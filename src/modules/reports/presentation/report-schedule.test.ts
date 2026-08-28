@@ -191,6 +191,7 @@ test("reports page uses a collapsed schedule card and Settings stays expanded", 
   assert.match(component, /SCHEDULE_KINDS\.map/);
   assert.match(component, /summaryItems\.map/);
   assert.match(component, /reports\.schedule\.disabledKinds/);
+  assert.doesNotMatch(component, /openSettings|前往设置查看完整配置/);
   assert.doesNotMatch(component, /flex-1 truncate font-mono/);
   const compactEditor = component.slice(
     component.indexOf("function CompactPlanEditor"),
