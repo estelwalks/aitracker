@@ -1,0 +1,86 @@
+{
+  "topLevelKeys": [
+    "branches",
+    "categories",
+    "contentHash",
+    "engineVersion",
+    "findings",
+    "locale",
+    "mode",
+    "riskScore",
+    "rules",
+    "rulesVersion",
+    "scannedFiles",
+    "skippedFiles",
+    "status",
+    "summary",
+    "threatLevel",
+    "threatLevelDisplay",
+    "tokenUsage",
+    "verdict"
+  ],
+  "cases": {
+    "clean": {
+      "status": "complete",
+      "mode": "quick",
+      "verdict": "allow",
+      "riskScore": 100,
+      "threatLevel": "none",
+      "scannedFiles": 1,
+      "categoryKinds": [],
+      "findingSources": [],
+      "tokenUsageStatus": "not_applicable",
+      "tokenRequestCount": 0,
+      "branches": ["static:complete"]
+    },
+    "staticMixed": {
+      "status": "complete",
+      "mode": "quick",
+      "verdict": "block",
+      "riskScore": 0,
+      "threatLevel": "critical",
+      "scannedFiles": 1,
+      "categoryKinds": ["destructive", "remote_execution"],
+      "findingSources": ["static", "static"],
+      "tokenUsageStatus": "not_applicable",
+      "tokenRequestCount": 0,
+      "branches": ["static:complete"]
+    },
+    "fullSingle": {
+      "status": "complete",
+      "mode": "full",
+      "verdict": "allow",
+      "riskScore": 90,
+      "threatLevel": "none",
+      "scannedFiles": 1,
+      "categoryKinds": ["network_abuse"],
+      "findingSources": ["model"],
+      "tokenUsageStatus": "complete",
+      "tokenRequestCount": 1,
+      "branches": [
+        "static:complete",
+        "ruleReview:complete",
+        "multiFileAnalysis:skipped:single SKILL.md input",
+        "singleFileAnalysis:complete"
+      ]
+    },
+    "fullMulti": {
+      "status": "complete",
+      "mode": "full",
+      "verdict": "allow",
+      "riskScore": 75,
+      "threatLevel": "low",
+      "scannedFiles": 2,
+      "categoryKinds": ["data_exfiltration"],
+      "findingSources": ["model"],
+      "tokenUsageStatus": "complete",
+      "tokenRequestCount": 1,
+      "branches": [
+        "static:complete",
+        "ruleReview:complete",
+        "singleFileAnalysis:skipped:multi-file input",
+        "multiFileAnalysis:complete"
+      ]
+    }
+  }
+}

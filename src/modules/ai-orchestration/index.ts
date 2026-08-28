@@ -6,17 +6,6 @@ export {
 } from "./application.ts";
 export * from "./model-profile.ts";
 export {
-  chatHeaders,
-  chatUrl,
-  modelRequestUrl,
-  modelListUrl,
-  parseChatCompletion,
-  requestBody,
-  type ChatRequestBodyOptions,
-  type ChatResponseClassification,
-  type ClassifiedChatResponse,
-} from "./model-profile.server.ts";
-export {
   deleteModelProfile,
   listModelProfiles,
   listRemoteModels,

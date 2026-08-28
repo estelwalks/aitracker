@@ -10,7 +10,7 @@ import {
 import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
-import { MarkdownView } from "../../reports/index.ts";
+import { MarkdownView } from "../../reports/presentation/index.ts";
 import type { SessionSummary, SessionTranscriptMessage } from "../contracts.ts";
 import { getSessionTranscript } from "../query.ts";
 import { ResumeSessionButton } from "./ResumeSessionButton.tsx";

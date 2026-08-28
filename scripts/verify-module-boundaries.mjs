@@ -134,7 +134,7 @@ async function listModuleNames(sourceRoot) {
 
 function isPublicModuleEntry(repoPath, moduleName) {
   return new RegExp(
-    `^src/modules/${moduleName}/(?:index|contracts)\\.(?:[cm]?[jt]sx?)$`,
+    `^src/modules/${moduleName}/(?:(?:application|presentation)/index|api\\.server|index|contracts)\\.(?:[cm]?[jt]sx?)$`,
   ).test(repoPath);
 }
 

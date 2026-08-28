@@ -14,6 +14,46 @@ It automatically tracks tokens, costs, and usage trends across AI tools such as 
 
 ---
 
+## Quick Start
+
+AITracker is a desktop application built with Electron, TanStack Start, React,
+and TypeScript. The repository includes the `skill-scanner` package it depends
+on, so a fresh clone can be installed and built without a sibling repository.
+
+### Requirements
+
+- Node.js 22 or later
+- npm 10 or later
+- macOS or Windows for the complete desktop experience
+
+```bash
+git clone https://github.com/estelwalks/aitracker.git
+cd aitracker
+npm ci
+npm run dev:desktop
+```
+
+To run the browser development server only, use `npm run dev`.
+
+### Build and Test
+
+```bash
+npm run build:desktop       # Web app + Electron main/preload bundles
+npm run typecheck           # App and bundled scanner
+npm run lint                # App and bundled scanner
+npm run test:all            # Unit, tooling, database, and scanner tests
+npm run check:opensource-hygiene
+```
+
+Platform installers can be produced with `npm run dist:mac` or
+`npm run dist:win:x64`. Signing and notarization credentials are not stored in
+this repository.
+
+See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
+generated-file policy, and repository layout.
+
+---
+
 ## Why AITracker?
 
 The number of AI tools keeps growing.
@@ -177,14 +217,16 @@ That is what AITracker is trying to build.
 
 ## Contributing
 
-AITracker is open source.
+Issues, feature proposals, documentation improvements, and pull requests are
+welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a
+change. For vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of
+opening a public issue.
 
 AITracker is licensed under the GNU General Public License, version 3 or later.
 See [LICENSE](LICENSE) for the full license text.
 
-Issues and suggestions for supporting new AI tools are welcome.
-
-If you use an AI Coding Tool that AITracker does not yet support, please let us know.
+The bundled `packages/skill-scanner` component retains its MIT license; see its
+own `LICENSE` and `NOTICE` files.
 
 ---
 

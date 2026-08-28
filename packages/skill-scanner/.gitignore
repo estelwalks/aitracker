@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tgz
+coverage/
+
+# secrets
+.env
+.env.*
+!.env.example
+.skill-scanner.json

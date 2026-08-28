@@ -31,8 +31,7 @@ export interface SessionSnapshotPage {
  * Concrete repository surface: `load` additionally accepts optional SQL-level
  * paging, which the generic `SnapshotRepository` contract does not declare.
  */
-export interface SqliteSessionSnapshotRepository
-  extends SnapshotRepository<SessionSnapshotData> {
+export interface SqliteSessionSnapshotRepository extends SnapshotRepository<SessionSnapshotData> {
   load(
     page?: SessionSnapshotPage,
   ): Promise<SnapshotHydrateResult<SessionSnapshotData>>;
