@@ -63,7 +63,9 @@ const session = (
   resumeAvailable: false,
 });
 
-function envelope(sessions: readonly SessionSummary[]): SnapshotEnvelope<SessionSnapshotData> {
+function envelope(
+  sessions: readonly SessionSummary[],
+): SnapshotEnvelope<SessionSnapshotData> {
   return {
     schemaVersion: 1,
     revision: "rev-1",
@@ -96,7 +98,10 @@ test("P1-11: load() assembles unknown models from a single batch instead of per-
     });
     await repository.save(
       envelope([
-        session("s1", "codex", "2026-08-07T00:01:00.000Z", ["model-x", "model-y"]),
+        session("s1", "codex", "2026-08-07T00:01:00.000Z", [
+          "model-x",
+          "model-y",
+        ]),
         session("s2", "claude", "2026-08-07T00:02:00.000Z", []),
       ]),
     );
@@ -106,7 +111,10 @@ test("P1-11: load() assembles unknown models from a single batch instead of per-
     const byId = new Map(
       loaded.envelope.data!.sessions.map((item) => [item.sessionId, item]),
     );
-    assert.deepEqual(byId.get("s1")?.cost.unknownModels, ["model-x", "model-y"]);
+    assert.deepEqual(byId.get("s1")?.cost.unknownModels, [
+      "model-x",
+      "model-y",
+    ]);
     assert.deepEqual(byId.get("s2")?.cost.unknownModels, []);
     host.close();
   } finally {

@@ -52,7 +52,7 @@ import { Field, Toggle } from "./fields";
 import { ModelProfilesSection } from "./ModelProfilesSection";
 import { MenuBarAppSettingsSection } from "./MenuBarAppSettingsSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
-import { ReportSchedule } from "../../reports/index.ts";
+import { ReportSchedule } from "../../reports/presentation/index.ts";
 import { useSecurityClient } from "./use-security-client";
 import {
   SETTINGS_CATEGORIES,

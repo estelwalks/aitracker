@@ -445,7 +445,10 @@ test("rejects malformed definition lists with invalid-argument", (t) => {
 });
 
 test("baseline migration 0001 contains the complete release schema", (t) => {
-  assert.ok(MIGRATIONS.length >= 1, "at least the baseline migration must exist");
+  assert.ok(
+    MIGRATIONS.length >= 1,
+    "at least the baseline migration must exist",
+  );
   assert.equal(MIGRATIONS[0].version, 1);
   assert.equal(MIGRATIONS[0].name, "0001_initial_schema");
   assert.equal(MIGRATIONS[0].sql, INITIAL_SCHEMA_SQL);

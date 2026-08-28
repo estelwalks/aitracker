@@ -10,7 +10,7 @@ import { resolveNpmSpawn } from "../scripts/npm-spawn.mjs";
 // the config); check-app-config-sync.mjs cross-checks them on every check:i18n.
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const skillScannerRoot = resolve(projectRoot, "../skill-scanner");
+const skillScannerRoot = resolve(projectRoot, "packages/skill-scanner");
 const viteOptimizationMetadata = join(
   projectRoot,
   "node_modules/.vite/deps/_metadata.json",

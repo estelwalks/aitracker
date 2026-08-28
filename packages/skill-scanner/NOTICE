@@ -1,0 +1,5 @@
+skill-scanner
+Copyright (c) 2026 l3m0nc9 contributors
+
+This package contains an independently implemented TypeScript scanner based on
+security rules, prompts, and samples used with permission from l3m0nc9.

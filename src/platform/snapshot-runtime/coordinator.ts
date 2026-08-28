@@ -149,7 +149,9 @@ export function createSnapshotCoordinator<T>(
     // P2-3: a reused last-known-good must keep its original generatedAt (and
     // read as stale), otherwise the UI claims a fresh collection that never
     // happened.
-    const generatedAt = staleRefreshed ? (current.generatedAt ?? nowIso) : nowIso;
+    const generatedAt = staleRefreshed
+      ? (current.generatedAt ?? nowIso)
+      : nowIso;
     const next: SnapshotEnvelope<T> = {
       schemaVersion: 1,
       revision: createRevision(),
@@ -162,7 +164,9 @@ export function createSnapshotCoordinator<T>(
       diagnostics: {
         ...emptyDiagnostics(),
         lastAttemptAt: nowIso,
-        lastSuccessAt: staleRefreshed ? current.diagnostics.lastSuccessAt : nowIso,
+        lastSuccessAt: staleRefreshed
+          ? current.diagnostics.lastSuccessAt
+          : nowIso,
         warningCodes: staleRefreshed ? ["stale-refreshed"] : [],
       },
       ...extra,
@@ -204,9 +208,7 @@ export function createSnapshotCoordinator<T>(
               : {}),
             // P2-2: successful commits clear accumulated warning codes; a
             // stale-refreshed commit surfaces exactly one explicit code.
-            warningCodes: collected.staleRefreshed
-              ? ["stale-refreshed"]
-              : [],
+            warningCodes: collected.staleRefreshed ? ["stale-refreshed"] : [],
           },
         },
         signal,

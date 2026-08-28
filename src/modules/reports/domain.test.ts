@@ -35,5 +35,7 @@ test("P1-10: wasReportTextTruncated reports the explicit truncation signal", () 
 test("safeReportText still rejects empty and sensitive bodies", () => {
   assert.throws(() => safeReportText("   "));
   assert.throws(() => safeReportText("/Users/alice/report"));
-  assert.throws(() => safeReportText("api_key: sk-abcdefghijklmnopqrstuvwxyz123456"));
+  assert.throws(() =>
+    safeReportText("api_key: sk-abcdefghijklmnopqrstuvwxyz123456"),
+  );
 });

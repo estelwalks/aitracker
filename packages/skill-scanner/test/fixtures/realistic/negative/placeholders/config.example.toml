@@ -1,0 +1,4 @@
+password = "your_password"
+aws_access_key_id = "AWS_ACCESS_KEY_ID_PLACEHOLDER"
+github_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+endpoint = "https://api.example.invalid/v1"

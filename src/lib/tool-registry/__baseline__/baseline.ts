@@ -276,7 +276,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX
+    maxFileSizeBytes: GENERIC_MAX,
   },
   {
     source: "gemini-cli",
@@ -286,7 +286,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: NATIVE_MAX
+    maxFileSizeBytes: NATIVE_MAX,
   },
   {
     source: "kimi-code",
@@ -310,7 +310,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX
+    maxFileSizeBytes: GENERIC_MAX,
   },
   {
     source: "grok",
@@ -320,7 +320,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: NATIVE_MAX
+    maxFileSizeBytes: NATIVE_MAX,
   },
   {
     source: "github-copilot",
@@ -412,7 +412,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: true,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX
+    maxFileSizeBytes: GENERIC_MAX,
   },
   {
     source: "openclaw",

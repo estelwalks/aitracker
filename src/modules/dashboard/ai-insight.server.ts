@@ -16,8 +16,6 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import {
-  chatHeaders,
-  chatUrl,
   createAiExecutor,
   createProviderRegistry,
   createRegistryRouter,
@@ -25,10 +23,14 @@ import {
   effectiveEndpoint,
   effectiveModel,
   effectiveProtocol,
-  parseChatCompletion,
-  requestBody,
   type ProfileProtocol,
 } from "../ai-orchestration/index.ts";
+import {
+  chatHeaders,
+  chatUrl,
+  parseChatCompletion,
+  requestBody,
+} from "../ai-orchestration/api.server.ts";
 import type {
   AIModelProvider,
   AIProviderRequest,

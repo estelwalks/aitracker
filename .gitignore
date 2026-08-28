@@ -10,11 +10,17 @@ out/
 .output/
 .tanstack/
 test-results/
+.aitracker-lab/
+.tt-lab/
 .env
 .env.local
 .env.*.local
 *.log
 .DS_Store
+
+# Local configuration and credentials
+.skill-scanner.json
+
 # External reference sample (downloaded zip + extracted project), not repo code
 docs/V3.0_*/project-sparkle-hub-*
 
