@@ -6,9 +6,7 @@
 
 AITracker 是一个**开源、本地运行的 AI 工作台**。
 
-自动追踪 Claude Code、Codex、Cursor 等 AI 工具的 Token、成本和
-
-使用趋势，统一管理 Skills 与常用配置，从真实工作与使用记录中蒸馏 Skills，构建个人知识库与长期记忆，让每一次 AI 使用都成为下一次可以复用的能力。
+自动追踪 Claude Code、Codex、Cursor 等 AI 工具的 Token、成本和使用趋势，统一管理 Skills 与常用配置，从真实工作与使用记录中蒸馏 Skills，构建个人知识库与长期记忆，让每一次 AI 使用都成为下一次可以复用的能力。
 
 **开源 · 本地 · 无需注册**
 
@@ -182,6 +180,12 @@ AITracker is open source.
 欢迎提交 Issue，以及新的 AI 工具适配建议。
 
 如果你正在使用某个 AI Coding Tool，而 AITracker 还没有支持，也欢迎告诉我们。
+
+---
+
+## 许可证
+
+AITracker 采用 GNU 通用公共许可证第 3 版或更高版本（GPL-3.0-or-later）。详见 [LICENSE](../LICENSE)。
 
 ---
 

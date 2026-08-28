@@ -184,6 +184,12 @@ Issue 제출과 새로운 AI 도구 지원 제안을 환영합니다.
 
 ---
 
+## 라이선스
+
+AITracker는 GNU General Public License 버전 3 이상(GPL-3.0-or-later)에 따라 배포됩니다. 자세한 내용은 [LICENSE](../LICENSE)를 참고하세요.
+
+---
+
 ## Star
 
 AITracker가 도움이 되었다면 프로젝트에 Star를 보내주세요. 감사합니다.
