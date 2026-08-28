@@ -12,7 +12,14 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import type { CompositionRoot } from "../../app/composition.server.ts";
+import { STORAGE_KEY_PREFIX } from "../../lib/app-config.ts";
 import { AppError } from "../../lib/errors.ts";
+import {
+  LOCALES,
+  mapSystemLocale,
+  normalizeLocale,
+  type Locale,
+} from "../../lib/i18n/locale.ts";
 import type { MessageKey } from "../../lib/i18n/messages.ts";
 import {
   PROFILE_API_KEY_MAX,
@@ -58,6 +65,12 @@ function parseProfileInput(value: unknown): ModelProfileInput {
   return input;
 }
 
+interface SetActiveModelProfileInput {
+  readonly id: string;
+  /** Optional explicit locale for callers that already have the route locale. */
+  readonly locale?: Locale;
+}
+
 function parseProfileId(value: unknown): { id: string } {
   if (
     value == null ||
@@ -68,6 +81,17 @@ function parseProfileId(value: unknown): { id: string } {
     throw new AppError("errors.modelProfile.notFound");
   }
   return { id: (value as { id: string }).id };
+}
+
+export function parseSetActiveModelProfileInput(
+  value: unknown,
+): SetActiveModelProfileInput {
+  const { id } = parseProfileId(value);
+  const locale = (value as { locale?: unknown }).locale;
+  if (locale !== undefined && !LOCALES.includes(locale as Locale)) {
+    throw new AppError("errors.generic");
+  }
+  return { id, ...(locale !== undefined ? { locale: locale as Locale } : {}) };
 }
 
 /**
@@ -167,6 +191,141 @@ function invalidateInsightCacheBestEffort(root: CompositionRoot): void {
   }
 }
 
+interface RequestLike {
+  readonly url: string;
+  readonly headers: Pick<Headers, "get">;
+}
+
+/**
+ * Resolve the locale for a server-side activation-triggered batch. The
+ * explicit value is preferred; the request URL preserves the renderer's
+ * route locale in the normal browser/Electron flow, while Accept-Language is
+ * a safe fallback for direct server calls.
+ */
+export function resolveModelActivationLocale(
+  explicit: Locale | undefined,
+  request?: RequestLike,
+): Locale {
+  if (explicit !== undefined) return explicit;
+
+  const referer = request?.headers.get("referer");
+  if (referer) {
+    try {
+      const routeLocale = normalizeLocale(
+        new URL(referer).searchParams.get("locale"),
+      );
+      if (routeLocale) return routeLocale;
+    } catch {
+      // Fall through to the language header for malformed/missing referrers.
+    }
+  }
+  return mapSystemLocale(request?.headers.get("accept-language"));
+}
+
+async function currentRequestLocale(
+  root: CompositionRoot,
+  explicit?: Locale,
+): Promise<Locale> {
+  if (explicit !== undefined) return explicit;
+
+  try {
+    const preferences = root.database.features.appPreferences;
+    const mode = preferences.get(`${STORAGE_KEY_PREFIX}localeMode`)?.value;
+    const stored = preferences.get(`${STORAGE_KEY_PREFIX}locale`)?.value;
+    const manualLocale =
+      mode === "manual" && typeof stored === "string"
+        ? normalizeLocale(stored)
+        : null;
+    if (manualLocale) return manualLocale;
+  } catch {
+    // Locale preference persistence is optional for this best-effort task.
+  }
+
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    return resolveModelActivationLocale(undefined, getRequest());
+  } catch {
+    // Server-function unit calls and non-HTTP invocations have no request
+    // context; the product's locale fallback is zh-CN.
+    return "zh-CN";
+  }
+}
+
+const initialInsightRefreshes = new WeakMap<object, Promise<void>>();
+const completedInitialInsightRefreshes = new WeakSet<object>();
+
+/**
+ * Start the first enhanced-auto insight batch after a successful activation.
+ * This function deliberately owns no model-activation state: the caller
+ * supplies the observed pre-activation state, and the persisted refresh store
+ * remains the authority for deduplicating an already-running batch.
+ */
+export async function triggerInitialInsightRefreshAfterModelActivation(options: {
+  readonly root: CompositionRoot;
+  readonly profileId: string;
+  readonly wasUnconfigured: boolean;
+  readonly locale: Locale;
+  readonly startBatch?: (locale: Locale) => Promise<unknown>;
+}): Promise<void> {
+  if (!options.wasUnconfigured) return;
+  if (completedInitialInsightRefreshes.has(options.root)) return;
+
+  const existing = initialInsightRefreshes.get(options.root);
+  if (existing) return existing;
+
+  const work = (async () => {
+    try {
+      // A concurrent activation may have replaced this profile before the
+      // fire-and-forget task starts. Only the profile that remains active may
+      // claim the first-activation refresh.
+      if (
+        (await options.root.modelProfiles.getActiveView())?.id !==
+        options.profileId
+      )
+        return;
+
+      const preference =
+        options.root.database.features.insights.getEffectivePreference(
+          "settings",
+        );
+      if (preference.mode !== "enhanced-auto") return;
+
+      const startBatch =
+        options.startBatch ??
+        (async (locale: Locale) => {
+          const { startPageInsightRefreshBatch } =
+            await import("../insights/page/background-refresh.server.ts");
+          await startPageInsightRefreshBatch(locale);
+        });
+      await startBatch(options.locale);
+      completedInitialInsightRefreshes.add(options.root);
+    } catch {
+      // Insight generation is a best-effort post-activation task. A missing
+      // preference store, dynamic import or batch failure must not affect the
+      // already-committed model activation.
+    } finally {
+      initialInsightRefreshes.delete(options.root);
+    }
+  })();
+  initialInsightRefreshes.set(options.root, work);
+  return work;
+}
+
+function scheduleInitialInsightRefresh(
+  root: CompositionRoot,
+  profileId: string,
+  locale: Locale | undefined,
+): void {
+  void currentRequestLocale(root, locale).then((resolvedLocale) =>
+    triggerInitialInsightRefreshAfterModelActivation({
+      root,
+      profileId,
+      wasUnconfigured: true,
+      locale: resolvedLocale,
+    }),
+  );
+}
+
 /** Renderer-safe profile list + active id (Settings model panel / distill). */
 export const listModelProfiles = createServerFn({ method: "GET" }).handler(
   async (): Promise<ModelProfileListResult> => {
@@ -228,13 +387,27 @@ export const deleteModelProfile = createServerFn({ method: "POST" })
 
 /** Activate a profile (takes effect immediately for profile-based runs). */
 export const setActiveModelProfile = createServerFn({ method: "POST" })
-  .validator((input: unknown): { id: string } => parseProfileId(input))
+  .validator((input: unknown): SetActiveModelProfileInput =>
+    parseSetActiveModelProfileInput(input),
+  )
   .handler(async ({ data }): Promise<ModelProfileActionResult> => {
     const { getCompositionRoot } =
       await import("../../app/composition.server.ts");
     const root = await getCompositionRoot();
+    let activeBefore: ModelProfileView | null | undefined;
+    try {
+      activeBefore = await root.modelProfiles.getActiveView();
+    } catch {
+      // Preserve the original activation behavior if the observation read
+      // fails; in that case only the post-activation batch is skipped.
+    }
     const result = await root.modelProfiles.setActive(data.id);
-    if (result.ok) invalidateInsightCacheBestEffort(root);
+    if (result.ok) {
+      invalidateInsightCacheBestEffort(root);
+      if (activeBefore === null) {
+        scheduleInitialInsightRefresh(root, data.id, data.locale);
+      }
+    }
     return result;
   });
 
