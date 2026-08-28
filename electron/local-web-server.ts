@@ -85,20 +85,22 @@ function isInside(basePath: string, candidatePath: string): boolean {
 }
 
 /**
- * Nitro/TanStack Start server-function chunks (`*.server-<hash>.js`) are
- * emitted into `.output/public/assets` but execute only inside the Node server
- * handler. They carry the server implementation (secret-key paths, database
- * locations, bearer request construction, schema) and are never needed by the
- * browser. `servePublicAsset` runs before capability-token validation, so
- * these chunks must be rejected outright — even an authenticated request gets
- * 404. If one is ever needed in the renderer it must be delivered through a
- * token-protected route instead.
+ * Nitro/TanStack Start emits both server implementations and browser-side
+ * ServerFn RPC proxies into `.output/public/assets`. The former carry server
+ * implementation details and must never be served; the latter are required by
+ * lazy routes and contain only the client transport stub. Keep the proxy
+ * naming exceptions explicit so a new server implementation does not become a
+ * public asset by accident.
  */
 const SERVER_CHUNK_PATH_PATTERN = /\.server-[A-Za-z0-9_-]+\.js$/;
+const BROWSER_SERVER_FUNCTION_PROXY_PATH_PATTERN =
+  /\/(?:llm-review\.server-fns|version-check\.server)-[A-Za-z0-9_-]+\.js$/;
 
 function isServerChunkPath(pathname: string): boolean {
   return (
-    pathname.startsWith("/assets/") && SERVER_CHUNK_PATH_PATTERN.test(pathname)
+    pathname.startsWith("/assets/") &&
+    SERVER_CHUNK_PATH_PATTERN.test(pathname) &&
+    !BROWSER_SERVER_FUNCTION_PROXY_PATH_PATTERN.test(pathname)
   );
 }
 
