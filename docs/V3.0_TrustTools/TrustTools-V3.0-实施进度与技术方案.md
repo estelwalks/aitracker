@@ -212,7 +212,7 @@
 
 ### 5.5 G5：Electron 托盘 + 卸载/升级（FR-030/031）
 
-- `electron/main.ts`：首次关闭弹提示（"继续在菜单栏运行"+「知道了」），用 prefs 记录 `closeHintShown`
+- `electron/main.ts`：macOS/Windows 点击关闭默认隐藏到托盘并继续运行；托盘「退出」才真正退出应用
 - 托盘菜单已有「打开/开机自启/退出」；补「显示主窗口/退出 TrustTools」语义
 - 升级安装：启动检测 `~/.trusttools/` 兼容性（schema version），不兼容弹窗提示备份后清除
 - 更新 `contracts.ts` + `preload.cts` + `main.ts` 三处（CLAUDE.md 要求同步）
