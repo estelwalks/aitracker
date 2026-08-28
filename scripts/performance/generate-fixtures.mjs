@@ -1,7 +1,8 @@
 // Generates deterministic, sanitized performance fixtures under
 // `tests/fixtures/performance/` (T0-06). Fixtures are pure synthetic data —
 // no real paths, prompts, commands, API keys or conversation content — so the
-// same bytes can be committed and reproduced on any machine.
+// same bytes can be reproduced on any machine. Small fixtures are committed
+// for fast checks; the 10x fixture is generated on demand to keep Git lean.
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";

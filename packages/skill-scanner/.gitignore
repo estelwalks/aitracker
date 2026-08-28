@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.tgz
 coverage/
+examples/samples/category-report.json
 
 # secrets
 .env
