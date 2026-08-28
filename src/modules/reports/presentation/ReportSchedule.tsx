@@ -273,70 +273,64 @@ function CompactPlanEditor({
   const { t, format } = useI18n();
   const plan = schedule[kind];
   return (
-    <div className="py-3 last:pb-0">
-      <div className="flex items-center gap-2">
-        <span className="text-[12px] font-medium">
-          {t(`reports.schedule.kinds.${kind}`)}
-        </span>
-        <ScheduleToggle
-          value={plan.enabled}
-          disabled={saving}
-          ariaLabel={t("reports.schedule.toggleKind", {
-            kind: t(`reports.schedule.kinds.${kind}`),
-          })}
-          onChange={(enabled) =>
-            onSave({ ...schedule, [kind]: { ...plan, enabled } })
-          }
-        />
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {kind === "weekly" && (
-          <WeekdayPicker
-            value={schedule.weekly.dayOfWeek}
-            disabled={saving}
-            compact
-            onChange={(dayOfWeek) =>
-              onSave({
-                ...schedule,
-                weekly: { ...schedule.weekly, dayOfWeek },
-              })
-            }
-          />
-        )}
-        {kind === "monthly" && (
-          <MonthDayInput
-            value={schedule.monthly.dayOfMonth}
-            disabled={saving}
-            compact
-            onCommit={(dayOfMonth) =>
-              onSave({
-                ...schedule,
-                monthly: { ...schedule.monthly, dayOfMonth },
-              })
-            }
-          />
-        )}
-        <TimeInput
-          value={plan.time}
+    <div className="flex min-w-0 items-center gap-2 py-3 last:pb-0">
+      <span className="shrink-0 text-[12px] font-medium">
+        {t(`reports.schedule.kinds.${kind}`)}
+      </span>
+      <ScheduleToggle
+        value={plan.enabled}
+        disabled={saving}
+        ariaLabel={t("reports.schedule.toggleKind", {
+          kind: t(`reports.schedule.kinds.${kind}`),
+        })}
+        onChange={(enabled) =>
+          onSave({ ...schedule, [kind]: { ...plan, enabled } })
+        }
+      />
+      {kind === "weekly" && (
+        <WeekdayPicker
+          value={schedule.weekly.dayOfWeek}
           disabled={saving}
           compact
-          onCommit={(time) =>
-            onSave({ ...schedule, [kind]: { ...plan, time } })
+          onChange={(dayOfWeek) =>
+            onSave({
+              ...schedule,
+              weekly: { ...schedule.weekly, dayOfWeek },
+            })
           }
         />
-        {plan.enabled && (
-          <span className="font-mono text-[10.5px] text-muted-foreground">
-            {status?.pending
-              ? t("reports.schedule.pending")
-              : status?.nextRunAt
-                ? `${t("reports.schedule.nextRun")} ${format.formatDateTime(
-                    status.nextRunAt,
-                    false,
-                  )}`
-                : t("common.loading")}
-          </span>
-        )}
-      </div>
+      )}
+      {kind === "monthly" && (
+        <MonthDayInput
+          value={schedule.monthly.dayOfMonth}
+          disabled={saving}
+          compact
+          onCommit={(dayOfMonth) =>
+            onSave({
+              ...schedule,
+              monthly: { ...schedule.monthly, dayOfMonth },
+            })
+          }
+        />
+      )}
+      <TimeInput
+        value={plan.time}
+        disabled={saving}
+        compact
+        onCommit={(time) => onSave({ ...schedule, [kind]: { ...plan, time } })}
+      />
+      {plan.enabled && (
+        <span className="min-w-0 truncate font-mono text-[10.5px] text-muted-foreground">
+          {status?.pending
+            ? t("reports.schedule.pending")
+            : status?.nextRunAt
+              ? `${t("reports.schedule.nextRun")} ${format.formatDateTime(
+                  status.nextRunAt,
+                  false,
+                )}`
+              : t("common.loading")}
+        </span>
+      )}
     </div>
   );
 }
