@@ -47,6 +47,7 @@ export const sessions = {
     desc: "Adjust the search keywords, tools, or time range and try again.",
   },
   refreshing: "Refreshing",
+  refreshNow: "Refresh now",
   group: {
     today: "Today",
     yesterday: "Yesterday",
