@@ -56,4 +56,8 @@ test("启动同步等待持久化偏好和当前 Token 数据就绪", () => {
     syncSource,
     /useWidgetData|useSecurityScanOverview|getMemoryAssets/,
   );
+  assert.doesNotMatch(
+    syncSource,
+    /usePageInsight|getPageInsight|enhancePageInsight/,
+  );
 });
