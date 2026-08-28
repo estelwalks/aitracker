@@ -8,6 +8,7 @@ import {
 } from "./cache.server.ts";
 import type { MarketListResult, MarketSkill, MarketSort } from "./types.ts";
 import type { SkillSnapshot } from "../local-skills/types.ts";
+import type { SkillSnapshotData } from "../../modules/skill-catalog/query/contracts.ts";
 import {
   countInstalledMarketSkills,
   type MarketInstalledSkillShape,
@@ -77,9 +78,11 @@ function computeStats(
 
 /**
  * Real local market-install count. Prefers an injected value (callers that
- * already loaded a local snapshot), then a snapshot-shaped test seam, and
- * finally the real on-disk scanner — the single source of truth for which
- * installed Skills carry `source.kind === "market"`.
+ * already loaded a local snapshot), then a snapshot-shaped test seam, then the
+ * Skill snapshot coordinator, and finally the real on-disk scanner — the
+ * single source of truth for which installed Skills carry
+ * `source.kind === "market"`. The coordinator read keeps pages off the scan
+ * path (P2-18); the direct scan remains the fallback when it has no data.
  */
 async function resolveInstalledCount(
   options: MarketApiOptions,
@@ -91,8 +94,32 @@ async function resolveInstalledCount(
   ) {
     return options.installedCount;
   }
-  const snapshot = options.localSnapshot ?? (await loadLocalSkillsSnapshot());
+  if (options.localSnapshot != null) {
+    return countInstalledMarketSkills(options.localSnapshot.skills);
+  }
+  const coordinated = await readCoordinatedSkillSnapshot();
+  if (coordinated != null) {
+    return countInstalledMarketSkills(coordinated.skills);
+  }
+  const snapshot = await loadLocalSkillsSnapshot();
   return countInstalledMarketSkills(snapshot.skills);
+}
+
+/**
+ * P2-18: read the installed-skill projection from the Skill snapshot
+ * coordinator instead of bypassing it with a full scan. Returns null when the
+ * coordinator has no data yet so callers can fall back to a direct scan.
+ */
+async function readCoordinatedSkillSnapshot(): Promise<SkillSnapshotData | null> {
+  try {
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    const { skillSnapshot } = await getCompositionRoot();
+    await skillSnapshot.ensureHydrated();
+    return skillSnapshot.readLatest().data;
+  } catch {
+    return null;
+  }
 }
 
 async function loadLocalSkillsSnapshot(): Promise<SkillSnapshot> {

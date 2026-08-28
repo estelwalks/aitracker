@@ -78,7 +78,19 @@ test("compact projection preserves token, event and dimension aggregates", () =>
   assert.deepEqual(rebuilt.totals, raw.totals);
   assert.deepEqual(rebuilt.bySource, raw.bySource);
   assert.deepEqual(rebuilt.byModel, raw.byModel);
-  assert.deepEqual(rebuilt.byProject, raw.byProject);
+  // P2-1: byProject rows carry a display-safe label (final path segment) so a
+  // hydrated snapshot never renders a ref hash as a project name.
+  assert.deepEqual(
+    rebuilt.byProject.map(({ label: _label, ...row }) => row),
+    raw.byProject,
+  );
+  assert.deepEqual(
+    rebuilt.byProject.map((row) => [row.key, row.label]),
+    [
+      ["/workspace/project-a", "project-a"],
+      ["/workspace/project-b", "project-b"],
+    ],
+  );
   assert.deepEqual(
     rebuilt.daily.map(({ bySource: _bySource, ...row }) => row),
     raw.daily.map(({ bySource: _bySource, ...row }) => row),

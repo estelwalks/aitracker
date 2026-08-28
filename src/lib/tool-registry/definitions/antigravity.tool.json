@@ -95,6 +95,7 @@
     "usage": {
       "mode": "native",
       "reader": "antigravity-transcript-v1",
+      "maxFileSizeBytes": 67108864,
       "paths": [
         {
           "targets": [
@@ -143,6 +144,9 @@
     "security": "unsupported"
   },
   "modelObservation": {
-    "modelField": "model"
+    "modelField": "model",
+    "tokenSemantics": {
+      "reasoningIncludedInOutput": false
+    }
   }
 }

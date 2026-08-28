@@ -11,17 +11,22 @@ import {
 } from "../period.ts";
 
 const DAY = 86400000;
-const WEEK_HEAD = ["一", "二", "三", "四", "五", "六", "日"];
 
 /** Compact pill label for the toggle button (mirrors the prototype's `short`). */
-function shortLabel(granularity: PeriodGranularity, key: string): string {
+function shortLabel(
+  granularity: PeriodGranularity,
+  key: string,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   const start = periodStartDate(granularity, key);
   if (!start) return key;
   if (granularity === "day") {
     return `${start.getMonth() + 1}/${start.getDate()}`;
   }
   if (granularity === "week") {
-    return `${start.getMonth() + 1}/${start.getDate()}周`;
+    return t("reports.period.weekShort", {
+      date: `${start.getMonth() + 1}/${start.getDate()}`,
+    });
   }
   return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -47,9 +52,11 @@ export function PeriodCalendar({
   now: Date;
   onSelect: (key: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  // Monday-first weekday headers, localized via the dictionary (narrow form).
+  const weekdayHeaders = [...t("reports.calendar.weekdayNarrow")];
 
   const initialMonth = useMemo(() => {
     const start = periodStartDate(granularity, selectedKey) ?? now;
@@ -121,7 +128,11 @@ export function PeriodCalendar({
     setOpen(false);
   };
 
-  const monthLabel = `${year} 年 ${month + 1} 月`;
+  const monthLabel = format.formatDate(cursor, {
+    year: "numeric",
+    month: "long",
+    day: undefined,
+  });
   const goTodayLabel =
     granularity === "day"
       ? t("reports.header.goToday")
@@ -143,7 +154,7 @@ export function PeriodCalendar({
         }`}
       >
         <CalendarDays className="size-3.5" strokeWidth={1.8} />
-        {shortLabel(granularity, selectedKey)}
+        {shortLabel(granularity, selectedKey, t)}
       </button>
 
       {open && (
@@ -196,7 +207,9 @@ export function PeriodCalendar({
                         : "bg-surface-2/60 hover:bg-surface-2"
                     }`}
                   >
-                    <span>{index + 1} 月</span>
+                    <span>
+                      {t("reports.period.monthShort", { month: index + 1 })}
+                    </span>
                     <span
                       className="size-1 rounded-full bg-primary"
                       style={{
@@ -212,8 +225,8 @@ export function PeriodCalendar({
           ) : (
             <>
               <div className="mb-1 grid grid-cols-7 text-center font-mono text-[10px] text-muted-foreground/70">
-                {WEEK_HEAD.map((weekday) => (
-                  <span key={weekday} className="py-1">
+                {weekdayHeaders.map((weekday, index) => (
+                  <span key={index} className="py-1">
                     {weekday}
                   </span>
                 ))}

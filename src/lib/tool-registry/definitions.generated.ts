@@ -498,7 +498,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "glob": "**/chats/session-*.json",
             "format": "json"
           }
-        ]
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "read-write",
       "agents": "unsupported",
@@ -694,7 +695,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "glob": "*/session-sqlite-import-archive/**/*.jsonl*",
             "format": "jsonl"
           }
-        ]
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "read-write",
       "agents": "unsupported",
@@ -1221,7 +1223,10 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "security": "unsupported"
     },
     "modelObservation": {
-      "modelField": "model"
+      "modelField": "model",
+      "tokenSemantics": {
+        "reasoningIncludedInOutput": false
+      }
     }
   },
   {
@@ -1311,7 +1316,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "glob": "**/updates.jsonl",
             "format": "jsonl"
           }
-        ]
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "read-write",
       "agents": "unsupported",
@@ -1590,7 +1596,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "glob": "**/.system_generated/logs/transcript.jsonl",
             "format": "jsonl"
           }
-        ]
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "read-write",
       "agents": "unsupported",
@@ -1601,7 +1608,10 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "security": "unsupported"
     },
     "modelObservation": {
-      "modelField": "model"
+      "modelField": "model",
+      "tokenSemantics": {
+        "reasoningIncludedInOutput": false
+      }
     }
   },
   {
@@ -2184,7 +2194,10 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "security": "unsupported"
     },
     "modelObservation": {
-      "modelField": "model"
+      "modelField": "model",
+      "tokenSemantics": {
+        "reasoningIncludedInOutput": false
+      }
     }
   },
   {
@@ -3275,4 +3288,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "e754c674fea2574b";
+export const TOOL_REGISTRY_VERSION: string = "1875799686af094d";

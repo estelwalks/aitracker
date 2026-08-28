@@ -68,6 +68,22 @@ function projectKey(project: string): string {
   return normalized.split("/").filter(Boolean).at(-1) ?? "unknown";
 }
 
+/**
+ * P2-1: hydrated usage buckets carry the HMAC ref hash (43-char base64url) as
+ * `project`. Such refs are already hashed — feeding them back into the
+ * classification service would double-hash (every lookup misses) and, worse,
+ * commit junk "unknown" rows keyed by hash-of-hash into the index. Only
+ * path-shaped refs may participate in classification resolution.
+ */
+function isPathShapedProjectRef(ref: string): boolean {
+  return (
+    ref === "~" ||
+    ref.startsWith("~/") ||
+    ref.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/u.test(ref)
+  );
+}
+
 function localDateKey(timestamp: string): string | null {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return null;
@@ -840,7 +856,9 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
     })),
   };
   const projectRefs = [
-    ...rawBuckets.map((bucket) => bucket.project),
+    ...rawBuckets
+      .map((bucket) => bucket.project)
+      .filter(isPathShapedProjectRef),
     ...(sessionsResult.status === "fulfilled"
       ? sessionsResult.value.sessions.map(
           (session) => session.projectRef ?? session.projectKey,
@@ -862,6 +880,7 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
     ...new Set(
       rawBuckets
         .map((bucket) => bucket.project)
+        .filter(isPathShapedProjectRef)
         .filter((ref) => !projectClassifications.has(ref)),
     ),
   ];

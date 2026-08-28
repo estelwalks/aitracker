@@ -1,4 +1,8 @@
 export { securityAssessmentModuleId } from "./contracts";
+export {
+  SECURITY_SCAN_COMPLETED_EVENT,
+  SECURITY_SCAN_STARTED_EVENT,
+} from "./events";
 export type {
   AssetAssessment,
   AssetFinding,

@@ -35,3 +35,4 @@ export {
   PAGE_INSIGHT_REFRESH_EVENT,
   insightFallbackStatusLabel,
 } from "./page/presentation/use-page-insight.pure.ts";
+export { refreshPageInsightSurface } from "./page/server-fns.ts";

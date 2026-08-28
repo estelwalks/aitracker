@@ -20,6 +20,7 @@ export type {
   TemplateVersion,
 } from "./contracts";
 export { aggregateSessionDensity, sumPeriodDensity } from "./period.ts";
+export { monthKeyOf } from "./period.ts";
 export type {
   PeriodGranularity,
   SessionDayMetric,

@@ -10,9 +10,40 @@ import type {
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,160}$/;
 const SAFE_SOURCE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,240}$/;
-const FORBIDDEN =
-  /(?:^|[\\/]|\b)(?:command|resumecommand|prompt|response|transcript|token|apikey|password|secret|content)(?:\b|=)/i;
+/**
+ * Privacy guard (P1-9): only genuine private *shapes* are rejected — absolute
+ * user paths and credential VALUES. Standalone technical words (token, prompt,
+ * content, …) are legal index terms and must never trip the guard, otherwise
+ * one legitimate title ("Token 使用统计") bricks the whole search index.
+ *
+ * The shapes mirror `src/modules/distillation/domain.ts` (PRIVATE_PATH_RE /
+ * CREDENTIAL_VALUE_RE): identity-revealing paths and `key=value` credentials.
+ */
+const PRIVATE_PATH_RE =
+  /(?:\/Users\/[A-Za-z0-9._-]+|\/home\/[A-Za-z0-9._-]+|[A-Za-z]:(?:\\[^\s"'<>|\\]*)+|\\\\[A-Za-z0-9._-]+\\[^\s"'<>|\\]+)/;
+const CREDENTIAL_VALUE_RE =
+  /(?:sk-[A-Za-z0-9_-]{8,}|pk-[A-Za-z0-9_-]{8,}|bearer\s+[A-Za-z0-9._~-]{12,}|(?:api[_-]?key|password|secret|token)\s*[:=]\s*[A-Za-z0-9._~/+=-]{8,})/i;
+/** Bare absolute path (POSIX or drive-letter) anywhere in the summary. */
 const PATH = /(?:^|\s)(?:\/[^\s]+|[A-Za-z]:[\\/][^\s]+)/;
+
+/**
+ * Single source of truth for the search projection privacy guard (S-03).
+ * `title` / `textSummary` are rejected only when they carry a real absolute
+ * path or a credential value shape. Exported so the repository layer reuses
+ * exactly the same check instead of maintaining a divergent pattern list.
+ */
+export function isSearchProjectionSafe(
+  title: string,
+  textSummary: string,
+): boolean {
+  return (
+    !PRIVATE_PATH_RE.test(title) &&
+    !CREDENTIAL_VALUE_RE.test(title) &&
+    !PRIVATE_PATH_RE.test(textSummary) &&
+    !CREDENTIAL_VALUE_RE.test(textSummary) &&
+    !PATH.test(textSummary)
+  );
+}
 
 export function assertSearchDocument(document: SearchDocument): void {
   if (!SAFE_ID.test(document.id) || !SAFE_SOURCE.test(document.sourceRef)) {
@@ -27,11 +58,7 @@ export function assertSearchDocument(document: SearchDocument): void {
   ) {
     throw new TypeError("search tags must be safe identifiers");
   }
-  if (
-    FORBIDDEN.test(document.title) ||
-    FORBIDDEN.test(document.textSummary) ||
-    PATH.test(document.textSummary)
-  ) {
+  if (!isSearchProjectionSafe(document.title, document.textSummary)) {
     throw new TypeError("search projection contains forbidden private content");
   }
   if (!Number.isNaN(Date.parse(document.updatedAt))) {
@@ -67,18 +94,31 @@ export function indexVersion(documents: readonly SearchDocument[]): string {
   return `search-v1-${hash(canonical)}`;
 }
 
+/**
+ * Build a canonical snapshot. Documents that fail the shape/privacy guard are
+ * skipped (never allowed to brick the whole index) and counted on the result
+ * as `skipped`; a per-document console warning keeps the loss observable.
+ */
 export function createSnapshot(
   documents: readonly SearchDocument[],
   generatedAt: string,
   stale = false,
-): SearchIndexSnapshot {
+): SearchIndexSnapshot & { skipped: number } {
   const deduped = new Map<string, SearchDocument>();
+  let skipped = 0;
   for (const document of documents) {
-    assertSearchDocument(document);
-    deduped.set(document.id, {
-      ...document,
-      tags: [...new Set(document.tags)].sort(),
-    });
+    try {
+      assertSearchDocument(document);
+      deduped.set(document.id, {
+        ...document,
+        tags: [...new Set(document.tags)].sort(),
+      });
+    } catch {
+      skipped += 1;
+      console.warn(
+        `search: skipped document "${document.id}" — does not satisfy the search projection guard`,
+      );
+    }
   }
   const ordered = [...deduped.values()].sort((a, b) =>
     a.id.localeCompare(b.id),
@@ -89,6 +129,7 @@ export function createSnapshot(
     generatedAt,
     stale,
     documents: ordered,
+    skipped,
   };
 }
 

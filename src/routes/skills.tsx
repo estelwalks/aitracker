@@ -59,14 +59,9 @@ export const Route = createFileRoute("/skills")({
     locale: resolveLocaleFromSearch(search as Record<string, unknown>),
   }),
   loader: async ({ deps }): Promise<SkillsLoader> => {
-    // The workspace snapshot is the only first-screen dependency. Usage
-    // analytics are not rendered here, and distillation activity is fetched by
-    // the mounted KPI after the workspace is interactive.
     const workspace = await getSkillWorkspace();
     return { locale: deps.locale, workspace };
   },
-  // Source mutations explicitly invalidate the router. Retaining the compact
-  // read model briefly makes ordinary sidebar navigation instant.
   staleTime: 30_000,
   gcTime: 5 * 60_000,
   preloadStaleTime: 30_000,

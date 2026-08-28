@@ -5,6 +5,7 @@ import {
   safeReportText,
   toDefinitionSummary,
   toReportSummary,
+  wasReportTextTruncated,
 } from "../domain.ts";
 import type {
   GenerateReportInput,
@@ -279,6 +280,10 @@ export function createReportsApplication(
       (item) => item.definitionId === document.definitionId,
     );
     if (!definition) return err("errors.reports.notFound");
+    // P1-10: the SQLite `reports.body` CHECK caps inline bodies at 60,000
+    // characters (see domain.REPORT_BODY_MAX); the file-backed store has no
+    // such limit. Flag the truncation instead of letting it happen silently.
+    const truncated = !content && wasReportTextTruncated(body);
     try {
       if (content) {
         const contentFile = document.contentFile
@@ -299,6 +304,7 @@ export function createReportsApplication(
         title: document.title,
         body,
         generatedAt: document.generatedAt,
+        ...(truncated ? { truncated: true } : {}),
       });
     } catch {
       return err("errors.reports.contentWriteFailed");

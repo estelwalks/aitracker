@@ -227,7 +227,7 @@ export const dashboard = {
     todayUsage: "今日の使用量",
     viewUsage: "使用量を見る",
     viewTools: "エージェントビュー",
-    viewScan: "今すぐスキャン",
+    viewScan: "今すぐチェック",
     viewAssets: "資産を見る",
     viewTokens: "消費明細",
     eventShort: "使用イベント",

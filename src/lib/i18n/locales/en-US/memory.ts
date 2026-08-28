@@ -26,6 +26,7 @@ export const memory = {
   originManual: "Manual",
   sourceDistill: "Distilled",
   sourceUnknown: "Unknown source",
+  titleFallback: "Memory",
   insightTitle: "Today's insight",
   insightEmpty: "No memory entries yet: run a distillation to create one.",
   insightTotal:

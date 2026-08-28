@@ -25,6 +25,7 @@ export const memory = {
   originManual: "手动",
   sourceDistill: "蒸馏",
   sourceUnknown: "未知来源",
+  titleFallback: "记忆",
   insightTitle: "今日洞察",
   insightEmpty: "还没有记忆条目：可前往蒸馏工作台产出一条。",
   insightTotal:

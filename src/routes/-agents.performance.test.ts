@@ -18,5 +18,7 @@ test("Agent analytics and security status load after first route paint", () => {
   assert.match(page, /void Promise\.all/);
   assert.match(page, /getAgentUsageOverview/);
   assert.match(page, /getSecuritySkillVerdicts/);
-  assert.match(page, /if \(usage == null\) return <RoutePending/);
+  // P2-16: a failed fetch renders a retryable error panel, never a skeleton.
+  assert.match(page, /status === "loading"\) return <RoutePending/);
+  assert.match(page, /LoadErrorPanel/);
 });

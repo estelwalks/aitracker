@@ -183,11 +183,11 @@ function ModelSelect({
   const groups = useMemo(() => {
     const map = new Map<string, typeof list>();
     for (const option of list) {
-      const vendor = option.vendor ?? "自有";
+      const vendor = option.vendor ?? t("distill.ownVendor");
       map.set(vendor, [...(map.get(vendor) ?? []), option]);
     }
     return [...map.entries()];
-  }, [list]);
+  }, [list, t]);
 
   return (
     <div ref={rootRef} className="relative w-full sm:max-w-[300px]">

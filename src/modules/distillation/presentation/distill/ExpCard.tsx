@@ -170,8 +170,7 @@ function buildSkillFiles(
       },
       {
         path: "references/usage.md",
-        content:
-          "# 使用建议\n\n1. 先替换变量占位符，再交给 Agent 执行\n2. 如果任务跨度大，建议把 Prompt 拆到多个步骤节点\n3. 若输出不稳定，补充项目上下文与成功标准\n",
+        content: `# 使用建议\n\n1. 先替换变量占位符，再交给 Agent 执行\n2. 如果任务跨度大，建议把 Prompt 拆到多个步骤节点\n3. 若输出不稳定，补充项目上下文与成功标准\n`,
       },
     ];
   }
@@ -188,8 +187,7 @@ function buildSkillFiles(
       },
       {
         path: "references/pitfalls.md",
-        content:
-          "# 历史踩坑与修复\n\n1. SSR 阶段访问 window：改为 useEffect 内读取\n2. 长列表卡顿：虚拟滚动 + memo\n3. 时区偏差：统一 UTC 存储、本地化展示\n",
+        content: `# 历史踩坑与修复\n\n1. SSR 阶段访问 window：改为 useEffect 内读取\n2. 长列表卡顿：虚拟滚动 + memo\n3. 时区偏差：统一 UTC 存储、本地化展示\n`,
       },
     ];
   }
@@ -206,23 +204,19 @@ function buildSkillFiles(
     },
     {
       path: "references/stack.md",
-      content:
-        "# 技术栈画像\n\n| 层 | 选型 | 备注 |\n| --- | --- | --- |\n| 前端 | React 19 + TypeScript | 严格模式 |\n| 路由 | TanStack Router | 文件式路由 |\n| 样式 | Tailwind CSS v4 | 语义 token |\n| 数据 | TanStack Query | 缓存与失效 |\n",
+      content: `# 技术栈画像\n\n| 层 | 选型 | 备注 |\n| --- | --- | --- |\n| 前端 | React 19 + TypeScript | 严格模式 |\n| 路由 | TanStack Router | 文件式路由 |\n| 样式 | Tailwind CSS v4 | 语义 token |\n| 数据 | TanStack Query | 缓存与失效 |\n`,
     },
     {
       path: "references/pitfalls.md",
-      content:
-        "# 常见问题与修复\n\n1. SSR 阶段访问 window：改为 useEffect 内读取\n2. 长列表卡顿：虚拟滚动 + memo\n3. 时区偏差：统一 UTC 存储、本地化展示\n",
+      content: `# 常见问题与修复\n\n1. SSR 阶段访问 window：改为 useEffect 内读取\n2. 长列表卡顿：虚拟滚动 + memo\n3. 时区偏差：统一 UTC 存储、本地化展示\n`,
     },
     {
       path: "scripts/apply_conventions.py",
-      content:
-        '#!/usr/bin/env python3\n"""按蒸馏出的约定检查当前仓库。"""\nimport pathlib, re, sys\n\nBAD = re.compile(r"console\\.log\\(")\n\ndef main() -> int:\n    hits = []\n    for f in pathlib.Path("src").rglob("*.ts*"):\n        if BAD.search(f.read_text(encoding="utf-8", errors="ignore")):\n            hits.append(str(f))\n    for h in hits:\n        print("debug log:", h)\n    return 1 if hits else 0\n\nif __name__ == "__main__":\n    sys.exit(main())\n',
+      content: `#!/usr/bin/env python3\n"""按蒸馏出的约定检查当前仓库。"""\nimport pathlib, re, sys\n\nBAD = re.compile(r"console\\.log\\(")\n\ndef main() -> int:\n    hits = []\n    for f in pathlib.Path("src").rglob("*.ts*"):\n        if BAD.search(f.read_text(encoding="utf-8", errors="ignore")):\n            hits.append(str(f))\n    for h in hits:\n        print("debug log:", h)\n    return 1 if hits else 0\n\nif __name__ == "__main__":\n    sys.exit(main())\n`,
     },
     {
       path: "scripts/collect_context.sh",
-      content:
-        '#!/usr/bin/env bash\nset -euo pipefail\n# 采集项目上下文，供 Skill 在会话开始时读取\necho "## 依赖"; cat package.json | head -40\necho "## 目录"; ls -1 src\n',
+      content: `#!/usr/bin/env bash\nset -euo pipefail\n# 采集项目上下文，供 Skill 在会话开始时读取\necho "## 依赖"; cat package.json | head -40\necho "## 目录"; ls -1 src\n`,
     },
     {
       path: "assets/metadata.json",
@@ -362,6 +356,12 @@ function SaveModal({
     if (files.length === 0) return null;
     return qualifySkillFiles(files, candidate.kind);
   }, [candidate, draft]);
+  const warnCount =
+    qualification?.checks.filter((c) => c.severity === "warn" && !c.pass)
+      .length ?? 0;
+  const errorCount =
+    qualification?.checks.filter((c) => c.severity === "error" && !c.pass)
+      .length ?? 0;
 
   async function handleSave() {
     if (!name.trim() || targets.length === 0) return;
@@ -392,8 +392,14 @@ function SaveModal({
     if (savedAgents.length > 0) {
       toast.success(
         savedAgents.length === 1
-          ? `${kindLabel} 已保存到 ${savedAgents[0]}`
-          : `${kindLabel} 已保存到 ${savedAgents.length} 个工具`,
+          ? t("distill.expSavedToSingle", {
+              kind: kindLabel,
+              target: savedAgents[0],
+            })
+          : t("distill.expSavedToMulti", {
+              kind: kindLabel,
+              count: savedAgents.length,
+            }),
       );
     }
     if (failed.length > 0) {
@@ -404,7 +410,10 @@ function SaveModal({
   }
 
   return (
-    <Modal onClose={onClose} title={`保存并安装${kindLabel}`}>
+    <Modal
+      onClose={onClose}
+      title={t("distill.expSaveInstall", { kind: kindLabel })}
+    >
       <div className="space-y-3">
         <div>
           <label className="mb-1.5 block text-[11px] text-muted-foreground">
@@ -427,22 +436,13 @@ function SaveModal({
             <div className="flex items-center gap-2 font-medium">
               <ShieldCheck className="size-3.5" />
               {qualification.pass
-                ? `质检合格${
-                    qualification.checks.filter(
-                      (c) => c.severity === "warn" && !c.pass,
-                    ).length > 0
-                      ? ` · ${
-                          qualification.checks.filter(
-                            (c) => c.severity === "warn" && !c.pass,
-                          ).length
-                        } 条建议`
-                      : ""
-                  }`
-                : `质检不合格（${
-                    qualification.checks.filter(
-                      (c) => c.severity === "error" && !c.pass,
-                    ).length
-                  } 项）`}
+                ? warnCount > 0
+                  ? `${t("distill.qualifyPass")} · ${t(
+                      "distill.qualifySuggestions",
+                      { count: warnCount },
+                    )}`
+                  : t("distill.qualifyPass")
+                : t("distill.qualifyFail", { count: errorCount })}
             </div>
             {qualification.checks.some((c) => !c.pass) && (
               <ul className="mt-1.5 space-y-0.5">
@@ -464,7 +464,9 @@ function SaveModal({
                       </span>
                       <span className="text-foreground/80">
                         {check.label}
-                        {check.severity === "warn" ? "（建议）" : ""}
+                        {check.severity === "warn"
+                          ? t("distill.qualifyWarnTag")
+                          : ""}
                       </span>
                       {check.detail ? (
                         <span className="text-muted-foreground">
@@ -553,7 +555,7 @@ function SaveModal({
             className="rounded-full bg-primary px-4 py-2 text-[12px] font-semibold text-primary-foreground disabled:opacity-40"
           >
             <Save className="mr-1 inline size-3.5" />
-            {`保存并安装${kindLabel}`}
+            {t("distill.expSaveInstall", { kind: kindLabel })}
           </button>
         </div>
       </div>
@@ -663,7 +665,7 @@ export function ExpCard({
                 >
                   {memoryAsset
                     ? t("distill.expSavedMemory")
-                    : `${kindLabel} 已保存 ✓`}
+                    : t("distill.expSavedKind", { kind: kindLabel })}
                 </span>
               )}
             </div>
@@ -675,8 +677,16 @@ export function ExpCard({
             </div>
             {(projectLine || titleLine) && (
               <div className="relative space-y-1 px-4 pb-3 font-mono text-[10.5px] text-muted-foreground">
-                {projectLine && <div>项目：{projectLine}</div>}
-                {titleLine && <div>会话：{titleLine}</div>}
+                {projectLine && (
+                  <div>
+                    {t("distill.materialProject")}：{projectLine}
+                  </div>
+                )}
+                {titleLine && (
+                  <div>
+                    {t("distill.materialSession")}：{titleLine}
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -762,7 +772,8 @@ export function ExpCard({
                 className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-white transition-opacity hover:opacity-90"
                 style={{ background: badge.color }}
               >
-                <Rocket className="size-3.5" /> {`保存并安装${kindLabel}`}
+                <Rocket className="size-3.5" />{" "}
+                {t("distill.expSaveInstall", { kind: kindLabel })}
               </button>
               <Act
                 icon={RefreshCw}

@@ -321,11 +321,28 @@ function addBreakdown(
   map.set(key, totals);
 }
 
-function serializeBreakdown(
-  map: Map<string, LocalUsageTotals>,
+/**
+ * Display-safe project label (final path segment), mirroring the persistence
+ * layer's `safeProjectLabel` without importing a server-only module (P2-1).
+ */
+function displayProjectLabel(project: string): string {
+  const normalized = project.trim().replaceAll("\\", "/").replace(/\/+$/u, "");
+  const label = normalized.slice(normalized.lastIndexOf("/") + 1);
+  return label && !/^[A-Za-z]:$/u.test(label) ? label.slice(0, 128) : "unknown";
+}
+
+function serializeBreakdown<T extends LocalUsageTotals>(
+  map: Map<string, T>,
+  withLabel = false,
 ): LocalUsageBreakdown[] {
   return [...map.entries()]
-    .map(([key, totals]) => ({ key, ...totals }))
+    .map(([key, totals]) => ({
+      key,
+      ...(withLabel && (totals as { label?: string }).label
+        ? { label: (totals as { label?: string }).label }
+        : {}),
+      ...totals,
+    }))
     .sort(
       (left, right) =>
         right.totalTokens - left.totalTokens ||
@@ -343,7 +360,7 @@ export function buildUsageSnapshotFromProjection(input: {
   const totals = emptyTotals();
   const bySource = new Map<string, LocalUsageTotals>();
   const byModel = new Map<string, LocalUsageTotals>();
-  const byProject = new Map<string, LocalUsageTotals>();
+  const byProject = new Map<string, LocalUsageTotals & { label?: string }>();
   const daily = new Map<string, LocalUsageTotals>();
   const dailyBySource = new Map<string, Record<string, LocalTokenCounts>>();
   for (const bucket of input.buckets) {
@@ -351,7 +368,17 @@ export function buildUsageSnapshotFromProjection(input: {
     addCounts(totals, bucket);
     addBreakdown(bySource, bucket.source, bucket);
     addBreakdown(byModel, bucket.model, bucket);
-    addBreakdown(byProject, bucket.projectRefHash ?? bucket.project, bucket);
+    // P2-1: group by the stable ref hash but carry the display label so
+    // hydrated snapshots never surface a base64url hash as a project name.
+    const projectKey = bucket.projectRefHash ?? bucket.project;
+    const existingProject = byProject.get(projectKey);
+    const projectTotals = existingProject ?? {
+      ...emptyTotals(),
+      label: bucket.projectLabel ?? displayProjectLabel(bucket.project),
+    };
+    projectTotals.events += bucket.events;
+    addCounts(projectTotals, bucket);
+    byProject.set(projectKey, projectTotals);
     addBreakdown(daily, bucket.date, bucket);
     const sourceRows = dailyBySource.get(bucket.date) ?? {};
     const counts = sourceRows[bucket.source] ?? emptyCounts();
@@ -374,7 +401,7 @@ export function buildUsageSnapshotFromProjection(input: {
     totals,
     bySource: serializeBreakdown(bySource),
     byModel: serializeBreakdown(byModel),
-    byProject: serializeBreakdown(byProject),
+    byProject: serializeBreakdown(byProject, true),
     daily: dailyRows,
     details: [],
     recent: [],

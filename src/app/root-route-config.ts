@@ -1,5 +1,10 @@
 import appCss from "../styles.css?url";
-import { APP_FAVICON_URL, APP_NAME, brandParams } from "../lib/app-config";
+import {
+  APP_FAVICON_DARK_URL,
+  APP_FAVICON_LIGHT_URL,
+  APP_NAME,
+  brandParams,
+} from "../lib/app-config";
 import {
   catalogFor,
   getMessage,
@@ -70,8 +75,17 @@ export function rootHead({ loaderData }: { loaderData?: RootLoaderData }) {
       { rel: "stylesheet", href: appCss },
       {
         rel: "icon",
-        href: APP_FAVICON_URL,
-        type: "image/png",
+        id: "app-favicon-light",
+        href: APP_FAVICON_LIGHT_URL,
+        type: "image/svg+xml",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        rel: "icon",
+        id: "app-favicon-dark",
+        href: APP_FAVICON_DARK_URL,
+        type: "image/svg+xml",
+        media: "(prefers-color-scheme: dark)",
       },
     ],
   };

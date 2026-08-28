@@ -11,8 +11,8 @@
       "network": "allowed"
     },
     "usage": {
-      "freshForMinutes": 1,
-      "defaultRefreshMinutes": 1,
+      "freshForMinutes": 5,
+      "defaultRefreshMinutes": 5,
       "startupPolicy": "if-stale",
       "staleReadable": true,
       "manualRefresh": true,
@@ -72,86 +72,141 @@
         "id": "exchange.refresh",
         "executorKey": "refresh-exchange-v1",
         "category": "collection",
-        "defaultSchedule": { "kind": "interval", "minutes": 1440 },
+        "defaultSchedule": {
+          "kind": "interval",
+          "minutes": 1440
+        },
         "constraints": {
           "minMinutes": 60,
           "maxMinutes": 10080,
           "singleFlight": true
         },
         "startupPolicy": "if-stale",
-        "retry": { "maxAttempts": 2, "backoffSeconds": [300, 900] },
+        "retry": {
+          "maxAttempts": 2,
+          "backoffSeconds": [
+            300,
+            900
+          ]
+        },
         "timeoutMs": 15000,
         "queue": "background",
         "network": "allowed",
         "requiresApproval": false,
-        "ui": { "settingsVisible": true, "i18nKey": "tasks.usageRefresh" }
+        "ui": {
+          "settingsVisible": true,
+          "i18nKey": "tasks.usageRefresh"
+        }
       },
       {
         "id": "usage.refresh",
         "executorKey": "refresh-usage-v1",
         "category": "collection",
-        "defaultSchedule": { "kind": "interval", "minutes": 1 },
+        "defaultSchedule": {
+          "kind": "interval",
+          "minutes": 5
+        },
         "constraints": {
           "minMinutes": 1,
           "maxMinutes": 1440,
           "singleFlight": true
         },
         "startupPolicy": "if-stale",
-        "retry": { "maxAttempts": 2, "backoffSeconds": [30, 120] },
+        "retry": {
+          "maxAttempts": 2,
+          "backoffSeconds": [
+            30,
+            120
+          ]
+        },
         "timeoutMs": 120000,
         "queue": "background",
         "network": "forbidden",
         "requiresApproval": false,
-        "ui": { "settingsVisible": true, "i18nKey": "tasks.usageRefresh" }
+        "ui": {
+          "settingsVisible": true,
+          "i18nKey": "tasks.usageRefresh"
+        }
       },
       {
         "id": "skills.refresh",
         "executorKey": "refresh-skills-v1",
         "category": "collection",
-        "defaultSchedule": { "kind": "interval", "minutes": 60 },
+        "defaultSchedule": {
+          "kind": "interval",
+          "minutes": 60
+        },
         "constraints": {
           "minMinutes": 15,
           "maxMinutes": 10080,
           "singleFlight": true
         },
         "startupPolicy": "if-stale",
-        "retry": { "maxAttempts": 2, "backoffSeconds": [60, 300] },
+        "retry": {
+          "maxAttempts": 2,
+          "backoffSeconds": [
+            60,
+            300
+          ]
+        },
         "timeoutMs": 180000,
         "queue": "background",
         "network": "forbidden",
         "requiresApproval": false,
-        "ui": { "settingsVisible": true, "i18nKey": "tasks.skillsRefresh" }
+        "ui": {
+          "settingsVisible": true,
+          "i18nKey": "tasks.skillsRefresh"
+        }
       },
       {
         "id": "sessions.refresh",
         "executorKey": "refresh-sessions-v1",
         "category": "collection",
-        "defaultSchedule": { "kind": "interval", "minutes": 30 },
+        "defaultSchedule": {
+          "kind": "interval",
+          "minutes": 30
+        },
         "constraints": {
           "minMinutes": 5,
           "maxMinutes": 1440,
           "singleFlight": true
         },
         "startupPolicy": "if-stale",
-        "retry": { "maxAttempts": 1, "backoffSeconds": [60] },
+        "retry": {
+          "maxAttempts": 1,
+          "backoffSeconds": [
+            60
+          ]
+        },
         "timeoutMs": 180000,
         "queue": "background",
         "network": "forbidden",
         "requiresApproval": false,
-        "ui": { "settingsVisible": true, "i18nKey": "tasks.sessionsRefresh" }
+        "ui": {
+          "settingsVisible": true,
+          "i18nKey": "tasks.sessionsRefresh"
+        }
       },
       {
         "id": "installation.refresh",
         "executorKey": "refresh-installation-v1",
         "category": "collection",
-        "defaultSchedule": { "kind": "interval", "minutes": 360 },
+        "defaultSchedule": {
+          "kind": "interval",
+          "minutes": 360
+        },
         "constraints": {
           "minMinutes": 60,
           "maxMinutes": 10080,
           "singleFlight": true
         },
         "startupPolicy": "if-stale",
-        "retry": { "maxAttempts": 1, "backoffSeconds": [120] },
+        "retry": {
+          "maxAttempts": 1,
+          "backoffSeconds": [
+            120
+          ]
+        },
         "timeoutMs": 60000,
         "queue": "background",
         "network": "forbidden",
@@ -165,19 +220,59 @@
         "id": "retention.apply",
         "executorKey": "apply-retention-v1",
         "category": "maintenance",
-        "defaultSchedule": { "kind": "daily", "localTime": "03:00" },
+        "defaultSchedule": {
+          "kind": "daily",
+          "localTime": "03:00"
+        },
         "constraints": {
           "minMinutes": 1440,
           "maxMinutes": 10080,
           "singleFlight": true
         },
         "startupPolicy": "disabled",
-        "retry": { "maxAttempts": 1, "backoffSeconds": [300] },
+        "retry": {
+          "maxAttempts": 1,
+          "backoffSeconds": [
+            300
+          ]
+        },
         "timeoutMs": 120000,
         "queue": "maintenance",
         "network": "forbidden",
         "requiresApproval": false,
-        "ui": { "settingsVisible": true, "i18nKey": "tasks.retentionApply" }
+        "ui": {
+          "settingsVisible": true,
+          "i18nKey": "tasks.retentionApply"
+        }
+      },
+      {
+        "id": "backup.daily",
+        "executorKey": "backup-daily-v1",
+        "category": "maintenance",
+        "defaultSchedule": {
+          "kind": "interval",
+          "minutes": 1440
+        },
+        "constraints": {
+          "minMinutes": 1440,
+          "maxMinutes": 10080,
+          "singleFlight": true
+        },
+        "startupPolicy": "disabled",
+        "retry": {
+          "maxAttempts": 1,
+          "backoffSeconds": [
+            300
+          ]
+        },
+        "timeoutMs": 120000,
+        "queue": "maintenance",
+        "network": "forbidden",
+        "requiresApproval": false,
+        "ui": {
+          "settingsVisible": true,
+          "i18nKey": "tasks.backupDaily"
+        }
       },
       {
         "id": "reports.generate",
@@ -194,30 +289,51 @@
           "singleFlight": true
         },
         "startupPolicy": "disabled",
-        "retry": { "maxAttempts": 2, "backoffSeconds": [120, 600] },
+        "retry": {
+          "maxAttempts": 2,
+          "backoffSeconds": [
+            120,
+            600
+          ]
+        },
         "timeoutMs": 300000,
         "queue": "interactive",
         "network": "forbidden",
         "requiresApproval": false,
-        "ui": { "settingsVisible": false, "i18nKey": "tasks.reportsGenerate" }
+        "ui": {
+          "settingsVisible": false,
+          "i18nKey": "tasks.reportsGenerate"
+        }
       },
       {
         "id": "reports.generate.daily",
         "executorKey": "generate-report-v1",
         "category": "report",
-        "defaultSchedule": { "kind": "daily", "localTime": "18:00" },
+        "defaultSchedule": {
+          "kind": "daily",
+          "localTime": "18:00"
+        },
         "constraints": {
           "minMinutes": 1440,
           "maxMinutes": 1440,
           "singleFlight": true
         },
         "startupPolicy": "disabled",
-        "retry": { "maxAttempts": 2, "backoffSeconds": [120, 600] },
+        "retry": {
+          "maxAttempts": 2,
+          "backoffSeconds": [
+            120,
+            600
+          ]
+        },
         "timeoutMs": 300000,
         "queue": "interactive",
         "network": "forbidden",
         "requiresApproval": false,
-        "ui": { "settingsVisible": false, "i18nKey": "tasks.reportsGenerate" }
+        "ui": {
+          "settingsVisible": false,
+          "i18nKey": "tasks.reportsGenerate"
+        }
       },
       {
         "id": "reports.generate.weekly",
@@ -234,12 +350,21 @@
           "singleFlight": true
         },
         "startupPolicy": "disabled",
-        "retry": { "maxAttempts": 2, "backoffSeconds": [120, 600] },
+        "retry": {
+          "maxAttempts": 2,
+          "backoffSeconds": [
+            120,
+            600
+          ]
+        },
         "timeoutMs": 300000,
         "queue": "interactive",
         "network": "forbidden",
         "requiresApproval": false,
-        "ui": { "settingsVisible": false, "i18nKey": "tasks.reportsGenerate" }
+        "ui": {
+          "settingsVisible": false,
+          "i18nKey": "tasks.reportsGenerate"
+        }
       },
       {
         "id": "reports.generate.monthly",
@@ -256,12 +381,21 @@
           "singleFlight": true
         },
         "startupPolicy": "disabled",
-        "retry": { "maxAttempts": 2, "backoffSeconds": [120, 600] },
+        "retry": {
+          "maxAttempts": 2,
+          "backoffSeconds": [
+            120,
+            600
+          ]
+        },
         "timeoutMs": 300000,
         "queue": "interactive",
         "network": "forbidden",
         "requiresApproval": false,
-        "ui": { "settingsVisible": false, "i18nKey": "tasks.reportsGenerate" }
+        "ui": {
+          "settingsVisible": false,
+          "i18nKey": "tasks.reportsGenerate"
+        }
       }
     ]
   },

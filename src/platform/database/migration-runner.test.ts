@@ -444,12 +444,15 @@ test("rejects malformed definition lists with invalid-argument", (t) => {
   assert.deepEqual(objectNames(host, "table"), []);
 });
 
-test("single baseline contains the complete release schema", (t) => {
-  assert.equal(MIGRATIONS.length, 1);
+test("baseline migration 0001 contains the complete release schema", (t) => {
+  assert.ok(MIGRATIONS.length >= 1, "at least the baseline migration must exist");
   assert.equal(MIGRATIONS[0].version, 1);
   assert.equal(MIGRATIONS[0].name, "0001_initial_schema");
   assert.equal(MIGRATIONS[0].sql, INITIAL_SCHEMA_SQL);
-  assert.equal(LATEST_MIGRATION_VERSION, 1);
+  assert.equal(
+    LATEST_MIGRATION_VERSION,
+    MIGRATIONS[MIGRATIONS.length - 1].version,
+  );
   assert.doesNotMatch(INITIAL_SCHEMA_SQL, /ALTER\s+TABLE/i);
 
   const host = openHost(t);

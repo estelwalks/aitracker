@@ -5,9 +5,9 @@ import { useI18n } from "../../../lib/i18n/context";
 import {
   getBrowserSecurityClient,
   getDesktopSecurityClient,
+  SECURITY_SCAN_COMPLETED_EVENT,
   type SecurityHistoryView,
 } from "../../security-assessment/index";
-import { SECURITY_SCAN_COMPLETED_EVENT } from "../../security-assessment/events";
 import {
   SkillsPage,
   type SkillWorkspaceSnapshot,

@@ -65,14 +65,17 @@ function download(filename: string, text: string) {
 }
 
 /** 单条记忆导出 MD：frontmatter + 完整正文（FR-014），浏览器本地下载（不触碰网络）。 */
-function downloadMemoryMarkdown(item: MemoryEntry) {
+function downloadMemoryMarkdown(
+  item: MemoryEntry,
+  t: ReturnType<typeof useI18n>["t"],
+) {
   const safeName = (item.title || "memory")
     .replace(/[^\p{L}\p{N} _-]/gu, "")
     .trim()
     .slice(0, 60);
   const frontmatter = [
     "---",
-    `title: ${item.title.replace(/\n/g, " ") || "记忆"}`,
+    `title: ${item.title.replace(/\n/g, " ") || t("memory.titleFallback")}`,
     `type: ${item.type}`,
     `source: ${item.source}`,
     ...(item.project ? [`project: ${item.project}`] : []),
@@ -492,7 +495,7 @@ function MemoryCard({
             <AITrackerButton
               size="sm"
               onClick={() => {
-                downloadMemoryMarkdown(item);
+                downloadMemoryMarkdown(item, t);
                 toast.success(t("memory.exportMd"));
               }}
               disabled={busy}

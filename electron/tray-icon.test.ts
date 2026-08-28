@@ -1,131 +1,98 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  APP_ICON_FILENAMES,
+  findAppIconPath,
   findTrayIconPath,
-  TRAY_ICON_DATA_URL,
-  TRAY_ICON_FILENAME,
+  TRAY_ICON_FILENAMES,
 } from "./tray-icon.js";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 
-function pngSize(path: string): { width: number; height: number } {
-  const bytes = readFileSync(path);
-  assert.deepEqual(
-    [...bytes.subarray(0, 8)],
-    [137, 80, 78, 71, 13, 10, 26, 10],
-  );
-  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
-}
-
-test("tray fallback is an inline PNG data URL", () => {
-  assert.match(TRAY_ICON_DATA_URL, /^data:image\/png;base64,/u);
-  const png = Buffer.from(
-    TRAY_ICON_DATA_URL.replace("data:image/png;base64,", ""),
-    "base64",
-  );
-  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+test("the canonical light and dark SVG assets are scalable square icons", () => {
+  for (const filename of ["favicon.svg", "favicon-dark.svg"]) {
+    const source = readFileSync(join(projectRoot, "public", filename), "utf8");
+    assert.match(source, /^<svg[^>]+viewBox="0 0 1024 1024"/u);
+  }
 });
 
-test("the shared tray logo is a valid application icon asset", () => {
-  assert.deepEqual(
-    pngSize(
-      join(
-        projectRoot,
-        "public",
-        "brand-logos",
-        "ai-tracker",
-        TRAY_ICON_FILENAME,
-      ),
-    ),
-    { width: 1024, height: 1024 },
-  );
-});
-
-test("the fallback is still a valid PNG", () => {
-  const png = Buffer.from(
-    TRAY_ICON_DATA_URL.replace("data:image/png;base64,", ""),
-    "base64",
-  );
-  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-  assert.deepEqual(
-    { width: png.readUInt32BE(16), height: png.readUInt32BE(20) },
-    { width: 16, height: 16 },
-  );
-});
-
-test("packaging preserves the shared tray logo and removes template resources", () => {
-  const ignored = spawnSync(
-    "git",
-    [
-      "check-ignore",
-      "--quiet",
-      `public/brand-logos/ai-tracker/${TRAY_ICON_FILENAME}`,
-    ],
-    { cwd: projectRoot },
-  );
-  assert.equal(ignored.status, 1, "the tray logo must not be ignored by git");
-
+test("packaging generates and preserves both native icon appearances", () => {
   const builderConfig = readFileSync(
     join(projectRoot, "electron-builder.yml"),
     "utf8",
   );
-  assert.match(
-    builderConfig,
-    /from: public\/brand-logos\/ai-tracker\/ai-tracker-icon-app\.png\s+to: tray\/ai-tracker-icon-app\.png/u,
+  const generator = readFileSync(
+    join(projectRoot, "scripts", "generate-native-icons.mjs"),
+    "utf8",
   );
-  assert.doesNotMatch(builderConfig, /tray-iconTemplate/u);
-  assert.match(
-    builderConfig,
-    /extraResources:\s*[\s\S]*?- from: \.output\s+to: web/u,
-  );
+
+  assert.match(builderConfig, /from: build\/native-icons\s+to: native-icons/u);
+  assert.match(builderConfig, /icon: public\/favicon\.svg/u);
+  for (const filename of [
+    ...Object.values(TRAY_ICON_FILENAMES),
+    ...Object.values(APP_ICON_FILENAMES),
+  ]) {
+    assert.match(generator, new RegExp(filename.replace(".", "\\."), "u"));
+  }
 });
 
-test("development and packaged paths target the shared tray logo", () => {
-  const developmentPath = join(
-    projectRoot,
-    "public",
-    "brand-logos",
-    "ai-tracker",
-    TRAY_ICON_FILENAME,
-  );
-  assert.equal(
-    findTrayIconPath({
-      isPackaged: false,
-      resourcesPath: "/unused",
-      appPath: projectRoot,
-    }),
-    developmentPath,
-  );
+test("development paths select light and dark generated icons", () => {
+  for (const appearance of ["light", "dark"] as const) {
+    const trayPath = join(
+      projectRoot,
+      "build",
+      "native-icons",
+      TRAY_ICON_FILENAMES[appearance],
+    );
+    assert.equal(
+      findTrayIconPath(
+        {
+          isPackaged: false,
+          resourcesPath: "/unused",
+          appPath: projectRoot,
+        },
+        appearance,
+        (candidate) => candidate === trayPath,
+      ),
+      trayPath,
+    );
+  }
+});
+
+test("packaged paths select the theme-aware app icon", () => {
   const packagedPath = join(
     "C:\\Program Files\\AITracker\\resources",
-    "tray",
-    TRAY_ICON_FILENAME,
+    "native-icons",
+    APP_ICON_FILENAMES.dark,
   );
   assert.equal(
-    findTrayIconPath(
+    findAppIconPath(
       {
         isPackaged: true,
         resourcesPath: "C:\\Program Files\\AITracker\\resources",
         appPath: "/unused",
       },
+      "dark",
       (candidate) => candidate === packagedPath,
     ),
     packagedPath,
   );
 });
 
-test("missing development logo falls back without a path warning", () => {
+test("missing generated icon returns null without a path warning", () => {
   assert.equal(
-    findTrayIconPath({
-      isPackaged: false,
-      resourcesPath: "/tmp/resources",
-      appPath: "/tmp/aitracker-no-build",
-    }),
+    findTrayIconPath(
+      {
+        isPackaged: false,
+        resourcesPath: "/tmp/resources",
+        appPath: "/tmp/aitracker-no-build",
+      },
+      "light",
+    ),
     null,
   );
 });

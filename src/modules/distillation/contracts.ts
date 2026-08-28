@@ -13,7 +13,7 @@ import type {
   SessionTranscript,
 } from "../sessions/contracts.ts";
 import type { Result } from "../../shared/result.ts";
-import type { DistillQuota } from "./quota.ts";
+import type { DistillQuotaPort } from "./quota.ts";
 
 export const distillationModuleId = "distillation" as const;
 export type DistillationModuleId = typeof distillationModuleId;
@@ -213,15 +213,14 @@ export interface DistillationPorts {
   readonly persistence?: CandidatePersistence;
   /**
    * Optional server-side daily quota ledger for real-model calls (Story B-600).
-   * When present, `start` rejects a real-model request that has exhausted
-   * today's quota and records one usage after a successful run. Offline runs
-   * never touch it; a missing or failing quota port degrades to unlimited so
-   * distillation is never blocked by quota bookkeeping itself.
+   * When present, `start` atomically reserves one call against today's quota
+   * before invoking the model (P2-10) — the reservation both checks the limit
+   * and counts the call in a single ledger write, so concurrent starts can
+   * never overshoot the daily ceiling. Offline runs never touch it; a missing
+   * or failing quota port degrades to unlimited so distillation is never
+   * blocked by quota bookkeeping itself.
    */
-  readonly quota?: {
-    read(): Promise<DistillQuota>;
-    increment(date: string): Promise<DistillQuota>;
-  };
+  readonly quota?: DistillQuotaPort;
   readonly now?: () => Date;
   readonly createCandidateId?: () => string;
 }

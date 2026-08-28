@@ -96,7 +96,19 @@ export function canTransition(
   );
 }
 
-export function safeReportText(value: string, max = 60_000): string {
+/**
+ * Storage boundary for report bodies. This is NOT a free choice: the `reports`
+ * table carries `CHECK (length(body) BETWEEN 1 AND 60000)` in migration
+ * `0001_initial_schema` (line ~583). SQLite cannot alter a CHECK on an existing
+ * table, and the migration is checksum-validated against already-created
+ * databases — so the durable limit stays 60,000 characters and `safeReportText`
+ * keeps truncating here. The transport layer (server-fns) allows up to 2 MiB;
+ * anything above the DB boundary is truncated explicitly and signalled via
+ * `wasReportTextTruncated` instead of silently dropped (P1-10).
+ */
+export const REPORT_BODY_MAX = 60_000;
+
+export function safeReportText(value: string, max = REPORT_BODY_MAX): string {
   const text = value.trim().slice(0, max);
   if (!text) throw new TypeError("report body is empty");
   if (
@@ -106,4 +118,16 @@ export function safeReportText(value: string, max = 60_000): string {
   )
     throw new TypeError("report body contains sensitive data");
   return text;
+}
+
+/**
+ * Explicit truncation signal (P1-10): true when `value` exceeds the storage
+ * boundary and a persistence path would slice it. Callers surface this to the
+ * user ("正文超过 60,000 字符将被截断") instead of truncating silently.
+ */
+export function wasReportTextTruncated(
+  value: string,
+  max = REPORT_BODY_MAX,
+): boolean {
+  return value.trim().length > max;
 }

@@ -139,8 +139,9 @@ test("read failures return a stable error", async () => {
   assert.equal(JSON.stringify(result).includes("private"), false);
 });
 
-test("default freshness follows the 1 minute Usage runtime policy", async () => {
-  assert.equal(DEFAULT_MAX_AGE_MS, 60_000);
+test("default freshness follows the 5 minute Usage runtime policy", async () => {
+  // P2-8: the Usage snapshot freshness window moved from 1 to 5 minutes.
+  assert.equal(DEFAULT_MAX_AGE_MS, 300_000);
   const result = await createSourcesApplication({
     repository: {
       async read() {

@@ -1165,3 +1165,28 @@ test("a failing tick re-arms with a bounded fallback instead of dying", async ()
   );
   await scheduler.stop();
 });
+
+test("a cancelled startup collector does not fail the startup barrier (P2-7)", async () => {
+  const h = harness();
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: startupCatalog(),
+    executors: {
+      ...successfulStartupExecutors(),
+      "refresh-usage-v1": async () => {
+        // Simulate a collector cancelled by its timeout: the scheduler records
+        // the run as cancelled (AbortError path) without failing the barrier.
+        throw Object.assign(new Error("usage:cancelled"), {
+          name: "AbortError",
+        });
+      },
+    },
+  });
+
+  // Must resolve (barrier passes) even though the usage refresh was cancelled.
+  await scheduler.start();
+  const usageRuns = await h.repository.list({ taskId: "usage.refresh" });
+  assert.equal(usageRuns[0]?.status, "cancelled");
+  await scheduler.stop();
+});

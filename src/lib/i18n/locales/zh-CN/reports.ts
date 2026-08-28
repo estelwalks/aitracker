@@ -37,6 +37,8 @@ export const reports = {
   },
   period: {
     weekSuffix: "当周",
+    monthShort: "{month}月",
+    weekShort: "{date}周",
   },
   schedule: {
     title: "自动定时生成",
@@ -116,6 +118,7 @@ export const reports = {
     dayHint: "点圆点表示当日会话密度",
     weekHint: "点任一天选中整周",
     monthHint: "选择月份",
+    weekdayNarrow: "一二三四五六日",
   },
   header: {
     sessions: "{count} 场会话",
@@ -131,6 +134,7 @@ export const reports = {
     emptyDesc: "点击「立即生成」为该周期创建一份报告。",
     draft: "立即生成",
     save: "保存",
+    truncated: "正文超过 60,000 字符将被截断",
     regenerate: "重新生成",
     rewriteTitle: "重新生成报告？",
     rewriteDesc:

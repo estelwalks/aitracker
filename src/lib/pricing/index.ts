@@ -87,6 +87,12 @@ export interface CostEstimate {
   unknownEvents: number;
   unknownModels: string[];
   complete: boolean;
+  /**
+   * True when any constituent event carried cache-write tokens but its matched
+   * rate had no cache-write price (P1-6): the known components were billed at
+   * the real rate, only cache-write was unbilled.
+   */
+  unpricedCacheWrite?: boolean;
 }
 
 export interface PricedUsageRow extends LocalUsageTotals {
@@ -168,6 +174,7 @@ export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
   );
 
   let cost: CostEstimate;
+  const unpricedCacheWrite = resolution.unpricedCacheWrite ?? undefined;
   switch (resolution.confidence) {
     case "exact": {
       const known = resolution.knownUsdNano ?? 0n;
@@ -183,6 +190,7 @@ export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
         unknownEvents: 0,
         unknownModels: [],
         complete: true,
+        ...(unpricedCacheWrite ? { unpricedCacheWrite: true } : {}),
       };
       break;
     }
@@ -200,6 +208,7 @@ export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
         unknownEvents: 0,
         unknownModels: [],
         complete: true,
+        ...(unpricedCacheWrite ? { unpricedCacheWrite: true } : {}),
       };
       break;
     }

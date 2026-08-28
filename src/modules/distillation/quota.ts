@@ -59,4 +59,13 @@ export interface DistillQuotaPort {
    * a different date resets the counter to 1.
    */
   increment(date: string): Promise<DistillQuota>;
+  /**
+   * Atomically reserve one real-model call against `date` (P2-10). The check
+   * and the increment happen in one ledger write, so concurrent reservations
+   * can never overshoot the daily limit. Returns `true` when the call was
+   * counted, `false` when the day's limit is already exhausted. A successful
+   * reservation counts even if the model run later fails — the quota is an
+   * upper-bound control, not an exact billing counter.
+   */
+  reserve(date: string): Promise<boolean>;
 }

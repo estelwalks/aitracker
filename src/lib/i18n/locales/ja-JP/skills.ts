@@ -142,6 +142,9 @@ export const skills = {
   },
   agentOverview: {
     title: "Agent 概要 · {appName}",
+    loadFailed: "Agent データの読み込みに失敗しました",
+    loadFailedDesc:
+      "ローカルの使用量・セキュリティデータを読み込めませんでした。再試行してください。",
     insightTitle: "今日のインサイト",
     dedicatedInsight: "専用インサイト",
     insightDescription:
