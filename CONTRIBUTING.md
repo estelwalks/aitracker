@@ -23,6 +23,6 @@ Keep commits reviewable and avoid committing generated installers, local data,
 credentials, or unrelated formatting changes. Generated registries should be
 updated only through their `npm run generate:*` commands.
 
-By participating, you agree to follow `CODE_OF_CONDUCT.md`. Contributions to
-the main application are accepted under GPL-3.0-or-later. Changes made solely
-to `packages/skill-scanner/` are accepted under that package's MIT license.
+By participating, you agree to follow `CODE_OF_CONDUCT.md`. Contributions are
+accepted under the MIT License. The bundled `packages/skill-scanner/` component
+retains its own MIT copyright notice.

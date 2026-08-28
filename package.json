@@ -6,7 +6,7 @@
   "workspaces": [
     "packages/skill-scanner"
   ],
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "main": "build/electron/main.js",
   "sideEffects": false,
   "type": "module",
