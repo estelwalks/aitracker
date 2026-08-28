@@ -76,6 +76,8 @@ export const reports = {
     enabled: "정기 생성이 활성화되었습니다",
     disabled: "정기 생성이 비활성화되었습니다",
     syncFailed: "일정 동기화에 실패했습니다. 로컬 설정은 유지됩니다",
+    modelRequired:
+      "정기 보고서를 켜기 전에 설정 → 모델 및 AI에서 모델을 활성화하세요.",
     editorNote:
       "저장 시 백그라운드 작업 스케줄러에 동기화되며, 앱 실행 중에는 설정한 주기로 자동 생성됩니다.",
     lastRun: "최근 생성",
