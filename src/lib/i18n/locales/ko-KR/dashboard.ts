@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const dashboard = {
   title: "홈 대시보드",
   meta: {

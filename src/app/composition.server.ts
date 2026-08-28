@@ -20,6 +20,10 @@ import {
 } from "./performance-rollout.ts";
 import { createExecutorRegistry } from "../modules/tasks/application/executor-registry/index.ts";
 import { createTaskScheduler } from "../modules/tasks/application/scheduler.ts";
+import type {
+  CalendarCursor,
+  CalendarCursorStore,
+} from "../modules/tasks/application/scheduler.ts";
 import { createTaskApi } from "../modules/tasks/application/task-api.ts";
 import type { TaskApi } from "../modules/tasks/application/task-api.ts";
 import {
@@ -56,6 +60,7 @@ import {
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
 import type { KnowledgeRepository } from "../modules/knowledge/contracts.ts";
+import type { PreferenceValue } from "../modules/settings/infrastructure/sqlite-preference-repository.server.ts";
 import { createDistillationApplication } from "../modules/distillation/application/index.ts";
 import type { DistillationApplication } from "../modules/distillation/index.ts";
 import type { DistillQuotaPort } from "../modules/distillation/quota.ts";
@@ -547,6 +552,11 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     context: createReportContextPort({
       snapshot: sessionSnapshot,
       usage: usageSnapshot,
+      usdToCny: async () => {
+        const { buildPricingSnapshot } =
+          await import("../lib/pricing/dynamic.server.ts");
+        return (await buildPricingSnapshot([])).usdToCny;
+      },
     }),
     generation: createReportGenerationPort({
       ai: aiExecutor,
@@ -716,12 +726,63 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     "installation.refresh": installationSnapshot,
   };
 
+  // Calendar-schedule cursors are persisted in app_preferences (same durable
+  // runtime contract the security scan scheduler uses) so a missed occurrence
+  // — the server/app was closed at the scheduled time — catches up on the
+  // next start instead of being silently dropped.
+  const CALENDAR_CURSOR_KEY = `${APP_ID}.tasks.calendar-cursor.v1`;
+  const calendarCursors: CalendarCursorStore = {
+    async read() {
+      try {
+        const entry =
+          databaseRuntime.features.appPreferences.get(CALENDAR_CURSOR_KEY);
+        const value = entry?.value;
+        if (value == null || typeof value !== "object" || Array.isArray(value))
+          return {};
+        const cursors: Record<string, CalendarCursor> = {};
+        for (const [taskId, item] of Object.entries(value)) {
+          const candidate = item as {
+            fingerprint?: unknown;
+            nextRunAt?: unknown;
+          };
+          if (
+            typeof candidate.fingerprint === "string" &&
+            typeof candidate.nextRunAt === "string"
+          ) {
+            cursors[taskId] = {
+              fingerprint: candidate.fingerprint,
+              nextRunAt: candidate.nextRunAt,
+            };
+          }
+        }
+        return cursors;
+      } catch (error) {
+        console.error("[tasks] calendar cursor read failed", error);
+        return {};
+      }
+    },
+    async write(cursors) {
+      try {
+        databaseRuntime.features.appPreferences.set({
+          key: CALENDAR_CURSOR_KEY,
+          value: cursors as unknown as PreferenceValue,
+          updatedAtMs: clock.now().getTime(),
+        });
+      } catch (error) {
+        // Best-effort: a failed cursor write only costs a missed catch-up,
+        // never the scheduler's liveness.
+        console.error("[tasks] calendar cursor write failed", error);
+      }
+    },
+  };
+
   const scheduler = createTaskScheduler({
     preferences,
     runs,
     clock,
     executors: executorRegistry.executors,
     resourceBudget,
+    calendarCursors,
     shouldAwaitStartupTask:
       process.platform === "darwin" || process.platform === "win32"
         ? async (definition) => {

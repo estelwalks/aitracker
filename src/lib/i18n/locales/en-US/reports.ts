@@ -87,6 +87,10 @@ export const reports = {
     disabledStatus: "Disabled",
     processRequiredHint:
       "Runs while the app is open or hidden to the menu bar; missed runs are caught up after the next launch.",
+    schedulerOff:
+      "The background scheduler is not running; scheduled generation will not fire.",
+    schedulerOffHint:
+      "Background tasks are not enabled on this platform or the scheduler failed to start; use the macOS/Windows app and check the application logs.",
     runSummary: "{time} · {result}",
     loadFailed: "Failed to load the report schedule",
     runStatus: {

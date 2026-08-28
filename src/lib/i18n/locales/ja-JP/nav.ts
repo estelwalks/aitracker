@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 export const nav = {
   home: "ホーム概要",
   agents: "Agent 概要",
@@ -8,7 +7,7 @@ export const nav = {
   guard: "セキュリティ検査",
   tracker: "バーンランキング",
   skillHub: "スキル管理",
-  market: "Skill マーケット",
+  market: "セキュリティマーケット",
   resume: "セッション",
   widget: "メニューバーウィジェット",
   sources: "データソース",

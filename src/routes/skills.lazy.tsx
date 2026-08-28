@@ -7,12 +7,12 @@ export const Route = createLazyFileRoute("/skills")({
 });
 
 function SkillsRoute() {
-  const { tab } = Route.useSearch();
+  const { skill, tab } = Route.useSearch();
   const initial = Route.useLoaderData();
 
   if (tab === "market") {
     return <Navigate to="/market" replace />;
   }
 
-  return <SkillHubPage initial={initial} />;
+  return <SkillHubPage initial={initial} initialQuery={skill} />;
 }

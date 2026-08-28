@@ -31,14 +31,12 @@ import {
   OFFICIAL_ENDPOINT,
   OFFICIAL_MODEL,
   OFFICIAL_MODEL_DISPLAY_NAME,
-  RECOMMENDED_MODEL,
-  RECOMMENDED_MODEL_OPTIONS,
-  isRecommendedModel,
   protocolMeta,
   recommendedModelDisplayName,
   type ModelProfileInput,
   type ModelProfileView,
   type ProfileMode,
+  type ProfileProtocol,
 } from "../../ai-orchestration/index.ts";
 import {
   deleteModelProfile,
@@ -53,7 +51,7 @@ interface FormState {
   readonly id: string | null;
   readonly name: string;
   readonly mode: ProfileMode;
-  readonly protocol: "openai" | "anthropic";
+  readonly protocol: ProfileProtocol;
   readonly apiKey: string;
   readonly storedApiKey: boolean;
   readonly endpoint: string;
@@ -123,16 +121,15 @@ function fromProfile(profile: ModelProfileView): FormState {
 }
 
 function fromOfficialProfile(profile: ModelProfileView): FormState {
-  const model = profile.model ?? "";
   return {
     id: profile.id === OFFICIAL_ENTRY_ID ? null : profile.id,
     name: profile.name,
     mode: "official",
-    protocol: "openai",
+    protocol: "openai-responses",
     apiKey: "",
     storedApiKey: profile.apiKeyMasked,
     endpoint: OFFICIAL_ENDPOINT,
-    model: isRecommendedModel(model) ? model : RECOMMENDED_MODEL,
+    model: profile.id === OFFICIAL_ENTRY_ID ? "" : (profile.model ?? ""),
     models: [],
     listing: false,
     listMsg: "",
@@ -144,10 +141,10 @@ function officialEntry(name: string): ModelProfileView {
     id: OFFICIAL_ENTRY_ID,
     name,
     mode: "official",
-    protocol: "openai",
+    protocol: "openai-responses",
     apiKeyMasked: false,
     endpoint: OFFICIAL_ENDPOINT,
-    model: RECOMMENDED_MODEL,
+    model: null,
     auth: "bearer",
     createdAt: "",
     updatedAt: "",
@@ -247,23 +244,25 @@ export function ModelProfilesSection() {
 
   const formValid =
     form.mode === "official"
-      ? form.apiKey.trim().length >= 8 || form.storedApiKey
+      ? form.model.trim().length > 0 &&
+        (form.apiKey.trim().length >= 8 || form.storedApiKey)
       : form.name.trim().length > 0 &&
         form.model.trim().length > 0 &&
         (form.apiKey.trim().length === 0 || form.apiKey.trim().length >= 8) &&
         (form.id !== null || form.apiKey.trim().length >= 8);
 
   const loadModels = async () => {
-    if (form.mode !== "custom") return;
     if (form.listing || (form.apiKey.trim() === "" && form.id === null)) return;
     setForm((current) => ({ ...current, listing: true, listMsg: "" }));
     try {
       const result = await listRemoteModels({
         data: {
           id: form.id ?? undefined,
-          mode: "custom",
-          protocol: form.protocol,
-          ...(form.endpoint.trim() ? { endpoint: form.endpoint.trim() } : {}),
+          mode: form.mode,
+          ...(form.mode === "custom" ? { protocol: form.protocol } : {}),
+          ...(form.mode === "custom" && form.endpoint.trim()
+            ? { endpoint: form.endpoint.trim() }
+            : {}),
           ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
         },
       });
@@ -371,6 +370,78 @@ export function ModelProfilesSection() {
       setDeleteTarget(null);
     }
   };
+
+  const modelPicker = (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="aitracker-label">
+          {t("settings.modelProfiles.modelLabel")}{" "}
+          <span className="text-danger">*</span>
+        </span>
+        <button
+          type="button"
+          disabled={
+            form.listing || (form.apiKey.trim() === "" && form.id === null)
+          }
+          onClick={() => void loadModels()}
+          className="aitracker-num aitracker-text-caption flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface-1 px-2.5 py-1.5 text-muted-foreground shadow-sm transition-colors hover:border-border-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {form.listing ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="size-3.5" />
+          )}
+          {form.listing
+            ? t("settings.modelProfiles.listingModels")
+            : form.mode === "official"
+              ? t("settings.modelProfiles.listOfficialModels")
+              : t("settings.modelProfiles.listModels")}
+        </button>
+      </div>
+      {form.models.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <select
+            value={form.models.includes(form.model) ? form.model : ""}
+            onChange={(event) => updateForm({ model: event.target.value })}
+            className="security-config-input"
+          >
+            <option value="">{t("settings.modelProfiles.selectModel")}</option>
+            {form.models.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+          <input
+            value={form.model}
+            onChange={(event) => updateForm({ model: event.target.value })}
+            placeholder={t("settings.modelProfiles.manualModel")}
+            maxLength={120}
+            className="security-config-input"
+          />
+        </div>
+      ) : (
+        <input
+          value={form.model}
+          onChange={(event) => updateForm({ model: event.target.value })}
+          placeholder={
+            form.mode === "official"
+              ? t("settings.modelProfiles.officialModelFetchHint")
+              : t("settings.modelProfiles.modelFetchHint", {
+                  model: OFFICIAL_MODEL,
+                })
+          }
+          maxLength={120}
+          className="security-config-input"
+        />
+      )}
+      {form.listMsg && (
+        <div className="aitracker-num aitracker-text-caption mt-1.5 text-muted-foreground">
+          {form.listMsg}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -525,39 +596,25 @@ export function ModelProfilesSection() {
                     </p>
                   )}
                 </div>
-                <dl className="aitracker-text-caption space-y-1 border-t border-border pt-2 text-muted-foreground">
-                  <div className="flex gap-2">
-                    <dt className="w-20 shrink-0">
+                {modelPicker}
+                <dl className="grid gap-2.5 sm:grid-cols-2">
+                  <div className="rounded-md border border-border bg-surface-1/70 p-3 shadow-sm">
+                    <dt className="aitracker-label text-muted-foreground">
                       {t("settings.modelProfiles.apiFormatLabel")}
                     </dt>
-                    <dd className="text-foreground">
-                      {t("settings.modelProfiles.protocolOpenai")}
+                    <dd className="mt-1.5 flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                      {t("settings.modelProfiles.protocolOpenaiResponses")}
+                      <span className="aitracker-num rounded bg-accent px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        POST /responses
+                      </span>
                     </dd>
                   </div>
-                  <div className="flex gap-2">
-                    <dt className="w-20 shrink-0">
+                  <div className="min-w-0 rounded-md border border-border bg-surface-1/70 p-3 shadow-sm">
+                    <dt className="aitracker-label text-muted-foreground">
                       {t("settings.modelProfiles.endpointLabel")}
                     </dt>
-                    <dd className="text-foreground">{OFFICIAL_ENDPOINT}</dd>
-                  </div>
-                  <div className="flex gap-2">
-                    <dt className="w-20 shrink-0">
-                      {t("settings.modelProfiles.modelLabel")}
-                    </dt>
-                    <dd className="text-foreground">
-                      <select
-                        value={form.model}
-                        onChange={(event) =>
-                          updateForm({ model: event.target.value })
-                        }
-                        className="security-config-input h-8 min-w-48 py-1"
-                      >
-                        {RECOMMENDED_MODEL_OPTIONS.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.displayName}
-                          </option>
-                        ))}
-                      </select>
+                    <dd className="aitracker-num mt-1.5 break-all text-sm text-foreground">
+                      {OFFICIAL_ENDPOINT}
                     </dd>
                   </div>
                 </dl>
@@ -584,35 +641,41 @@ export function ModelProfilesSection() {
                   <div className="aitracker-label mb-1.5">
                     {t("settings.modelProfiles.apiFormatLabel")}
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {(["openai", "anthropic"] as const).map((protocol) => (
-                      <button
-                        key={protocol}
-                        type="button"
-                        onClick={() =>
-                          updateForm({
-                            protocol,
-                            models: [],
-                          })
-                        }
-                        className={`rounded-sm border px-2.5 py-2 text-left transition-colors ${form.protocol === protocol ? "border-primary bg-primary/10" : "border-border hover:border-border-strong"}`}
-                      >
-                        <span className="aitracker-text-body-sm block text-foreground">
-                          {t(
-                            protocol === "openai"
-                              ? "settings.modelProfiles.protocolOpenai"
-                              : "settings.modelProfiles.protocolAnthropic",
-                          )}
-                        </span>
-                        <span className="aitracker-text-caption mt-0.5 block text-muted-foreground">
-                          {t(
-                            protocol === "openai"
-                              ? "settings.modelProfiles.protocolOpenaiHint"
-                              : "settings.modelProfiles.protocolAnthropicHint",
-                          )}
-                        </span>
-                      </button>
-                    ))}
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(["openai", "openai-responses", "anthropic"] as const).map(
+                      (protocol) => (
+                        <button
+                          key={protocol}
+                          type="button"
+                          onClick={() =>
+                            updateForm({
+                              protocol,
+                              models: [],
+                            })
+                          }
+                          className={`rounded-sm border px-2.5 py-2 text-left transition-colors ${form.protocol === protocol ? "border-primary bg-primary/10" : "border-border hover:border-border-strong"}`}
+                        >
+                          <span className="aitracker-text-body-sm block text-foreground">
+                            {t(
+                              protocol === "openai"
+                                ? "settings.modelProfiles.protocolOpenai"
+                                : protocol === "openai-responses"
+                                  ? "settings.modelProfiles.protocolOpenaiResponses"
+                                  : "settings.modelProfiles.protocolAnthropic",
+                            )}
+                          </span>
+                          <span className="aitracker-text-caption mt-0.5 block text-muted-foreground">
+                            {t(
+                              protocol === "openai"
+                                ? "settings.modelProfiles.protocolOpenaiHint"
+                                : protocol === "openai-responses"
+                                  ? "settings.modelProfiles.protocolOpenaiResponsesHint"
+                                  : "settings.modelProfiles.protocolAnthropicHint",
+                            )}
+                          </span>
+                        </button>
+                      ),
+                    )}
                   </div>
                 </div>
 
@@ -656,79 +719,7 @@ export function ModelProfilesSection() {
                   </div>
                 </div>
 
-                <div>
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="aitracker-label">
-                      {t("settings.modelProfiles.modelLabel")}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={
-                        form.listing ||
-                        (form.apiKey.trim() === "" && form.id === null)
-                      }
-                      onClick={() => void loadModels()}
-                      className="aitracker-num aitracker-text-caption flex shrink-0 items-center gap-1 rounded-sm border border-border px-2 py-1 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      {form.listing ? (
-                        <Loader2 className="size-3 animate-spin" />
-                      ) : (
-                        <RefreshCw className="size-3" />
-                      )}
-                      {form.listing
-                        ? t("settings.modelProfiles.listingModels")
-                        : t("settings.modelProfiles.listModels")}
-                    </button>
-                  </div>
-                  {form.models.length > 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <select
-                        value={
-                          form.models.includes(form.model) ? form.model : ""
-                        }
-                        onChange={(event) =>
-                          updateForm({ model: event.target.value })
-                        }
-                        className="security-config-input"
-                      >
-                        <option value="">
-                          {t("settings.modelProfiles.selectModel")}
-                        </option>
-                        {form.models.map((model) => (
-                          <option key={model} value={model}>
-                            {model}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        value={form.model}
-                        onChange={(event) =>
-                          updateForm({ model: event.target.value })
-                        }
-                        placeholder={t("settings.modelProfiles.manualModel")}
-                        maxLength={120}
-                        className="security-config-input"
-                      />
-                    </div>
-                  ) : (
-                    <input
-                      value={form.model}
-                      onChange={(event) =>
-                        updateForm({ model: event.target.value })
-                      }
-                      placeholder={t("settings.modelProfiles.modelFetchHint", {
-                        model: OFFICIAL_MODEL,
-                      })}
-                      maxLength={120}
-                      className="security-config-input"
-                    />
-                  )}
-                  {form.listMsg && (
-                    <div className="aitracker-num aitracker-text-caption mt-1 text-muted-foreground">
-                      {form.listMsg}
-                    </div>
-                  )}
-                </div>
+                {modelPicker}
 
                 <dl className="aitracker-num aitracker-text-caption space-y-1 border-t border-border pt-2 text-muted-foreground">
                   <div className="flex gap-2">

@@ -29,6 +29,7 @@ export { InsightCard } from "./page/presentation/insight-card.tsx";
 export { InsightSettingsSection } from "./page/presentation/InsightSettingsSection.tsx";
 export { usePageInsight } from "./page/presentation/use-page-insight.ts";
 export { insightSeverityLabelKey } from "./page/presentation/use-page-insight.ts";
+export { clearPageInsightClientCache } from "./page/presentation/use-page-insight.ts";
 export {
   PAGE_INSIGHT_REFRESH_CHANNEL,
   PAGE_INSIGHT_REFRESH_EVENT,

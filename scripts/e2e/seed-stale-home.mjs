@@ -23,7 +23,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { INITIAL_SCHEMA_SQL } from "../../src/platform/database/migrations/index.ts";
 
-const APP_VERSION = "3.0.1"; // keep in sync with src/lib/app-config.ts
+const APP_VERSION = "1.0.0"; // keep in sync with src/lib/app-config.ts
 const DEFAULT_NOW_MS = Date.UTC(2026, 7, 20, 0, 0, 0);
 const STALE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, matching the old fixture
 

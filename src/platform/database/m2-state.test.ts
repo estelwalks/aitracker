@@ -11,7 +11,7 @@ import { createSqliteMonitoringStatusStore } from "../../modules/monitoring/sqli
 import { createSqliteHttpCacheRepository } from "./http-cache-repository.server.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import { runMigrations } from "./migration-runner.server.ts";
-import { LATEST_MIGRATION_VERSION } from "./migrations/index.ts";
+import { LATEST_MIGRATION_VERSION, MIGRATIONS } from "./migrations/index.ts";
 import { createSqliteRuntimeFlagRepository } from "./runtime-flag-repository.server.ts";
 
 function hostForTest(t: { after(callback: () => void): void }): DatabaseHost {
@@ -33,7 +33,7 @@ test("fresh baseline contains all low-risk state tables", (t) => {
   assert.equal(result.currentVersion, LATEST_MIGRATION_VERSION);
   assert.deepEqual(
     result.applied.map((item) => item.version),
-    [1],
+    MIGRATIONS.map((item) => item.version),
   );
   const tables = host
     .prepare(

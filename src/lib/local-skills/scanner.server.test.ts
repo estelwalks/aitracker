@@ -82,10 +82,13 @@ test("scans common agent roots without treating mtime as usage evidence", async 
   const dataDirectory = join(root, APP_DATA_DIR);
   const claudeSkill = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "example");
   const codexSkill = join(root, SKILL_ROOT_SUFFIXES["Codex"], "example");
+  const aipySkill = join(root, SKILL_ROOT_SUFFIXES["AiPy"], "example");
   await mkdir(claudeSkill, { recursive: true });
   await mkdir(codexSkill, { recursive: true });
+  await mkdir(aipySkill, { recursive: true });
   await writeFile(join(claudeSkill, "SKILL.md"), "# Example");
   await writeFile(join(codexSkill, "SKILL.md"), "# Example");
+  await writeFile(join(aipySkill, "SKILL.md"), "# Example");
 
   const snapshot = await scanLocalSkills({
     homeDirectory: root,
@@ -93,10 +96,11 @@ test("scans common agent roots without treating mtime as usage evidence", async 
     now: new Date(),
   });
 
-  // All nine verified Skill installation targets are exposed.
-  assert.equal(Object.keys(snapshot.roots).length, 9);
+  // All verified Skill installation targets are exposed, including AiPy.
+  assert.equal(Object.keys(snapshot.roots).length, 10);
+  assert.equal(snapshot.agents["AiPy"].installed, true);
   assert.equal(snapshot.skills.length, 1);
-  assert.equal(snapshot.skills[0].installations.length, 2);
+  assert.equal(snapshot.skills[0].installations.length, 3);
   // No structured call evidence: mtime is not treated as usage evidence.
   assert.equal(snapshot.skills[0].lastUsedAt, null);
 });

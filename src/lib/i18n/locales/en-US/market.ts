@@ -1,5 +1,5 @@
 export const market = {
-  pageHeader: "Skill Market",
+  pageHeader: "Security Market",
   pageHeaderDesc: "Only Skills that passed security scanning are listed",
   strip: {
     subtitle:
@@ -7,18 +7,18 @@ export const market = {
   },
   meta: {
     description:
-      "Browse the real {appName} Skill Market index — only Skills that passed security scanning are included.",
+      "Browse the real {appName} Security Market index — only Skills that passed security scanning are included.",
   },
   notProvided: "Not provided",
   jarvis: {
     available:
-      "The market currently offers {total} Skills, {official} of which are official releases.",
-    installed: "{count} market Skills installed on this machine.",
+      "The Security Market currently offers {total} Skills, {official} of which are official releases.",
+    installed: "{count} Security Market Skills installed on this machine.",
   },
   network: {
-    loadFailed: "Network unavailable: failed to load the Skill Market",
+    loadFailed: "Network unavailable: failed to load the Security Market",
     unavailableTitle:
-      "Network unavailable — the Skill Market is temporarily inaccessible",
+      "Network unavailable — the Security Market is temporarily inaccessible",
     unavailableDesc:
       "The locally cached list is still browsable; it will auto-sync with the latest data once the network recovers.",
   },
@@ -31,7 +31,7 @@ export const market = {
     passRate: "Security passed",
     passRatePage: "This page pass rate",
     installedCount: "Installed",
-    hintCurrentPage: "Current page stats",
+    hintAllDimensionsPassed: "Passed all 11 scan dimensions",
     hintLocalInstalled: "Installed on this machine",
     hintDomains: "{count} categories",
   },

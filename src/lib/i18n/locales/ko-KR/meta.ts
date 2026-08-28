@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const meta = {
   title: "{appName} V3.0 · AI 도구 주권 콘솔",
   description:
@@ -7,7 +6,7 @@ export const meta = {
     dashboard: "대시보드 · {appName} V3.0",
     agents: "Agent 개요 · {appName} V3.0",
     skills: "Skill 관리 · {appName} V3.0",
-    market: "Skill 마켓 · {appName} V3.0",
+    market: "보안 마켓 · {appName} V3.0",
     tracker: "버닝 리더보드 · {appName} V3.0",
     security: "보안 검사 · {appName} V3.0",
     sessions: "세션 관리 · {appName} V3.0",

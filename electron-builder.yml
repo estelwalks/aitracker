@@ -21,14 +21,10 @@ files:
   - node_modules/skill-scanner/package.json
   - node_modules/zod/**/*
 extraResources:
-  # Native menu-bar images are kept outside the web bundle. macOS resolves the
-  # Template/@2x pair by filename, so the resources must remain adjacent and
-  # unhashed in the final .app bundle on both Intel and Apple Silicon builds.
-  - from: public/build
-    to: tray
-    filter:
-      - "tray-iconTemplate.png"
-      - "tray-iconTemplate@2x.png"
+  # Keep the supplied application logo outside the asar so both macOS and
+  # Windows can load the same native tray image.
+  - from: public/brand-logos/ai-tracker/ai-tracker-icon-app.png
+    to: tray/ai-tracker-icon-app.png
   - from: .output
     to: web
     filter:

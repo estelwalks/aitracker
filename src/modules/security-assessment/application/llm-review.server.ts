@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import type { AIExecutorPort } from "../../ai-orchestration/index.ts";
+import { getActiveModelProfileForExecution } from "../../ai-orchestration/model-profile.server.ts";
 import { APP_NAME } from "../../../lib/app-config.ts";
 import {
   SECURITY_LLM_DIMENSIONS,
@@ -201,13 +202,11 @@ async function resolveActiveProfile(): Promise<SecurityLlmReviewProfile | null> 
     const { getCompositionRoot } =
       await import("../../../app/composition.server.ts");
     const repository = (await getCompositionRoot()).modelProfiles;
-    const active = await repository.getActiveView();
-    if (!active) return null;
-    const profile = await repository.getProfileForExecution(active.id);
+    const profile = await getActiveModelProfileForExecution(repository);
     if (!profile?.apiKey) return null;
     return {
-      id: active.id,
-      label: active.name || profile.model || active.id,
+      id: profile.id,
+      label: profile.name || profile.model || profile.id,
     };
   } catch {
     return null;

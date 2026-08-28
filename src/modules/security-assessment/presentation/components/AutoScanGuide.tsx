@@ -16,9 +16,10 @@ import {
   type SecurityClient,
 } from "../../query/desktop-client";
 import { getBrowserSecurityClient } from "../../query/browser-client";
-import type {
-  SecurityScanCycle,
-  SecurityScanScheduleView,
+import {
+  resolveNextScheduledScanAt,
+  type SecurityScanCycle,
+  type SecurityScanScheduleView,
 } from "../security-view";
 
 const CYCLE_KEYS: Record<SecurityScanCycle, MessageKey> = {
@@ -41,7 +42,11 @@ const CYCLE_OPTIONS: readonly SecurityScanCycle[] = [
  * 「调整范围」跳转 /settings 全量扫描配置页。
  * SSR 安全 —— 客户端挂载后才解析 client 并读取计划，未就绪前渲染中性加载态。
  */
-export function AutoScanGuide() {
+export function AutoScanGuide({
+  onNextScanAtChange,
+}: {
+  onNextScanAtChange?: (nextScanAt: string | null) => void;
+}) {
   const { t } = useI18n();
   const [client, setClient] = useState<SecurityClient | null>(null);
   const [schedule, setSchedule] = useState<SecurityScanScheduleView | null>(
@@ -50,6 +55,7 @@ export function AutoScanGuide() {
   const [unavailable, setUnavailable] = useState(false);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [timeDraft, setTimeDraft] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -64,8 +70,15 @@ export function AutoScanGuide() {
       setClient(resolved);
       try {
         const nextSchedule = await resolved.getScanSchedule();
+        const nextStatus = await resolved
+          .getScanScheduleStatus()
+          .catch(() => null);
         if (disposed) return;
         setSchedule(nextSchedule);
+        setTimeDraft(nextSchedule.time);
+        onNextScanAtChange?.(
+          resolveNextScheduledScanAt(nextSchedule, nextStatus),
+        );
       } catch {
         if (!disposed) setUnavailable(true);
       }
@@ -73,7 +86,7 @@ export function AutoScanGuide() {
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [onNextScanAtChange]);
 
   const save = useCallback(
     async (patch: Partial<SecurityScanScheduleView>) => {
@@ -86,14 +99,18 @@ export function AutoScanGuide() {
       try {
         const saved = await client.setScanSchedule(next);
         setSchedule(saved);
+        if (patch.time !== undefined) setTimeDraft(saved.time);
+        const status = await client.getScanScheduleStatus().catch(() => null);
+        onNextScanAtChange?.(resolveNextScheduledScanAt(saved, status));
       } catch {
         setSchedule(previous);
+        if (patch.time !== undefined) setTimeDraft(previous.time);
         toast.error(t("security.center.autoScan.saveFailed"));
       } finally {
         setSaving(false);
       }
     },
-    [client, schedule, t],
+    [client, onNextScanAtChange, schedule, t],
   );
 
   const toggle = useCallback(() => {
@@ -223,9 +240,17 @@ export function AutoScanGuide() {
               <Clock className="size-3.5 text-muted-foreground" />
               <input
                 type="time"
-                value={schedule.time}
+                value={timeDraft ?? schedule.time}
                 disabled={schedule.cycle === "hourly" || saving}
-                onChange={(event) => void save({ time: event.target.value })}
+                onChange={(event) => setTimeDraft(event.target.value)}
+                onBlur={(event) => {
+                  const time = event.currentTarget.value;
+                  if (!/^\d{2}:\d{2}$/.test(time)) {
+                    setTimeDraft(schedule.time);
+                  } else if (time !== schedule.time) {
+                    void save({ time });
+                  }
+                }}
                 className="bg-transparent font-mono text-[11.5px] outline-none disabled:opacity-40"
               />
             </span>

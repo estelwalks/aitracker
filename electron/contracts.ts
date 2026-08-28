@@ -119,6 +119,8 @@ export interface SecurityScanStartRequest {
   scope: "single" | "all";
   /** Opaque ref returned by list/select. Absolute paths are never accepted. */
   skillRef?: SecuritySkillTarget["skillRef"];
+  /** Renderer-safe Skill name fallback when catalog and directory names differ. */
+  skillName?: string;
   mode: SecurityScanMode;
   trigger?: SecurityScanTrigger;
 }
@@ -225,6 +227,32 @@ export interface SecurityFindingDto {
   reasoning?: string;
 }
 
+export type SecurityTokenUsageStatus =
+  "not_applicable" | "complete" | "partial" | "unavailable";
+
+export interface SecurityTokenUsageBreakdownDto {
+  status: SecurityTokenUsageStatus;
+  requestCount: number;
+  reportedRequestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedInputTokens: number;
+}
+
+export interface SecurityTokenUsageDto extends SecurityTokenUsageBreakdownDto {
+  byModel: Record<string, SecurityTokenUsageBreakdownDto>;
+  byBranch: Partial<
+    Record<
+      | "ruleReview"
+      | "singleFileAnalysis"
+      | "multiFileAnalysis"
+      | "semanticDedup",
+      SecurityTokenUsageBreakdownDto
+    >
+  >;
+}
+
 export interface SecurityScanReportDto {
   status: "complete" | "partial";
   mode: SecurityScanMode;
@@ -284,6 +312,8 @@ export interface SecurityScanReportDto {
     /** Sanitized bounded fallback only; UI should localize reasonCode. */
     reason: string;
   }>;
+  /** Model accounting returned by skill-scanner; absent on legacy history. */
+  tokenUsage?: SecurityTokenUsageDto;
 }
 
 export interface SecurityScanHistoryEntry {

@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const widget = {
   metaDescription:
     "{appName} 위젯 디자인 미리보기 및 설정: 메뉴바 스타일, 플로팅 3탭 패널, 데스크톱 소형/중형/대형 위젯, 자비스 톤.",

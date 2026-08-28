@@ -8,7 +8,7 @@ import {
   resolveRuntimeIdentity,
 } from "./index.ts";
 
-test("development web defaults to no background scanning", () => {
+test("web defaults to background tasks enabled on supported desktop platforms", () => {
   const identity = createNodeRuntimeIdentity({
     env: { NODE_ENV: "development" },
     platform: "darwin",
@@ -18,22 +18,22 @@ test("development web defaults to no background scanning", () => {
     kind: "web",
     mode: "development",
     platform: "macos",
-    backgroundTasksEnabled: false,
-    backgroundTasksReason: "web-default-disabled",
+    backgroundTasksEnabled: true,
+    backgroundTasksReason: "web-default-enabled",
   });
 });
 
-test("web requires an explicit true flag to enable background work", () => {
+test("web can be explicitly disabled", () => {
   const identity = createNodeRuntimeIdentity({
     env: {
       NODE_ENV: "development",
-      [ENV.ENABLE_BACKGROUND_TASKS]: "true",
+      [ENV.ENABLE_BACKGROUND_TASKS]: "false",
     },
     platform: "win32",
   });
 
-  assert.equal(identity.backgroundTasksEnabled, true);
-  assert.equal(identity.backgroundTasksReason, "explicitly-enabled");
+  assert.equal(identity.backgroundTasksEnabled, false);
+  assert.equal(identity.backgroundTasksReason, "explicitly-disabled");
 });
 
 test("desktop is enabled on supported desktop platforms and can be disabled", () => {

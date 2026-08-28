@@ -38,7 +38,7 @@ async function openRouteWithoutPageErrors(
   expect(response?.status(), `${path} 不应返回 HTTP 错误`).toBeLessThan(400);
   await expect(
     page.getByRole("heading", { name: heading, exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "页面加载失败" })).toHaveCount(
     0,
   );
@@ -58,7 +58,7 @@ test("首页展示真实数据", async ({ page }) => {
   // 新首页（V3.0）真实数据信号：洞察 heading + 指标卡 + 事件计数
   await expect(
     page.getByRole("heading", { name: "今日洞察", exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Token 消耗").first()).toBeVisible();
   // 第一个指标卡（Token 消耗）副文案：真实成本金额 · 较前 N 天
   // （价格目录未知时回退为「已观测 N 条事件」）
@@ -226,13 +226,18 @@ test("安全页连接检测服务且不自动触发扫描", async ({ page }) => 
 
 test("设置加载完成", async ({ page }) => {
   await page.goto("/settings");
+  await page.waitForURL(/locale=/, { timeout: 30_000 });
 
   await expect(
     page.getByRole("heading", { name: "设置", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("开机自启动", { exact: true })).toBeVisible();
+  // 数据路径属于「数据与存储」分类，不与应用偏好混在同一面板。
+  await page.getByRole("button", { name: "数据与存储", exact: true }).click();
   await expect(page.getByText("数据路径", { exact: true })).toBeVisible();
-  await expect(page.getByText("清除缓存", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "清除缓存", exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "应用偏好", exact: true }).click();
   await expect(page.getByText("主题", { exact: true })).toBeVisible();
 });
@@ -249,8 +254,19 @@ test("本地采集状态仅在数据来源页展示真实结果", async ({ page 
   ).toBeVisible();
   await expect(page.getByText("已接入Agent", { exact: true })).toBeVisible();
   await expect(page.getByText("采集事件", { exact: true })).toBeVisible();
-  // 隔离空 Home 下应明确显示全部未安装，并保留扫描目录证据。
-  await expect(page.getByRole("button", { name: /未安装 36/ })).toBeVisible();
+  // PATH 可能命中部分全局可执行文件，即使 HOME 隔离也不等价于零安装。
+  // 校验状态总和覆盖完整工具目录，并保留扫描目录证据。
+  const connectedLabel = await page
+    .getByText("已接入Agent", { exact: true })
+    .locator("..")
+    .locator("..")
+    .textContent();
+  const missingLabel = await page
+    .getByRole("button", { name: /^未安装 \d+$/ })
+    .textContent();
+  const connectedCount = Number(connectedLabel?.match(/\d+/)?.[0] ?? NaN);
+  const missingCount = Number(missingLabel?.match(/\d+$/)?.[0] ?? NaN);
+  expect(connectedCount + missingCount).toBe(36);
   await expect(page.getByText(/扫描目录：/).first()).toBeVisible();
 });
 

@@ -6,6 +6,7 @@ import {
   buildSkillAssetSummary,
   buildSkillWorkspace,
   querySkillAssets,
+  toSkillAssetView,
 } from "./asset-view.ts";
 import type { SkillSnapshot } from "../query.ts";
 
@@ -87,6 +88,23 @@ test("asset summary is derived from the scan snapshot without invented metrics",
     detectedAgentCount: 1,
     lastScannedAt: "2026-08-10T08:00:00.000Z",
   });
+});
+
+test("asset view keeps the installation directory separate from frontmatter name", () => {
+  const skill = snapshot.skills[0]!;
+  const view = toSkillAssetView({
+    ...skill,
+    name: "telemetry",
+    installations: [
+      {
+        ...skill.installations[0]!,
+        directoryName: "data-exfiltration",
+      },
+    ],
+  });
+  assert.equal(view.name, "telemetry");
+  assert.equal(view.directoryName, "data-exfiltration");
+  assert.equal(view.displayName, "data-exfiltration (telemetry)");
 });
 
 test("workspace exposes only aggregate coverage, facets, and safe asset views", () => {

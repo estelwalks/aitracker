@@ -30,6 +30,9 @@ const REQUIRED_TABLES = [
   "insight_preferences",
   "insight_enhancement_cache",
   "insight_enhancement_lines",
+  "insight_refresh_runs",
+  "insight_refresh_items",
+  "insight_generation_reservations",
   "task_preferences",
   "task_runs",
   "monitoring_state",
@@ -139,6 +142,9 @@ try {
     ["knowledge_versions", "content"],
     ["skills", "form"],
     ["usage_aggregate_buckets", "project_kind"],
+    ["skill_installations", "directory_name"],
+    ["ai_executions", "failure_detail"],
+    ["insight_refresh_items", "result_detail"],
   ] as const) {
     assert.ok(
       database
@@ -149,6 +155,25 @@ try {
       `missing ${table}.${column}`,
     );
   }
+
+  assert.equal(
+    database
+      .prepare(
+        "SELECT name FROM pragma_table_info('model_profiles') WHERE name = 'api_format'",
+      )
+      .get(),
+    undefined,
+  );
+  assert.match(
+    String(
+      database
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'model_profiles'",
+        )
+        .get()?.sql,
+    ),
+    /'openai-responses'/,
+  );
 
   assert.equal(Number(scalar(database, "PRAGMA application_id")), 0x54544442);
   assert.equal(Number(scalar(database, "PRAGMA user_version")), 0);
@@ -166,5 +191,5 @@ try {
 }
 
 process.stdout.write(
-  `Database baseline OK: 1 migration, ${REQUIRED_TABLES.length} tables, ${REQUIRED_VIEWS.length} views.\n`,
+  `Database baseline OK: ${MIGRATIONS.length} migrations, ${REQUIRED_TABLES.length} baseline tables, ${REQUIRED_VIEWS.length} views.\n`,
 );

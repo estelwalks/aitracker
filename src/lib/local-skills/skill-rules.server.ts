@@ -33,7 +33,7 @@ function toRule(def: ToolDefinition): SkillAgentRule {
 }
 
 /**
- * The nine skill agents, in canonical UI order. Each entry maps a tool to its
+ * The supported skill agents, in canonical UI order. Each entry maps a tool to its
  * skill roots; `[0]` is the write path (sync/install target).
  */
 export const SKILL_AGENT_RULES: readonly SkillAgentRule[] =

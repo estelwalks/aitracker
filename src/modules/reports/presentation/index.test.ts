@@ -220,6 +220,36 @@ test("retains a failed run alongside the previous report and keeps renderer payl
   assert.match(serialized, /errors\.reports\.generationFailed/);
 });
 
+test("orders same-period regenerated reports by generation time", async () => {
+  const generatedAt = "2026-08-07T12:00:00.000Z";
+  const oldReport = report({
+    reportId: "report:old",
+    runId: "run:old",
+    generatedAt,
+  });
+  const newReport = report({
+    reportId: "report:new",
+    runId: "run:new",
+    generatedAt,
+  });
+  const query = createReportsPresentation({
+    reports: app(),
+    source: {
+      // Deliberately return the old document first, as some stores do when
+      // generatedAt is the same period anchor for both reports.
+      listReports: async () => [oldReport, newReport],
+      listRuns: async () => [
+        run({ runId: "run:old", startedAt: "2026-08-07T12:01:00.000Z" }),
+        run({ runId: "run:new", startedAt: "2026-08-07T12:05:00.000Z" }),
+      ],
+    },
+  });
+  const result = await query.query();
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.feed.reports[0]?.reportId, "report:new");
+});
+
 test("surfaces real session density and report/run counts in the feed", async () => {
   const query = createReportsPresentation({
     reports: app(),

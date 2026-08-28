@@ -55,7 +55,7 @@ export function DashboardPage({ locale }: { readonly locale: Locale }) {
   const dashboard = useDashboardSummary(locale);
 
   return (
-    <div className="dashboard-v3 space-y-4 pb-12">
+    <div className="dashboard-v3 dashboard-page-stack pb-12">
       <DashboardDeferredInsight />
       {dashboard.data ? (
         <DashboardV2Page

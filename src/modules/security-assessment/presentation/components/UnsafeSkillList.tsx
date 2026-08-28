@@ -3,39 +3,44 @@ import { ShieldAlert } from "lucide-react";
 
 import { Pagination } from "../../../../components/aitracker";
 import { useI18n } from "../../../../lib/i18n/context";
+import { STANDARD_PAGE_SIZE } from "../../../../lib/pagination";
 import {
   hitDimensionsOf,
   unsafeEntries,
-  unsafeVerdictTone,
   type SecurityHistoryView,
+  type SecuritySkillView,
 } from "../security-view";
 import { SecurityCard } from "./SecurityCard";
-
-const PAGE_SIZE = 6;
 
 /**
  * 不安全 Skill 名单：与 V3.0 原型一致的「不安全 Skill 名单」卡片。
  *
- * 仅列出最近一次扫描中明确判定为 block / warn 的 Skill。unknown、失败
- * 和部分完成属于「未能确认」，不能误报成不安全；这些状态仍保留在统计与历史中。
- * 每页 6 项分页；「查看报告」打开该 Skill 的真实扫描报告弹窗。
+ * 仅列出最近一次扫描中具有明确 warn/block 结论的现存 Skill。检测失败
+ * 和未完成结果留在扫描历史中，不得伪装成已确认的安全风险。
+ * 每页 10 项分页；「查看报告」打开该 Skill 的真实扫描报告弹窗。
  */
 export function UnsafeSkillList({
   entries,
+  skills,
   onOpenReport,
 }: {
   entries: readonly SecurityHistoryView[];
+  skills: readonly SecuritySkillView[];
   onOpenReport: (entry: SecurityHistoryView) => void;
 }) {
   const { t } = useI18n();
   const rows = unsafeEntries(entries);
+  const skillByRef = new Map(skills.map((skill) => [skill.skillRef, skill]));
   const [page, setPage] = useState(1);
 
   useEffect(() => setPage(1), [rows.length]);
 
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(rows.length / STANDARD_PAGE_SIZE));
   const current = Math.min(Math.max(1, page), pageCount);
-  const pageRows = rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+  const pageRows = rows.slice(
+    (current - 1) * STANDARD_PAGE_SIZE,
+    current * STANDARD_PAGE_SIZE,
+  );
 
   return (
     <SecurityCard
@@ -53,6 +58,7 @@ export function UnsafeSkillList({
               <thead>
                 <tr>
                   <th>{t("security.center.result.skill")}</th>
+                  <th>{t("skills.detail.installedPos")}</th>
                   <th>{t("security.center.result.verdict")}</th>
                   <th>{t("security.center.result.hitDimensions")}</th>
                   <th style={{ textAlign: "right" }}>
@@ -62,33 +68,32 @@ export function UnsafeSkillList({
               </thead>
               <tbody>
                 {pageRows.map((item) => {
-                  const danger = unsafeVerdictTone(item) === "danger";
                   const hits = hitDimensionsOf(item);
+                  const target = skillByRef.get(item.skillRef);
                   return (
                     <tr key={item.id}>
                       <td className="font-medium">{item.skillName}</td>
+                      <td className="text-muted-foreground">
+                        {target
+                          ? `${target.agents.join(" · ")} / ${target.name}`
+                          : "—"}
+                      </td>
                       <td>
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] ${
-                            danger
-                              ? "bg-danger/15 text-danger"
-                              : "bg-amber-500/15 text-amber-500"
-                          }`}
-                        >
+                        <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2 py-0.5 font-mono text-[10px] text-danger">
                           <ShieldAlert className="size-3" strokeWidth={2} />
                           {t("security.center.unsafe.vulnerable")}
                         </span>
                       </td>
                       <td className="text-muted-foreground">
                         {hits.join(" · ") ||
-                          t("security.center.result.multipleAnomalies")}
+                          item.report?.summary ||
+                          t("security.center.history.noReport")}
                       </td>
                       <td className="text-right">
                         <button
                           type="button"
-                          disabled={!item.report}
                           onClick={() => onOpenReport(item)}
-                          className="font-mono text-[11px] text-primary transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="font-mono text-[11px] text-primary transition-opacity hover:opacity-85"
                         >
                           {t("security.center.unsafe.report")}
                         </button>
@@ -103,9 +108,9 @@ export function UnsafeSkillList({
             page={current}
             pageCount={pageCount}
             onChange={setPage}
-            rangeLabel={`${(current - 1) * PAGE_SIZE + 1}–${Math.min(
+            rangeLabel={`${(current - 1) * STANDARD_PAGE_SIZE + 1}–${Math.min(
               rows.length,
-              current * PAGE_SIZE,
+              current * STANDARD_PAGE_SIZE,
             )} / ${rows.length}`}
           />
         </>

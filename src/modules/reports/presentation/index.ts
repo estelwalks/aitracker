@@ -15,6 +15,8 @@ import type {
 } from "../contracts.ts";
 import type { SessionDensity } from "../period.ts";
 
+export { ReportSchedule } from "./ReportSchedule.tsx";
+
 export type ReportsViewModel = ReportsModuleContract;
 
 export type ReportUiStatus =
@@ -259,9 +261,19 @@ export function createReportsPresentation(
             ),
           );
         }
-        items.sort((a, b) =>
-          (b.generatedAt ?? "").localeCompare(a.generatedAt ?? ""),
+        const runStartedAt = new Map(
+          runs.map((run) => [run.runId, run.startedAt]),
         );
+        items.sort((a, b) => {
+          const generated = (b.generatedAt ?? "").localeCompare(
+            a.generatedAt ?? "",
+          );
+          if (generated !== 0) return generated;
+          const started = (runStartedAt.get(b.runId ?? "") ?? "").localeCompare(
+            runStartedAt.get(a.runId ?? "") ?? "",
+          );
+          return started || (b.reportId ?? "").localeCompare(a.reportId ?? "");
+        });
         const selected = input.reportId
           ? reports.find((report) => report.reportId === input.reportId)
           : undefined;

@@ -1,25 +1,24 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const market = {
-  pageHeader: "Skill 마켓",
+  pageHeader: "보안 마켓",
   pageHeaderDesc: "보안 스캔을 통과한 Skill만 수록",
   strip: {
     subtitle: "보안 스캔을 통과한 Skill만 수록 · 원클릭으로 로컬 Agent에 배포",
   },
   meta: {
     description:
-      "{appName} Skill 마켓의 실제 인덱스를 탐색합니다. 보안 스캔을 통과한 Skill만 수록됩니다.",
+      "{appName} 보안 마켓의 실제 인덱스를 탐색합니다. 보안 스캔을 통과한 Skill만 수록됩니다.",
   },
   notProvided: "제공되지 않음",
   jarvis: {
     available:
-      "마켓에 {total}개의 Skill, 그중 {official}개가 공식 릴리스입니다.",
-    installed: "이 기기에 마켓 Skill {count}개를 설치했습니다.",
+      "보안 마켓에 {total}개의 Skill, 그중 {official}개가 공식 릴리스입니다.",
+    installed: "이 기기에 보안 마켓의 Skill {count}개를 설치했습니다.",
   },
   network: {
     loadFailed:
-      "네트워크를 사용할 수 없습니다: Skill 마켓을 불러오지 못했습니다",
+      "네트워크를 사용할 수 없습니다: 보안 마켓을 불러오지 못했습니다",
     unavailableTitle:
-      "네트워크를 사용할 수 없어 Skill 마켓에 접근할 수 없습니다",
+      "네트워크를 사용할 수 없어 보안 마켓에 접근할 수 없습니다",
     unavailableDesc:
       "로컬에 캐시된 목록은 계속 볼 수 있으며, 네트워크가 복구되면 최신 데이터로 자동 동기화됩니다.",
   },
@@ -32,7 +31,7 @@ export const market = {
     passRate: "보안 통과",
     passRatePage: "이 페이지 통과율",
     installedCount: "설치됨",
-    hintCurrentPage: "현재 페이지 통계",
+    hintAllDimensionsPassed: "11개 검사 항목 모두 통과",
     hintLocalInstalled: "이 기기에 설치됨",
     hintDomains: "{count}개 분류",
   },
@@ -50,7 +49,7 @@ export const market = {
     nameDesc: "Z-A",
   },
   list: {
-    title: "Skill 목록 ({count})",
+    title: "보안 마켓 Skill 목록 ({count})",
     count: "총 {count}개 Skill",
     allSafe: "모두 보안 스캔 통과",
   },

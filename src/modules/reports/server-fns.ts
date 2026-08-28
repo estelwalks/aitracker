@@ -200,9 +200,19 @@ export interface ReportScheduleStatus {
   readonly nextRunAt: string | null;
   readonly pending: boolean;
 }
-export type ReportScheduleStatuses = Readonly<
-  Record<ReportScheduleKind, ReportScheduleStatus>
->;
+export type ReportScheduleStatuses = Readonly<{
+  /**
+   * Whether the background task scheduler is actually armed in this runtime.
+   * The per-kind next-run times below are computed from the stored config and
+   * do NOT imply the scheduler is running; renderers must surface this flag
+   * when it is false (e.g. unsupported platforms) instead of showing a fake
+   * next-run countdown.
+   */
+  readonly schedulerRunning: boolean;
+  readonly daily: ReportScheduleStatus;
+  readonly weekly: ReportScheduleStatus;
+  readonly monthly: ReportScheduleStatus;
+}>;
 
 /**
  * Testable core of `syncReportScheduleToTasks`: applies the mapped preference
@@ -327,5 +337,10 @@ export const getReportScheduleStatus = createServerFn({
       listRuns: (request) => root.taskApi.listRuns(request),
     }),
   ]);
-  return { daily, weekly, monthly };
+  return {
+    schedulerRunning: root.scheduler.isRunning(),
+    daily,
+    weekly,
+    monthly,
+  };
 });

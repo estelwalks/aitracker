@@ -135,10 +135,13 @@ export function createBackgroundRuntimeBootstrap(
  *
  * The composition root is only built once a request reaches this runtime's
  * `start` — and `ensureStarted` only calls `start` when
- * `RuntimeIdentity.backgroundTasksEnabled` is true — so Web dev mode (where
- * background tasks are disabled by policy) never triggers the scheduler or its
- * data-root I/O. `stop` reuses the idempotent singleton, which resolves without
- * reconstruction since bootstrap only stops after a successful start.
+ * `RuntimeIdentity.backgroundTasksEnabled` is true. Web and desktop modes on
+ * supported platforms both enable background tasks (the Nitro server process
+ * owns the scheduler in either mode), so scheduled features behave
+ * identically in the browser and the packaged app; only Linux and unknown
+ * platforms keep the runtime disabled by policy. `stop` reuses the idempotent
+ * singleton, which resolves without reconstruction since bootstrap only
+ * stops after a successful start.
  */
 function createCompositionBackgroundRuntime(): BackgroundRuntime {
   return {
@@ -171,7 +174,8 @@ const productionBootstrap = createBackgroundRuntimeBootstrap({
 
 /**
  * Server composition entrypoint. Calling it is harmless in Web development:
- * RuntimeIdentity resolves that mode to the disabled policy by default.
+ * RuntimeIdentity enables background tasks for web mode on macOS/Windows, so
+ * scheduled reports/collectors run in the dev server exactly as in desktop.
  */
 export function ensureBackgroundRuntimeStarted(): Promise<BackgroundRuntimeStartResult> {
   return productionBootstrap.ensureStarted();

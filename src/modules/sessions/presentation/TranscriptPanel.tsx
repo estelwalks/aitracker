@@ -10,6 +10,7 @@ import {
 import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
+import { MarkdownView } from "../../reports/index.ts";
 import type { SessionSummary, SessionTranscriptMessage } from "../contracts.ts";
 import { getSessionTranscript } from "../query.ts";
 import { ResumeSessionButton } from "./ResumeSessionButton.tsx";
@@ -163,7 +164,7 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
           <>
             <div className="space-y-4">
               {transcript.map((message, index) => (
-                <Bubble key={index} message={message} />
+                <Bubble key={index} message={message} source={session.source} />
               ))}
             </div>
             <p className="mt-6 text-center text-[10px] tracking-wide text-muted-foreground">
@@ -176,7 +177,13 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
   );
 }
 
-function Bubble({ message }: { message: SessionTranscriptMessage }) {
+function Bubble({
+  message,
+  source,
+}: {
+  message: SessionTranscriptMessage;
+  source: SessionSummary["source"];
+}) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
@@ -215,10 +222,23 @@ function Bubble({ message }: { message: SessionTranscriptMessage }) {
             ) : null}
           </div>
         ) : null}
-        <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
-          {message.text}
-        </p>
+        {source === "aipy" ? (
+          <MarkdownTranscriptBody text={message.text} />
+        ) : (
+          <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
+            {message.text}
+          </p>
+        )}
       </div>
+    </div>
+  );
+}
+
+/** Render assistant Markdown through the shared, React-node renderer. */
+export function MarkdownTranscriptBody({ text }: { text: string }) {
+  return (
+    <div className="text-foreground [&>div>:first-child]:mt-0 [&>div>:last-child]:mb-0">
+      <MarkdownView source={text} hideUnusedAgentRows={false} />
     </div>
   );
 }

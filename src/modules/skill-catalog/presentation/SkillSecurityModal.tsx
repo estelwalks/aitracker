@@ -20,15 +20,21 @@ import {
 } from "../../security-assessment/index";
 
 /** Verdict → label key + tone, matching the card KPI / security page source. */
-function verdictDisplay(verdict: SecurityVerdict): {
+function verdictDisplay(
+  verdict: SecurityVerdict,
+  findingCount: number,
+): {
   labelKey: MessageKey;
   tone: string;
 } {
+  if (findingCount > 0) {
+    return { labelKey: "skills.security.unsafe", tone: "text-danger" };
+  }
   switch (verdict) {
     case "allow":
       return { labelKey: "skills.security.clean", tone: "text-ok" };
     case "warn":
-      return { labelKey: "skills.security.attention", tone: "text-warn" };
+      return { labelKey: "skills.security.unsafe", tone: "text-danger" };
     case "block":
       return { labelKey: "security.verdict.dangerous", tone: "text-danger" };
     default:
@@ -150,7 +156,10 @@ export function SkillSecurityModal({
                   </li>
                 );
               }
-              const display = verdictDisplay(report.verdict);
+              const display = verdictDisplay(
+                report.verdict,
+                report.findings.length,
+              );
               return (
                 <li
                   key={`${entry.scanId}-${index}`}
@@ -164,7 +173,7 @@ export function SkillSecurityModal({
                   </span>
                   <span className="truncate text-muted-foreground">
                     {report.findings.length > 0
-                      ? `${report.findings.length} ${t("skills.security.attention")}`
+                      ? `${report.findings.length} ${t("skills.security.unsafe")}`
                       : t("skills.security.clean")}
                   </span>
                   <span

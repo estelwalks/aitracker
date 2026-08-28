@@ -21,6 +21,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { backup, DatabaseSync } from "node:sqlite";
 
+import type { SqliteBindValue } from "../contracts.ts";
 import { NODE_SQLITE_CONNECTION_OPTIONS } from "./node-sqlite-database.server.ts";
 
 /** Strict options plus `readOnly`, for verification-only connections. */
@@ -39,7 +40,10 @@ export interface ReadOnlySqliteSession {
   /** First column of every row (e.g. `PRAGMA quick_check` result lines). */
   queryFirstColumnAll(sql: string): unknown[];
   /** Every row as a plain record (BigInt integers, per the strict options). */
-  queryRows(sql: string): Record<string, unknown>[];
+  queryRows(
+    sql: string,
+    ...parameters: SqliteBindValue[]
+  ): Record<string, unknown>[];
   /** Closes the connection; safe to call once, in a `finally`. */
   close(): void;
 }
@@ -58,10 +62,13 @@ export function openReadOnlySqlite(path: string): ReadOnlySqliteSession {
     queryFirstColumnAll(sql: string): unknown[] {
       return database.prepare(sql).all().map(firstColumnValue);
     },
-    queryRows(sql: string): Record<string, unknown>[] {
+    queryRows(
+      sql: string,
+      ...parameters: SqliteBindValue[]
+    ): Record<string, unknown>[] {
       return database
         .prepare(sql)
-        .all()
+        .all(...parameters)
         .map((row) => row as Record<string, unknown>);
     },
     close(): void {

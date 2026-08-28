@@ -9,6 +9,7 @@ import type {
   JobRun,
 } from "./task-storage.ts";
 import {
+  calendarScheduleFingerprint,
   createTaskScheduler,
   effectiveSchedule,
   isScheduleDue,
@@ -16,6 +17,8 @@ import {
   nextRunAt,
   prioritizeStartupDefinitions,
   TaskSchedulerStartupError,
+  type CalendarCursor,
+  type CalendarCursorStore,
   type SchedulerOptions,
 } from "./scheduler.ts";
 
@@ -857,4 +860,308 @@ test("T5-06: cancelled heavy task releases its permit (no leak)", async () => {
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(permits, 1);
   assert.equal(released, 1); // permit released on cancellation
+});
+
+test("isRunning reflects the scheduler lifecycle", async () => {
+  const h = harness();
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [],
+  });
+  assert.equal(scheduler.isRunning(), false);
+  await scheduler.start();
+  assert.equal(scheduler.isRunning(), true);
+  await scheduler.stop();
+  assert.equal(scheduler.isRunning(), false);
+});
+
+test("calendar cursor catch-up runs a missed occurrence after restart", async () => {
+  const reportDefinition = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "reports.generate.daily",
+  );
+  assert.ok(reportDefinition);
+  const h = harness();
+  const schedule = { kind: "daily", localTime: "10:16" } as const;
+  await h.prefs.set("reports.generate.daily", {
+    enabled: true,
+    schedule,
+  });
+  // The app was closed at 10:16; it restarts at 11:00.
+  const now = new Date(2026, 7, 28, 11, 0, 0, 0);
+  const fingerprint = calendarScheduleFingerprint(schedule, true);
+  let stored: Record<string, CalendarCursor> = {
+    "reports.generate.daily": {
+      fingerprint,
+      nextRunAt: new Date(2026, 7, 28, 10, 16, 0, 0).toISOString(),
+    },
+  };
+  const store: CalendarCursorStore = {
+    read: async () => stored,
+    write: async (cursors) => {
+      stored = { ...cursors };
+    },
+  };
+  const handlers: Array<() => void> = [];
+  const delays: number[] = [];
+  let calls = 0;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [reportDefinition],
+    clock: { now: () => new Date(now) },
+    calendarCursors: store,
+    setTimeout(handler, delay) {
+      delays.push(delay);
+      handlers.push(handler);
+      return { id: handlers.length } as unknown as ReturnType<
+        typeof setTimeout
+      >;
+    },
+    clearTimeout() {},
+    executors: {
+      "generate-report-v1": async () => {
+        calls += 1;
+      },
+    },
+  });
+
+  await scheduler.start();
+  // The overdue occurrence is armed with a zero delay, not tomorrow.
+  assert.equal(delays.at(-1), 0);
+  assert.equal(calls, 0);
+  handlers.at(-1)!();
+  for (let attempt = 0; attempt < 20 && calls === 0; attempt += 1) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  assert.equal(calls, 1);
+  // After the run the cursor advances to the next occurrence (tomorrow).
+  for (
+    let attempt = 0;
+    attempt < 20 &&
+    stored["reports.generate.daily"]?.nextRunAt ===
+      new Date(2026, 7, 28, 10, 16, 0, 0).toISOString();
+    attempt += 1
+  ) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  const advanced = stored["reports.generate.daily"];
+  assert.ok(advanced);
+  assert.equal(advanced.fingerprint, fingerprint);
+  assert.equal(
+    Date.parse(advanced.nextRunAt),
+    new Date(2026, 7, 29, 10, 16, 0, 0).getTime(),
+  );
+  await scheduler.stop();
+});
+
+test("a stale calendar cursor fingerprint arms fresh instead of catching up", async () => {
+  const reportDefinition = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "reports.generate.daily",
+  );
+  assert.ok(reportDefinition);
+  const h = harness();
+  const schedule = { kind: "daily", localTime: "10:16" } as const;
+  await h.prefs.set("reports.generate.daily", {
+    enabled: true,
+    schedule,
+  });
+  const now = new Date(2026, 7, 28, 11, 0, 0, 0);
+  let stored: Record<string, CalendarCursor> = {
+    "reports.generate.daily": {
+      // Deliberately stale: the plan was changed, so it must not catch up.
+      fingerprint: "outdated",
+      nextRunAt: new Date(2026, 7, 28, 10, 16, 0, 0).toISOString(),
+    },
+  };
+  const store: CalendarCursorStore = {
+    read: async () => stored,
+    write: async (cursors) => {
+      stored = { ...cursors };
+    },
+  };
+  const delays: number[] = [];
+  let calls = 0;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [reportDefinition],
+    clock: { now: () => new Date(now) },
+    calendarCursors: store,
+    setTimeout(handler, delay) {
+      void handler;
+      delays.push(delay);
+      return { id: delays.length } as unknown as ReturnType<typeof setTimeout>;
+    },
+    clearTimeout() {},
+    executors: {
+      "generate-report-v1": async () => {
+        calls += 1;
+      },
+    },
+  });
+
+  await scheduler.start();
+  assert.equal(calls, 0);
+  // Fresh arm: next occurrence tomorrow 10:16.
+  assert.equal(delays.at(-1), 23 * 3_600_000 + 16 * 60_000);
+  // The stale cursor is re-keyed to the current plan (no catch-up fired).
+  const armed = stored["reports.generate.daily"];
+  assert.ok(armed);
+  assert.equal(armed.fingerprint, calendarScheduleFingerprint(schedule, true));
+  assert.equal(
+    Date.parse(armed.nextRunAt),
+    new Date(2026, 7, 29, 10, 16, 0, 0).getTime(),
+  );
+  await scheduler.stop();
+});
+
+test("an overdue cursor satisfied by a manual run advances instead of busy-looping", async () => {
+  const reportDefinition = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "reports.generate.daily",
+  );
+  assert.ok(reportDefinition);
+  const h = harness();
+  const schedule = { kind: "daily", localTime: "10:16" } as const;
+  await h.prefs.set("reports.generate.daily", {
+    enabled: true,
+    schedule,
+  });
+  // A manual run already satisfied today's occurrence at 11:00.
+  await h.repository.append({
+    runId: "run:manual",
+    taskId: "reports.generate.daily",
+    trigger: "manual",
+    status: "succeeded",
+    queuedAt: new Date(2026, 7, 28, 11, 0).toISOString(),
+    startedAt: new Date(2026, 7, 28, 11, 0).toISOString(),
+    finishedAt: new Date(2026, 7, 28, 11, 0).toISOString(),
+    attempt: 1,
+    correlationId: "corr:manual",
+  });
+  const now = new Date(2026, 7, 28, 11, 30, 0, 0);
+  const fingerprint = calendarScheduleFingerprint(schedule, true);
+  let stored: Record<string, CalendarCursor> = {
+    "reports.generate.daily": {
+      fingerprint,
+      nextRunAt: new Date(2026, 7, 28, 10, 16, 0, 0).toISOString(),
+    },
+  };
+  const store: CalendarCursorStore = {
+    read: async () => stored,
+    write: async (cursors) => {
+      stored = { ...cursors };
+    },
+  };
+  const handlers: Array<() => void> = [];
+  const delays: number[] = [];
+  let calls = 0;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [reportDefinition],
+    clock: { now: () => new Date(now) },
+    calendarCursors: store,
+    setTimeout(handler, delay) {
+      delays.push(delay);
+      handlers.push(handler);
+      return { id: handlers.length } as unknown as ReturnType<
+        typeof setTimeout
+      >;
+    },
+    clearTimeout() {},
+    executors: {
+      "generate-report-v1": async () => {
+        calls += 1;
+      },
+    },
+  });
+
+  await scheduler.start();
+  // No catch-up fire: the occurrence is already satisfied.
+  assert.equal(calls, 0);
+  // The timer arms for tomorrow 10:16, not for now.
+  assert.equal(delays.at(-1), 22 * 3_600_000 + 46 * 60_000);
+  // The cursor advances to the next occurrence.
+  const advanced = stored["reports.generate.daily"];
+  assert.ok(advanced);
+  assert.equal(
+    Date.parse(advanced.nextRunAt),
+    new Date(2026, 7, 29, 10, 16, 0, 0).getTime(),
+  );
+  await scheduler.stop();
+});
+
+test("a failing tick re-arms with a bounded fallback instead of dying", async () => {
+  const reportDefinition = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "reports.generate.daily",
+  );
+  assert.ok(reportDefinition);
+  const h = harness();
+  await h.prefs.set("reports.generate.daily", {
+    enabled: true,
+    schedule: { kind: "daily", localTime: "18:30" },
+  });
+  const now = new Date(2026, 7, 27, 18, 0, 0, 0);
+  const handlers: Array<() => void> = [];
+  const delays: number[] = [];
+  let appendFailures = 0;
+  const repository: TaskRunRepository = {
+    ...h.repository,
+    append: async (run) => {
+      if (appendFailures > 0) {
+        appendFailures -= 1;
+        throw new Error("database busy");
+      }
+      return h.repository.append(run);
+    },
+  };
+  let calls = 0;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: repository,
+    catalog: [reportDefinition],
+    clock: { now: () => new Date(now) },
+    setTimeout(handler, delay) {
+      delays.push(delay);
+      handlers.push(handler);
+      return { id: handlers.length } as unknown as ReturnType<
+        typeof setTimeout
+      >;
+    },
+    clearTimeout() {},
+    executors: {
+      "generate-report-v1": async () => {
+        calls += 1;
+      },
+    },
+  });
+
+  await scheduler.start();
+  assert.equal(calls, 0);
+  assert.equal(delays.at(-1), 30 * 60_000);
+
+  // The armed time arrives while the run store is temporarily broken.
+  now.setTime(new Date(2026, 7, 27, 18, 31, 0, 0).getTime());
+  appendFailures = 1;
+  handlers[0]!();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  // The failed tick re-arms with the bounded fallback delay.
+  assert.equal(delays.at(-1), 60_000);
+  assert.equal(calls, 0);
+
+  // The fallback tick recovers once the store is healthy again.
+  handlers.at(-1)!();
+  for (let attempt = 0; attempt < 20 && calls === 0; attempt += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 1));
+  }
+  assert.equal(calls, 1);
+  assert.equal(
+    h.runs.some(
+      (run) =>
+        run.taskId === "reports.generate.daily" && run.status === "succeeded",
+    ),
+    true,
+  );
+  await scheduler.stop();
 });

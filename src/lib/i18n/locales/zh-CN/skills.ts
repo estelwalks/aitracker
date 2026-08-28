@@ -62,7 +62,7 @@ export const skills = {
     select: "选择 {name}",
     deselect: "取消选择 {name}",
   },
-  source: { frontmatter: "元数据", market: "市场", unknown: "未知" },
+  source: { frontmatter: "元数据", market: "安全市场", unknown: "未知" },
   update: {
     all: "全部更新状态",
     available: "可更新",
@@ -85,7 +85,7 @@ export const skills = {
     install: "安装",
     uninstallAll: "卸载全部副本",
     addMonitorDir: "添加监控目录",
-    goMarket: "去市场看看",
+    goMarket: "去安全市场看看",
     block: "加入黑名单",
     unblock: "移出黑名单",
   },
@@ -271,7 +271,7 @@ export const skills = {
   hub: {
     title: "Skill Hub",
     summary: "{count} 个本地 Skill",
-    desc: "统一管理本地 Skill 资产，并从市场安装经安全扫描的 Skill。",
+    desc: "统一管理本地 Skill 资产，并从安全市场安装经安全扫描的 Skill。",
   },
   jarvis: {
     localSkills:
@@ -280,8 +280,8 @@ export const skills = {
       "已对 {count} 个本地 Skill 完成安全检测，累计 {risk} 项风险。",
     securityClean: "全部本地 Skill 安全检测通过，未发现风险项。",
     marketAvailable:
-      "市场当前可安装 {total} 个 Skill，其中 {official} 个官方发布。",
-    marketInstalled: "本机已从市场安装 {count} 个 Skill。",
+      "安全市场当前可安装 {total} 个 Skill，其中 {official} 个官方发布。",
+    marketInstalled: "本机已从安全市场安装 {count} 个 Skill。",
   },
   kpi: {
     localSkills: "本地 Skill",
@@ -302,6 +302,7 @@ export const skills = {
   security: {
     detected: "已安全检测",
     attention: "需关注",
+    unsafe: "不安全",
     clean: "安全",
     pending: "待扫描",
   },

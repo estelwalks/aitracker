@@ -22,6 +22,22 @@ import type {
 export type SchedulerReason = "manual" | "startup" | "schedule";
 export type QueuePriority = "interactive" | "background" | "maintenance";
 
+/**
+ * Durable per-task cursor for calendar schedules, mirroring the security
+ * module's persisted schedule runtime. The scheduler remembers the armed
+ * occurrence across restarts so a run missed while the server/app was closed
+ * catches up on the next start instead of being silently dropped.
+ */
+export interface CalendarCursor {
+  readonly fingerprint: string;
+  readonly nextRunAt: string;
+}
+
+export interface CalendarCursorStore {
+  read(): Promise<Readonly<Record<string, CalendarCursor>>>;
+  write(cursors: Readonly<Record<string, CalendarCursor>>): Promise<void>;
+}
+
 export interface TaskExecutionContext {
   readonly taskId: TaskId;
   readonly runId: RunId;
@@ -65,6 +81,12 @@ export interface SchedulerOptions {
     definition: JobTypeDefinition,
   ) => boolean | Promise<boolean>;
   /**
+   * Durable cursor store for calendar schedules. When present, the scheduler
+   * persists each armed occurrence and catches up overdue ones after a
+   * restart (same contract the security scan scheduler uses).
+   */
+  readonly calendarCursors?: CalendarCursorStore;
+  /**
    * P5-T5-06: global resource budget. Collection tasks acquire the "heavy"
    * permit before running so at most one heavy collector executes at a time.
    * Manual triggers raise queue priority but never bypass the budget.
@@ -85,6 +107,8 @@ export interface TaskScheduler {
   runNow(request: { taskId: TaskId; reason: SchedulerReason }): Promise<JobRun>;
   cancel(runId: RunId | string): Promise<void>;
   getNextRunAt(taskId: TaskId, from?: Date): Date | undefined;
+  /** Whether the shared timer is armed (started and not stopped). */
+  isRunning(): boolean;
 }
 
 export class TaskSchedulerStartupError extends Error {
@@ -108,6 +132,25 @@ const PRIORITY: Record<QueuePriority, number> = {
   background: 1,
   interactive: 2,
 };
+/** Fallback re-arm delay when a scheduler tick or preference read fails. */
+const TICK_RETRY_DELAY_MS = 60_000;
+
+/**
+ * Stable fingerprint of an armed calendar schedule. Changing the schedule or
+ * toggling the task invalidates the stored cursor so a re-enabled or
+ * re-timed plan arms fresh instead of catching up on a stale occurrence.
+ */
+export function calendarScheduleFingerprint(
+  schedule: Schedule,
+  enabled: boolean,
+): string {
+  let hash = 2166136261;
+  const payload = `${enabled ? "1" : "0"}|${JSON.stringify(schedule)}`;
+  for (let index = 0; index < payload.length; index += 1) {
+    hash = Math.imul(hash ^ payload.charCodeAt(index), 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
 
 function parseTime(value: string): [number, number] {
   const [hour, minute] = value.split(":").map(Number);
@@ -532,19 +575,77 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
     }
   };
 
+  /**
+   * Reads the durable calendar cursors once per re-arm. A failing store must
+   * never take the scheduler down: it degrades to no cursors (fresh arms)
+   * and the error is surfaced in server diagnostics.
+   */
+  const readCalendarCursors = async (): Promise<
+    Readonly<Record<string, CalendarCursor>>
+  > => {
+    if (!options.calendarCursors) return {};
+    try {
+      return await options.calendarCursors.read();
+    } catch (error) {
+      console.error("[tasks] cannot read calendar cursors", error);
+      return {};
+    }
+  };
+
+  const persistCalendarCursors = async (
+    cursors: Readonly<Record<string, CalendarCursor>>,
+  ): Promise<void> => {
+    if (!options.calendarCursors) return;
+    try {
+      await options.calendarCursors.write(cursors);
+    } catch (error) {
+      console.error("[tasks] cannot persist calendar cursors", error);
+    }
+  };
+
   const scheduleNext = async (expectedLifecycle = lifecycle) => {
     if (!started || lifecycle !== expectedLifecycle) return;
     if (timer !== undefined) clearTimer(timer);
     let soonest: Date | undefined;
+    let sawEnabledTask = false;
+    const storedCursors = await readCalendarCursors();
+    const nextCursors: Record<string, CalendarCursor> = {
+      ...storedCursors,
+    };
+    let cursorChanged = false;
     for (const definition of catalog) {
       if (!started || lifecycle !== expectedLifecycle) return;
-      const preference = await options.preferences.get(definition.id);
+      let preference: TaskPreference | undefined;
+      try {
+        preference = await options.preferences.get(definition.id);
+      } catch (error) {
+        console.error(
+          `[tasks] cannot read preference for ${definition.id}`,
+          error,
+        );
+        continue;
+      }
       if (!started || lifecycle !== expectedLifecycle) return;
-      if (!enabled(definition.id, preference)) continue;
+      if (!enabled(definition.id, preference)) {
+        // A disabled calendar task must not keep a stale cursor that could
+        // look like an overdue occurrence if it is ever re-enabled.
+        if (nextCursors[definition.id] !== undefined) {
+          delete nextCursors[definition.id];
+          cursorChanged = true;
+        }
+        continue;
+      }
+      sawEnabledTask = true;
       const schedule = effectiveSchedule(definition, preference);
-      const runs = await withRuns(() =>
-        options.runs.list({ taskId: definition.id }),
-      );
+      let runs: readonly JobRun[] = [];
+      try {
+        runs = await withRuns(() =>
+          options.runs.list({ taskId: definition.id }),
+        );
+      } catch (error) {
+        console.error(`[tasks] cannot read runs for ${definition.id}`, error);
+        continue;
+      }
       if (!started || lifecycle !== expectedLifecycle) return;
       const lastSuccess = lastSuccessfulFinishedAt(runs);
       const scheduled = lastScheduledAt.get(definition.id);
@@ -555,35 +656,137 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       // Startup collectors without a success run immediately. Calendar tasks
       // whose startup policy is disabled wait for their first configured
       // occurrence instead of firing as soon as the preference is enabled.
+      if (schedule.kind === "interval") {
+        const candidate = base
+          ? nextRunAt(schedule, base)
+          : definition.startupPolicy === "disabled"
+            ? nextRunAt(schedule, clock.now())
+            : clock.now();
+        if (!soonest || candidate < soonest) soonest = candidate;
+        continue;
+      }
+      const now = clock.now();
+      const fingerprint = calendarScheduleFingerprint(schedule, true);
+      const stored = storedCursors[definition.id];
+      const firedThisSession = lastScheduledAt.get(definition.id);
+      // The persisted arm is authoritative only while the task is genuinely
+      // due: a manual run after the armed time makes the occurrence already
+      // satisfied, so the cursor advances instead of busy-looping.
+      const dueByFreshness =
+        lastSuccess === undefined || nextRunAt(schedule, lastSuccess) <= now;
+      if (
+        stored !== undefined &&
+        stored.fingerprint === fingerprint &&
+        Date.parse(stored.nextRunAt) <= now.getTime() &&
+        dueByFreshness &&
+        // A catch-up run already fired for this occurrence in this session;
+        // advance the cursor to the next occurrence instead of re-firing.
+        (firedThisSession === undefined ||
+          firedThisSession.getTime() < Date.parse(stored.nextRunAt))
+      ) {
+        // A previously armed occurrence is overdue (the server/app was closed
+        // at the scheduled time): fire immediately, mirroring the security
+        // scan scheduler's persisted-runtime catch-up. The stored cursor is
+        // left untouched; the post-run re-arm advances it to the next
+        // occurrence.
+        soonest = now;
+        continue;
+      }
       const candidate = base
         ? nextRunAt(schedule, base)
-        : definition.startupPolicy === "disabled"
-          ? nextRunAt(schedule, clock.now())
-          : clock.now();
+        : nextRunAt(schedule, now);
+      const candidateAt = candidate.getTime();
+      if (candidateAt > now.getTime()) {
+        const armed: CalendarCursor = {
+          fingerprint,
+          nextRunAt: candidate.toISOString(),
+        };
+        if (
+          stored === undefined ||
+          stored.fingerprint !== fingerprint ||
+          stored.nextRunAt !== armed.nextRunAt
+        ) {
+          nextCursors[definition.id] = armed;
+          cursorChanged = true;
+        }
+      }
       if (!soonest || candidate < soonest) soonest = candidate;
     }
-    if (soonest && started && lifecycle === expectedLifecycle)
+    if (cursorChanged) await persistCalendarCursors(nextCursors);
+    if (!started || lifecycle !== expectedLifecycle) return;
+    if (!soonest && sawEnabledTask) {
+      // Enabled tasks exist but every candidate read failed; keep polling so
+      // the scheduler recovers once the underlying store does.
+      timer = setTimer(() => {
+        void tick(expectedLifecycle);
+      }, TICK_RETRY_DELAY_MS);
+      return;
+    }
+    if (soonest)
       timer = setTimer(
         () => {
-          void (async () => {
-            if (!started || lifecycle !== expectedLifecycle) return;
-            const now = clock.now();
-            for (const definition of catalog) {
-              if (!started || lifecycle !== expectedLifecycle) return;
-              const id = createTaskId(definition.id);
-              const preference = await options.preferences.get(id);
-              if (!started || lifecycle !== expectedLifecycle) return;
-              if (await isDue(definition, preference, now)) {
-                if (!started || lifecycle !== expectedLifecycle) return;
-                lastScheduledAt.set(definition.id, now);
-                await runNow({ taskId: id, reason: "schedule" });
-              }
-            }
-            await scheduleNext(expectedLifecycle);
-          })();
+          void tick(expectedLifecycle);
         },
         Math.max(0, soonest.getTime() - clock.now().getTime()),
       );
+  };
+
+  /**
+   * Shared-timer tick. Per-task read failures skip only that task; any
+   * unexpected failure re-arms with a bounded fallback instead of silently
+   * stopping all future scheduled runs.
+   */
+  const tick = async (expectedLifecycle: number): Promise<void> => {
+    if (!started || lifecycle !== expectedLifecycle) return;
+    const now = clock.now();
+    try {
+      for (const definition of catalog) {
+        if (!started || lifecycle !== expectedLifecycle) return;
+        const id = createTaskId(definition.id);
+        let preference: TaskPreference | undefined;
+        try {
+          preference = await options.preferences.get(id);
+        } catch (error) {
+          console.error(
+            `[tasks] tick: cannot read preference for ${definition.id}`,
+            error,
+          );
+          continue;
+        }
+        if (!started || lifecycle !== expectedLifecycle) return;
+        let due = false;
+        try {
+          due = await isDue(definition, preference, now);
+        } catch (error) {
+          console.error(
+            `[tasks] tick: cannot evaluate ${definition.id}`,
+            error,
+          );
+          continue;
+        }
+        if (!due) continue;
+        if (!started || lifecycle !== expectedLifecycle) return;
+        lastScheduledAt.set(definition.id, now);
+        try {
+          await runNow({ taskId: id, reason: "schedule" });
+        } catch (error) {
+          // Keep the task due so the fallback re-arm retries it.
+          lastScheduledAt.delete(definition.id);
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[tasks] scheduler tick failed; re-arming in ${TICK_RETRY_DELAY_MS}ms`,
+        error,
+      );
+      if (started && lifecycle === expectedLifecycle)
+        timer = setTimer(() => {
+          void tick(expectedLifecycle);
+        }, TICK_RETRY_DELAY_MS);
+      return;
+    }
+    await scheduleNext(expectedLifecycle);
   };
 
   const runNow = async (
@@ -817,6 +1020,9 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       return definition
         ? nextRunAt(definition.defaultSchedule as Schedule, from)
         : undefined;
+    },
+    isRunning() {
+      return started;
     },
   };
 }

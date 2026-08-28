@@ -3,11 +3,11 @@ import { homedir } from "node:os";
 import type { ModelConfig } from "skill-scanner";
 
 import { ENV } from "../../../lib/app-config.ts";
+import { SECURITY_LLM_REVIEW_PREF_KEY } from "../llm-review.contracts.ts";
 import type { PreferenceValue } from "../../settings/infrastructure/sqlite-preference-repository.server.ts";
 import { createNodeRuntimeIdentity } from "../../../platform/runtime/node-runtime-identity.ts";
 import type {
   DesktopLocale,
-  SecurityScanHistoryEntry,
   SecurityScanRunRecord,
   SecurityScanSchedule,
   SecurityScanScheduleRuntime,
@@ -16,6 +16,11 @@ import {
   handleSecurityHttpApi,
   SECURITY_API_PREFIX,
 } from "../../../../electron/security-http-api";
+import {
+  createAutomaticSecurityScanScheduler,
+  type AutomaticSecurityScanClock,
+  type AutomaticSecurityScanScheduler,
+} from "../../../../electron/automatic-security-scan-scheduler";
 import type {
   SecretStoragePort,
   SecurityScannerPersistence,
@@ -28,8 +33,10 @@ import {
   DESKTOP_SCHEDULE_RUNTIME_KEY,
   projectSecurityScheduleRuntime,
   projectDesktopSecurityHistory,
+  restoreDesktopSecurityHistory,
 } from "../../../app/desktop-state-broker.server.ts";
 import { getCompositionRoot } from "../../../app/composition.server.ts";
+import { getActiveModelProfileForExecution } from "../../ai-orchestration/model-profile.server.ts";
 
 /**
  * Browser-dev-only security backend.
@@ -49,8 +56,9 @@ import { getCompositionRoot } from "../../../app/composition.server.ts";
  * `/api/security/*` before this handler runs.
  */
 
-/** Key used to mirror the singleton on `globalThis` so it survives Vite HMR. */
-const DEV_SERVICE_GLOBAL = "__AITRACKER_SECURITY_DEV_SERVICE__";
+/** Key used to mirror the singleton runtime on `globalThis` across Vite HMR. */
+const DEV_RUNTIME_GLOBAL = "__AITRACKER_SECURITY_DEV_RUNTIME_V4__";
+const PREVIOUS_DEV_RUNTIME_GLOBAL = "__AITRACKER_SECURITY_DEV_RUNTIME_V3__";
 
 /** Mirror of `electron/local-web-server.ts` `MAX_SECURITY_API_BODY_BYTES`. */
 const MAX_SECURITY_API_BODY_BYTES = 64 * 1024;
@@ -62,21 +70,38 @@ const MAX_SECURITY_API_BODY_BYTES = 64 * 1024;
  */
 let currentDevLocale: DesktopLocale = "zh-CN";
 
-let devSecurityScanner: SecurityScannerService | null | undefined;
-
-type DevSecurityServiceGlobal = Record<
-  typeof DEV_SERVICE_GLOBAL,
-  SecurityScannerService | undefined
->;
-
-function readDevServiceCache(): SecurityScannerService | undefined {
-  const g = globalThis as unknown as Partial<DevSecurityServiceGlobal>;
-  return g[DEV_SERVICE_GLOBAL];
+interface DevSecurityRuntime {
+  readonly service: SecurityScannerService;
+  readonly scheduler: AutomaticSecurityScanScheduler;
 }
 
-function writeDevServiceCache(value: SecurityScannerService | undefined): void {
-  const g = globalThis as unknown as DevSecurityServiceGlobal;
-  g[DEV_SERVICE_GLOBAL] = value;
+let devSecurityRuntime: DevSecurityRuntime | null | undefined;
+let devSecurityRuntimePromise: Promise<DevSecurityRuntime> | undefined;
+
+type DevSecurityRuntimeGlobal = Record<
+  typeof DEV_RUNTIME_GLOBAL,
+  DevSecurityRuntime | undefined
+>;
+
+function readDevRuntimeCache(): DevSecurityRuntime | undefined {
+  const g = globalThis as unknown as Partial<DevSecurityRuntimeGlobal>;
+  return g[DEV_RUNTIME_GLOBAL];
+}
+
+function writeDevRuntimeCache(value: DevSecurityRuntime | undefined): void {
+  const g = globalThis as unknown as DevSecurityRuntimeGlobal;
+  g[DEV_RUNTIME_GLOBAL] = value;
+}
+
+function stopPreviousDevRuntime(): void {
+  const g = globalThis as unknown as Record<
+    string,
+    DevSecurityRuntime | undefined
+  >;
+  const previous = g[PREVIOUS_DEV_RUNTIME_GLOBAL];
+  if (!previous) return;
+  previous.scheduler.stop();
+  delete g[PREVIOUS_DEV_RUNTIME_GLOBAL];
 }
 
 /**
@@ -95,19 +120,19 @@ export function createDevSecretStorage(): SecretStoragePort {
 
 interface StoredModelProfile {
   readonly mode: "official" | "custom";
-  readonly protocol: "openai" | "anthropic";
+  readonly protocol: "openai" | "openai-responses" | "anthropic";
   readonly apiKey?: string;
   readonly endpoint?: string;
   readonly model?: string;
 }
 
 export function toSecurityModelConfig(
-  profile: StoredModelProfile | null,
+  profile: StoredModelProfile | null | undefined,
   enabled: boolean,
 ): ModelConfig | undefined {
   if (!enabled) return undefined;
   if (!profile?.apiKey) return undefined;
-  const provider = profile.mode === "official" ? "openai" : profile.protocol;
+  const provider = profile.protocol === "anthropic" ? "anthropic" : "openai";
   const endpoint =
     profile.mode === "official"
       ? "https://api.deepseek.com/v1"
@@ -133,9 +158,9 @@ export function createDevScannerPersistence(): SecurityScannerPersistence {
   return {
     async readHistory() {
       const root = await getCompositionRoot();
-      return structuredClone(
-        (root.database.features.appPreferences.get(DESKTOP_HISTORY_KEY)
-          ?.value ?? []) as unknown as SecurityScanHistoryEntry[],
+      return restoreDesktopSecurityHistory(
+        root.database.features.appPreferences.get(DESKTOP_HISTORY_KEY)?.value ??
+          [],
       );
     },
     async writeHistory(entries) {
@@ -202,11 +227,18 @@ export function createDevScannerPersistence(): SecurityScannerPersistence {
     },
     async modelConfig() {
       const root = await getCompositionRoot();
-      const active = await root.modelProfiles.getActiveView();
-      if (!active) return undefined;
-      const profile = (await root.modelProfiles.getProfileForExecution(
-        active.id,
-      )) as StoredModelProfile | null;
+      const aiDetectionPreference = root.database.features.appPreferences.get(
+        SECURITY_LLM_REVIEW_PREF_KEY,
+      );
+      if (
+        aiDetectionPreference !== undefined &&
+        aiDetectionPreference.value !== true
+      ) {
+        return undefined;
+      }
+      const profile = await getActiveModelProfileForExecution(
+        root.modelProfiles,
+      );
       return toSecurityModelConfig(profile, true);
     },
   };
@@ -232,11 +264,96 @@ export function createDevSecurityScannerService(
         persistence: options.persistence ?? createDevScannerPersistence(),
         ...(options.now ? { now: options.now } : {}),
         ...(options.scanner ? { scanner: options.scanner } : {}),
+        ...(options.onScheduleChanged
+          ? { onScheduleChanged: options.onScheduleChanged }
+          : {}),
         ...(options.beforeOpenFile
           ? { beforeOpenFile: options.beforeOpenFile }
           : {}),
       }),
   );
+}
+
+/**
+ * Runs the same durable scheduler in browser development that the Electron
+ * main process uses. The scanner service remains the only execution boundary;
+ * this adapter only supplies its persisted schedule/runtime and timer.
+ */
+export function createDevAutomaticSecurityScanScheduler(options: {
+  readonly service: Pick<
+    SecurityScannerService,
+    "getScanSchedule" | "getStatus" | "startAutomaticScan"
+  >;
+  readonly persistence: Pick<
+    SecurityScannerPersistence,
+    "readScheduleRuntime" | "writeScheduleRuntime"
+  >;
+  readonly clock?: AutomaticSecurityScanClock;
+}): AutomaticSecurityScanScheduler {
+  return createAutomaticSecurityScanScheduler({
+    ...(options.clock ? { clock: options.clock } : {}),
+    readSchedule: () => options.service.getScanSchedule(),
+    readRuntime: () => options.persistence.readScheduleRuntime(),
+    writeRuntime: (runtime) =>
+      options.persistence.writeScheduleRuntime(runtime),
+    attempt: async (schedule) => {
+      const status = options.service.getStatus().status;
+      if (status === "running" || status === "cancelling") return "busy";
+      try {
+        await options.service.startAutomaticScan(schedule);
+        return "started";
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "unknown";
+        console.warn(`[security] dev automatic scan skipped: ${reason}`);
+        return "failed";
+      }
+    },
+  });
+}
+
+async function getDevSecurityRuntime(): Promise<DevSecurityRuntime | null> {
+  const identity = createNodeRuntimeIdentity();
+  if (identity.kind !== "web") {
+    devSecurityRuntime = null;
+    return null;
+  }
+
+  if (devSecurityRuntime !== undefined) return devSecurityRuntime;
+  stopPreviousDevRuntime();
+  const cached = readDevRuntimeCache();
+  if (cached) {
+    devSecurityRuntime = cached;
+    return cached;
+  }
+  if (devSecurityRuntimePromise) return devSecurityRuntimePromise;
+
+  devSecurityRuntimePromise = (async () => {
+    const homeDirectory = process.env[ENV.USAGE_HOME] ?? homedir();
+    const persistence = createDevScannerPersistence();
+    let scheduler: AutomaticSecurityScanScheduler | null = null;
+    const service = await createDevSecurityScannerService({
+      homeDirectory,
+      persistence,
+      onScheduleChanged: async (schedule) => {
+        await scheduler?.update(schedule);
+      },
+    });
+    scheduler = createDevAutomaticSecurityScanScheduler({
+      service,
+      persistence,
+    });
+    await scheduler.start();
+    const runtime = { service, scheduler };
+    devSecurityRuntime = runtime;
+    writeDevRuntimeCache(runtime);
+    return runtime;
+  })();
+
+  try {
+    return await devSecurityRuntimePromise;
+  } finally {
+    devSecurityRuntimePromise = undefined;
+  }
 }
 
 /**
@@ -249,27 +366,7 @@ export function createDevSecurityScannerService(
  * the same in-flight scanner state.
  */
 export async function getDevSecurityScannerService(): Promise<SecurityScannerService | null> {
-  const identity = createNodeRuntimeIdentity();
-  if (identity.kind !== "web") {
-    devSecurityScanner = null;
-    return null;
-  }
-
-  if (devSecurityScanner !== undefined) return devSecurityScanner;
-
-  const cached = readDevServiceCache();
-  if (cached) {
-    devSecurityScanner = cached;
-    return cached;
-  }
-
-  const homeDirectory = process.env[ENV.USAGE_HOME] ?? homedir();
-  const service = await createDevSecurityScannerService({
-    homeDirectory,
-  });
-  devSecurityScanner = service;
-  writeDevServiceCache(service);
-  return service;
+  return (await getDevSecurityRuntime())?.service ?? null;
 }
 
 class RequestBodyTooLargeError extends Error {}

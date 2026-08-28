@@ -25,6 +25,14 @@ const anthropicConfig: DashboardAIInsightRuntimeConfig = {
   model: "claude-model",
 };
 
+const responsesConfig: DashboardAIInsightRuntimeConfig = {
+  protocol: "openai-responses",
+  auth: "bearer",
+  endpoint: "https://api.openai.com/v1",
+  apiKey: "test-key-123456",
+  model: "gpt-5.2",
+};
+
 function input(): DashboardAIInsightInput {
   return {
     range: { preset: "30d" },
@@ -168,6 +176,36 @@ test("OpenAI-compatible request sends only allowlisted aggregate input", async (
   );
   assert.equal(JSON.stringify(result).includes("test-key-123456"), false);
   assert.equal(JSON.stringify(result).includes("llm.example.test"), false);
+});
+
+test("OpenAI Responses request uses input, max_output_tokens and output_text", async () => {
+  let sentUrl: string | undefined;
+  let sentHeaders: Record<string, string> | undefined;
+  let sentBody: unknown;
+  const service = createDashboardAIInsightService({
+    resolveConfig: async () => responsesConfig,
+    fetch: (async (url, init) => {
+      sentUrl = String(url);
+      sentHeaders = init?.headers as Record<string, string>;
+      sentBody = JSON.parse(String(init?.body));
+      return Response.json({ output_text: validOutput() });
+    }) as typeof fetch,
+  });
+
+  const result = await service.refresh(input());
+  assert.equal(result.status, "ready");
+  assert.equal(sentUrl, "https://api.openai.com/v1/responses");
+  assert.equal(sentHeaders?.authorization, "Bearer test-key-123456");
+  const request = sentBody as {
+    model: string;
+    input: string;
+    instructions: string;
+    max_output_tokens: number;
+  };
+  assert.equal(request.model, "gpt-5.2");
+  assert.equal(request.max_output_tokens, 600);
+  assert.deepEqual(JSON.parse(request.input), input());
+  assert.match(request.instructions, /aggregate JSON/);
 });
 
 test("Anthropic request uses the messages endpoint, x-api-key auth and system template", async () => {

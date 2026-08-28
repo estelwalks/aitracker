@@ -138,7 +138,7 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
   await usageSnapshot.ensureHydrated();
   await installationSnapshot.ensureHydrated();
   const latest = usageSnapshot.readLatest();
-  let installations = installationSnapshot.readLatest();
+  const installations = installationSnapshot.readLatest();
   const knownInstallationIds = new Set(
     installations.data?.facts.map((fact) => fact.id) ?? [],
   );
@@ -148,13 +148,13 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
   if (installations.data == null || catalogChanged) {
     // A registry upgrade can add a tool while the persisted installation
     // snapshot is still inside its six-hour freshness window. Repair that
-    // shape mismatch inline so a newly supported tool is visible immediately.
-    await installationSnapshot
+    // shape mismatch in the background; serve the last-known-good (or empty)
+    // projection now so the route never waits for installation probing.
+    void installationSnapshot
       .requestRefresh({
         reason: installations.data == null ? "empty" : "event",
       })
       .catch(() => {});
-    installations = installationSnapshot.readLatest();
   } else if (
     installations.status === "stale" ||
     installations.status === "failed"

@@ -64,6 +64,18 @@ function toItem(session: SessionSummary): DistillationSessionItem {
   };
 }
 
+/** Mark the package entry so the Skill scanner can distinguish generated
+ * distillation output from a manually installed Skill with no source field. */
+function markDistilledManifest(content: string): string {
+  const marker = "aitracker-origin: distilled";
+  const existing = /^aitracker-origin:\s*[^\r\n]*$/imu;
+  if (existing.test(content)) return content.replace(existing, marker);
+  if (/^---\r?\n/u.test(content)) {
+    return content.replace(/^---\r?\n/u, `---\n${marker}\n`);
+  }
+  return `---\n${marker}\n---\n\n${content}`;
+}
+
 /**
  * Load the distillation workbench read model. Resolves the selectable sessions
  * from the composition root's shared session port, the complete persisted
@@ -429,7 +441,13 @@ export async function saveCandidateAsSkill(
     if (!isPathInside(targetDir, targetFile))
       return { ok: false, errorCode: "errors.distillation.invalidName" };
     seenPaths.add(filePath);
-    validated.push({ targetFile, content: file.content });
+    validated.push({
+      targetFile,
+      content:
+        filePath === "SKILL.md"
+          ? markDistilledManifest(file.content)
+          : file.content,
+    });
   }
   if (!seenPaths.has("SKILL.md"))
     return { ok: false, errorCode: "errors.distillation.invalidName" };

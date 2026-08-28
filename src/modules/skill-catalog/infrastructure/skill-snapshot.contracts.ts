@@ -2,6 +2,7 @@ import type {
   SkillSnapshot as LegacySkillSnapshot,
   LocalSkill as LegacyLocalSkill,
 } from "../../../lib/local-skills/types.ts";
+import { basename } from "node:path";
 import type { SkillSnapshotData } from "../query/contracts.ts";
 
 /**
@@ -37,6 +38,8 @@ export function toSkillSnapshotData(
           label: installation.source.label,
         }
       : null,
+    directoryName: basename(installation.path).slice(0, 160),
+    ...(installation.isDistilled ? { isDistilled: true } : {}),
     updateStatus: installation.updateStatus,
     updateReason: installation.updateReason,
   });

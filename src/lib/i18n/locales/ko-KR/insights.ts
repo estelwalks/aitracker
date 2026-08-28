@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const insights = {
   title: "오늘의 인사이트",
   rotate: "전환",
@@ -30,7 +29,7 @@ export const insights = {
     sources: "데이터 소스",
     settings: "모델 설정",
     tracker: "번 리더보드 보기",
-    market: "마켓",
+    market: "보안 마켓",
     skills: "스킬",
     memory: "메모리",
   },
@@ -207,21 +206,22 @@ export const insights = {
         "Skill {unassigned}개는 어떤 Agent에도 설치되지 않았습니다.",
     },
     market: {
-      "market-installed": "{count}개의 마켓 컴포넌트가 설치되었습니다.",
+      "market-installed": "{count}개의 보안 마켓 컴포넌트가 설치되었습니다.",
       "market-updates":
         "{count}개의 컴포넌트에 업데이트가 있습니다. 빠른 업그레이드를 권장합니다.",
       "market-scan-first": "새 컴포넌트 설치 전에 보안 스캔을 먼저 완료하세요.",
       "market-review":
         "설치 전에 SKILL.md와 버전 기록을 확인해 못 쓰는 패키지를 피하세요.",
       "market-guide-installs":
-        "마켓 Skill {installed}개가 현재 설치되어 있습니다.",
+        "보안 마켓 Skill {installed}개가 현재 설치되어 있습니다.",
       "market-guide-updates":
-        "마켓 Skill {updates}개에 사용 가능한 업데이트가 있습니다.",
+        "보안 마켓 Skill {updates}개에 사용 가능한 업데이트가 있습니다.",
       "market-guide-cache":
-        "로컬 마켓 캐시에 탐색 가능한 항목 {total}개가 있습니다.",
+        "로컬 보안 마켓 캐시에 탐색 가능한 항목 {total}개가 있습니다.",
       "market-guide-review":
-        "설치된 마켓 Skill 중 {current}개는 대기 중인 업데이트가 없습니다.",
-      "market-guide-install": "마켓 캐시는 약 {hours}시간 전에 가져왔습니다.",
+        "설치된 보안 마켓 Skill 중 {current}개는 대기 중인 업데이트가 없습니다.",
+      "market-guide-install":
+        "보안 마켓 캐시는 약 {hours}시간 전에 가져왔습니다.",
     },
     chats: {
       "chats-total": "총 {count}개의 세션을 수집했습니다.",

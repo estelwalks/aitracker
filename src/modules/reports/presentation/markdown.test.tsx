@@ -8,12 +8,24 @@ function render(source: string): string {
   return renderToStaticMarkup(<MarkdownView source={source} />);
 }
 
-test("MarkdownView renders headings at each level with prototype sizing", () => {
+test("MarkdownView renders headings at each level with semantic typography classes", () => {
   const markup = render("# 一级\n## 二级\n### 三级\n#### 四级");
-  assert.match(markup, /<h1 class="[^"]*text-\[17px\]"[^>]*>一级<\/h1>/);
-  assert.match(markup, /<h2 class="[^"]*text-\[14\.5px\]"[^>]*>二级<\/h2>/);
-  assert.match(markup, /<h3 class="[^"]*text-\[13px\]"[^>]*>三级<\/h3>/);
-  assert.match(markup, /<h4 class="[^"]*text-\[12\.5px\]"[^>]*>四级<\/h4>/);
+  assert.match(
+    markup,
+    /<h1 class="[^"]*aitracker-text-page-title[^"]*"[^>]*>一级<\/h1>/,
+  );
+  assert.match(
+    markup,
+    /<h2 class="[^"]*aitracker-text-section-title[^"]*"[^>]*>二级<\/h2>/,
+  );
+  assert.match(
+    markup,
+    /<h3 class="[^"]*aitracker-text-section-title[^"]*"[^>]*>三级<\/h3>/,
+  );
+  assert.match(
+    markup,
+    /<h4 class="[^"]*aitracker-text-section-title[^"]*"[^>]*>四级<\/h4>/,
+  );
 });
 
 test("MarkdownView renders bold and inline code with prototype classes", () => {
@@ -46,16 +58,38 @@ test("MarkdownView renders tables with prototype aitracker-table chrome", () => 
   );
   assert.match(
     markup,
-    /<table class="aitracker-table w-full min-w-\[520px\] text-\[12px\]">/,
+    /<table class="aitracker-table w-full min-w-\[520px\] table-fixed text-\[12px\]">/,
   );
   assert.match(
     markup,
-    /<thead><tr><th class="px-3 py-2 font-mono text-\[10\.5px\] tracking-\[0\.06em\] text-muted-foreground uppercase text-left">名称<\/th><th class="px-3 py-2 font-mono text-\[10\.5px\] tracking-\[0\.06em\] text-muted-foreground uppercase text-right">数量<\/th><\/tr><\/thead>/,
+    /<thead><tr><th class="px-3 py-2 text-left font-mono text-\[10\.5px\] tracking-\[0\.06em\] text-muted-foreground uppercase">名称<\/th><th class="px-3 py-2 text-left font-mono text-\[10\.5px\] tracking-\[0\.06em\] text-muted-foreground uppercase">数量<\/th><\/tr><\/thead>/,
   );
   assert.match(
     markup,
-    /<tbody><tr><td class="px-3 py-2 text-left">A<\/td><td class="px-3 py-2 text-right font-mono">1<\/td><\/tr><tr><td class="px-3 py-2 text-left">B<\/td><td class="px-3 py-2 text-right font-mono">2<\/td><\/tr><\/tbody>/,
+    /<tbody><tr><td class="px-3 py-2 text-left font-mono">A<\/td><td class="px-3 py-2 text-left font-mono">1<\/td><\/tr><tr><td class="px-3 py-2 text-left font-mono">B<\/td><td class="px-3 py-2 text-left font-mono">2<\/td><\/tr><\/tbody>/,
   );
+});
+
+test("MarkdownView keeps uneven table rows aligned to the header columns", () => {
+  const markup = render(
+    "| Agent | 会话 | Tokens |\n| --- | --- | --- |\n| codex | 6 | 159M |\n| aipy | 0 |",
+  );
+  assert.match(
+    markup,
+    /<colgroup><col style="width:24%"\/><col style="width:38%"\/><col style="width:38%"\/><\/colgroup>/,
+  );
+  assert.match(
+    markup,
+    /<tbody><tr><td class="px-3 py-2 text-left font-mono">codex<\/td><td class="px-3 py-2 text-left font-mono">6<\/td><td class="px-3 py-2 text-left font-mono">159M<\/td><\/tr><tr><td class="px-3 py-2 text-left font-mono">aipy<\/td><td class="px-3 py-2 text-left font-mono">0<\/td><td class="px-3 py-2 text-left font-mono"><\/td><\/tr><\/tbody>/,
+  );
+});
+
+test("MarkdownView hides Agent rows with zero Tokens", () => {
+  const markup = render(
+    "| Agent | 会话 | Tokens |\n| --- | --- | --- |\n| codex | 6 | 159M |\n| unused-agent | 0 | 0 |",
+  );
+  assert.match(markup, /codex/);
+  assert.doesNotMatch(markup, /unused-agent/);
 });
 
 test("MarkdownView renders blockquotes with prototype border color", () => {

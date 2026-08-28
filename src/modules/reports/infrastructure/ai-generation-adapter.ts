@@ -94,8 +94,12 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
-function fmtCost(n: number): string {
+function fmtCostCny(n: number): string {
   return `¥${n.toFixed(2)}`;
+}
+
+function displayCostCny(cost: { costUsd: number; costCny?: number }): number {
+  return cost.costCny ?? cost.costUsd;
 }
 
 function fmtDuration(min: number): string {
@@ -117,20 +121,24 @@ export function buildOfflineReportDraft(
   const stats = context.stats ?? emptyStats(kindNoun);
   const top = stats.projects[0] ?? "主线项目";
   const projects = stats.projects.join("、") || "—";
+  const editSummary =
+    stats.editsComplete === false
+      ? `代码改动数据不完整（已识别 ${stats.edits} 处）`
+      : `代码改动 ${stats.edits} 处`;
   const table =
     "| Agent | 会话 | Tokens | 成本 | 改动 | 时长 |\n" +
     "| --- | --- | --- | --- | --- | --- |\n" +
     (stats.bySource
-      .map(
-        (row) =>
-          `| ${row.source} | ${row.sessions} | ${fmtTokens(row.tokens)} | ${fmtCost(row.costUsd)} | ${row.edits} | ${fmtDuration(row.durationMin)} |`,
-      )
+      .map((row) => {
+        const edits = row.editsComplete === false ? "—" : String(row.edits);
+        return `| ${row.source} | ${row.sessions} | ${fmtTokens(row.tokens)} | ${fmtCostCny(displayCostCny(row))} | ${edits} | ${fmtDuration(row.durationMin)} |`;
+      })
       .join("\n") || "| — | 0 | 0 | ¥0.00 | 0 | 0m |");
 
   return [
     `## ${kindNoun}摘要`,
     "",
-    `${stats.periodLabel}，共完成 **${stats.sessions}** 场 AI 协作会话，覆盖 ${stats.projects.length} 个项目（${projects}），累计对话 ${stats.turns} 轮、代码改动 ${stats.edits} 处，有效协作时长 ${fmtDuration(stats.durationMin)}。Token 消耗 ${fmtTokens(stats.tokens)}，估算成本 ${fmtCost(stats.costUsd)}。主要精力集中在「${top}」。Token 按事件发生日统计（含内部 Agent 调用）；会话数、轮次、代码改动和时长按用户会话统计。`,
+    `${stats.periodLabel}，共完成 **${stats.sessions}** 场 AI 协作会话，覆盖 ${stats.projects.length} 个项目（${projects}），累计对话 ${stats.turns} 轮、${editSummary}，有效协作时长 ${fmtDuration(stats.durationMin)}。Token 消耗 ${fmtTokens(stats.tokens)}，估算成本 ${fmtCostCny(displayCostCny(stats))}。主要精力集中在「${top}」。Token 按事件发生日统计（含内部 Agent 调用）；会话数、轮次和时长按用户会话统计，代码改动仅统计可识别的编辑工具调用。`,
     "",
     `## Agent 使用详情`,
     "",
@@ -151,7 +159,9 @@ export function buildOfflineReportDraft(
     "",
     `- 继续推进「${top}」剩余改动并补齐边界用例`,
     "- 将本时段高频经验蒸馏为个人 Skill，减少重复排查",
-    `- 复核 ${stats.edits} 处改动的回归影响，补充必要测试`,
+    stats.editsComplete === false
+      ? "- 当前部分 Agent 的改动工具不可观测，建议结合 Git 变更复核实际代码改动"
+      : `- 复核 ${stats.edits} 处改动的回归影响，补充必要测试`,
     "",
     `> 本报告由 AI 依据${kindNoun}会话自动生成草稿，可直接编辑后保存。`,
   ].join("\n");

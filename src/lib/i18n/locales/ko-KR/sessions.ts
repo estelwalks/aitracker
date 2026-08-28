@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const sessions = {
   metaDescription:
     "로컬 과거 세션을 탐색하고 사용 가능한 세션을 안전하게 복원합니다.",

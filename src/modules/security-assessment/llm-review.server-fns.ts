@@ -89,6 +89,7 @@ export function resolveSecurityLlmReviewRequestFromHistory(
     !Array.isArray(value.categories)
       ? (value.categories as Record<string, unknown>)
       : {};
+  let categorizedFindingCount = 0;
   for (const kind of RISK_KINDS) {
     const category = categories[kind];
     if (
@@ -102,6 +103,7 @@ export function resolveSecurityLlmReviewRequestFromHistory(
     const count = Number(row.count);
     if (!Number.isSafeInteger(count) || count < 0 || count > 1_000_000)
       return null;
+    categorizedFindingCount += count;
     const dimension = securityLlmDimensionOfRiskKind(kind);
     dimensions[dimension] = { hit: count > 0, count };
     const severity = String(row.highestSeverity) as SecuritySeverity;
@@ -110,6 +112,34 @@ export function resolveSecurityLlmReviewRequestFromHistory(
     else if (severity === "medium") severityCounts.medium += count;
     else if (severity === "low") severityCounts.low += count;
     else if (count > 0) return null;
+  }
+  // Preference persistence cannot retain category objects whose keys contain
+  // privacy-sensitive words (for example `secret_access`). Rebuild the same
+  // aggregate from the privacy-safe finding rows when categories are absent.
+  if (categorizedFindingCount === 0 && Array.isArray(value.findings)) {
+    for (const rawFinding of value.findings) {
+      if (
+        rawFinding == null ||
+        typeof rawFinding !== "object" ||
+        Array.isArray(rawFinding)
+      ) {
+        return null;
+      }
+      const finding = rawFinding as Record<string, unknown>;
+      const kind = String(finding.kind) as SecurityRiskKind;
+      if (!RISK_KINDS.includes(kind)) return null;
+      const severity = String(finding.severity) as SecuritySeverity;
+      const dimension = securityLlmDimensionOfRiskKind(kind);
+      dimensions[dimension] = {
+        hit: true,
+        count: dimensions[dimension].count + 1,
+      };
+      if (severity === "critical" || severity === "high")
+        severityCounts.high += 1;
+      else if (severity === "medium") severityCounts.medium += 1;
+      else if (severity === "low") severityCounts.low += 1;
+      else return null;
+    }
   }
   return {
     assetRef: String(value.contentHash || historyEntryId).slice(0, 128),

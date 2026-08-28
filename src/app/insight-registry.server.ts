@@ -118,12 +118,34 @@ export async function createPageInsightsApplicationForRoot(
     });
   }
 
-  return createPageInsightsApplication({
+  const application = createPageInsightsApplication({
     adapters,
     ...(enhancer ? { enhancer } : {}),
     store: deps.store,
     now: () => Date.now(),
   });
+  // Run recovery BEFORE the first read/enhance of this process so a stale
+  // batch can never hold the whole app hostage.
+  recoverStaleInsightState(deps.store);
+  return application;
+}
+
+/**
+ * Crash recovery for insight refresh coordination, run once per composition
+ * root build (this module is the shared entry for both page reads and batch
+ * processing). A process restart mid-batch would otherwise leave the run row
+ * `queued/running` with `active_slot` set, making `hasActiveRefreshRun()`
+ * true forever and locking every page to rule-based insight. Completed
+ * caches are preserved; stale runs and reservations are marked terminal.
+ * Safe under the single-process assumption (Electron single instance / dev
+ * single worker) because nothing can be legitimately in-flight at build time.
+ */
+function recoverStaleInsightState(store: SqliteInsightRepository): void {
+  try {
+    store.recoverStaleState?.(Date.now());
+  } catch {
+    // Recovery is best-effort; a failure must not break the first page read.
+  }
 }
 
 let cachedApplication: PageInsightsApplication | undefined;

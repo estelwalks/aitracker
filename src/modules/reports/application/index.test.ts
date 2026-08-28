@@ -89,6 +89,41 @@ test("manual and scheduled generation share the same use case and produce equiva
   }
 });
 
+test("regenerating the same period replaces the previous report", async () => {
+  let attempt = 0;
+  const state = app({
+    generation: {
+      generate: async () => {
+        attempt += 1;
+        return {
+          status: "succeeded" as const,
+          body: `Report body ${attempt}.`,
+        };
+      },
+    },
+  });
+  const period = { granularity: "day" as const, key: "2026-08-07" };
+  const first = await state.app.generate({
+    definitionId: "reports.daily",
+    trigger: "manual",
+    period,
+  });
+  const second = await state.app.generate({
+    definitionId: "reports.daily",
+    trigger: "manual",
+    period,
+  });
+  assert.equal(first.ok && second.ok, true);
+  if (!first.ok || !second.ok) return;
+
+  const listed = await state.app.list();
+  assert.equal(listed.ok && listed.value.length, 1);
+  assert.equal(listed.ok && listed.value[0]?.reportId, second.value.reportId);
+  assert.equal((await state.app.get(first.value.reportId)).ok, false);
+  const content = await state.app.readContent(second.value.reportId);
+  assert.equal(content.ok && content.value.body, "Report body 2.");
+});
+
 test("generate forwards an explicit modelId to the generation port", async () => {
   const calls: Array<{ modelId?: string }> = [];
   const state = app({

@@ -101,6 +101,7 @@ export function ReportSchedule({
     ).length;
     const summaryItems = compactScheduleSummaryItems(schedule, status);
     const disabledKinds = compactDisabledScheduleKinds(schedule);
+    const schedulerOff = status != null && !status.schedulerRunning;
     let summary: ReactNode;
     if (!loaded) {
       summary = <span>{t("common.loading")}</span>;
@@ -172,6 +173,13 @@ export function ReportSchedule({
           </button>
         </header>
 
+        {schedulerOff && enabledCount > 0 && (
+          <div className="mt-2 flex items-start gap-1.5 text-[11px] text-warn">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <span>{t("reports.schedule.schedulerOff")}</span>
+          </div>
+        )}
+
         {open && loaded && !statusError && (
           <div className="mt-3 divide-y divide-border/40">
             {SCHEDULE_KINDS.map((kind) => (
@@ -217,8 +225,22 @@ export function ReportSchedule({
       </div>
     );
   } else {
+    const schedulerOff = status != null && !status.schedulerRunning;
     content = (
       <div className="space-y-3">
+        {schedulerOff && (
+          <div className="aitracker-text-body-sm flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-warn">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-medium">
+                {t("reports.schedule.schedulerOff")}
+              </p>
+              <p className="aitracker-text-caption mt-0.5">
+                {t("reports.schedule.schedulerOffHint")}
+              </p>
+            </div>
+          </div>
+        )}
         {SCHEDULE_KINDS.map((kind) => (
           <SettingsPlanEditor
             key={kind}

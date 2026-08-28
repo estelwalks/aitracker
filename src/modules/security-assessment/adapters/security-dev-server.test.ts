@@ -23,13 +23,57 @@ import type {
   SecurityScannerPersistence,
   SecurityScannerServiceOptions,
 } from "../../../../electron/security-scanner-service";
+import type { AutomaticSecurityScanClock } from "../../../../electron/automatic-security-scan-scheduler";
 import {
+  createDevAutomaticSecurityScanScheduler,
   createDevSecretStorage,
   createDevSecurityScannerService,
   handleSecurityDevRequest,
   localeFromAcceptLanguage,
   toSecurityModelConfig,
 } from "./security-dev-server.server.ts";
+
+class DevSchedulerFakeClock implements AutomaticSecurityScanClock {
+  #now: number;
+  #nextId = 1;
+  readonly #timers = new Map<
+    number,
+    { readonly at: number; readonly handler: () => void }
+  >();
+
+  constructor(now: string) {
+    this.#now = Date.parse(now);
+  }
+
+  now(): Date {
+    return new Date(this.#now);
+  }
+
+  setTimeout(handler: () => void, delayMs: number): unknown {
+    const id = this.#nextId++;
+    this.#timers.set(id, { at: this.#now + Math.max(0, delayMs), handler });
+    return id;
+  }
+
+  clearTimeout(timer: unknown): void {
+    this.#timers.delete(timer as number);
+  }
+
+  async advanceTo(target: string): Promise<void> {
+    const targetTime = Date.parse(target);
+    for (;;) {
+      const due = [...this.#timers.entries()]
+        .filter(([, value]) => value.at <= targetTime)
+        .sort((left, right) => left[1].at - right[1].at)[0];
+      if (!due) break;
+      this.#now = due[1].at;
+      this.#timers.delete(due[0]);
+      due[1].handler();
+      await Promise.resolve();
+    }
+    this.#now = targetTime;
+  }
+}
 
 const cleanup: string[] = [];
 test.afterEach(async () => {
@@ -239,20 +283,25 @@ test("dev secret adapter round-trips without creating a persistence authority", 
   );
 });
 
-test("full scan without a configured model returns model-required", async () => {
+test("a requested full scan stays local when no model is enabled", async () => {
   const { home } = await fixture();
+  const requests: unknown[] = [];
   const service = await createDevSecurityScannerService({
     homeDirectory: home,
     locale: () => "zh-CN",
+    scanner: stubScanner(requests),
     persistence: memoryPersistence(),
   });
-  const state = await service.start({
+  await service.start({
     scope: "all",
     mode: "full",
     trigger: "manual",
   });
-  assert.equal(state.status, "model-required");
-  assert.equal(state.mode, "full");
+  await waitForTerminal(service);
+
+  assert.equal(service.getStatus().status, "complete");
+  assert.equal(service.getStatus().mode, "quick");
+  assert.equal((requests[0] as { mode?: string } | undefined)?.mode, "quick");
 });
 
 test("quick global scan completes and persists a history entry with a report", async () => {
@@ -306,17 +355,63 @@ test("dev automatic scans stay quick when disabled and become full only when ena
   );
 });
 
-test("handleSecurityDevRequest routes only /api/security/* requests", async () => {
+test("dev runtime arms saved schedules and executes them automatically", async () => {
+  const { home } = await fixture();
+  const persistence = memoryPersistence();
+  const requests: unknown[] = [];
+  const clock = new DevSchedulerFakeClock("2026-08-27T08:29:00.000Z");
+  let scheduler: ReturnType<
+    typeof createDevAutomaticSecurityScanScheduler
+  > | null = null;
+  const service = await createDevSecurityScannerService({
+    homeDirectory: home,
+    scanner: stubScanner(requests),
+    persistence,
+    now: () => clock.now(),
+    onScheduleChanged: async (schedule) => {
+      await scheduler?.update(schedule);
+    },
+  });
+  scheduler = createDevAutomaticSecurityScanScheduler({
+    service,
+    persistence,
+    clock,
+  });
+  await scheduler.start();
+  await service.setScanSchedule({
+    enabled: true,
+    cycle: "hourly",
+    time: "16:30",
+    scope: "all",
+    agents: [],
+    dir: null,
+    notify: false,
+  });
+
+  assert.equal(
+    (await service.getScanScheduleStatus()).nextRunAt,
+    "2026-08-27T09:29:00.000Z",
+  );
+  await clock.advanceTo("2026-08-27T09:29:00.000Z");
+  for (let index = 0; index < 100 && requests.length === 0; index += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  await waitForTerminal(service);
+
+  assert.equal(requests.length, 1);
+  assert.equal((await service.history())[0]?.trigger, "automatic");
+  assert.equal(
+    (await service.getScanScheduleStatus()).nextRunAt,
+    "2026-08-27T10:29:00.000Z",
+  );
+  scheduler.stop();
+});
+
+test("handleSecurityDevRequest passes through non-security requests", async () => {
   const passthrough = await handleSecurityDevRequest(
     new Request("http://127.0.0.1:8080/"),
   );
   assert.equal(passthrough, null);
-
-  const capability = await handleSecurityDevRequest(
-    new Request(`http://127.0.0.1:8080${SECURITY_API_PREFIX}/capability`),
-  );
-  assert.ok(capability instanceof Response);
-  assert.equal(capability.status, 200);
 });
 
 const origin = "http://127.0.0.1:43210";

@@ -10,6 +10,7 @@ import type {
 import type {
   InsightCacheIdentity,
   InsightEnhancementCache,
+  InsightGenerationReservation,
   InsightMode,
   InsightPreference,
   SqliteInsightRepository,
@@ -39,6 +40,11 @@ function keyFor(identity: InsightCacheIdentity): string {
 class FakeInsightRepository implements SqliteInsightRepository {
   readonly saved: InsightEnhancementCache[] = [];
   private readonly entries = new Map<string, InsightEnhancementCache>();
+  private readonly reservations = new Map<
+    string,
+    InsightGenerationReservation
+  >();
+  private activeRefreshRun = false;
 
   getPreference(): InsightPreference | undefined {
     return undefined;
@@ -68,6 +74,66 @@ class FakeInsightRepository implements SqliteInsightRepository {
     // not used by the enhancer
   }
 
+  getRefreshGeneration(): number {
+    return 1;
+  }
+
+  getRefreshGenerationStartedAtMs(): number {
+    return FIXED_NOW;
+  }
+
+  hasActiveRefreshRun(): boolean {
+    return this.activeRefreshRun;
+  }
+
+  setActiveRefreshRun(active: boolean): void {
+    this.activeRefreshRun = active;
+  }
+
+  claimGeneration(
+    value: Omit<
+      InsightGenerationReservation,
+      "status" | "resultStatus" | "finishedAtMs"
+    >,
+  ) {
+    const existing = this.reservations.get(value.reservationKey);
+    // Mirrors the repository: only running/completed reservations stay
+    // exclusive; a failed reservation can be re-claimed and retried.
+    if (existing && existing.status !== "failed") {
+      return { claimed: false, reservation: existing };
+    }
+    const reservation: InsightGenerationReservation = {
+      ...value,
+      status: "running",
+      resultStatus: null,
+      finishedAtMs: null,
+    };
+    this.reservations.set(value.reservationKey, reservation);
+    return { claimed: true, reservation };
+  }
+
+  finishGeneration(input: {
+    readonly reservationKey: string;
+    readonly ownerId: string;
+    readonly status: "completed" | "failed";
+    readonly resultStatus: string;
+    readonly nowMs: number;
+  }): boolean {
+    const existing = this.reservations.get(input.reservationKey);
+    if (!existing || existing.ownerId !== input.ownerId) return false;
+    this.reservations.set(input.reservationKey, {
+      ...existing,
+      status: input.status,
+      resultStatus: input.resultStatus,
+      finishedAtMs: input.nowMs,
+    });
+    return true;
+  }
+
+  clearReservations(): void {
+    this.reservations.clear();
+  }
+
   findValid(
     identity: InsightCacheIdentity,
     nowMs: number,
@@ -75,6 +141,24 @@ class FakeInsightRepository implements SqliteInsightRepository {
     const entry = this.entries.get(keyFor(identity));
     if (!entry) return undefined;
     return entry.expiresAtMs > nowMs ? entry : undefined;
+  }
+
+  findLatestValid(
+    identity: InsightCacheIdentity,
+    nowMs: number,
+  ): InsightEnhancementCache | undefined {
+    return [...this.entries.values()]
+      .filter(
+        (entry) =>
+          entry.surfaceId === identity.surfaceId &&
+          entry.scopeHash === identity.scopeHash &&
+          entry.locale === identity.locale &&
+          entry.profileId === identity.profileId &&
+          entry.promptVersionId === identity.promptVersionId &&
+          entry.promptVersion === identity.promptVersion &&
+          entry.expiresAtMs > nowMs,
+      )
+      .sort((left, right) => right.generatedAtMs - left.generatedAtMs)[0];
   }
 
   saveEnhancement(input: {
@@ -216,7 +300,12 @@ const resolveProfile = () => Promise.resolve(profile);
 
 type EnhancerOverrides = Pick<
   InsightEnhancerOptions,
-  "ttlMs" | "dailyCallLimit" | "singleflight" | "recordExecution"
+  | "ttlMs"
+  | "dailyCallLimit"
+  | "singleflight"
+  | "recordExecution"
+  | "maxAttempts"
+  | "retryDelayMs"
 >;
 
 function enhancer(
@@ -264,8 +353,25 @@ test("successful generation writes the cache and a second call hits it", async (
   assert.equal(second.modelLabel, "Model");
   assert.equal(second.lines.length, 2);
   assert.equal(calls(), 1, "cache hit must not invoke the model again");
-  assert.equal(requests()[0]?.timeoutMs, 90_000);
-  assert.equal(requests()[0]?.maxOutputTokens, 8192);
+  // Calibrated for reasoning models: 120s timeout and a 32K output budget
+  // (the old 90s/8192 pair cut deep-reasoning runs mid-thought).
+  assert.equal(requests()[0]?.timeoutMs, 120_000);
+  assert.equal(requests()[0]?.maxOutputTokens, 32_768);
+});
+
+test("a changed evidence sample reuses AI text until the configured TTL expires", async () => {
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const target = enhancer(ai, new FakeInsightRepository());
+
+  assert.equal((await target.enhance(input())).status, "enhanced-ready");
+  const changedCandidates = input().candidates.map((candidate) => ({
+    ...candidate,
+    fact: `${candidate.fact}，新的规则事实`,
+  }));
+  const cached = await target.enhance(input({ candidates: changedCandidates }));
+
+  assert.equal(cached.status, "enhanced-cached");
+  assert.equal(calls(), 1);
 });
 
 test("dotted page candidate ids do not trip outbound URL validation", async () => {
@@ -360,6 +466,7 @@ test("legacy cache entries older than one hour are refreshed", async () => {
     generatedAtMs: FIXED_NOW - 2 * 60 * 60 * 1000,
     expiresAtMs: FIXED_NOW + 2 * 60 * 60 * 1000,
   });
+  repository.clearReservations();
 
   assert.equal((await target.enhance(input())).status, "enhanced-ready");
   assert.equal(calls(), 2);
@@ -405,10 +512,55 @@ test("adapterVersion isolates the enhancement cache identity", async () => {
 
 test("timeout returns timeout with no lines", async () => {
   const { ai, calls } = fakeAI(() => statusResult("timeout"));
-  const target = enhancer(ai, new FakeInsightRepository());
+  const target = enhancer(ai, new FakeInsightRepository(), {
+    maxAttempts: 1,
+  });
   const result = await target.enhance(input());
   assert.equal(result.status, "timeout");
   assert.deepEqual(result.lines, []);
+  assert.equal(calls(), 1);
+});
+
+test("transient failures are retried until the attempt budget is spent", async () => {
+  const { ai, calls } = fakeAI(() => statusResult("timeout"));
+  const target = enhancer(ai, new FakeInsightRepository(), {
+    maxAttempts: 3,
+    retryDelayMs: () => 0,
+  });
+  const result = await target.enhance(input());
+  assert.equal(result.status, "timeout");
+  assert.equal(calls(), 3, "three attempts for a persistently failing model");
+});
+
+test("a transient failure succeeds on retry", async () => {
+  let attempts = 0;
+  const { ai, calls } = fakeAI(() => {
+    attempts += 1;
+    return attempts === 1
+      ? statusResult("timeout")
+      : completedResult(VALID_OUTPUT);
+  });
+  const target = enhancer(ai, new FakeInsightRepository(), {
+    maxAttempts: 3,
+    retryDelayMs: () => 0,
+  });
+  const result = await target.enhance(input());
+  assert.equal(result.status, "enhanced-ready");
+  assert.equal(calls(), 2);
+});
+
+test("budget exhaustion is never retried", async () => {
+  let attempts = 0;
+  const { ai, calls } = fakeAI(() => {
+    attempts += 1;
+    return statusResult("budget-exceeded");
+  });
+  const target = enhancer(ai, new FakeInsightRepository(), {
+    maxAttempts: 3,
+    retryDelayMs: () => 0,
+  });
+  const result = await target.enhance(input());
+  assert.equal(result.status, "budget-exceeded");
   assert.equal(calls(), 1);
 });
 
@@ -478,7 +630,7 @@ test("a missing mandatory candidate is invalid-output and is not cached", async 
   });
   const { ai } = fakeAI(() => completedResult(missingMandatory));
   const repository = new FakeInsightRepository();
-  const target = enhancer(ai, repository);
+  const target = enhancer(ai, repository, { maxAttempts: 1 });
   const result = await target.enhance(input());
   assert.equal(result.status, "invalid-output");
   assert.equal(repository.saved.length, 0);
@@ -489,9 +641,55 @@ test("an output containing digits is invalid-output", async () => {
     lines: [{ candidateId: "c1", analysis: "检测到 42 个风险" }],
   });
   const { ai } = fakeAI(() => completedResult(withDigit));
-  const target = enhancer(ai, new FakeInsightRepository());
+  const target = enhancer(ai, new FakeInsightRepository(), {
+    maxAttempts: 1,
+  });
   const result = await target.enhance(input());
   assert.equal(result.status, "invalid-output");
+});
+
+test("failure attribution is returned with the final failed result", async () => {
+  const { ai } = fakeAI(() => ({
+    summary: {
+      requestId: "req-1",
+      modelId: "p1",
+      providerId: "profile",
+      promptVersionId: "insight.dashboard",
+      promptVersion: 1,
+      status: "fallback",
+      cost: { confidence: "unknown", currency: "USD", reason: "no-pricing" },
+      usedFallback: true,
+      errorCode: "ai.provider-invalid-response",
+      failureDetail: "reasoning-only",
+    },
+    response: {
+      modelId: "p1",
+      providerId: "profile",
+      text: "Offline deterministic fallback",
+      finishReason: "stop",
+    },
+  }));
+  const target = enhancer(ai, new FakeInsightRepository(), {
+    maxAttempts: 1,
+  });
+  const result = await target.enhance(input());
+  assert.equal(result.status, "enhancer-failed");
+  assert.equal(result.failureDetail, "reasoning-only");
+});
+
+test("a save failure is reported instead of pretending persistence", async () => {
+  const { ai } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const repository = new FakeInsightRepository();
+  const original = repository.saveEnhancement.bind(repository);
+  repository.saveEnhancement = () => {
+    throw new Error("privacy guard rejected the line");
+  };
+  const target = enhancer(ai, repository, { maxAttempts: 1 });
+  const result = await target.enhance(input());
+  assert.equal(result.status, "enhanced-ready");
+  assert.equal(result.persisted, false);
+  assert.equal(repository.saved.length, 0);
+  repository.saveEnhancement = original;
 });
 
 test("a sensitive fact never reaches the model", async () => {
@@ -533,7 +731,79 @@ test("singleflight merges concurrent same-scope calls", async () => {
   assert.equal(r1.status, "enhanced-ready");
 });
 
-test("serializes different surfaces for a burst-sensitive provider", async () => {
+test("persistent reservation merges the same call across enhancer instances", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const { ai, calls } = fakeAI(async () => {
+    await gate;
+    return completedResult(VALID_OUTPUT);
+  });
+  const repository = new FakeInsightRepository();
+  const firstEnhancer = enhancer(ai, repository);
+  const secondEnhancer = enhancer(ai, repository);
+
+  const first = firstEnhancer.enhance(input());
+  const duplicate = secondEnhancer.enhance(input());
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(calls(), 1);
+  release();
+  const results = await Promise.all([first, duplicate]);
+  assert.equal(calls(), 1);
+  assert.ok(results.some((result) => result.status === "enhanced-ready"));
+});
+
+test("a failed reservation is re-claimed and retried after the cooldown", async () => {
+  const { ai, calls } = fakeAI(() => statusResult("fallback"));
+  const repository = new FakeInsightRepository();
+  let nowMs = FIXED_NOW;
+  const target = createInsightEnhancer({
+    ai,
+    repository,
+    resolveActiveProfile: resolveProfile,
+    now: () => nowMs,
+    maxAttempts: 1, // this test covers reservation re-claim, not retries
+  });
+
+  assert.equal((await target.enhance(input())).status, "enhancer-failed");
+  assert.equal(calls(), 1);
+  nowMs += 61_000;
+  assert.equal((await target.enhance(input())).status, "enhancer-failed");
+  assert.equal(calls(), 2, "a failed reservation must not block a retry");
+});
+
+test("an active refresh run keeps one reservation across TTL boundaries", async () => {
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const repository = new FakeInsightRepository();
+  repository.setActiveRefreshRun(true);
+  let nowMs = FIXED_NOW;
+  const target = createInsightEnhancer({
+    ai,
+    repository,
+    resolveActiveProfile: resolveProfile,
+    now: () => nowMs,
+  });
+
+  // Renderer calls are no longer hard-blocked during a batch; ownership is
+  // coordinated by the generation reservation instead.
+  assert.equal((await target.enhance(input())).status, "enhanced-ready");
+  assert.equal(calls(), 1);
+  assert.equal(
+    (await target.enhance(input({ batchOwned: true }))).status,
+    "enhanced-cached",
+    "the duplicate identity is served from the persisted cache",
+  );
+  assert.equal(calls(), 1);
+  nowMs += 2 * INSIGHT_ENHANCEMENT_CACHE_TTL_MS;
+  assert.equal(
+    (await target.enhance(input({ batchOwned: true }))).status,
+    "enhancer-failed",
+  );
+  assert.equal(calls(), 1, "the completed reservation still blocks re-claims");
+});
+
+test("bounds concurrent surfaces through the shared pool", async () => {
   let active = 0;
   let maxActive = 0;
   const { ai } = fakeAI(async () => {
@@ -552,7 +822,33 @@ test("serializes different surfaces for a burst-sensitive provider", async () =>
 
   assert.equal(first.status, "enhanced-ready");
   assert.equal(second.status, "enhanced-ready");
-  assert.equal(maxActive, 1);
+  assert.equal(maxActive, 2, "different surfaces share the bounded pool");
+
+  // A burst-sensitive provider can still request full serialization.
+  let serialActive = 0;
+  let serialMax = 0;
+  const serial = fakeAI(async () => {
+    serialActive += 1;
+    serialMax = Math.max(serialMax, serialActive);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    serialActive -= 1;
+    return completedResult(VALID_OUTPUT);
+  });
+  const serialTarget = createInsightEnhancer({
+    ai: serial.ai,
+    repository: new FakeInsightRepository(),
+    resolveActiveProfile: resolveProfile,
+    maxConcurrentRequests: 1,
+  });
+  await Promise.all([
+    serialTarget.enhance(input()),
+    serialTarget.enhance(input({ surface: "agents" })),
+  ]);
+  assert.equal(
+    serialMax,
+    1,
+    "maxConcurrentRequests: 1 restores serial behavior",
+  );
 });
 
 test("recordExecution receives the execution summary on success", async () => {

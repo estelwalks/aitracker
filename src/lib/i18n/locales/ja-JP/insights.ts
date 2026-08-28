@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 export const insights = {
   title: "今日のインサイト",
   rotate: "切替",
@@ -34,7 +33,7 @@ export const insights = {
     sources: "データソース",
     settings: "モデル設定",
     tracker: "バーンランキングを見る",
-    market: "マーケット",
+    market: "セキュリティマーケット",
     skills: "スキル",
     memory: "メモリ",
   },
@@ -217,7 +216,7 @@ export const insights = {
     },
     market: {
       "market-installed":
-        "{count} 個のマーケットコンポーネントをインストール済みです。",
+        "{count} 個のセキュリティマーケットコンポーネントをインストール済みです。",
       "market-updates":
         "{count} 個のコンポーネントに更新があります。早めのアップグレードをおすすめします。",
       "market-scan-first":
@@ -225,15 +224,15 @@ export const insights = {
       "market-review":
         "インストール前に SKILL.md とバージョン履歴を確認し、使えないパッケージを避けてください。",
       "market-guide-installs":
-        "マーケット由来の Skill を {installed} 個インストール済みです。",
+        "セキュリティマーケット由来の Skill を {installed} 個インストール済みです。",
       "market-guide-updates":
-        "{updates} 個のマーケット Skill に更新があります。",
+        "{updates} 個のセキュリティマーケット Skill に更新があります。",
       "market-guide-cache":
-        "ローカル市場キャッシュには {total} 件の項目があります。",
+        "ローカルセキュリティマーケットキャッシュには {total} 件の項目があります。",
       "market-guide-review":
-        "インストール済み市場 Skill のうち {current} 個には保留中の更新がありません。",
+        "インストール済みセキュリティマーケット Skill のうち {current} 個には保留中の更新がありません。",
       "market-guide-install":
-        "市場キャッシュは約 {hours} 時間前に取得されました。",
+        "セキュリティマーケットキャッシュは約 {hours} 時間前に取得されました。",
     },
     chats: {
       "chats-total": "{count} 件のセッションを収集しました。",

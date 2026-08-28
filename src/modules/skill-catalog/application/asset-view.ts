@@ -4,6 +4,10 @@ import type {
   SkillAgent,
   SkillSnapshot,
 } from "../query/contracts.ts";
+import {
+  formatSkillDisplayName,
+  primarySkillDirectoryName,
+} from "./skill-identity.ts";
 
 export type AssetSourceFilter = "all" | "frontmatter" | "market" | "unknown";
 export type AssetUpdateFilter = "all" | "available" | "current" | "unknown";
@@ -12,6 +16,9 @@ export type AssetSortDirection = "asc" | "desc";
 
 export interface SkillAssetView extends LocalSkill {
   readonly sourceKinds: readonly Exclude<AssetSourceFilter, "all">[];
+  readonly directoryName: string;
+  readonly displayName: string;
+  readonly isDistilled: boolean;
   readonly versions: readonly string[];
   readonly latestModifiedAt: string | null;
   readonly updateStatus: Exclude<AssetUpdateFilter, "all">;
@@ -119,8 +126,14 @@ export function toSkillAssetView(skill: LocalSkill): SkillAssetView {
       ),
     ),
   ] as SkillAssetView["sourceKinds"];
+  const directoryName = primarySkillDirectoryName(skill);
   return {
     ...skill,
+    directoryName,
+    displayName: formatSkillDisplayName(skill, directoryName),
+    isDistilled: skill.installations.some(
+      (installation) => installation.isDistilled === true,
+    ),
     sourceKinds,
     versions: [
       ...new Set(
@@ -240,6 +253,8 @@ export function querySkillAssets(
     const matchesText =
       normalizedText.length === 0 ||
       skill.name.toLocaleLowerCase().includes(normalizedText) ||
+      skill.directoryName.toLocaleLowerCase().includes(normalizedText) ||
+      skill.displayName.toLocaleLowerCase().includes(normalizedText) ||
       skill.description?.toLocaleLowerCase().includes(normalizedText) === true;
     return (
       matchesText &&
@@ -256,7 +271,7 @@ export function querySkillAssets(
   return assets.sort((left, right) => {
     let comparison: number;
     if (filters.sort === "name") {
-      comparison = left.name.localeCompare(right.name);
+      comparison = left.directoryName.localeCompare(right.directoryName);
     } else {
       const field =
         filters.sort === "lastUsedAt" ? "lastUsedAt" : "latestModifiedAt";
@@ -266,7 +281,8 @@ export function querySkillAssets(
         (leftValue ?? Number.NEGATIVE_INFINITY) -
         (rightValue ?? Number.NEGATIVE_INFINITY);
     }
-    if (comparison === 0) comparison = left.name.localeCompare(right.name);
+    if (comparison === 0)
+      comparison = left.directoryName.localeCompare(right.directoryName);
     return filters.direction === "asc" ? comparison : -comparison;
   });
 }

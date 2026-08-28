@@ -41,6 +41,20 @@ async function preparePage(browser: Browser): Promise<{
       configurable: true,
     });
   });
+  // Locale/currency preferences are SQLite-backed. Normalize them through
+  // the UI because clearing localStorage alone cannot undo another test's
+  // persisted language choice (and would make Chinese sidebar labels vanish).
+  await page.goto("/settings", {
+    waitUntil: "domcontentloaded",
+    timeout: 90_000,
+  });
+  await page.waitForURL(/locale=/, { timeout: 30_000 });
+  await page
+    .getByRole("button", {
+      name: /^(应用偏好|App preferences|アプリ設定|앱 환경설정)$/,
+    })
+    .click();
+  await page.getByRole("button", { name: "中文", exact: true }).click();
   await page.goto("/", { waitUntil: "domcontentloaded", timeout: 90_000 });
   await expect(page.locator("main")).toBeVisible();
   return { page, close: () => context.close() };

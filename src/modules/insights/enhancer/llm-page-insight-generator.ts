@@ -26,11 +26,19 @@ import { MAX_PAYLOAD_BYTES, assertPayloadSafe } from "./validation.ts";
 /**
  * The configured gateway can spend tens of seconds on reasoning before it
  * returns a short insight. Keep a bounded page-specific window while giving
- * the real provider enough time to finish.
+ * the real provider enough time to finish. 120s is calibrated against the
+ * observed 48–90s completion distribution (the old 90s cap killed successful
+ * deep-reasoning runs at exactly 90.0s).
  */
-export const INSIGHT_MODEL_TIMEOUT_MS = 90_000;
-/** Keep the gateway-compatible reasoning/output ceiling used by successful runs. */
-export const INSIGHT_MAX_OUTPUT_TOKENS = 8192;
+export const INSIGHT_MODEL_TIMEOUT_MS = 120_000;
+/**
+ * Reasoning models (e.g. deepseek-v4-flash) consume the output budget on
+ * `reasoning_content`; when the budget runs out, `content` is empty and the
+ * whole response is rejected. 32768 covers the empirically observed reasoning
+ * tail (up to ~13.5K tokens) with margin while the model still stops early at
+ * its natural length for ordinary runs.
+ */
+export const INSIGHT_MAX_OUTPUT_TOKENS = 32768;
 
 export interface InsightGeneratePrompt {
   readonly id: string;
@@ -59,6 +67,8 @@ export interface InsightGenerateResult {
   readonly usage?: TokenUsage;
   /** Present only when the executor was actually invoked. */
   readonly summary?: AIExecutionSummary;
+  /** Sanitized failure attribution of the final failed attempt. */
+  readonly failureDetail?: string;
 }
 
 export interface LLMInsightGenerator {
@@ -82,8 +92,14 @@ function mapStatus(status: AIExecutionStatus): InsightGenerateStatus {
 
 export function createLLMInsightGenerator(options: {
   readonly ai: AIExecutorPort;
+  /** Overrides INSIGHT_MAX_OUTPUT_TOKENS (calibrated for reasoning models). */
+  readonly maxOutputTokens?: number;
+  /** Overrides INSIGHT_MODEL_TIMEOUT_MS. */
+  readonly timeoutMs?: number;
 }): LLMInsightGenerator {
   const ai = options.ai;
+  const maxOutputTokens = options.maxOutputTokens ?? INSIGHT_MAX_OUTPUT_TOKENS;
+  const timeoutMs = options.timeoutMs ?? INSIGHT_MODEL_TIMEOUT_MS;
 
   return {
     async generate(request) {
@@ -123,8 +139,8 @@ export function createLLMInsightGenerator(options: {
         modelId: request.profileId,
         prompt: request.prompt,
         input: { text: inputText },
-        maxOutputTokens: INSIGHT_MAX_OUTPUT_TOKENS,
-        timeoutMs: INSIGHT_MODEL_TIMEOUT_MS,
+        maxOutputTokens,
+        timeoutMs,
         signal: request.signal,
       });
       const summary = result.summary;
@@ -134,6 +150,9 @@ export function createLLMInsightGenerator(options: {
         text: result.response?.text,
         usage: result.response?.usage,
         summary,
+        ...(summary.failureDetail !== undefined
+          ? { failureDetail: summary.failureDetail }
+          : {}),
       };
     },
   };

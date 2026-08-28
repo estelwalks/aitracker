@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MonitoringSecuritySummary } from "../../monitoring/contracts";
 import {
   dedupeHistoryByContentHash,
+  historyForCurrentSkills,
   latestHistory,
   summarizeReports,
 } from "../presentation/security-view";
@@ -18,7 +19,7 @@ const REFRESH_INTERVAL_MS = 30_000;
 export interface SecurityScanOverview {
   readonly summary: MonitoringSecuritySummary | null;
   readonly runCount: number;
-  /** Deduplicated count of unique scanned Skills across ALL scan history. */
+  /** Deduplicated count of currently installed Skills with scan history. */
   readonly coverage: number;
   /** Deduplicated count of all discovered Skills on this machine. */
   readonly totalSkills: number;
@@ -92,17 +93,21 @@ export function useSecurityScanOverview(): SecurityScanOverview {
         // monitoring placeholder. A failed first read keeps `available`
         // false and the server-composed fallback intact.
         setAvailable(true);
-        // summarizeReports dedups across all history by content hash, so the
+        // Keep the audit history intact, but scope the homepage posture to
+        // Skills returned by the latest discovery pass. Otherwise deleted
+        // Skills remain in coverage and safe/unsafe counts indefinitely.
+        const currentHistory = historyForCurrentSkills(history, skills);
+        // summarizeReports dedups current history by content hash, so the
         // latest run skipping unchanged skills never drops their totals.
-        const totals = summarizeReports(history);
-        const latest = latestHistory(history);
+        const totals = summarizeReports(currentHistory);
+        const latest = latestHistory(currentHistory);
         // 检测次数 = the number of scan RUNS (distinct scanIds), not history
         // entries: one full scan covering 16 skills counts as 1, not 16.
         setRunCount(new Set(history.map((entry) => entry.scanId)).size);
         // Use the same current-state projection as the security page: a
         // rescan replaces the previous verdict, then identical installations
         // collapse by content hash.
-        setCoverage(dedupeHistoryByContentHash(history).length);
+        setCoverage(dedupeHistoryByContentHash(currentHistory).length);
         setTotalSkills(skills.length);
         setSummary(
           totals.total === 0

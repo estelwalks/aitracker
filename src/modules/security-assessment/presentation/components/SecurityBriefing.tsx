@@ -1,23 +1,32 @@
-import { ScanLine } from "lucide-react";
+import {
+  Clock3,
+  RadarIcon,
+  ScanLine,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 
-import { InsightCard } from "../../../insights/page/presentation/insight-card";
+import { InsightCard } from "../../../insights/index.ts";
 import { useI18n } from "../../../../lib/i18n/context";
-import type { SecurityScanPhase, SecurityTotals } from "../security-view";
+import { detectedRiskCount, type SecurityTotals } from "../security-view";
 
 /**
- * Security-page insight hero. The copy and layout intentionally use the same
- * shared 今日洞察 card as the dashboard; security keeps only its health ring
- * and scan action in the right-hand action slot.
+ * Security-page insight hero. The card frame, insight lifecycle, AI label and
+ * rotation behavior all come from the shared 今日洞察 component. Security
+ * supplies the evidence-derived copy/actions plus the adjacent status bar.
  */
 export function SecurityBriefing({
   totals,
+  dimensions,
+  lastScan,
+  nextScan,
   scanning,
   onScan,
 }: {
   totals: SecurityTotals;
   dimensions: number;
   lastScan: string;
-  latestStatus: SecurityScanPhase | null;
+  nextScan: string;
   scanning: boolean;
   onScan: () => void;
 }) {
@@ -31,13 +40,67 @@ export function SecurityBriefing({
       : totals.warn > 0
         ? "var(--warn)"
         : "var(--ok)";
-  const radius = 42;
-  const circumference = 2 * Math.PI * radius;
-
+  const risky = detectedRiskCount(totals);
+  const first =
+    totals.total === 0
+      ? t("security.center.briefing.noReportLine")
+      : risky > 0
+        ? t("security.center.briefing.riskyLine", {
+            total: totals.total,
+            risky,
+            danger: totals.danger,
+            warn: totals.warn,
+          })
+        : totals.findings > 0
+          ? t("security.center.briefing.findingLine", {
+              total: totals.total,
+              findings: totals.findings,
+            })
+          : t("security.center.briefing.cleanLine", {
+              dimensions,
+              total: totals.total,
+            });
+  const status = `${t("security.center.briefing.lastScan", {
+    dimensions,
+    time: lastScan,
+  })} · ${health}% ${t("security.center.briefing.health")}`;
+  const localLines = [
+    first,
+    status,
+    t("security.center.briefing.boundaryLine"),
+  ];
+  const pending = risky;
+  const statusBar = (
+    <section
+      className="rounded-xl bg-card px-4 py-3"
+      aria-label={t("security.center.briefing.title")}
+    >
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          {pending === 0 ? (
+            <ShieldCheck className="size-3.5 text-ok" strokeWidth={1.8} />
+          ) : (
+            <ShieldAlert className="size-3.5" strokeWidth={1.8} />
+          )}
+          {t("security.center.briefing.needsAttention", { count: pending })}
+        </span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <Clock3 className="size-3.5" strokeWidth={1.8} />
+          {t("security.center.briefing.recentScan", { time: lastScan })}
+        </span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          {t("security.center.briefing.scannedSkills", { count: totals.total })}
+        </span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          {t("security.center.briefing.nextScan", { time: nextScan })}
+        </span>
+      </div>
+    </section>
+  );
   const actions = (
-    <div className="security-briefing-actions">
+    <div className="flex shrink-0 flex-col items-center gap-1">
       <div
-        className="security-briefing-health-ring relative grid shrink-0 place-items-center"
+        className="relative grid size-20 shrink-0 place-items-center"
         title={`${t("security.center.briefing.health")} ${health}%`}
         aria-label={`${t("security.center.briefing.health")} ${health}%`}
       >
@@ -45,7 +108,7 @@ export function SecurityBriefing({
           <circle
             cx="50"
             cy="50"
-            r={radius}
+            r="42"
             fill="none"
             stroke="var(--surface-2)"
             strokeWidth="7"
@@ -53,19 +116,19 @@ export function SecurityBriefing({
           <circle
             cx="50"
             cy="50"
-            r={radius}
+            r="42"
             fill="none"
             stroke={tone}
             strokeWidth="7"
             strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - health / 100)}
+            strokeDasharray={2 * Math.PI * 42}
+            strokeDashoffset={2 * Math.PI * 42 * (1 - health / 100)}
             style={{ transition: "stroke-dashoffset 1s ease" }}
           />
         </svg>
         <div className="absolute flex flex-col items-center">
           <span
-            className="aitracker-num aitracker-text-metric leading-none font-bold"
+            className="aitracker-num text-[18px] leading-none font-bold"
             style={{ color: tone }}
           >
             {health}%
@@ -75,7 +138,6 @@ export function SecurityBriefing({
           </span>
         </div>
       </div>
-
       <button
         type="button"
         onClick={onScan}
@@ -92,13 +154,20 @@ export function SecurityBriefing({
   );
 
   return (
-    <InsightCard
-      surfaceId="security"
-      variant="hero"
-      headingLevel={2}
-      title={t("security.center.briefing.title")}
-      showRotate={false}
-      actions={actions}
-    />
+    <>
+      <InsightCard
+        surfaceId="security"
+        variant="hero"
+        headingLevel={2}
+        title={t("security.center.briefing.title")}
+        icon={RadarIcon}
+        accent={tone}
+        fallbackLines={localLines}
+        showFallbackStatus={false}
+        actions={actions}
+        actionsLayout="title-row"
+      />
+      {statusBar}
+    </>
   );
 }

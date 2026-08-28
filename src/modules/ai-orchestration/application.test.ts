@@ -58,6 +58,24 @@ test("provider failure falls back and exposes only stable error metadata", async
   assert.equal(result.summary.usedFallback, true);
 });
 
+test("provider failure preserves an allowlisted diagnostic classification", async () => {
+  const result = await executeAIRequest(request(), {
+    router: {
+      route: () => ({
+        providerId: "p",
+        invoke: async () => {
+          throw Object.assign(new Error("sensitive provider response"), {
+            code: "ai.provider-rate-limited",
+          });
+        },
+      }),
+    },
+  });
+  assert.equal(result.summary.status, "fallback");
+  assert.equal(result.summary.errorCode, "ai.provider-rate-limited");
+  assert.equal(JSON.stringify(result.summary).includes("sensitive"), false);
+});
+
 test("budget exceeded prevents provider invocation", async () => {
   let called = false;
   const result = await executeAIRequest(request({ budgetUsd: 0.1 }), {
@@ -93,6 +111,50 @@ test("timeout and cancellation are bounded and fallback locally", async () => {
     { router: { route: () => slow } },
   );
   assert.equal(cancelled.summary.status, "cancelled");
+});
+
+test("timeout aborts the underlying provider request", async () => {
+  let observedSignal: AbortSignal | undefined;
+  const slow = {
+    providerId: "p",
+    invoke: (providerRequest: { signal: AbortSignal }) => {
+      observedSignal = providerRequest.signal;
+      // Reject when aborted so the provider stops promptly after the timeout.
+      return new Promise<AIResponse>((_resolve, reject) => {
+        observedSignal?.addEventListener("abort", () => {
+          reject(new Error("aborted"));
+        });
+      });
+    },
+  };
+  const result = await executeAIRequest(request({ timeoutMs: 5 }), {
+    router: { route: () => slow },
+  });
+  assert.equal(result.summary.status, "timeout");
+  assert.equal(
+    observedSignal?.aborted,
+    true,
+    "the fetch signal must be aborted",
+  );
+});
+
+test("provider failure detail flows into the summary for attribution", async () => {
+  const result = await executeAIRequest(request(), {
+    router: {
+      route: () => ({
+        providerId: "p",
+        invoke: async () => {
+          const error = new Error("ai.provider-invalid-response") as Error & {
+            detail?: string;
+          };
+          error.detail = "reasoning-only";
+          throw error;
+        },
+      }),
+    },
+  });
+  assert.equal(result.summary.status, "fallback");
+  assert.equal(result.summary.failureDetail, "reasoning-only");
 });
 
 test("redaction removes input/output and sensitive fields", () => {

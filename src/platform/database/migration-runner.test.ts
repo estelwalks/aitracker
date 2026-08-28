@@ -40,6 +40,8 @@ const EXPECTED_INDEXES = [
   "idx_ai_executions_status_started",
   "idx_insight_enhancement_cache_identity",
   "idx_insight_enhancement_cache_surface_expires",
+  "idx_insight_generation_reservations_identity",
+  "idx_insight_refresh_runs_created",
   "idx_model_profiles_single_active",
 ] as const;
 
@@ -442,11 +444,12 @@ test("rejects malformed definition lists with invalid-argument", (t) => {
   assert.deepEqual(objectNames(host, "table"), []);
 });
 
-test("single baseline directly contains the final evolved columns", (t) => {
+test("single baseline contains the complete release schema", (t) => {
   assert.equal(MIGRATIONS.length, 1);
   assert.equal(MIGRATIONS[0].version, 1);
   assert.equal(MIGRATIONS[0].name, "0001_initial_schema");
   assert.equal(MIGRATIONS[0].sql, INITIAL_SCHEMA_SQL);
+  assert.equal(LATEST_MIGRATION_VERSION, 1);
   assert.doesNotMatch(INITIAL_SCHEMA_SQL, /ALTER\s+TABLE/i);
 
   const host = openHost(t);
@@ -456,6 +459,9 @@ test("single baseline directly contains the final evolved columns", (t) => {
     ["knowledge_versions", "content"],
     ["skills", "form"],
     ["usage_aggregate_buckets", "project_kind"],
+    ["skill_installations", "directory_name"],
+    ["ai_executions", "failure_detail"],
+    ["insight_refresh_items", "result_detail"],
   ] as const) {
     assert.ok(
       host
@@ -467,4 +473,24 @@ test("single baseline directly contains the final evolved columns", (t) => {
     );
   }
   assert.ok(objectNames(host, "table").includes("usage_tracker_buckets"));
+  assert.ok(objectNames(host, "table").includes("insight_refresh_runs"));
+  assert.ok(
+    objectNames(host, "table").includes("insight_generation_reservations"),
+  );
+  assert.equal(
+    host
+      .prepare(
+        "SELECT name FROM pragma_table_info('model_profiles') WHERE name = 'api_format'",
+      )
+      .get(),
+    undefined,
+  );
+  const modelProfilesSql = text(
+    host
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'model_profiles'",
+      )
+      .get()?.sql,
+  );
+  assert.match(modelProfilesSql, /'openai-responses'/);
 });

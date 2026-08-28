@@ -66,6 +66,7 @@ export {
   latestHistory,
   latestScanEntries,
   reportNeedsLocaleRefresh,
+  resolveNextScheduledScanAt,
   isScanActive,
   clampPercent,
   countScanTasks,

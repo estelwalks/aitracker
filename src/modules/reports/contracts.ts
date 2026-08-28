@@ -116,6 +116,8 @@ export interface ReportStore {
   createRun(run: ReportRun): Promise<void>;
   updateRun(run: ReportRun): Promise<void>;
   saveDocument(document: ReportDocument): Promise<void>;
+  /** Replace an existing document for the same definition and period anchor. */
+  replaceForPeriod(document: ReportDocument): Promise<void>;
   getDocument(reportId: string): Promise<ReportDocument | undefined>;
   latest(definitionId: string): Promise<ReportDocument | undefined>;
   /** Enumerate persisted report documents (newest first). */
@@ -144,15 +146,22 @@ export interface ReportStats {
   readonly sessions: number;
   readonly turns: number;
   readonly tokens: number;
+  /** USD source-of-truth used for accounting and reconciliation. */
   readonly costUsd: number;
+  /** Optional CNY display projection captured from the shared rate snapshot. */
+  readonly costCny?: number;
   readonly edits: number;
+  /** False when generic execution wrappers hide whether a turn edited code. */
+  readonly editsComplete?: boolean;
   readonly durationMin: number;
   readonly bySource: readonly {
     readonly source: string;
     readonly sessions: number;
     readonly tokens: number;
     readonly costUsd: number;
+    readonly costCny?: number;
     readonly edits: number;
+    readonly editsComplete?: boolean;
     readonly durationMin: number;
   }[];
   /** Display-safe project keys present in the period (no paths). */

@@ -10,7 +10,8 @@
     "grok",
     "hermes",
     "openclaw",
-    "antigravity"
+    "antigravity",
+    "aipy"
   ],
   "defaultMarkers": ["SKILL.md", "skill.md"],
   "defaultMaxDepth": 3,

@@ -17,6 +17,9 @@ export type SkillInstallation = Omit<
     readonly kind: "frontmatter" | "market";
     readonly label: string;
   } | null;
+  /** Safe basename for display; never an absolute or relative path. */
+  readonly directoryName?: string;
+  readonly isDistilled?: boolean;
 };
 
 export type LocalSkill = Omit<LegacyLocalSkill, "installations"> & {
@@ -88,6 +91,9 @@ export interface SkillSnapshotInstallation {
     readonly kind: "frontmatter" | "market";
     readonly label: string;
   } | null;
+  /** Safe basename for display; never an absolute or relative path. */
+  readonly directoryName?: string;
+  readonly isDistilled?: boolean;
   readonly updateStatus: "current" | "available" | "unknown";
   readonly updateReason: string;
 }

@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const skills = {
   metaDesc:
     "로컬 AI Agent의 Skill을 스캔하고 관리합니다. 안전한 복사, Agent 간 동기화, 블랙리스트를 지원합니다.",
@@ -64,7 +63,11 @@ export const skills = {
     select: "{name} 선택",
     deselect: "{name} 선택 해제",
   },
-  source: { frontmatter: "메타데이터", market: "마켓", unknown: "알 수 없음" },
+  source: {
+    frontmatter: "메타데이터",
+    market: "보안 마켓",
+    unknown: "알 수 없음",
+  },
   update: {
     all: "모든 업데이트 상태",
     available: "업데이트 가능",
@@ -87,7 +90,7 @@ export const skills = {
     install: "설치",
     uninstallAll: "모든 복사본 제거",
     addMonitorDir: "모니터링 디렉터리 추가",
-    goMarket: "마켓 보기",
+    goMarket: "보안 마켓 보기",
     block: "블랙리스트에 추가",
     unblock: "블랙리스트에서 제외",
   },
@@ -279,7 +282,7 @@ export const skills = {
   hub: {
     title: "Skill Hub",
     summary: "로컬 Skill {count}개",
-    desc: "로컬 Skill 자산을 한곳에서 관리하고, 보안 검사를 통과한 Skill을 마켓에서 설치합니다.",
+    desc: "로컬 Skill 자산을 한곳에서 관리하고, 보안 검사를 통과한 Skill을 보안 마켓에서 설치합니다.",
   },
   jarvis: {
     localSkills:
@@ -288,8 +291,8 @@ export const skills = {
       "{count}개의 로컬 Skill 보안 검사가 완료되었으며 위험은 {risk}건입니다.",
     securityClean: "모든 로컬 Skill 보안 검사를 통과했습니다.",
     marketAvailable:
-      "마켓에서 {total}개의 Skill을 설치할 수 있으며 그중 {official}개는 공식 릴리스입니다.",
-    marketInstalled: "이 머신에 마켓 Skill {count}개가 설치되었습니다.",
+      "보안 마켓에서 {total}개의 Skill을 설치할 수 있으며 그중 {official}개는 공식 릴리스입니다.",
+    marketInstalled: "이 머신에 보안 마켓의 Skill {count}개가 설치되었습니다.",
   },
   kpi: {
     localSkills: "로컬 Skill",
@@ -310,6 +313,7 @@ export const skills = {
   security: {
     detected: "보안 검사됨",
     attention: "확인 필요",
+    unsafe: "안전하지 않음",
     clean: "안전",
     pending: "미검사",
   },

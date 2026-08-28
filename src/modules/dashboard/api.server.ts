@@ -740,7 +740,7 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
         .ensureHydrated()
         .then(() => installationSnapshot.readLatest()),
     ]);
-  let installationLatest = initialInstallationLatest;
+  const installationLatest = initialInstallationLatest;
   const knownInstallationIds = new Set(
     installationLatest.data?.facts.map((fact) => fact.id) ?? [],
   );
@@ -751,13 +751,13 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
     // Keep Agent Overview in sync when a new catalog tool is added while the
     // previous installation snapshot is still within its six-hour freshness
     // window. The installation scan is bounded and runs through the task
-    // runtime; only this repair path waits for its committed result.
-    await installationSnapshot
+    // runtime, but route loaders must serve the last-known-good (or empty)
+    // projection immediately instead of waiting for the scan to commit.
+    void installationSnapshot
       .requestRefresh({
         reason: installationLatest.data == null ? "empty" : "event",
       })
       .catch(() => {});
-    installationLatest = installationSnapshot.readLatest();
   } else if (
     installationLatest.status === "stale" ||
     installationLatest.status === "failed"

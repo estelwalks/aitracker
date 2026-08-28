@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type {
   SecurityHistoryView,
   SecurityReportView,
+  SecuritySkillView,
 } from "../security-view.ts";
 import { UnsafeSkillList } from "./UnsafeSkillList.tsx";
 
@@ -66,6 +67,16 @@ function finding(
   };
 }
 
+const skills: readonly SecuritySkillView[] = [
+  {
+    skillRef: "skill:one",
+    name: "one",
+    agents: ["AiPy"],
+    modifiedAt: "2026-08-10T00:00:00.000Z",
+    source: "discovered",
+  },
+];
+
 test("UnsafeSkillList shows only unsafe skills with danger/warn pills and report buttons", () => {
   const block = entry({
     id: "history:block",
@@ -87,19 +98,24 @@ test("UnsafeSkillList shows only unsafe skills with danger/warn pills and report
   });
 
   const markup = renderToStaticMarkup(
-    <UnsafeSkillList entries={[safe, block, warn]} onOpenReport={() => {}} />,
+    <UnsafeSkillList
+      entries={[safe, block, warn]}
+      skills={skills}
+      onOpenReport={() => {}}
+    />,
   );
   // Header row + 2 unsafe rows — safe skill is excluded.
   assert.equal((markup.match(/<tr/g) ?? []).length, 3);
   assert.match(markup, /blocker/);
   assert.match(markup, /warner/);
   assert.doesNotMatch(markup, /safe-skill/);
-  // Verdict pill classes by tone.
+  // Confirmed warn/block verdicts share the same danger presentation.
   assert.match(markup, /bg-danger\/15/);
-  assert.match(markup, /bg-amber-500\/15/);
+  assert.doesNotMatch(markup, /bg-amber-500\/15/);
   // Hit dimensions come from the real report findings.
   assert.match(markup, /代码执行/);
   assert.match(markup, /密钥访问/);
+  assert.match(markup, /AiPy \/ one/);
   // Header + 2 enabled report buttons.
   assert.equal((markup.match(/查看报告/g) ?? []).length, 3);
 });
@@ -111,6 +127,7 @@ test("UnsafeSkillList shows the empty state when every skill passed", () => {
         entry({ report: report() }),
         entry({ id: "history:two", skillName: "two", report: report() }),
       ]}
+      skills={skills}
       onOpenReport={() => {}}
     />,
   );
@@ -118,7 +135,7 @@ test("UnsafeSkillList shows the empty state when every skill passed", () => {
   assert.doesNotMatch(markup, /<tr/);
 });
 
-test("UnsafeSkillList does not mislabel incomplete or failed scans as unsafe", () => {
+test("UnsafeSkillList excludes incomplete and failed scans from confirmed risks", () => {
   const markup = renderToStaticMarkup(
     <UnsafeSkillList
       entries={[
@@ -134,9 +151,11 @@ test("UnsafeSkillList does not mislabel incomplete or failed scans as unsafe", (
           status: "failed",
         }),
       ]}
+      skills={skills}
       onOpenReport={() => {}}
     />,
   );
+  assert.doesNotMatch(markup, /partial-skill/);
+  assert.doesNotMatch(markup, /failed-skill/);
   assert.match(markup, /暂无不安全 Skill/);
-  assert.doesNotMatch(markup, /partial-skill|failed-skill/);
 });

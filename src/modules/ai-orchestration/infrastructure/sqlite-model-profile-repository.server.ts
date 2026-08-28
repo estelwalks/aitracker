@@ -168,7 +168,9 @@ function readProfileRow(row: Readonly<Record<string, unknown>>): ProfileRow {
     typeof row.profile_id !== "string" ||
     typeof row.name !== "string" ||
     (row.mode !== "official" && row.mode !== "custom") ||
-    (row.protocol !== "openai" && row.protocol !== "anthropic") ||
+    (row.protocol !== "openai" &&
+      row.protocol !== "openai-responses" &&
+      row.protocol !== "anthropic") ||
     (row.auth !== null && row.auth !== "x-api-key" && row.auth !== "bearer") ||
     (row.endpoint !== null && typeof row.endpoint !== "string") ||
     (row.model !== null && typeof row.model !== "string") ||
@@ -183,7 +185,7 @@ function profileWithoutSecret(row: ProfileRow): ModelProfile {
     id: row.profile_id,
     name: row.name,
     mode: row.mode,
-    protocol: row.mode === "official" ? "openai" : row.protocol,
+    protocol: row.protocol,
     ...(row.auth ? { auth: row.auth } : {}),
     ...(row.mode === "official"
       ? { endpoint: OFFICIAL_ENDPOINT, model: row.model ?? OFFICIAL_MODEL }

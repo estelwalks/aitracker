@@ -16,7 +16,7 @@ function identity(enabled: boolean): RuntimeIdentity {
     backgroundTasksEnabled: enabled,
     backgroundTasksReason: enabled
       ? "explicitly-enabled"
-      : "web-default-disabled",
+      : "explicitly-disabled",
   };
 }
 
@@ -59,7 +59,7 @@ test("background bootstrap does not construct a runtime when policy disables it"
   assert.equal(constructed, 0);
   assert.deepEqual(result, {
     status: "disabled",
-    reason: "web-default-disabled",
+    reason: "explicitly-disabled",
   });
 });
 

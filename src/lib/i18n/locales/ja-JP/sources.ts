@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 export const sources = {
   metaDescription:
     "このマシンの各 AI ツールのインストール検出状況とログ収集状況を確認します。",

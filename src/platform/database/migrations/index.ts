@@ -9,10 +9,7 @@ export interface MigrationDefinition {
   readonly sql: string;
 }
 
-/**
- * The product is unpublished, so all current schema is represented by one
- * fresh-install baseline. Future released schema changes start at version 2.
- */
+/** Fresh-release baseline. No historical upgrade migrations are shipped. */
 export const MIGRATIONS: readonly MigrationDefinition[] = [
   {
     version: 1,

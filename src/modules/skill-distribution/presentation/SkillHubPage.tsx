@@ -7,11 +7,13 @@ import {
   getDesktopSecurityClient,
   type SecurityHistoryView,
 } from "../../security-assessment/index";
+import { SECURITY_SCAN_COMPLETED_EVENT } from "../../security-assessment/events";
 import {
   SkillsPage,
   type SkillWorkspaceSnapshot,
 } from "../../skill-catalog/index.ts";
 import { getDistillationActivity } from "../../distillation/index.ts";
+import { projectSkillSecurityView } from "./skill-security-view.ts";
 
 /** Real distillation activity surfaced by the composition root. */
 export interface SkillsDistillationView {
@@ -30,7 +32,13 @@ export interface SkillHubData {
  * are derived from real loader data and a real client-side security-history
  * read — nothing is mocked.
  */
-export function SkillHubPage({ initial }: { initial: SkillHubData }) {
+export function SkillHubPage({
+  initial,
+  initialQuery,
+}: {
+  initial: SkillHubData;
+  initialQuery?: string;
+}) {
   const { t } = useI18n();
   const [distillation, setDistillation] =
     useState<SkillsDistillationView | null>(null);
@@ -55,9 +63,15 @@ export function SkillHubPage({ initial }: { initial: SkillHubData }) {
         // numbers.
       }
     };
+    const onScanCompleted = () => void load();
+    window.addEventListener(SECURITY_SCAN_COMPLETED_EVENT, onScanCompleted);
     void load();
     return () => {
       cancelled = true;
+      window.removeEventListener(
+        SECURITY_SCAN_COMPLETED_EVENT,
+        onScanCompleted,
+      );
     };
   }, []);
 
@@ -75,31 +89,17 @@ export function SkillHubPage({ initial }: { initial: SkillHubData }) {
     };
   }, []);
 
-  const localSkillNames = useMemo(
-    () => new Set(initial.workspace.snapshot.skills.map((skill) => skill.name)),
-    [initial.workspace.snapshot.skills],
-  );
-
   /**
    * skill name → risk-finding count from the latest completed scan of each
    * locally present skill (mirrors the /security page's history, deduped to the
    * most recent scan so a skill is never counted twice).
    */
   const securityView = useMemo(() => {
-    const byName = new Map<string, number>();
-    const latestFinishedAt = new Map<string, string>();
-    for (const entry of securityHistory) {
-      if (!localSkillNames.has(entry.skillName)) continue;
-      if (!entry.report) continue; // failed/skipped scans have no findings.
-      const previous = latestFinishedAt.get(entry.skillName);
-      if (previous && Date.parse(previous) >= Date.parse(entry.finishedAt)) {
-        continue;
-      }
-      latestFinishedAt.set(entry.skillName, entry.finishedAt);
-      byName.set(entry.skillName, entry.report.findings.length);
-    }
-    return { byName };
-  }, [securityHistory, localSkillNames]);
+    return projectSkillSecurityView(
+      initial.workspace.snapshot.skills,
+      securityHistory,
+    );
+  }, [initial.workspace.snapshot.skills, securityHistory]);
 
   return (
     <div className="space-y-4">
@@ -111,6 +111,7 @@ export function SkillHubPage({ initial }: { initial: SkillHubData }) {
 
       <SkillsPage
         initial={initial.workspace}
+        initialQuery={initialQuery}
         showWorkspace
         showToolOverview={false}
         security={securityView}

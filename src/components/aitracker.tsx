@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 
 import { useI18n } from "../lib/i18n/context";
+import { paginationWindow } from "../lib/pagination";
 
 /** Shared compact input for module toolbars and data views. */
 export function SearchInput({
@@ -230,9 +231,9 @@ export function Stat({
 
 /**
  * Shared pager (V3.0 prototype style): a top divider, a localized range on the
- * left and prev/numbered/next buttons on the right. Page buttons mirror the
- * prototype exactly — square (`rounded-sm`), bordered, monospaced numerals —
- * and the window shows first/last plus the current page's neighbours.
+ * left and prev/numbered/next buttons anchored at the bottom-right. Numbered
+ * buttons grow with their content, and the compact window keeps huge catalogs
+ * inside the card without losing first/last/current context.
  */
 export function Pagination({
   page,
@@ -257,12 +258,7 @@ export function Pagination({
   const safePageCount = Math.max(1, pageCount);
   const current = Math.min(Math.max(1, page), safePageCount);
 
-  // Show first/last plus a window of 5 around the current page (e.g.
-  // `1 2 3 4 … 4203`), so wide catalogs never collapse to a 3-button strip.
-  const nums = Array.from({ length: safePageCount }, (_, i) => i + 1).filter(
-    (p) =>
-      p === 1 || p === safePageCount || (p >= current - 1 && p <= current + 3),
-  );
+  const nums = paginationWindow(current, safePageCount);
 
   const stepButton =
     "aitracker-text-control inline-flex min-h-[var(--aitracker-control-height)] items-center justify-center gap-1.5 rounded-[6px] border border-border bg-surface-2 px-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40";
@@ -271,7 +267,8 @@ export function Pagination({
     <div
       className={`aitracker-text-body-sm flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-muted-foreground ${className}`}
     >
-      <div className="flex items-center gap-1">
+      {rangeLabel ? <span className="aitracker-num">{rangeLabel}</span> : null}
+      <div className="aitracker-pagination-controls ml-auto flex max-w-full items-center justify-end gap-1 overflow-x-auto pb-px">
         <button
           type="button"
           disabled={current <= 1}
@@ -280,19 +277,19 @@ export function Pagination({
           title={resolvedPrev}
           className={stepButton}
         >
-          <ChevronLeft className="size-4" />
-          {resolvedPrev}
+          <ChevronLeft className="size-4 shrink-0" />
+          <span className="hidden sm:inline">{resolvedPrev}</span>
         </button>
         {nums.map((p, idx) => (
-          <span key={p} className="flex items-center gap-1">
+          <span key={p} className="flex shrink-0 items-center gap-1">
             {idx > 0 && nums[idx - 1] !== p - 1 && (
-              <span className="px-0.5">…</span>
+              <span className="shrink-0 px-0.5">…</span>
             )}
             <button
               type="button"
               aria-current={p === current ? "page" : undefined}
               onClick={() => onChange(p)}
-              className={`aitracker-num aitracker-text-body-sm size-[var(--aitracker-control-height)] rounded-[6px] border transition-colors ${
+              className={`aitracker-num aitracker-text-body-sm h-[var(--aitracker-control-height)] min-w-[var(--aitracker-control-height)] shrink-0 rounded-[6px] border px-2 transition-colors ${
                 p === current
                   ? "border-ok bg-ok/15 text-ok"
                   : "border-border hover:text-foreground"
@@ -310,15 +307,10 @@ export function Pagination({
           title={resolvedNext}
           className={stepButton}
         >
-          {resolvedNext}
-          <ChevronRight className="size-4" />
+          <span className="hidden sm:inline">{resolvedNext}</span>
+          <ChevronRight className="size-4 shrink-0" />
         </button>
       </div>
-      {rangeLabel ? (
-        <span className="aitracker-num">{rangeLabel}</span>
-      ) : (
-        <span aria-hidden="true" />
-      )}
     </div>
   );
 }
