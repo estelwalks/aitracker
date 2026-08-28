@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { ProviderSchema } from "skill-scanner";
+
 import { DesktopStateBroker } from "./desktop-state-broker.js";
 import { ENV } from "./app-config.js";
 
@@ -157,16 +159,55 @@ test("model config is returned whenever the shared model profile is configured",
           : Response.json({});
       },
     });
-    assert.deepEqual(await broker.modelConfig(), {
-      provider: "openai",
+    const config = (await broker.modelConfig()) as Record<string, unknown>;
+    const expected: Record<string, unknown> = {
       endpoint: "http://127.0.0.1:11434/v1",
       apiKey: "test-key",
       liteModel: "local-model",
       proModel: "local-model",
       timeoutMs: 120_000,
       maxAgentTurns: 8,
-    });
+    };
+    if (ProviderSchema.safeParse("openai-completions").success) {
+      expected.provider = "openai-completions";
+    } else {
+      expected.provider = "openai";
+    }
+    assert.deepEqual(config, expected);
     assert.deepEqual(paths, ["/api/desktop-state/model-profile"]);
+  } finally {
+    if (previous == null) delete process.env[ENV.DESKTOP_BROKER_TOKEN];
+    else process.env[ENV.DESKTOP_BROKER_TOKEN] = previous;
+  }
+});
+
+test("desktop model config preserves the explicit Responses protocol for upgraded scanners", async () => {
+  const previous = process.env[ENV.DESKTOP_BROKER_TOKEN];
+  process.env[ENV.DESKTOP_BROKER_TOKEN] = "test-broker-token";
+  try {
+    const broker = new DesktopStateBroker({
+      origin: () => "http://127.0.0.1:3210",
+      capabilityToken: () => undefined,
+      fetchFn: async (input) => {
+        const path = new URL(input instanceof Request ? input.url : input)
+          .pathname;
+        return path.endsWith("/model-profile")
+          ? Response.json({
+              mode: "custom",
+              protocol: "openai-responses",
+              apiKey: "test-key",
+              endpoint: "https://api.openai.com/v1",
+              model: "gpt-5.2",
+            })
+          : Response.json({});
+      },
+    });
+    const config = (await broker.modelConfig()) as Record<string, unknown>;
+    if (ProviderSchema.safeParse("openai-responses").success) {
+      assert.equal(config.provider, "openai-responses");
+    } else {
+      assert.equal(config.provider, "openai");
+    }
   } finally {
     if (previous == null) delete process.env[ENV.DESKTOP_BROKER_TOKEN];
     else process.env[ENV.DESKTOP_BROKER_TOKEN] = previous;

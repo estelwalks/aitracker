@@ -130,6 +130,13 @@ function isCachedInsightFresh(
 function readCachedInsight(key: string): CachedInsight | undefined {
   const entry = insightCache.get(key);
   if (entry === undefined || !isCachedInsightFresh(entry)) return undefined;
+  // Model availability is configuration state, not insight data. Do not let
+  // a pre-configuration fallback survive a later model activation when the
+  // page was visited before the settings change.
+  if (entry.envelope.status === "enhancer-unavailable") {
+    insightCache.delete(key);
+    return undefined;
+  }
   touchKey(insightCache, key);
   return entry;
 }
@@ -219,6 +226,18 @@ export function clearPageInsightClientCache(): void {
   insightCache.clear();
   insightReads.clear();
   insightEnhancements.clear();
+}
+
+// Settings pages do not mount an InsightCard, so a listener owned only by a
+// mounted card would miss model/toggle changes while the app is on settings.
+// Keep one app-level listener so returning to a previously visited surface
+// never reuses an obsolete availability result. The per-hook listener below
+// still handles the immediate refresh for a card that remains mounted.
+if (typeof window !== "undefined") {
+  window.addEventListener(
+    PAGE_INSIGHT_REFRESH_EVENT,
+    clearPageInsightClientCache,
+  );
 }
 
 export interface PageInsightRefreshTimer {

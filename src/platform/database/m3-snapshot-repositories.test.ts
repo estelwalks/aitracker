@@ -298,11 +298,8 @@ test("same-name projects keep distinct HMAC identities and persisted classificat
   assert.equal(projectRows.length, 2);
   assert.equal(new Set(projectRows.map((row) => row.project_ref_hash)).size, 2);
   assert.deepEqual(
-    projectRows.map((row) => [row.project_label, row.project_kind]),
-    [
-      ["shared", "workspace"],
-      ["shared", "workspace"],
-    ],
+    projectRows.map((row) => `${row.project_label}:${row.project_kind}`).sort(),
+    ["shared · a:workspace", "shared · b:workspace"],
   );
   const trackerProjects = database
     .prepare(
@@ -312,6 +309,12 @@ test("same-name projects keep distinct HMAC identities and persisted classificat
     .all();
   assert.equal(trackerProjects.length, 2);
   assert.equal(new Set(trackerProjects.map((row) => row.entity_key)).size, 2);
+  assert.deepEqual(
+    trackerProjects
+      .map((row) => `${row.entity_label}:${row.project_kind}`)
+      .sort(),
+    ["shared · a:workspace", "shared · b:workspace"],
+  );
   const persistedText = stringifySqliteRows([
     ...projectRows,
     ...trackerProjects,
@@ -322,8 +325,8 @@ test("same-name projects keep distinct HMAC identities and persisted classificat
   assert.equal(hydrated.envelope.data?.details.length, 0);
   assert.equal(hydrated.envelope.data?.recent.length, 0);
   assert.equal(
-    hydrated.envelope.data?.aggregateBuckets?.filter(
-      (bucket) => bucket.projectLabel === "shared",
+    hydrated.envelope.data?.aggregateBuckets?.filter((bucket) =>
+      ["shared · a", "shared · b"].includes(bucket.projectLabel ?? ""),
     ).length,
     2,
   );

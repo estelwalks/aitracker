@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">TrustTools light icon</title>
+  <desc id="desc">A dark scanning frame and three rising points on a soft white rounded square.</desc>
+
+  <defs>
+    <linearGradient id="light-surface" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.52" stop-color="#fbfbfc"/>
+      <stop offset="1" stop-color="#f3f4f6"/>
+    </linearGradient>
+    <linearGradient id="light-edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e9ebef"/>
+    </linearGradient>
+    <linearGradient id="light-ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1726"/>
+      <stop offset="1" stop-color="#050b14"/>
+    </linearGradient>
+    <linearGradient id="light-trail" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#87909e" stop-opacity="0"/>
+      <stop offset="0.58" stop-color="#87909e" stop-opacity="0.36"/>
+      <stop offset="1" stop-color="#77808d" stop-opacity="0.64"/>
+    </linearGradient>
+    <filter id="light-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#101827" flood-opacity="0.13"/>
+    </filter>
+    <filter id="light-soft-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#06101f" flood-opacity="0.22"/>
+    </filter>
+    <clipPath id="light-board-clip">
+      <rect x="80" y="88" width="864" height="824" rx="236"/>
+    </clipPath>
+  </defs>
+
+  <g filter="url(#light-shadow)">
+    <rect x="80" y="88" width="864" height="824" rx="236" fill="url(#light-surface)"/>
+    <rect x="81" y="89" width="862" height="822" rx="235" fill="none" stroke="url(#light-edge)" stroke-width="2"/>
+  </g>
+
+  <g clip-path="url(#light-board-clip)">
+    <path d="M448 244H335C263 244 218 292 218 353V452"
+      fill="none" stroke="url(#light-ink)" stroke-width="44" stroke-linecap="round"/>
+    <path d="M576 244H689C761 244 806 292 806 353V451"
+      fill="none" stroke="url(#light-ink)" stroke-width="44" stroke-linecap="round"/>
+    <path d="M218 566V671C218 738 267 781 335 781H448"
+      fill="none" stroke="url(#light-ink)" stroke-width="44" stroke-linecap="round"/>
+    <path d="M806 565V671C806 738 757 781 689 781H576"
+      fill="none" stroke="url(#light-ink)" stroke-width="44" stroke-linecap="round"/>
+
+    <path d="M278 697L379 558" fill="none" stroke="url(#light-trail)" stroke-width="34" stroke-linecap="butt"/>
+    <path d="M357 714L506 505" fill="none" stroke="url(#light-trail)" stroke-width="47" stroke-linecap="butt"/>
+    <path d="M460 724L657 431" fill="none" stroke="url(#light-trail)" stroke-width="59" stroke-linecap="butt"/>
+
+    <g fill="url(#light-ink)" filter="url(#light-soft-shadow)">
+      <circle cx="379" cy="558" r="30"/>
+      <circle cx="506" cy="505" r="45"/>
+      <circle cx="657" cy="431" r="58"/>
+    </g>
+  </g>
+</svg>

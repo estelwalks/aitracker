@@ -1,3 +1,6 @@
+import { homedir } from "node:os";
+import { isAbsolute, join } from "node:path";
+
 import { isResumeSafeId } from "../../../lib/local-sessions/resume-id.ts";
 import { scanLocalSessions } from "../../../lib/local-sessions/scanner.server.ts";
 import type { SessionRecord } from "../../../lib/local-sessions/types.ts";
@@ -28,12 +31,17 @@ export function createSessionRepository(): SessionRepository {
 export interface ResumeCommandExecutor {
   /**
    * Executes a resume request from a trusted source/session pair. The adapter
-   * never accepts a command, cwd, or other launch parameter from a renderer.
+   * never accepts a command, cwd, or other launch parameter from a renderer;
+   * `cwd` is selected from the scanned local session record.
    */
-  execute(
-    request: Pick<ResumeSessionRequest, "source" | "sessionId">,
-    signal?: AbortSignal,
-  ): Promise<void>;
+  execute(request: ResumeCommandRequest, signal?: AbortSignal): Promise<void>;
+}
+
+export interface ResumeCommandRequest {
+  readonly source: ResumeSessionRequest["source"];
+  readonly sessionId: ResumeSessionRequest["sessionId"];
+  /** Server-only absolute project directory for the child process, when known. */
+  readonly cwd?: string;
 }
 
 export interface SessionScan {
@@ -42,6 +50,18 @@ export interface SessionScan {
 
 export interface ResumeSessionPortOptions {
   readonly scanner?: SessionScan;
+}
+
+function resumeCwdFor(record: SessionRecord): string | null {
+  const candidate = record.resumeCwd ?? record.projectRef;
+  if (isAbsolute(candidate)) return candidate;
+
+  // Keep compatibility with records created before `resumeCwd` was added.
+  // The normal scanner supplies an absolute raw cwd, so this fallback is only
+  // for older/test records whose projectRef is already HOME-relative.
+  if (candidate === "~") return homedir();
+  if (candidate.startsWith("~/")) return join(homedir(), candidate.slice(2));
+  return null;
 }
 
 /** Server-only adapter. Commands and cwd never appear in ResumeSessionResult. */
@@ -66,11 +86,23 @@ export function createSessionResumePort(
           item.source === request.source &&
           item.sessionId === request.sessionId,
       );
-      if (!record || !record.resumeSafe)
+      const cwd = record == null ? null : resumeCwdFor(record);
+      // Claude Code resolves session files relative to the project directory;
+      // without the original cwd its `--resume` command cannot target the
+      // right local session. Other registered tools can resume by id alone.
+      if (
+        !record ||
+        !record.resumeSafe ||
+        (record.source === "claude-code" && cwd == null)
+      )
         return err("errors.sessions.resumeUnavailable");
       try {
         await executor.execute(
-          { source: record.source, sessionId: record.sessionId },
+          {
+            source: record.source,
+            sessionId: record.sessionId,
+            ...(cwd == null ? {} : { cwd }),
+          },
           request.signal,
         );
         return ok({

@@ -333,6 +333,7 @@ test("no active profile returns enhancer-unavailable without calling the model",
   const result = await target.enhance(input());
   assert.equal(result.status, "enhancer-unavailable");
   assert.deepEqual(result.lines, []);
+  assert.equal(await target.isAvailable?.(), false);
   assert.equal(calls(), 0);
 });
 
@@ -341,6 +342,7 @@ test("successful generation writes the cache and a second call hits it", async (
   const repository = new FakeInsightRepository();
   const target = enhancer(ai, repository);
 
+  assert.equal(await target.isAvailable?.(), true);
   const first = await target.enhance(input());
   assert.equal(first.status, "enhanced-ready");
   assert.equal(first.lines.length, 2);

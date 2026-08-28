@@ -59,7 +59,7 @@ export const widget = {
   securityRuns: "{count} runs",
   securityCoverage: "{count} skills covered",
   lastScan: "Last scan {time}",
-  scanNow: "Scan now",
+  scanNow: "Check now",
   goScan: "Go scan",
   // Usage tab
   usageTitle: "Token usage",

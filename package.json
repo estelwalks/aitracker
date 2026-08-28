@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "AITracker local AI development asset dashboard",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "main": "build/electron/main.js",
   "sideEffects": false,
   "type": "module",

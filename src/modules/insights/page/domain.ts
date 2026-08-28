@@ -238,6 +238,8 @@ export interface ComposeRulesEnvelopeOptions {
   readonly locale: string;
   readonly mode: InsightMode;
   readonly enhancerAvailable: boolean;
+  /** Whether a usable model profile is configured for this preference. */
+  readonly modelConfigured?: boolean;
   readonly autoEnhanceAuthorized?: boolean;
   readonly now: () => number;
 }
@@ -279,16 +281,26 @@ export function composeRulesEnvelope(
   const hasStale =
     bundle.partial === true ||
     bundle.evidence.some((item) => item.freshness === "stale");
+  const modelUnavailable =
+    options.modelConfigured === false && mode !== "rules";
 
   return {
     surfaceId: adapter.surfaceId,
-    status: hasStale ? "stale" : "rules",
+    status: modelUnavailable
+      ? "enhancer-unavailable"
+      : hasStale
+        ? "stale"
+        : "rules",
     lines,
     generatedAt: new Date(options.now()).toISOString(),
     source: "rules",
-    canEnhance: options.enhancerAvailable && mode !== "rules",
+    canEnhance:
+      options.enhancerAvailable &&
+      options.modelConfigured !== false &&
+      mode !== "rules",
     autoEnhance:
       options.enhancerAvailable &&
+      options.modelConfigured !== false &&
       mode === "enhanced-auto" &&
       options.autoEnhanceAuthorized === true,
   };

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">TrustTools dark icon</title>
+  <desc id="desc">A white scanning frame and three rising points on a deep navy rounded square.</desc>
+
+  <defs>
+    <radialGradient id="dark-surface" cx="35%" cy="20%" r="95%">
+      <stop offset="0" stop-color="#182236"/>
+      <stop offset="0.5" stop-color="#0c1424"/>
+      <stop offset="1" stop-color="#040a14"/>
+    </radialGradient>
+    <linearGradient id="dark-edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#27344d"/>
+      <stop offset="0.45" stop-color="#111c32"/>
+      <stop offset="1" stop-color="#0b1427"/>
+    </linearGradient>
+    <linearGradient id="dark-white" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f5f5f4"/>
+    </linearGradient>
+    <linearGradient id="dark-trail" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#aeb7c5" stop-opacity="0"/>
+      <stop offset="0.58" stop-color="#b7bec9" stop-opacity="0.36"/>
+      <stop offset="1" stop-color="#d4d7dd" stop-opacity="0.7"/>
+    </linearGradient>
+    <filter id="dark-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#02050b" flood-opacity="0.28"/>
+    </filter>
+    <filter id="dark-white-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000713" flood-opacity="0.36"/>
+    </filter>
+    <clipPath id="dark-board-clip">
+      <rect x="80" y="88" width="864" height="824" rx="236"/>
+    </clipPath>
+  </defs>
+
+  <g filter="url(#dark-shadow)">
+    <rect x="80" y="88" width="864" height="824" rx="236" fill="url(#dark-surface)"/>
+    <rect x="82" y="90" width="860" height="820" rx="234" fill="none" stroke="url(#dark-edge)" stroke-width="5"/>
+  </g>
+
+  <g clip-path="url(#dark-board-clip)">
+    <g fill="none" stroke="url(#dark-white)" stroke-width="48" stroke-linecap="round" filter="url(#dark-white-shadow)">
+      <path d="M440 242H326C257 242 215 290 215 351V462"/>
+      <path d="M584 242H698C767 242 809 290 809 351V462"/>
+      <path d="M215 574V676C215 742 262 785 326 785H440"/>
+      <path d="M809 574V676C809 742 762 785 698 785H584"/>
+    </g>
+
+    <path d="M278 697L362 567" fill="none" stroke="url(#dark-trail)" stroke-width="34" stroke-linecap="butt"/>
+    <path d="M356 714L496 516" fill="none" stroke="url(#dark-trail)" stroke-width="47" stroke-linecap="butt"/>
+    <path d="M462 723L664 430" fill="none" stroke="url(#dark-trail)" stroke-width="59" stroke-linecap="butt"/>
+
+    <g fill="url(#dark-white)" filter="url(#dark-white-shadow)">
+      <circle cx="362" cy="567" r="30"/>
+      <circle cx="496" cy="516" r="45"/>
+      <circle cx="664" cy="430" r="58"/>
+    </g>
+  </g>
+</svg>

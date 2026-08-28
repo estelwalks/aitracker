@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { ENV } from "../app-config";
 import { readDshSessionLog } from "../local-usage/dsh-zstd.ts";
-import { normalizeProjectPath } from "../local-usage/project-path.ts";
+import { canonicalizeProjectIdentity } from "../local-usage/project-path.ts";
 import {
   findNearestGitRepositoryRoot,
   serverPathImplForPlatform,
@@ -1548,6 +1548,9 @@ async function fragmentToRecord(
   const pathImpl = serverPathImplForPlatform(process.platform);
   const gitRoot = await findNearestGitRepositoryRoot(pathImpl, rawProjectRef);
   const projectRef = gitRoot ?? rawProjectRef;
+  const resumeCwd = pathImpl.isAbsolute(rawProjectRef)
+    ? rawProjectRef
+    : undefined;
   const resumeSafe =
     fragment.resumeSupported !== false && isResumeSafeId(fragment.sessionId);
   const idSafe = isResumeSafeId(fragment.sessionId);
@@ -1567,6 +1570,7 @@ async function fragmentToRecord(
     title: fragment.title || fragment.fallbackTitle,
     projectKey: projectKeyFromCwd(projectRef),
     projectRef,
+    ...(resumeCwd === undefined ? {} : { resumeCwd }),
     isGitProject: gitRoot != null,
     model: fragment.model,
     startedAt,
@@ -1583,7 +1587,9 @@ async function fragmentToRecord(
     status,
     statusReason,
     resumeSafe,
-    resumeCommand: buildResumeCommand(fragment.source, fragment.sessionId),
+    resumeCommand: resumeSafe
+      ? buildResumeCommand(fragment.source, fragment.sessionId)
+      : null,
   };
   return { ...record, cost: estimateSessionCost(record) };
 }
@@ -1819,16 +1825,31 @@ export async function scanLocalSessions(
     }),
   );
 
-  const sessions = dedupeAndSort(perTool.flat())
-    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))
-    // Normalize each record's projectRef the same way the usage scanner
-    // normalizes `event.project` (HOME-relative paths become ~/…), so the
-    // dashboard classification index and project aggregation join sessions to
-    // usage events under one key instead of a raw cwd that misses the index.
-    .map((session) => ({
-      ...session,
-      projectRef: normalizeProjectPath(session.projectRef, homeDirectory),
-    }));
+  const canonicalProjectPaths = new Map<
+    string,
+    ReturnType<typeof canonicalizeProjectIdentity>
+  >();
+  const sessions = await Promise.all(
+    dedupeAndSort(perTool.flat())
+      .sort((left, right) => right.startedAt.localeCompare(left.startedAt))
+      .map((session) => {
+        let canonicalProject = canonicalProjectPaths.get(session.projectRef);
+        if (canonicalProject == null) {
+          canonicalProject = canonicalizeProjectIdentity(
+            session.projectRef,
+            homeDirectory,
+            options.platform ?? process.platform,
+          );
+          canonicalProjectPaths.set(session.projectRef, canonicalProject);
+        }
+        return canonicalProject.then((identity) => ({
+          ...session,
+          projectKey: projectKeyFromCwd(identity.project),
+          projectRef: identity.project,
+          isGitProject: identity.isGitProject,
+        }));
+      }),
+  );
 
   return {
     generatedAt: now.toISOString(),

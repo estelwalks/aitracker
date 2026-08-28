@@ -227,7 +227,7 @@ export const insights = {
       "chats-recoverable": "{count} sessions recoverable — archive or distill.",
       "chats-empty": "No sessions yet — connect a data source to see them.",
       "chats-resume":
-        "Resume commands carry the project path — paste into a terminal to return to the working directory.",
+        "Recovery opens the default terminal in the session's project directory, then runs the resume command.",
       "chats-distill":
         "Send reusable sessions to the distillation bench — turning them into Skills beats digging through history.",
       "chats-guide-inventory":
@@ -246,7 +246,7 @@ export const insights = {
       "chat-detail-recoverable":
         "This session can be recovered or distilled — start from the detail page.",
       "chat-detail-resume":
-        "This session can be resumed to continue context — the resume command carries the project path.",
+        "This session can be resumed to continue context — recovery first enters its project directory.",
       "chat-detail-guide-turns": "This session records {count} retry turns.",
       "chat-detail-guide-tokens":
         "This session records {count} subagent calls.",

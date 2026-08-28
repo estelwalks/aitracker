@@ -46,6 +46,75 @@ test("Windows reuses an injected empty WSL topology without enumerating again", 
   }
 });
 
+test("collapses nested Codex working directories to one Git repository project", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-project-identity-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const repositoryRoot = join(homeDirectory, "Documents", "Dev", "repo");
+  const firstWorktree = join(repositoryRoot, "release");
+  const secondWorktree = join(repositoryRoot, "src", "feature");
+  const sessionsDirectory = join(homeDirectory, ".codex", "sessions");
+  const codexSession = (sessionId: string, cwd: string) =>
+    [
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:00.000Z",
+        type: "session_meta",
+        payload: { type: "session_meta", id: sessionId },
+      }),
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:01.000Z",
+        type: "turn_context",
+        payload: { type: "turn_context", model: "codex-test", cwd },
+      }),
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:02.000Z",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              input_tokens: 20,
+              cached_input_tokens: 5,
+              output_tokens: 8,
+              reasoning_output_tokens: 3,
+            },
+          },
+        },
+      }),
+    ].join("\n") + "\n";
+
+  await mkdir(join(repositoryRoot, ".git"), { recursive: true });
+  await mkdir(firstWorktree, { recursive: true });
+  await mkdir(secondWorktree, { recursive: true });
+  await mkdir(sessionsDirectory, { recursive: true });
+  await writeFile(
+    join(sessionsDirectory, "rollout-first.jsonl"),
+    codexSession("codex-session-first", firstWorktree),
+  );
+  await writeFile(
+    join(sessionsDirectory, "rollout-second.jsonl"),
+    codexSession("codex-session-second", "~/Documents/Dev/repo/src/feature"),
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = snapshot.details.filter((event) => event.source === "codex");
+    assert.equal(events.length, 2);
+    assert.deepEqual(
+      new Set(events.map((event) => event.project)),
+      new Set(["~/Documents/Dev/repo"]),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function sourceSummary(
   snapshot: Awaited<ReturnType<typeof scanLocalUsage>>,
   source: LocalUsageSource,

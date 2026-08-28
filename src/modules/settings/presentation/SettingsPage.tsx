@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useRouter } from "@tanstack/react-router";
+import { useRouter, useRouterState } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,6 +56,7 @@ import { ReportSchedule } from "../../reports/index.ts";
 import { useSecurityClient } from "./use-security-client";
 import {
   SETTINGS_CATEGORIES,
+  parseSettingsSection,
   resolveSettingsCategory,
   type SettingsCategory,
   type SettingsSection,
@@ -147,6 +148,12 @@ export function SettingsPage({
   readonly loaderData: SettingsLoaderData;
 }) {
   const router = useRouter();
+  const requestedSection = useRouterState({
+    select: (state) =>
+      parseSettingsSection(
+        (state.location.search as Record<string, unknown>).section,
+      ),
+  });
   const [category, setCategory] = useState<SettingsCategory>(() =>
     resolveSettingsCategory(loaderData.section),
   );
@@ -194,6 +201,12 @@ export function SettingsPage({
 
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
     setSettings((current) => ({ ...current, [key]: value }));
+
+  // Keep same-route deep links (for example /settings?section=model) in sync
+  // after the SettingsPage has already mounted.
+  useEffect(() => {
+    setCategory(resolveSettingsCategory(requestedSection));
+  }, [requestedSection]);
 
   // Optional LLM review supplement (M4): master toggle. It defaults on; an
   // unconfigured model still degrades to the local rule result.

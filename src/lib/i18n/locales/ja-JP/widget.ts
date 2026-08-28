@@ -60,7 +60,7 @@ export const widget = {
   securityRuns: "{count} 回のスキャン",
   securityCoverage: "{count} 個の Skill をカバー",
   lastScan: "前回スキャン {time}",
-  scanNow: "今すぐスキャン",
+  scanNow: "今すぐ検査",
   goScan: "スキャンへ",
   // 使用量タブ
   usageTitle: "トークン消費",

@@ -92,7 +92,7 @@ export const sessions = {
     turnsShort: "{count}턴",
     edits: "편집 횟수",
     resumeDirHint:
-      "복원은 제어된 로컬 서비스로 실행되며 명령이나 디렉터리는 브라우저에 공개되지 않습니다.",
+      "복원할 때 먼저 세션의 프로젝트 디렉터리로 이동한 다음 복원 명령을 실행하며, 디렉터리는 브라우저에 공개되지 않습니다.",
     statusReason: "상태:",
   },
   toast: {
@@ -130,9 +130,10 @@ export const sessions = {
     historyUnavailable: "세션 기록을 불러오지 못했습니다",
     cliResumable: "CLI 복원 가능",
     cliHint:
-      "세션 ID로 로컬에서 이어서 진행합니다. 복원 명령은 제어된 로컬 처리에서만 실행됩니다",
+      "복원할 때 먼저 세션의 프로젝트 디렉터리로 이동한 다음 로컬 복원 명령을 실행합니다",
     clientSession: "클라이언트 세션",
-    clientHint: "{source}은 GUI 클라이언트라 명령줄 복원이 없습니다",
+    clientHint:
+      "{source}은 자동 복원을 지원하지 않습니다. 세션 ID를 복사해 해당 클라이언트에서 수동으로 복원하세요",
     sessionId: "세션 ID",
     reportTitle: "세션 브리핑",
     reportOverview: "개요",

@@ -16,6 +16,8 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import {
+  chatHeaders,
+  chatUrl,
   createAiExecutor,
   createProviderRegistry,
   createRegistryRouter,
@@ -23,6 +25,8 @@ import {
   effectiveEndpoint,
   effectiveModel,
   effectiveProtocol,
+  parseChatCompletion,
+  requestBody,
   type ProfileProtocol,
 } from "../ai-orchestration/index.ts";
 import type {
@@ -328,158 +332,51 @@ async function resolveActiveProfileConfig(): Promise<DashboardAIInsightRuntimeCo
   }
 }
 
-function openAIEndpoint(endpoint: string): string {
-  const base = endpoint.replace(/\/+$/u, "");
-  return /\/chat\/completions$/u.test(base) ? base : `${base}/chat/completions`;
-}
-
-function openAIResponsesEndpoint(endpoint: string): string {
-  const base = endpoint.replace(/\/+$/u, "");
-  return /\/responses$/u.test(base) ? base : `${base}/responses`;
-}
-
-function anthropicEndpoint(endpoint: string): string {
-  const base = endpoint.replace(/\/+$/u, "");
-  return /\/messages$/u.test(base) ? base : `${base}/messages`;
-}
-
-function openAIHeaders(
-  apiKey: string,
-  auth: "x-api-key" | "bearer",
-): Record<string, string> {
-  return auth === "x-api-key"
-    ? { "content-type": "application/json", "x-api-key": apiKey }
-    : {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      };
-}
-
-function anthropicHeaders(
-  apiKey: string,
-  auth: "x-api-key" | "bearer",
-): Record<string, string> {
-  return {
-    "content-type": "application/json",
-    ...(auth === "x-api-key"
-      ? { "x-api-key": apiKey }
-      : { authorization: `Bearer ${apiKey}` }),
-    "anthropic-version": "2023-06-01",
-  };
-}
-
 function createDashboardAIInsightProvider(
   config: DashboardAIInsightRuntimeConfig,
   fetchImpl: typeof fetch,
 ): AIModelProvider {
-  const anthropic = config.protocol === "anthropic";
-  const responses = config.protocol === "openai-responses";
   return {
     providerId: "dashboard-insight",
     async invoke(request: AIProviderRequest): Promise<AIResponse> {
+      // Request construction, headers and URL are shared with the profile
+      // provider so every protocol (OpenAI Responses API, OpenAI Chat
+      // Completions, Anthropic Messages API) behaves identically everywhere.
       const response = await fetchImpl(
-        anthropic
-          ? anthropicEndpoint(config.endpoint)
-          : responses
-            ? openAIResponsesEndpoint(config.endpoint)
-            : openAIEndpoint(config.endpoint),
+        chatUrl(config.protocol, config.endpoint),
         {
           method: "POST",
-          headers: anthropic
-            ? anthropicHeaders(config.apiKey, config.auth)
-            : openAIHeaders(config.apiKey, config.auth),
-          body: JSON.stringify(
-            anthropic
-              ? {
-                  model: config.model,
-                  max_tokens: 600,
-                  system: request.prompt.template,
-                  messages: [{ role: "user", content: request.input.text }],
-                }
-              : responses
-                ? {
-                    model: config.model,
-                    max_output_tokens: 600,
-                    instructions: request.prompt.template,
-                    input: request.input.text,
-                  }
-                : {
-                    model: config.model,
-                    temperature: 0.2,
-                    max_tokens: 600,
-                    response_format: { type: "json_object" },
-                    messages: [
-                      { role: "system", content: request.prompt.template },
-                      { role: "user", content: request.input.text },
-                    ],
-                  },
+          headers: chatHeaders(config.protocol, config.apiKey, config.auth),
+          body: requestBody(
+            "custom",
+            config.protocol,
+            config.model,
+            request.prompt.template,
+            request.input.text,
+            600,
+            // The insight card requires structured JSON; only the Chat
+            // Completions branch uses these knobs.
+            { temperature: 0.2, jsonResponse: true },
           ),
           signal: request.signal,
         },
       );
       if (!response.ok) throw new Error("provider-failed");
-      const payload: unknown = await response.json();
-      const text = anthropic
-        ? readAnthropicMessagesText(payload)
-        : responses
-          ? readOpenAIResponsesText(payload)
-          : readChatCompletionText(payload);
-      if (text == null) throw new Error("provider-invalid-response");
+      const parsed = parseChatCompletion(
+        config.protocol,
+        await response.text(),
+      );
+      // Reasoning-only / empty responses are invalid here: the card needs the
+      // actual answer text.
+      if (parsed.kind !== "ok") throw new Error("provider-invalid-response");
       return {
         providerId: "dashboard-insight",
         modelId: config.model,
-        text,
-        finishReason: "stop",
+        text: parsed.text,
+        finishReason: parsed.finishReason ?? "stop",
       };
     },
   };
-}
-
-function readOpenAIResponsesText(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const outputText = (payload as { output_text?: unknown }).output_text;
-  if (typeof outputText === "string" && outputText.trim()) return outputText;
-  const output = (payload as { output?: unknown }).output;
-  if (!Array.isArray(output)) return null;
-  const text = output
-    .flatMap((item) => {
-      if (!item || typeof item !== "object") return [];
-      const content = (item as { content?: unknown }).content;
-      return Array.isArray(content) ? content : [];
-    })
-    .map((part) => {
-      if (!part || typeof part !== "object") return "";
-      const text = (part as { text?: unknown }).text;
-      return typeof text === "string" ? text : "";
-    })
-    .join("\n")
-    .trim();
-  return text || null;
-}
-
-function readChatCompletionText(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const choices = (payload as { choices?: unknown }).choices;
-  if (!Array.isArray(choices) || choices.length !== 1) return null;
-  const message = (choices[0] as { message?: unknown } | undefined)?.message;
-  if (!message || typeof message !== "object") return null;
-  const content = (message as { content?: unknown }).content;
-  return typeof content === "string" ? content : null;
-}
-
-function readAnthropicMessagesText(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const content = (payload as { content?: unknown }).content;
-  if (!Array.isArray(content)) return null;
-  const text = content
-    .map((block) => {
-      if (!block || typeof block !== "object") return "";
-      const value = (block as { text?: unknown }).text;
-      return typeof value === "string" ? value : "";
-    })
-    .join("\n")
-    .trim();
-  return text.length > 0 ? text : null;
 }
 
 function cachedView(

@@ -265,6 +265,34 @@ function dateKeyAt(timestampMs: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+/**
+ * Persisted project labels normally already contain a path disambiguator.
+ * Keep the read model safe for older projections (or hand-built projections)
+ * that contain multiple project identities with the same label.
+ */
+function disambiguateProjectLabels(
+  entries: readonly { key: string; label: string }[],
+): ReadonlyMap<string, string> {
+  const labels = new Map<string, string>();
+  const byLabel = new Map<string, Array<{ key: string; label: string }>>();
+  for (const entry of entries) {
+    const group = byLabel.get(entry.label) ?? [];
+    group.push(entry);
+    byLabel.set(entry.label, group);
+  }
+  for (const group of byLabel.values()) {
+    if (group.length === 1) {
+      labels.set(group[0]!.key, group[0]!.label);
+      continue;
+    }
+    for (const entry of group) {
+      const suffix = entry.key.slice(-8) || "unknown";
+      labels.set(entry.key, `${entry.label} · ${suffix}`);
+    }
+  }
+  return labels;
+}
+
 /** Build one Tracker board from compact daily facts only. */
 export function buildBoardFromProjection(
   buckets: readonly UsageTrackerBucket[],
@@ -276,6 +304,9 @@ export function buildBoardFromProjection(
   const previousStart = dateKeyAt(nowMs - 2 * RECENT_TREND_DAYS * DAY_MS);
   for (const bucket of buckets) {
     if (bucket.dimension !== dimension) continue;
+    if (dimension === "project" && bucket.projectKind !== "workspace") {
+      continue;
+    }
     const entry = accs.get(bucket.identity) ?? {
       acc: emptyAcc(),
       label: bucket.label,
@@ -295,8 +326,17 @@ export function buildBoardFromProjection(
     }
     accs.set(bucket.identity, entry);
   }
+  const projectLabels =
+    dimension === "project"
+      ? disambiguateProjectLabels(
+          [...accs.entries()].map(([key, entry]) => ({
+            key,
+            label: entry.label,
+          })),
+        )
+      : new Map<string, string>();
   const allRows = [...accs.entries()].map(([key, entry]) =>
-    rowFor(key, entry.label, entry.source, entry.acc),
+    rowFor(key, projectLabels.get(key) ?? entry.label, entry.source, entry.acc),
   );
   allRows.sort((left, right) =>
     right.tokens !== left.tokens
@@ -327,7 +367,11 @@ export function buildTrackerReadModelFromProjection(input: {
     totals: {
       tokens: tokensForDimension(boards, "project"),
       events: input.buckets
-        .filter((bucket) => bucket.dimension === "project")
+        .filter(
+          (bucket) =>
+            bucket.dimension === "project" &&
+            bucket.projectKind === "workspace",
+        )
         .reduce((sum, bucket) => sum + bucket.events, 0),
       entries: (Object.values(boards) as TrackerBoard[]).reduce(
         (sum, board) => sum + totalEntriesForBoard(board),

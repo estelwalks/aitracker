@@ -14,6 +14,7 @@ import { MarkdownView } from "../../reports/index.ts";
 import type { SessionSummary, SessionTranscriptMessage } from "../contracts.ts";
 import { getSessionTranscript } from "../query.ts";
 import { ResumeSessionButton } from "./ResumeSessionButton.tsx";
+import { SessionIdCopyButton } from "./SessionIdCopyButton.tsx";
 
 /**
  * Session detail panel (Story S-300): sticky header, CLI/client resume card,
@@ -108,6 +109,7 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
             <div className="flex gap-2">
               <dt className="shrink-0">{t("sessions.transcript.sessionId")}</dt>
               <dd className="truncate text-foreground">{session.sessionId}</dd>
+              <SessionIdCopyButton sessionId={session.sessionId} />
             </div>
           </dl>
           <p className="mt-2 text-[11px] text-muted-foreground">
@@ -135,6 +137,7 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
             <div className="flex gap-2">
               <dt className="shrink-0">{t("sessions.transcript.sessionId")}</dt>
               <dd className="truncate text-foreground">{session.sessionId}</dd>
+              <SessionIdCopyButton sessionId={session.sessionId} />
             </div>
           </dl>
         </div>

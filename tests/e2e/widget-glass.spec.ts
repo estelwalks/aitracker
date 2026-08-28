@@ -54,7 +54,7 @@ test("浮窗没有设置入口并始终保留三个 Agent 槽位", async ({ page
   await expect(
     page.locator('.aitracker-glass-overview a[href^="/"]'),
   ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "立即扫描" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "立即检测" })).toBeVisible();
   await expect(page.getByRole("button", { name: "生成简报" })).toBeVisible();
   await expect(page.getByRole("button", { name: "打开仪表盘" })).toBeVisible();
   await expect(page.locator(".aitracker-glass-settings")).toHaveCount(0);
@@ -100,7 +100,7 @@ test("浮窗应用入口全部交给桌面主窗口路由", async ({ page }) => 
 
   const floatUrl = page.url();
   await page.locator(".aitracker-glass-security").click();
-  await page.getByRole("button", { name: "立即扫描" }).click();
+  await page.getByRole("button", { name: "立即检测" }).click();
   await page.getByRole("button", { name: "生成简报" }).click();
   await page.getByRole("button", { name: "打开仪表盘" }).click();
 
