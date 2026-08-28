@@ -87,6 +87,7 @@ import {
   type ReleaseDataReset,
   type ReleaseDataResetOptions,
 } from "./release-data-reset.js";
+import { shouldHideWindowOnClose } from "./window-close.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
@@ -153,16 +154,6 @@ function applyNativeAppIcon(): void {
   for (const window of [mainWindow, widgetWindow]) {
     if (window && !window.isDestroyed()) window.setIcon(icon);
   }
-}
-
-async function hasCloseHintBeenShown(): Promise<boolean> {
-  if (!desktopStateBroker) throw new Error("Desktop state broker unavailable");
-  return (await desktopStateBroker.preferences()).closeHintShown === true;
-}
-
-async function markCloseHintShown(): Promise<void> {
-  if (!desktopStateBroker) throw new Error("Desktop state broker unavailable");
-  await desktopStateBroker.setPreference("closeHintShown", true);
 }
 
 /**
@@ -940,22 +931,9 @@ async function createMainWindow(): Promise<void> {
   };
   mainWindow.on("maximize", () => broadcastMaximized(true));
   mainWindow.on("unmaximize", () => broadcastMaximized(false));
-  mainWindow.on("close", async (event) => {
-    if (isQuitting) {
-      return;
-    }
+  mainWindow.on("close", (event) => {
+    if (!shouldHideWindowOnClose(isQuitting)) return;
     event.preventDefault();
-
-    if (!(await hasCloseHintBeenShown())) {
-      const closeHint =
-        electronMessages[currentPreferences.locale].dialog.closeHint;
-      await dialog.showMessageBox(mainWindow!, {
-        message: closeHint.message,
-        buttons: [closeHint.ok],
-      });
-      await markCloseHintShown();
-    }
-
     mainWindow?.hide();
   });
   mainWindow.on("closed", () => {
