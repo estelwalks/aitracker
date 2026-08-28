@@ -257,7 +257,10 @@ export function createReportsApplication(
     const persisted = content
       ? { ...document, contentFile: await content.create(document, body) }
       : { ...document, body };
-    await options.store.saveDocument(persisted);
+    // A regeneration for the same selected period is a replacement, not a
+    // second archived report. The report id remains fresh so content and
+    // evidence are replaced atomically at the store boundary.
+    await options.store.replaceForPeriod(persisted);
     return ok(toReportSummary(persisted, definition));
   };
 

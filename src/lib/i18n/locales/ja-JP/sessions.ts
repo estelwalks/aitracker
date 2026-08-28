@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 export const sessions = {
   metaDescription:
     "ローカルの過去セッションを閲覧し、利用可能なセッションを安全に復元します。",

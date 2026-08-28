@@ -170,16 +170,17 @@ export const insights = {
         "当前有 {unassigned} 个 Skill 尚未安装到任何 Agent。",
     },
     market: {
-      "market-installed": "已安装 {count} 个市场组件。",
+      "market-installed": "已安装 {count} 个安全市场组件。",
       "market-updates": "发现 {count} 个组件有可用更新，建议及时升级。",
       "market-scan-first": "安装新组件前，请先完成安全扫描再启用。",
       "market-review": "安装前先看 SKILL.md 与版本记录，避免装到废包。",
-      "market-guide-installs": "当前已安装 {installed} 个来自市场的 Skill。",
-      "market-guide-updates": "其中 {updates} 个市场 Skill 存在可用更新。",
-      "market-guide-cache": "本地市场缓存包含 {total} 个可浏览条目。",
+      "market-guide-installs":
+        "当前已安装 {installed} 个来自安全市场的 Skill。",
+      "market-guide-updates": "其中 {updates} 个安全市场 Skill 存在可用更新。",
+      "market-guide-cache": "本地安全市场缓存包含 {total} 个可浏览条目。",
       "market-guide-review":
-        "已安装的市场 Skill 中有 {current} 个当前无待更新版本。",
-      "market-guide-install": "当前市场缓存距抓取时间约 {hours} 小时。",
+        "已安装的安全市场 Skill 中有 {current} 个当前无待更新版本。",
+      "market-guide-install": "当前安全市场缓存距抓取时间约 {hours} 小时。",
     },
     chats: {
       "chats-total": "共采集到 {count} 段会话。",

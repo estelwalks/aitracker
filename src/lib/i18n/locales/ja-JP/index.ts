@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 import type { Translations } from "../../schema";
 
 import { common } from "./common";

@@ -1,17 +1,20 @@
 import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   Boxes,
   ChevronRight,
+  RefreshCw,
   ShieldCheck,
   ShieldX,
-  TriangleAlert,
 } from "lucide-react";
 
 import { useI18n } from "../../../../lib/i18n/context";
+import { Pagination } from "../../../../components/aitracker";
+import { STANDARD_PAGE_SIZE } from "../../../../lib/pagination";
 import {
   aggregateScanTasks,
   detectedRiskCount,
-  unresolvedScanCount,
   type SecurityHistoryView,
   type SecurityScanTaskView,
 } from "../security-view";
@@ -43,15 +46,27 @@ export function ScanHistory({
   const { t, format } = useI18n();
   const [state, setState] = useState<StateFilter>("all");
   const [span, setSpan] = useState<TimeFilter>("7d");
+  const [page, setPage] = useState(1);
   const now = Date.now();
   const list = useMemo(
     () =>
       aggregateScanTasks(entries).filter((group) => {
         if (now - Date.parse(group.finishedAt) > timeSpans[span]) return false;
-        return state === "all" || (state === "safe" ? group.safe : !group.safe);
+        if (state === "all") return true;
+        if (state === "safe") return group.safe || group.unchanged;
+        return detectedRiskCount(group.totals) > 0;
       }),
     [entries, now, span, state],
   );
+  const pageCount = Math.max(1, Math.ceil(list.length / STANDARD_PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, page), pageCount);
+  const pageRows = list.slice(
+    (currentPage - 1) * STANDARD_PAGE_SIZE,
+    currentPage * STANDARD_PAGE_SIZE,
+  );
+  const rangeStart =
+    list.length === 0 ? 0 : (currentPage - 1) * STANDARD_PAGE_SIZE + 1;
+  const rangeEnd = Math.min(currentPage * STANDARD_PAGE_SIZE, list.length);
 
   return (
     <SecurityCard
@@ -60,7 +75,10 @@ export function ScanHistory({
       action={
         <ChipTabs
           value={span}
-          onChange={setSpan}
+          onChange={(value) => {
+            setSpan(value);
+            setPage(1);
+          }}
           options={[
             { value: "24h", label: t("security.center.history.day") },
             { value: "7d", label: t("security.center.history.week") },
@@ -73,13 +91,16 @@ export function ScanHistory({
       <div className="px-5 pb-4">
         <ChipTabs
           value={state}
-          onChange={setState}
+          onChange={(value) => {
+            setState(value);
+            setPage(1);
+          }}
           options={[
             { value: "all", label: t("security.center.history.all") },
             { value: "safe", label: t("security.center.history.safe") },
             {
               value: "unsafe",
-              label: t("security.center.history.needsReview"),
+              label: t("security.center.history.unsafe"),
             },
           ]}
         />
@@ -90,68 +111,104 @@ export function ScanHistory({
           {t("security.center.history.empty")}
         </p>
       ) : (
-        <div className="border-t border-border/60">
-          {list.map((group) => {
-            const totals = group.totals;
-            const unsafe = detectedRiskCount(totals);
-            const unresolved = unresolvedScanCount(totals);
-            const safe = group.safe;
-            return (
-              <div
-                key={group.scanId}
-                className="border-b border-border/40 last:border-b-0"
-              >
-                <button
-                  type="button"
-                  onClick={() => onOpenTask?.(group)}
-                  className="flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3.5 text-left transition-colors hover:bg-surface-2"
+        <>
+          <div className="border-t border-border/60">
+            {pageRows.map((group) => {
+              const totals = group.totals;
+              const unsafe = detectedRiskCount(totals);
+              const safe = group.safe;
+              const unchanged = group.unchanged;
+              const failed = group.status === "failed" && unsafe === 0;
+              return (
+                <div
+                  key={group.scanId}
+                  className="border-b border-border/40 last:border-b-0"
                 >
-                  <span className="aitracker-num w-[104px] shrink-0 font-mono text-[11.5px] text-muted-foreground">
-                    {format.formatDateTime(group.finishedAt, false)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
-                    {group.scope === "all"
-                      ? t("security.center.history.scopeAll")
-                      : t("security.center.history.scopeSingle")}
-                  </span>
-                  <span className="hidden items-center gap-3 font-mono text-[10.5px] text-muted-foreground sm:flex">
-                    <span className="inline-flex items-center gap-1">
-                      <Boxes className="size-3" /> {totals.total}
+                  <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3.5 text-left transition-colors hover:bg-surface-2">
+                    <span className="aitracker-num w-[104px] shrink-0 font-mono text-[11.5px] text-muted-foreground">
+                      {format.formatDateTime(group.finishedAt, false)}
                     </span>
-                    <RelativeTime iso={group.finishedAt} />
-                  </span>
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px]"
-                    style={{
-                      color: safe
-                        ? "var(--ok)"
-                        : unsafe > 0
-                          ? "var(--danger)"
-                          : "var(--warn)",
-                    }}
-                  >
-                    {safe ? (
-                      <ShieldCheck className="size-3" />
-                    ) : unsafe > 0 ? (
-                      <ShieldX className="size-3" />
+                    {group.scope === "all" ? (
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+                        {t("security.center.history.scopeAll")}
+                      </span>
                     ) : (
-                      <TriangleAlert className="size-3" />
+                      <Link
+                        to="/skills"
+                        search={{ skill: group.entries[0]?.skillName }}
+                        className="min-w-0 flex-1 truncate text-[12.5px] font-medium transition-colors hover:text-primary hover:underline"
+                      >
+                        {t("security.center.history.scopeSingleNamed", {
+                          name:
+                            group.entries[0]?.skillName ??
+                            t("security.center.history.scopeSingle"),
+                        })}
+                      </Link>
                     )}
-                    {safe
-                      ? t("security.center.history.safe")
-                      : unsafe > 0
-                        ? `${t("security.center.history.unsafe")} · ${unsafe}`
-                        : `${t("security.center.history.needsReview")} · ${unresolved}`}
-                  </span>
-                  <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[10.5px] text-primary">
-                    {t("security.center.task.viewDetails")}
-                    <ChevronRight className="size-3.5" />
-                  </span>
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                    <span className="hidden items-center gap-3 font-mono text-[10.5px] text-muted-foreground sm:flex">
+                      <span className="inline-flex items-center gap-1">
+                        <Boxes className="size-3" /> {totals.total}
+                      </span>
+                      <RelativeTime iso={group.finishedAt} />
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px]"
+                      style={{
+                        color:
+                          safe || unchanged
+                            ? "var(--ok)"
+                            : failed
+                              ? "var(--warn)"
+                              : "var(--danger)",
+                      }}
+                    >
+                      {unchanged ? (
+                        <RefreshCw className="size-3" />
+                      ) : safe ? (
+                        <ShieldCheck className="size-3" />
+                      ) : failed ? (
+                        <AlertTriangle className="size-3" />
+                      ) : (
+                        <ShieldX className="size-3" />
+                      )}
+                      {unchanged
+                        ? t("security.center.history.safeReused", {
+                            count: totals.skipped,
+                          })
+                        : safe
+                          ? totals.skipped > 0
+                            ? t("security.center.history.safeReused", {
+                                count: totals.skipped,
+                              })
+                            : t("security.center.history.safe")
+                          : failed
+                            ? t("security.center.status.failed")
+                            : `${t("security.center.history.unsafe")} · ${unsafe}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onOpenTask?.(group)}
+                      className="inline-flex shrink-0 items-center gap-1 font-mono text-[10.5px] text-primary"
+                    >
+                      {t("security.center.task.viewDetails")}
+                      <ChevronRight className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <Pagination
+            page={currentPage}
+            pageCount={pageCount}
+            onChange={setPage}
+            rangeLabel={t("security.center.history.range", {
+              start: format.formatNumber(rangeStart),
+              end: format.formatNumber(rangeEnd),
+              total: format.formatNumber(list.length),
+            })}
+          />
+        </>
       )}
     </SecurityCard>
   );

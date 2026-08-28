@@ -132,6 +132,31 @@ const matchSchema = z
   })
   .strict();
 
+const tokenUsageBreakdownSchema = z
+  .object({
+    status: z.enum(["not_applicable", "complete", "partial", "unavailable"]),
+    requestCount: z.number().int().nonnegative(),
+    reportedRequestCount: z.number().int().nonnegative(),
+    inputTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    totalTokens: z.number().int().nonnegative(),
+    cachedInputTokens: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const tokenUsageSchema = tokenUsageBreakdownSchema.extend({
+  byModel: z.record(z.string(), tokenUsageBreakdownSchema),
+  byBranch: z.record(
+    z.enum([
+      "ruleReview",
+      "singleFileAnalysis",
+      "multiFileAnalysis",
+      "semanticDedup",
+    ]),
+    tokenUsageBreakdownSchema,
+  ),
+});
+
 const reportSchema = z
   .object({
     status: z.enum(["complete", "partial"]),
@@ -204,6 +229,7 @@ const reportSchema = z
         })
         .strict(),
     ),
+    tokenUsage: tokenUsageSchema.optional(),
   })
   .strict();
 
@@ -281,18 +307,26 @@ const scanStartSchema = z
       .string()
       .regex(/^skill:/u)
       .optional(),
+    skillName: z.string().trim().min(1).max(160).optional(),
     mode: modeSchema,
     trigger: z.literal("manual").optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.scope === "single" && value.skillRef == null) {
+    if (
+      value.scope === "single" &&
+      value.skillRef == null &&
+      value.skillName == null
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "single scan requires skillRef",
+        message: "single scan requires skillRef or skillName",
       });
     }
-    if (value.scope === "all" && value.skillRef != null) {
+    if (
+      value.scope === "all" &&
+      (value.skillRef != null || value.skillName != null)
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: "all scan cannot include skillRef",

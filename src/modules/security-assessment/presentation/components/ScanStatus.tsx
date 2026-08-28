@@ -13,9 +13,9 @@ import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";
 import {
   clampPercent,
-  detectedRiskCount,
   isScanActive,
   relativeTimeParts,
+  detectedRiskCount,
   type SecurityRiskKind,
   type SecurityScanStateView,
   type SecurityTotals,

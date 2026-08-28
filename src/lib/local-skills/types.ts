@@ -23,6 +23,8 @@ export interface SkillInstallation {
   modifiedAt: string;
   version: string | null;
   source: SkillSource | null;
+  /** Explicit provenance written by the distillation save flow. */
+  isDistilled?: boolean;
   updateStatus: SkillUpdateStatus;
   updateReason: string;
 }

@@ -71,7 +71,7 @@ CREATE TABLE model_profiles (
     mode IN ('official', 'custom')
   ),
   protocol TEXT NOT NULL CHECK (
-    protocol IN ('openai', 'anthropic')
+    protocol IN ('openai', 'openai-responses', 'anthropic')
   ),
   endpoint TEXT,
   model TEXT,
@@ -119,7 +119,8 @@ CREATE TABLE ai_executions (
   error_code TEXT,
   started_at_ms INTEGER CHECK (started_at_ms IS NULL OR started_at_ms >= 0),
   finished_at_ms INTEGER CHECK (finished_at_ms IS NULL OR finished_at_ms >= 0),
-  duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0)
+  duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+  failure_detail TEXT
 ) STRICT;
 
 CREATE INDEX idx_ai_executions_capability_started
@@ -211,6 +212,61 @@ CREATE TABLE insight_enhancement_lines (
   action_id TEXT,
   PRIMARY KEY (cache_key, sequence)
 ) STRICT;
+
+CREATE TABLE insight_refresh_runs (
+  run_id TEXT PRIMARY KEY,
+  active_slot TEXT UNIQUE,
+  locale TEXT NOT NULL,
+  generation INTEGER NOT NULL CHECK (generation >= 1),
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed')),
+  total_items INTEGER NOT NULL CHECK (total_items >= 0),
+  completed_items INTEGER NOT NULL DEFAULT 0 CHECK (completed_items >= 0),
+  failed_items INTEGER NOT NULL DEFAULT 0 CHECK (failed_items >= 0),
+  skipped_items INTEGER NOT NULL DEFAULT 0 CHECK (skipped_items >= 0),
+  created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
+  started_at_ms INTEGER CHECK (started_at_ms IS NULL OR started_at_ms >= 0),
+  finished_at_ms INTEGER CHECK (finished_at_ms IS NULL OR finished_at_ms >= 0)
+) STRICT;
+
+CREATE INDEX idx_insight_refresh_runs_created
+  ON insight_refresh_runs (created_at_ms DESC);
+
+CREATE TABLE insight_refresh_items (
+  run_id TEXT NOT NULL REFERENCES insight_refresh_runs (run_id) ON DELETE CASCADE,
+  surface_id TEXT NOT NULL,
+  scope_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (
+    status IN ('queued', 'running', 'completed', 'failed', 'skipped')
+  ),
+  result_status TEXT,
+  started_at_ms INTEGER CHECK (started_at_ms IS NULL OR started_at_ms >= 0),
+  finished_at_ms INTEGER CHECK (finished_at_ms IS NULL OR finished_at_ms >= 0),
+  result_detail TEXT,
+  PRIMARY KEY (run_id, surface_id, scope_json)
+) STRICT;
+
+CREATE TABLE insight_generation_reservations (
+  reservation_key TEXT PRIMARY KEY,
+  generation INTEGER NOT NULL CHECK (generation >= 0),
+  time_bucket INTEGER NOT NULL CHECK (time_bucket >= 0),
+  surface_id TEXT NOT NULL,
+  scope_hash TEXT NOT NULL,
+  evidence_hash TEXT NOT NULL,
+  locale TEXT NOT NULL,
+  profile_id TEXT NOT NULL,
+  prompt_version_id TEXT NOT NULL,
+  prompt_version INTEGER NOT NULL CHECK (prompt_version >= 0),
+  owner_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+  result_status TEXT,
+  created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
+  finished_at_ms INTEGER CHECK (finished_at_ms IS NULL OR finished_at_ms >= 0)
+) STRICT;
+
+CREATE INDEX idx_insight_generation_reservations_identity
+  ON insight_generation_reservations (
+    surface_id, scope_hash, evidence_hash, locale, profile_id
+  );
 
 CREATE TABLE task_preferences (
   task_id TEXT PRIMARY KEY,
@@ -484,6 +540,7 @@ CREATE TABLE skill_installations (
   installed_at_ms INTEGER NOT NULL CHECK(installed_at_ms >= 0), modified_at_ms INTEGER NOT NULL CHECK(modified_at_ms >= 0),
   version TEXT, source_kind TEXT CHECK(source_kind IS NULL OR source_kind IN ('frontmatter','market')), source_label TEXT,
   update_status TEXT NOT NULL CHECK(update_status IN ('current','available','unknown')), update_reason_code TEXT NOT NULL,
+  directory_name TEXT NOT NULL DEFAULT '',
   PRIMARY KEY(snapshot_id,skill_id,installation_ref),
   FOREIGN KEY(snapshot_id,skill_id) REFERENCES skills(snapshot_id,skill_id) ON DELETE CASCADE
 ) STRICT;

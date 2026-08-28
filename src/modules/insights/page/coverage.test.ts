@@ -73,4 +73,17 @@ test("settings page keeps only the insight settings toggle", () => {
   );
   assert.doesNotMatch(source, /InsightCard/);
   assert.match(source, /<InsightSettingsSection\s*\/>/);
+  const modelStart = source.indexOf('{category === "model"');
+  const dataStart = source.indexOf('{category === "data"');
+  assert.ok(modelStart >= 0 && dataStart > modelStart);
+  assert.doesNotMatch(
+    source.slice(modelStart, dataStart),
+    /InsightSettingsSection/,
+  );
+  const preferencesStart = source.indexOf('{category === "preferences"');
+  assert.ok(preferencesStart >= 0 && modelStart > preferencesStart);
+  assert.match(
+    source.slice(preferencesStart, modelStart),
+    /<InsightSettingsSection\s*\/>/,
+  );
 });

@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 /** 蒸留ワークベンチの文案（V3.0 プロトタイプに合わせる）。 */
 export const distill = {
   jarvisTitle: "Jarvis インサイト",

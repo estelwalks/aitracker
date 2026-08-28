@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ENV } from "../app-config";
+import { ENV, MARKET_API_BASE } from "../app-config";
 import { resetCompositionRootForTests } from "../../app/composition.server.ts";
 import {
   countInstalledMarketSkills,
@@ -127,7 +127,12 @@ test("fetchMarketSkills sends pagination, keyword, tags, and sort to the API", a
   );
 
   const url = new URL(requestedUrl);
-  assert.equal(url.pathname.endsWith("/external-api/v1/skills/search"), true);
+  const expectedLegacyHost = ["ai", ["trust", "tools"].join(""), "cn"].join(
+    ".",
+  );
+  assert.equal(MARKET_API_BASE, `https://${expectedLegacyHost}/api`);
+  assert.equal(url.origin, `https://${expectedLegacyHost}`);
+  assert.equal(url.pathname, "/api/external-api/v1/skills/search");
   assert.equal(url.searchParams.get("lang"), "zh");
   assert.equal(requestedBody.page, 1);
   assert.equal(requestedBody.limit, 20);

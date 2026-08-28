@@ -23,15 +23,22 @@
 export const APP_NAME = "AITracker";
 export const APP_ID = "aitracker";
 
-/** Browser-facing app icon from the AITracker brand package. [safe] */
-export const APP_ICON_URL = "/brand-logos/ai-tracker/ai-tracker-icon-mono.png";
+/** Browser favicon from the AITracker brand package. [safe] */
+export const APP_FAVICON_URL =
+  "/brand-logos/ai-tracker/ai-tracker-icon-mono.png";
+
+/** Theme-aware product marks used inside the application UI. [safe] */
+export const APP_BRAND_ICON_DARK_URL =
+  "/brand-logos/ai-tracker/ai-tracker-icon-color-dark.png";
+export const APP_BRAND_ICON_LIGHT_URL =
+  "/brand-logos/ai-tracker/ai-tracker-icon-color-light.png";
 
 /** Product version shown in the UI; bump together with package.json `version`. */
-export const APP_VERSION = "3.0.1";
+export const APP_VERSION = "1.0.0";
 /** Release date shown on the About page. */
 export const APP_RELEASE_DATE = "2026-08-03";
 /** Source repository link shown on the About page. */
-export const APP_REPO_URL = `https://github.com/${APP_ID}/${APP_ID}`;
+export const APP_REPO_URL = "https://github.com/estelwalks/aitracker";
 
 /** Local data root directory name under the user's home (`~/.aitracker`). [compat: user data] */
 export const APP_DATA_DIR = `.${APP_ID}`;
@@ -48,7 +55,7 @@ export const EXPORT_FILENAME_PREFIX = `${APP_ID}_export_`;
 /** Token poster image file prefix. [safe] */
 export const POSTER_FILENAME_PREFIX = `${APP_ID}-token-`;
 /** Skill market API base URL. [compat: live backend endpoint] */
-export const MARKET_API_BASE = `https://ai.${APP_ID}.cn/api`;
+export const MARKET_API_BASE = "https://ai.trusttools.cn/api";
 /** Sandbox temp-dir prefix for tests. [safe — neutral on purpose] */
 export const TEST_TMP_PREFIX = "aitracker-";
 /** Name of the global object exposed by the Electron preload bridge. [safe — rebuilt per launch] */

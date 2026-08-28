@@ -308,6 +308,7 @@ test("saveCandidateAsSkill writes the approved note into the target agent skill 
     const skillPath = result.path;
     const content = await readFile(skillPath, "utf8");
     assert.match(content, /name: my-distilled-skill/);
+    assert.match(content, /aitracker-origin: distilled/);
     assert.ok(
       skillPath.startsWith(join(dir, APP_DATA_DIR)) ||
         skillPath.startsWith(join(dir, ".claude")),

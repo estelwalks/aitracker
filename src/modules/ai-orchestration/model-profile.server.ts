@@ -30,10 +30,29 @@ import {
   type ProfileProtocol,
 } from "./model-profile.ts";
 import type {
+  AIErrorCode,
   AIModelProvider,
   AIProviderRequest,
   AIResponse,
 } from "./contracts.ts";
+
+class ProfileProviderInvocationError extends Error {
+  readonly name = "ProfileProviderInvocationError";
+  constructor(
+    readonly code: AIErrorCode,
+    /** Sanitized, bounded failure attribution (never raw response text). */
+    readonly detail?: string,
+  ) {
+    super(code);
+  }
+}
+
+function httpFailureCode(status: number): AIErrorCode {
+  if (status === 401 || status === 403) return "ai.provider-auth";
+  if (status === 429) return "ai.provider-rate-limited";
+  if (status >= 500) return "ai.provider-unavailable";
+  return "ai.provider-http-client";
+}
 
 /** Stable error thrown by repository mutations for renderer-safe mapping. */
 export class ModelProfileError extends Error {
@@ -55,6 +74,23 @@ function chatRequestBody(
     max_tokens: maxTokens,
     messages: [{ role: "user", content }],
   });
+}
+
+function requestBody(
+  mode: ModelProfileInput["mode"],
+  protocol: ProfileProtocol,
+  model: string,
+  content: string,
+  maxTokens: number,
+): string {
+  if (mode === "official" || protocol === "openai-responses") {
+    return JSON.stringify({
+      model,
+      max_output_tokens: maxTokens,
+      input: content,
+    });
+  }
+  return chatRequestBody(protocol, model, content, maxTokens);
 }
 
 function chatHeaders(
@@ -83,12 +119,25 @@ function chatHeaders(
 
 export function chatUrl(protocol: ProfileProtocol, endpoint: string): string {
   const base = endpoint.replace(/\/+$/, "");
-  if (/\/(?:chat\/completions|messages)$/u.test(base)) return base;
+  if (/\/(?:chat\/completions|messages|responses)$/u.test(base)) return base;
+  if (protocol === "openai-responses") return `${base}/responses`;
   return protocol === "anthropic"
     ? /\/v\d+$/u.test(base)
       ? `${base}/messages`
       : `${base}/v1/messages`
     : `${base}/chat/completions`;
+}
+
+/** Recommended profiles use the OpenAI Responses API; custom profiles retain their selected protocol. */
+export function modelRequestUrl(
+  mode: ModelProfileInput["mode"],
+  protocol: ProfileProtocol,
+  endpoint: string,
+): string {
+  if (mode !== "official" && protocol !== "openai-responses")
+    return chatUrl(protocol, endpoint);
+  const base = endpoint.replace(/\/+$/, "");
+  return /\/responses$/u.test(base) ? base : `${base}/responses`;
 }
 
 /** Model-list endpoint: `GET {base}/models` (chatUrl is the POST chat path). */
@@ -225,10 +274,16 @@ export function createModelProfileNetworkOperations(options?: {
     try {
       const response = await withNetworkTimeout(
         (signal) =>
-          fetchImpl(chatUrl(protocol, endpoint), {
+          fetchImpl(modelRequestUrl(input.mode, protocol, endpoint), {
             method: "POST",
             headers: chatHeaders(protocol, apiKey, effectiveAuth(input)),
-            body: chatRequestBody(protocol, model, "Reply with OK.", 16),
+            body: requestBody(
+              input.mode,
+              protocol,
+              model,
+              "Reply with OK.",
+              16,
+            ),
             signal,
           }),
         timeoutMs,
@@ -324,28 +379,135 @@ function textFromContent(value: unknown): string {
     .trim();
 }
 
-function parseChatText(protocol: ProfileProtocol, raw: string): string {
+export type ChatResponseClassification =
+  "ok" | "not-json" | "empty-content" | "reasoning-only" | "no-text-field";
+
+export interface ClassifiedChatResponse {
+  readonly text: string;
+  readonly kind: ChatResponseClassification;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly totalTokens?: number;
+  readonly reasoningTokens?: number;
+  readonly finishReason?: AIResponse["finishReason"];
+}
+
+function parseChatUsage(
+  usage: unknown,
+):
+  | Pick<
+      ClassifiedChatResponse,
+      "inputTokens" | "outputTokens" | "totalTokens" | "reasoningTokens"
+    >
+  | undefined {
+  if (!usage || typeof usage !== "object") return undefined;
+  const record = usage as Record<string, unknown>;
+  const inputTokens =
+    typeof record.prompt_tokens === "number"
+      ? record.prompt_tokens
+      : typeof record.input_tokens === "number"
+        ? record.input_tokens
+        : undefined;
+  const outputTokens =
+    typeof record.completion_tokens === "number"
+      ? record.completion_tokens
+      : typeof record.output_tokens === "number"
+        ? record.output_tokens
+        : undefined;
+  if (inputTokens === undefined || outputTokens === undefined) return undefined;
+  const details = record.completion_tokens_details as
+    { reasoning_tokens?: unknown } | undefined;
+  const reasoningTokens =
+    details && typeof details.reasoning_tokens === "number"
+      ? details.reasoning_tokens
+      : undefined;
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens:
+      typeof record.total_tokens === "number"
+        ? record.total_tokens
+        : inputTokens + outputTokens,
+    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+  };
+}
+
+/**
+ * Parses a chat-completion response and classifies the outcome. Reasoning
+ * models (e.g. deepseek-v4-flash) frequently exhaust the output budget on
+ * `reasoning_content` and return an empty `content`; distinguishing
+ * `reasoning-only` from `empty-content` and `not-json` is what makes failure
+ * attribution actionable.
+ */
+function parseChatCompletion(
+  protocol: ProfileProtocol,
+  raw: string,
+): ClassifiedChatResponse {
+  let json: unknown;
   try {
-    const json: unknown = JSON.parse(raw);
-    if (protocol === "anthropic") {
-      const content = (json as { content?: Array<{ text?: string }> })?.content;
-      return textFromContent(content);
-    }
+    json = JSON.parse(raw);
+  } catch {
+    return { text: "", kind: "not-json" };
+  }
+  let content: unknown;
+  let reasoningContent: unknown;
+  let usage: unknown;
+  let finishReason: unknown;
+  if (protocol === "anthropic") {
     const record = json as {
-      choices?: Array<{ text?: unknown; message?: { content?: unknown } }>;
+      content?: unknown;
+      usage?: unknown;
+      stop_reason?: unknown;
+    };
+    content = record.content;
+    usage = record.usage;
+    finishReason = record.stop_reason;
+  } else {
+    const record = json as {
+      choices?: Array<{
+        text?: unknown;
+        message?: {
+          content?: unknown;
+          reasoning_content?: unknown;
+        };
+        finish_reason?: unknown;
+      }>;
       output_text?: unknown;
       output?: Array<{ content?: unknown }>;
+      usage?: unknown;
     };
     const choice = record.choices?.[0];
-    return (
+    content =
       textFromContent(choice?.message?.content) ||
       textFromContent(choice?.text) ||
       textFromContent(record.output_text) ||
-      textFromContent(record.output?.flatMap((item) => item.content ?? []))
-    );
-  } catch {
-    return "";
+      textFromContent(record.output?.flatMap((item) => item.content ?? [])) ||
+      "";
+    reasoningContent = choice?.message?.reasoning_content;
+    finishReason = choice?.finish_reason;
+    usage = record.usage;
   }
+  const text = textFromContent(content);
+  const reasoning = textFromContent(reasoningContent);
+  const kind: ChatResponseClassification =
+    text.length > 0
+      ? "ok"
+      : reasoning.length > 0
+        ? "reasoning-only"
+        : "empty-content";
+  return {
+    text,
+    kind,
+    ...(parseChatUsage(usage) ?? {}),
+    ...(typeof finishReason === "string" &&
+    (finishReason === "stop" || finishReason === "length")
+      ? { finishReason }
+      : {}),
+  };
+}
+
+function parseChatText(protocol: ProfileProtocol, raw: string): string {
+  return parseChatCompletion(protocol, raw).text;
 }
 
 export type ModelDiagnosticFailureClassification =
@@ -407,7 +569,11 @@ async function runDiagnosticAttempt(input: {
   try {
     const exchange = await withNetworkTimeout(async (signal) => {
       const response = await input.fetchFn(
-        chatUrl(input.profile.protocol, effectiveEndpoint(input.profile)),
+        modelRequestUrl(
+          input.profile.mode,
+          input.profile.protocol,
+          effectiveEndpoint(input.profile),
+        ),
         {
           method: "POST",
           headers: chatHeaders(
@@ -415,7 +581,8 @@ async function runDiagnosticAttempt(input: {
             input.profile.apiKey!,
             effectiveAuth(input.profile),
           ),
-          body: chatRequestBody(
+          body: requestBody(
+            input.profile.mode,
             input.profile.protocol,
             input.model,
             input.content,
@@ -523,7 +690,7 @@ export async function diagnoseModelProfile(
 export interface ModelProfileRepository {
   /** Renderer-safe projection of every profile (no apiKey anywhere). */
   listViews(): Promise<ModelProfileView[]>;
-  /** Active profile projection, or the first profile when none is marked. */
+  /** Explicitly active profile projection; null when no profile is enabled. */
   getActiveView(): Promise<ModelProfileView | null>;
   /**
    * Server-only accessor returning the full profile including the apiKey.
@@ -549,6 +716,23 @@ export interface ModelProfileRepository {
 }
 
 /**
+ * Resolve credentials only for the explicitly enabled profile.
+ *
+ * Keeping this lookup shared prevents model consumers from silently falling
+ * back to the first configured profile when the user has not enabled one.
+ */
+export async function getActiveModelProfileForExecution(
+  repository: Pick<
+    ModelProfileRepository,
+    "getActiveView" | "getProfileForExecution"
+  >,
+): Promise<ModelProfile | undefined> {
+  const active = await repository.getActiveView();
+  if (!active) return undefined;
+  return repository.getProfileForExecution(active.id);
+}
+
+/**
  * Provider adapter that resolves a saved profile at invoke time by
  * `request.modelId` and performs a real chat-completion call. Registered in
  * the composition root under the stable id `profile`; distillation requests
@@ -566,7 +750,7 @@ export function createProfileBackedProvider(options: {
     async invoke(request: AIProviderRequest): Promise<AIResponse> {
       const profile = await options.resolve(request.modelId);
       if (!profile?.apiKey)
-        throw new ModelProfileError("errors.modelProfile.notFound");
+        throw new ProfileProviderInvocationError("ai.profile-unavailable");
       const endpoint = effectiveEndpoint(profile);
       const model = effectiveModel(profile) ?? request.modelId;
       const content =
@@ -580,7 +764,8 @@ export function createProfileBackedProvider(options: {
           profile.apiKey,
           effectiveAuth(profile),
         ),
-        body: chatRequestBody(
+        body: requestBody(
+          profile.mode,
           profile.protocol,
           model,
           content,
@@ -597,15 +782,13 @@ export function createProfileBackedProvider(options: {
         if (request.signal.aborted) throw new Error("request cancelled");
         try {
           response = await fetchImpl(
-            chatUrl(profile.protocol, endpoint),
+            modelRequestUrl(profile.mode, profile.protocol, endpoint),
             requestInit,
           );
         } catch (error) {
-          if (
-            request.signal.aborted ||
-            attempt === MAX_TRANSIENT_CHAT_RETRIES
-          ) {
-            throw error;
+          if (request.signal.aborted) throw error;
+          if (attempt === MAX_TRANSIENT_CHAT_RETRIES) {
+            throw new ProfileProviderInvocationError("ai.provider-network");
           }
           await waitBeforeChatRetry();
           continue;
@@ -619,15 +802,46 @@ export function createProfileBackedProvider(options: {
         }
         await waitBeforeChatRetry();
       }
-      if (response === undefined) throw new Error("empty model response");
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const text = parseChatText(profile.protocol, await response.text());
-      if (!text) throw new Error("empty model response");
+      if (response === undefined)
+        throw new ProfileProviderInvocationError(
+          "ai.provider-invalid-response",
+        );
+      if (!response.ok)
+        throw new ProfileProviderInvocationError(
+          httpFailureCode(response.status),
+          `http-error:${response.status}`,
+        );
+      const parsed = parseChatCompletion(
+        profile.protocol,
+        await response.text(),
+      );
+      if (parsed.kind !== "ok") {
+        // Distinguish reasoning-budget exhaustion from other empty responses
+        // so the caller can attribute and retry intelligently.
+        throw new ProfileProviderInvocationError(
+          "ai.provider-invalid-response",
+          parsed.kind,
+        );
+      }
       return {
         providerId: "profile",
         modelId: request.modelId,
-        text,
-        finishReason: "stop",
+        text: parsed.text,
+        finishReason: parsed.finishReason ?? "stop",
+        ...(parsed.inputTokens !== undefined &&
+        parsed.outputTokens !== undefined &&
+        parsed.totalTokens !== undefined
+          ? {
+              usage: {
+                inputTokens: parsed.inputTokens,
+                outputTokens: parsed.outputTokens,
+                totalTokens: parsed.totalTokens,
+                ...(parsed.reasoningTokens !== undefined
+                  ? { reasoningTokens: parsed.reasoningTokens }
+                  : {}),
+              },
+            }
+          : {}),
       };
     },
   };

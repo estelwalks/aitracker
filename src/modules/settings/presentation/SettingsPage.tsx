@@ -541,6 +541,7 @@ export function SettingsPage({
                 </div>
               </Field>
               <MenuBarAppSettingsSection />
+              <InsightSettingsSection />
               <Field label={t("settings.autoLaunch")} hint={autoLaunchHint}>
                 <Toggle
                   value={autoLaunchEnabled}
@@ -611,7 +612,6 @@ export function SettingsPage({
           {category === "model" && (
             <div>
               <ModelProfilesSection />
-              <InsightSettingsSection />
             </div>
           )}
 

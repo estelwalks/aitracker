@@ -23,6 +23,7 @@ import {
   effectiveEndpoint,
   effectiveModel,
   effectiveProtocol,
+  type ProfileProtocol,
 } from "../ai-orchestration/index.ts";
 import type {
   AIModelProvider,
@@ -129,7 +130,7 @@ export interface DashboardAIInsightAvailability {
  * browser-safe view.
  */
 export interface DashboardAIInsightRuntimeConfig {
-  readonly protocol: "openai" | "anthropic";
+  readonly protocol: ProfileProtocol;
   readonly auth: "x-api-key" | "bearer";
   readonly endpoint: string;
   readonly apiKey: string;
@@ -332,6 +333,11 @@ function openAIEndpoint(endpoint: string): string {
   return /\/chat\/completions$/u.test(base) ? base : `${base}/chat/completions`;
 }
 
+function openAIResponsesEndpoint(endpoint: string): string {
+  const base = endpoint.replace(/\/+$/u, "");
+  return /\/responses$/u.test(base) ? base : `${base}/responses`;
+}
+
 function anthropicEndpoint(endpoint: string): string {
   const base = endpoint.replace(/\/+$/u, "");
   return /\/messages$/u.test(base) ? base : `${base}/messages`;
@@ -367,13 +373,16 @@ function createDashboardAIInsightProvider(
   fetchImpl: typeof fetch,
 ): AIModelProvider {
   const anthropic = config.protocol === "anthropic";
+  const responses = config.protocol === "openai-responses";
   return {
     providerId: "dashboard-insight",
     async invoke(request: AIProviderRequest): Promise<AIResponse> {
       const response = await fetchImpl(
         anthropic
           ? anthropicEndpoint(config.endpoint)
-          : openAIEndpoint(config.endpoint),
+          : responses
+            ? openAIResponsesEndpoint(config.endpoint)
+            : openAIEndpoint(config.endpoint),
         {
           method: "POST",
           headers: anthropic
@@ -387,16 +396,23 @@ function createDashboardAIInsightProvider(
                   system: request.prompt.template,
                   messages: [{ role: "user", content: request.input.text }],
                 }
-              : {
-                  model: config.model,
-                  temperature: 0.2,
-                  max_tokens: 600,
-                  response_format: { type: "json_object" },
-                  messages: [
-                    { role: "system", content: request.prompt.template },
-                    { role: "user", content: request.input.text },
-                  ],
-                },
+              : responses
+                ? {
+                    model: config.model,
+                    max_output_tokens: 600,
+                    instructions: request.prompt.template,
+                    input: request.input.text,
+                  }
+                : {
+                    model: config.model,
+                    temperature: 0.2,
+                    max_tokens: 600,
+                    response_format: { type: "json_object" },
+                    messages: [
+                      { role: "system", content: request.prompt.template },
+                      { role: "user", content: request.input.text },
+                    ],
+                  },
           ),
           signal: request.signal,
         },
@@ -405,7 +421,9 @@ function createDashboardAIInsightProvider(
       const payload: unknown = await response.json();
       const text = anthropic
         ? readAnthropicMessagesText(payload)
-        : readChatCompletionText(payload);
+        : responses
+          ? readOpenAIResponsesText(payload)
+          : readChatCompletionText(payload);
       if (text == null) throw new Error("provider-invalid-response");
       return {
         providerId: "dashboard-insight",
@@ -415,6 +433,28 @@ function createDashboardAIInsightProvider(
       };
     },
   };
+}
+
+function readOpenAIResponsesText(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const outputText = (payload as { output_text?: unknown }).output_text;
+  if (typeof outputText === "string" && outputText.trim()) return outputText;
+  const output = (payload as { output?: unknown }).output;
+  if (!Array.isArray(output)) return null;
+  const text = output
+    .flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const content = (item as { content?: unknown }).content;
+      return Array.isArray(content) ? content : [];
+    })
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const text = (part as { text?: unknown }).text;
+      return typeof text === "string" ? text : "";
+    })
+    .join("\n")
+    .trim();
+  return text || null;
 }
 
 function readChatCompletionText(payload: unknown): string | null {

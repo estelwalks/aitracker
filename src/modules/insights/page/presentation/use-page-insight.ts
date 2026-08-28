@@ -2,7 +2,7 @@
  * `usePageInsight` — the renderer hook for the 「今日洞察双模式」 page insight.
  *
  * First render fetches the surface envelope via `getPageInsight` (with cancel
- * protection), then refreshes the mounted page's evidence every 3 hours.
+ * protection), then refreshes the mounted page on the configured period.
  * It also exposes localized display lines, the enhance action (with a 60s
  * cooldown and visible failure status), and the raw envelope for
  * status/modelLabel.
@@ -24,6 +24,7 @@ import type {
   InsightSeverity,
   InsightSurfaceId,
 } from "../contracts";
+import { DEFAULT_INSIGHT_REFRESH_INTERVAL_MS } from "../contracts";
 import {
   canEnhanceNow,
   composeLineText,
@@ -52,8 +53,134 @@ export type {
   InsightActionPath,
 } from "./use-page-insight.pure";
 
-/** Evidence and auto-enhancement refresh period for the currently mounted page. */
-export const PAGE_INSIGHT_REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000;
+/** Fallback refresh period; mounted pages replace it with the saved setting. */
+export const PAGE_INSIGHT_REFRESH_INTERVAL_MS =
+  DEFAULT_INSIGHT_REFRESH_INTERVAL_MS;
+
+type CachedInsight = {
+  readonly envelope: InsightEnvelope;
+  readonly cachedAtMs: number;
+  readonly refreshIntervalMs: number;
+};
+
+const insightCache = new Map<string, CachedInsight>();
+const insightReads = new Map<string, Promise<InsightEnvelope>>();
+const insightEnhancements = new Map<string, Promise<InsightEnvelope>>();
+let insightCacheVersion = 0;
+
+function stableScopeKey(scope: InsightScope | undefined): string {
+  return JSON.stringify({
+    range: scope?.range ?? null,
+    entityId: scope?.entityId ?? null,
+  });
+}
+
+function insightRequestKey(options: UsePageInsightOptions): string {
+  return `${options.surfaceId}|${options.locale}|${stableScopeKey(options.scope)}`;
+}
+
+function isCachedInsightFresh(
+  entry: CachedInsight,
+  nowMs = Date.now(),
+): boolean {
+  const expiresAtMs =
+    entry.envelope.enhancementExpiresAtMs ??
+    entry.cachedAtMs + entry.refreshIntervalMs;
+  return expiresAtMs > nowMs;
+}
+
+function readCachedInsight(key: string): CachedInsight | undefined {
+  const entry = insightCache.get(key);
+  if (entry === undefined || !isCachedInsightFresh(entry)) return undefined;
+  return entry;
+}
+
+function cacheInsight(
+  key: string,
+  envelope: InsightEnvelope,
+  refreshIntervalMs: number,
+): InsightEnvelope {
+  const previous = readCachedInsight(key);
+  // A background rules read must never erase a still-valid AI result. This is
+  // the client-side counterpart of the server cache's configured expiry.
+  if (envelope.source === "rules" && previous?.envelope.source === "enhanced") {
+    return previous.envelope;
+  }
+  insightCache.set(key, {
+    envelope,
+    cachedAtMs: Date.now(),
+    refreshIntervalMs,
+  });
+  return envelope;
+}
+
+function requestPageInsight(
+  key: string,
+  input: Parameters<typeof getPageInsight>[0],
+  refreshIntervalMs: number,
+): Promise<InsightEnvelope> {
+  const existing = insightReads.get(key);
+  if (existing !== undefined) return existing;
+  const version = insightCacheVersion;
+  const request = getPageInsight(input).then((envelope) => {
+    if (version !== insightCacheVersion) return envelope;
+    return cacheInsight(
+      key,
+      envelope,
+      envelope.refreshIntervalMs ?? refreshIntervalMs,
+    );
+  });
+  insightReads.set(key, request);
+  void request.then(
+    () => {
+      if (insightReads.get(key) === request) insightReads.delete(key);
+    },
+    () => {
+      if (insightReads.get(key) === request) insightReads.delete(key);
+    },
+  );
+  return request;
+}
+
+function requestEnhancement(
+  key: string,
+  input: Parameters<typeof enhancePageInsight>[0],
+  refreshIntervalMs: number,
+): Promise<InsightEnvelope> {
+  const existing = insightEnhancements.get(key);
+  if (existing !== undefined) return existing;
+  const version = insightCacheVersion;
+  const request = enhancePageInsight(input).then((envelope) => {
+    if (version !== insightCacheVersion) return envelope;
+    return cacheInsight(
+      key,
+      envelope,
+      envelope.refreshIntervalMs ?? refreshIntervalMs,
+    );
+  });
+  insightEnhancements.set(key, request);
+  void request.then(
+    () => {
+      if (insightEnhancements.get(key) === request) {
+        insightEnhancements.delete(key);
+      }
+    },
+    () => {
+      if (insightEnhancements.get(key) === request) {
+        insightEnhancements.delete(key);
+      }
+    },
+  );
+  return request;
+}
+
+/** Clears renderer caches after settings/model changes or an explicit refresh. */
+export function clearPageInsightClientCache(): void {
+  insightCacheVersion += 1;
+  insightCache.clear();
+  insightReads.clear();
+  insightEnhancements.clear();
+}
 
 export interface PageInsightRefreshTimer {
   setInterval(callback: () => void, delayMs: number): number;
@@ -67,10 +194,11 @@ export interface PageInsightRefreshTimer {
 export function startPageInsightRefreshTimer(
   refresh: () => void | Promise<void>,
   timer: PageInsightRefreshTimer = window,
+  refreshIntervalMs = PAGE_INSIGHT_REFRESH_INTERVAL_MS,
 ): () => void {
   const handle = timer.setInterval(() => {
     void refresh();
-  }, PAGE_INSIGHT_REFRESH_INTERVAL_MS);
+  }, refreshIntervalMs);
   return () => timer.clearInterval(handle);
 }
 
@@ -135,28 +263,60 @@ export function usePageInsight(
       range || entityId ? ({ range, entityId } as InsightScope) : undefined,
     [range, entityId],
   );
+  const requestKey = useMemo(
+    () => insightRequestKey({ surfaceId, scope: scopeData, locale }),
+    [surfaceId, scopeData, locale],
+  );
 
   useEffect(() => {
     let cancelled = false;
     let refreshInFlight = false;
+    let stopRefreshTimer = () => {};
 
     const refreshEvidence = async (
       initial: boolean,
       showLoading = false,
     ): Promise<void> => {
       if (refreshInFlight) return;
+      if (!showLoading) {
+        const cached = readCachedInsight(requestKey);
+        if (cached !== undefined) {
+          setEnvelope(cached.envelope);
+          setLoading(false);
+          return;
+        }
+      }
       refreshInFlight = true;
       if (initial || showLoading) setLoading(true);
       setError(false);
+      const requestVersion = insightCacheVersion;
       try {
-        const next = await getPageInsight({
-          data: {
-            surfaceId,
-            locale,
-            scope: scopeData ?? {},
+        const refreshIntervalMs = PAGE_INSIGHT_REFRESH_INTERVAL_MS;
+        const next = await requestPageInsight(
+          requestKey,
+          {
+            data: {
+              surfaceId,
+              locale,
+              scope: scopeData ?? {},
+            },
           },
-        });
-        if (!cancelled) setEnvelope(next);
+          refreshIntervalMs,
+        );
+        if (!cancelled && requestVersion === insightCacheVersion) {
+          const resolved = cacheInsight(
+            requestKey,
+            next,
+            next.refreshIntervalMs ?? refreshIntervalMs,
+          );
+          setEnvelope(resolved);
+          stopRefreshTimer();
+          stopRefreshTimer = startPageInsightRefreshTimer(
+            () => refreshEvidence(false),
+            window,
+            resolved.refreshIntervalMs ?? refreshIntervalMs,
+          );
+        }
       } catch {
         if (!cancelled) setError(true);
       } finally {
@@ -165,15 +325,24 @@ export function usePageInsight(
       }
     };
 
-    void refreshEvidence(true);
-    const stopRefreshTimer = startPageInsightRefreshTimer(() =>
-      refreshEvidence(false),
-    );
+    const cached = readCachedInsight(requestKey);
+    if (cached !== undefined) {
+      setEnvelope(cached.envelope);
+      setLoading(false);
+      stopRefreshTimer = startPageInsightRefreshTimer(
+        () => refreshEvidence(false),
+        window,
+        cached.envelope.refreshIntervalMs ?? cached.refreshIntervalMs,
+      );
+    } else {
+      void refreshEvidence(true);
+    }
     const onModelProfileChanged = () => {
-      // A manual cache refresh must be allowed to retry immediately. The
-      // normal 60s guard prevents duplicate automatic requests, but keeping
-      // it here makes a failed tracker/chats insight look permanently stuck.
+      clearPageInsightClientCache();
+      // A manual cache refresh must be allowed to retry immediately.
       lastEnhanceAtRef.current = null;
+      stopRefreshTimer();
+      stopRefreshTimer = () => {};
       void refreshEvidence(false, true);
     };
     const refreshChannel =
@@ -192,10 +361,19 @@ export function usePageInsight(
       refreshChannel?.removeEventListener("message", onModelProfileChanged);
       refreshChannel?.close();
     };
-  }, [surfaceId, locale, scopeData]);
+  }, [surfaceId, locale, scopeData, requestKey]);
 
   useEffect(() => {
-    if (envelope?.autoEnhance !== true || envelope.source !== "rules") return;
+    // `status === "rules"` excludes "pending": a caller that lost a
+    // reservation to the batch must not re-fire its own enhance (the batch
+    // writes the cache when it finishes).
+    if (
+      envelope?.autoEnhance !== true ||
+      envelope.source !== "rules" ||
+      envelope.status !== "rules"
+    ) {
+      return;
+    }
     if (enhancingRef.current) return;
     // The rules envelope has already rendered. Queue auto enhancement in a
     // separate turn so the provider can never enter the first-paint path.
@@ -205,15 +383,21 @@ export function usePageInsight(
       lastEnhanceAtRef.current = now;
       enhancingRef.current = true;
       setEnhancing(true);
-      void enhancePageInsight({
-        data: {
-          surfaceId,
-          locale,
-          scope: scopeData ?? {},
-          reason: "auto",
+      const requestVersion = insightCacheVersion;
+      void requestEnhancement(
+        requestKey,
+        {
+          data: {
+            surfaceId,
+            locale,
+            scope: scopeData ?? {},
+            reason: "auto",
+          },
         },
-      })
+        envelope.refreshIntervalMs ?? PAGE_INSIGHT_REFRESH_INTERVAL_MS,
+      )
         .then((next) => {
+          if (requestVersion !== insightCacheVersion) return;
           setEnvelope((previous) =>
             previous?.source === "enhanced" && next.source === "rules"
               ? previous
@@ -221,6 +405,7 @@ export function usePageInsight(
           );
         })
         .catch(() => {
+          if (requestVersion !== insightCacheVersion) return;
           // Keep the rule lines visible, but expose a stable fallback status
           // when the browser cannot receive the server's failure envelope.
           setEnvelope((previous) =>
@@ -235,7 +420,7 @@ export function usePageInsight(
         });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [envelope, surfaceId, locale, scopeData]);
+  }, [envelope, surfaceId, locale, scopeData, requestKey]);
 
   const enhance = useCallback(
     async (reason: "manual" = "manual"): Promise<void> => {
@@ -246,14 +431,18 @@ export function usePageInsight(
       enhancingRef.current = true;
       setEnhancing(true);
       try {
-        const next = await enhancePageInsight({
-          data: {
-            surfaceId,
-            locale,
-            scope: scopeData ?? {},
-            reason,
+        const next = await requestEnhancement(
+          requestKey,
+          {
+            data: {
+              surfaceId,
+              locale,
+              scope: scopeData ?? {},
+              reason,
+            },
           },
-        });
+          envelope?.refreshIntervalMs ?? PAGE_INSIGHT_REFRESH_INTERVAL_MS,
+        );
         setEnvelope((previous) =>
           previous?.source === "enhanced" && next.source === "rules"
             ? previous
@@ -272,7 +461,7 @@ export function usePageInsight(
         setEnhancing(false);
       }
     },
-    [surfaceId, locale, scopeData],
+    [surfaceId, locale, scopeData, requestKey, envelope],
   );
 
   const lines = useMemo<ResolvedInsightLine[]>(() => {

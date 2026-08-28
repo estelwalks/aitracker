@@ -1,6 +1,6 @@
 {
   "name": "aitracker-desktop",
-  "version": "3.0.1",
+  "version": "1.0.0",
   "description": "AITracker local AI development asset dashboard",
   "private": true,
   "main": "build/electron/main.js",

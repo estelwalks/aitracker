@@ -53,15 +53,16 @@ test("stale 快照时首页立即渲染，不阻塞且无错误", async ({ page 
 
 /**
  * 2. Browser offline must not white-screen the app; exchange rates keep
- * rendering from the cache/built-in fallback (never "live" on the read path).
+ * rendering from the existing rate snapshot (never a required network read on
+ * the page path). A fresh snapshot may legitimately still be labelled live.
  *
  * Note: Playwright's offline emulation also blocks 127.0.0.1, so any SPA
  * navigation that runs a local server-fn loader would fail while offline.
  * The scenario therefore navigates to the settings page (which displays the
- * rate + "离线可用" hint) while online, then drops the network and asserts the
+ * rate/source row) while online, then drops the network and asserts the
  * already-rendered page keeps working — the read path never re-fetches rates.
  */
-test("离线时页面仍正常渲染，汇率回退内建值且无网络白屏", async ({
+test("离线时页面仍正常渲染，汇率快照可用且无网络白屏", async ({
   page,
   context,
 }) => {
@@ -79,11 +80,11 @@ test("离线时页面仍正常渲染，汇率回退内建值且无网络白屏",
     page.getByRole("heading", { name: "设置", exact: true }),
   ).toBeVisible();
 
-  // 断网后：已渲染的页面保持可用，汇率区以缓存/内置基准渲染并展示
-  // 「离线可用」提示（读路径从不联网）。
+  // 断网后：已渲染的页面保持可用，汇率区继续使用已有快照（缓存、内置
+  // 基准或此前的实时快照），读路径从不因断网而发起新的网络请求。
   await context.setOffline(true);
   await expect(page.getByText(/1 USD = /).first()).toBeVisible();
-  await expect(page.getByText("离线可用")).toBeVisible();
+  await expect(page.getByText(/实时|缓存|内置基准/).first()).toBeVisible();
   await expect(page.getByText("页面加载失败")).toHaveCount(0);
   await expect(page.locator("main")).toBeVisible();
 
@@ -103,7 +104,9 @@ test("多窗口 Widget 浮窗均正常渲染且无错误", async ({ page, contex
   });
   expect(response1?.status() ?? 0).toBeLessThan(400);
   await expect(page.getByText("页面加载失败")).toHaveCount(0);
-  await expect(page.locator("main")).toBeVisible();
+  // Float mode renders its own inner <main> inside the application shell;
+  // assert the shell landmark without triggering strict-mode ambiguity.
+  await expect(page.locator("main").first()).toBeVisible();
 
   // 第二个窗口（同一浏览器上下文，独立 renderer；init 脚本需单独挂载）。
   const page2 = await context.newPage();
@@ -115,7 +118,7 @@ test("多窗口 Widget 浮窗均正常渲染且无错误", async ({ page, contex
   });
   expect(response2?.status() ?? 0).toBeLessThan(400);
   await expect(page2.getByText("页面加载失败")).toHaveCount(0);
-  await expect(page2.locator("main")).toBeVisible();
+  await expect(page2.locator("main").first()).toBeVisible();
 
   await page.waitForTimeout(300);
   expect(pageErrors1, "widget 窗口1不应触发未捕获页面错误").toEqual([]);

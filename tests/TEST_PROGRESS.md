@@ -3,7 +3,7 @@
 | 属性     | 值                                          |
 | -------- | ------------------------------------------- |
 | 文档类型 | 测试进度记录 (TEST-PROGRESS)                |
-| 项目     | AITracker Desktop 3.0.1                    |
+| 项目     | AITracker Desktop 1.0.0                    |
 | 执行时间 | 2026-08-24（最终复测）                      |
 | 系统 URL | 本地临时 Vite URL（无登录）                 |
 | 测试目录 | `/Users/gerry/RedactedWorkspace/aitracker_webapp` |

@@ -12,6 +12,7 @@ import {
   type CompiledRegistry,
   type PlatformOs,
 } from "../../../lib/tool-registry/registry.ts";
+import { openReadOnlySqlite } from "../../../platform/database/infrastructure/sqlite-runtime.server.ts";
 import type {
   SessionTranscript,
   SessionTranscriptMessage,
@@ -41,6 +42,8 @@ export interface LoadSessionTranscriptInput {
 export interface TranscriptReaderOptions {
   /** Test seam: base home directory (defaults to `$AITRACKER_USAGE_HOME`/HOME). */
   homeDirectory?: string;
+  /** Test seam: platform used for registry path resolution. */
+  platform?: NodeJS.Platform;
   /** Test seam: registry used for session-plan and data-root resolution. */
   registry?: CompiledRegistry;
   /** Test seam: override resource caps (production uses scanner-parity defaults). */
@@ -136,9 +139,9 @@ function resolveHome(override: string | undefined): string {
   );
 }
 
-/** Map Node's `process.platform` to the registry's `PlatformOs`. */
-function currentPlatformOs(): PlatformOs {
-  switch (process.platform) {
+/** Map Node's platform value to the registry's `PlatformOs`. */
+function currentPlatformOs(platform: NodeJS.Platform): PlatformOs {
+  switch (platform) {
     case "darwin":
       return "macos";
     case "win32":
@@ -301,6 +304,12 @@ async function readJsonFile<T>(path: string): Promise<T | undefined> {
 }
 
 function parseTimestampMs(value: unknown): number {
+  if (typeof value === "bigint") {
+    if (value <= 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+    value = Number(value);
+  }
   if (typeof value === "number" && Number.isFinite(value)) {
     const normalized = value < 1e12 ? value * 1_000 : value;
     return normalized > 0 ? normalized : Number.MAX_SAFE_INTEGER;
@@ -631,6 +640,61 @@ async function readGrokTranscript(
   }
 }
 
+// ---------------------------------------------------------------------------
+// AiPy — platform app-data/aipy-pro/aipy (SQLite)
+// ---------------------------------------------------------------------------
+
+/**
+ * AiPy stores the visible conversation directly in `task_event`: USER rows
+ * are prompts, LLM rows are assistant replies, and optional LLM `reason`
+ * values contain thinking text. Other event types are execution metadata and
+ * must not be rendered as chat messages.
+ */
+async function readAipyTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const databasePath = join(root, "aipy");
+  const databaseSize = await readFileSize(databasePath);
+  if (databaseSize < 0 || databaseSize > limits.maxFileBytes) return;
+
+  let database: ReturnType<typeof openReadOnlySqlite> | undefined;
+  try {
+    database = openReadOnlySqlite(databasePath);
+    const rows = database.queryRows(
+      `SELECT type, content, reason, time
+       FROM task_event
+       WHERE task_id = ? AND type IN ('USER', 'LLM')
+       ORDER BY time ASC, rowid ASC
+       LIMIT ?`,
+      sessionId,
+      limits.maxRecordsPerFile,
+    );
+
+    for (const row of rows) {
+      if (out.length >= limits.maxMessages) break;
+      const type = stringValue(row.type);
+      const role =
+        type === "USER" ? "user" : type === "LLM" ? "assistant" : null;
+      if (role == null) continue;
+      pushMessage(
+        out,
+        role,
+        stringValue(row.content) ?? "",
+        role === "assistant" ? stringValue(row.reason) : undefined,
+        parseTimestampMs(row.time),
+        limits,
+      );
+    }
+  } catch {
+    // Missing/incompatible AiPy databases degrade to an empty transcript.
+  } finally {
+    database?.close();
+  }
+}
+
 /**
  * Load one session's transcript into memory (S-300). Returns an empty
  * transcript for unknown sources, unsafe ids, missing logs, or oversized
@@ -661,7 +725,7 @@ export async function loadSessionTranscript(
   const resolution = resolvePlatformPaths(
     input.source,
     "sessions",
-    currentPlatformOs(),
+    currentPlatformOs(options.platform ?? process.platform),
     process.env,
     registry,
   );
@@ -716,6 +780,8 @@ async function readSourceTranscript(
       return readCodexTranscript(root, sessionId, out, limits);
     case "grok-session-v1":
       return readGrokTranscript(root, sessionId, out, limits);
+    case "aipy-session-v1":
+      return readAipyTranscript(root, sessionId, out, limits);
     default:
       // Unknown reader — no transcript extraction implemented for it yet.
       return;

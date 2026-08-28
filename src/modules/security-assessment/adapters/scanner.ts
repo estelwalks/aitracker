@@ -51,11 +51,11 @@ export function assessmentFromSkillScannerReport(input: {
   const verdict: AssetAssessment["verdict"] =
     input.report.status === "partial" || input.report.verdict === "unknown"
       ? "unknown"
-      : input.report.verdict === "allow"
-        ? "clean"
-        : input.report.verdict === "warn"
+      : input.report.verdict === "block"
+        ? "dangerous"
+        : input.report.findings.length > 0 || input.report.verdict === "warn"
           ? "suspicious"
-          : "dangerous";
+          : "clean";
   return createAssetAssessment({
     assetRef: input.assetRef,
     assetKind: input.assetKind,

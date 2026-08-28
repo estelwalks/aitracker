@@ -27,7 +27,7 @@ export const insights = {
     sources: "Data sources",
     settings: "Model settings",
     tracker: "View burn leaderboard",
-    market: "Marketplace",
+    market: "Security Market",
     skills: "Skills",
     memory: "Memory",
   },
@@ -204,22 +204,22 @@ export const insights = {
         "{unassigned} Skills are not installed on any Agent.",
     },
     market: {
-      "market-installed": "{count} marketplace components installed.",
+      "market-installed": "{count} Security Market components installed.",
       "market-updates": "{count} components have updates — upgrade soon.",
       "market-scan-first":
         "Run a security scan before installing new components.",
       "market-review":
         "Review SKILL.md and version history before installing to avoid dead packages.",
       "market-guide-installs":
-        "{installed} marketplace Skills are currently installed.",
+        "{installed} Security Market Skills are currently installed.",
       "market-guide-updates":
-        "{updates} marketplace Skills have an available update.",
+        "{updates} Security Market Skills have an available update.",
       "market-guide-cache":
-        "The local marketplace cache contains {total} browsable entries.",
+        "The local Security Market cache contains {total} browsable entries.",
       "market-guide-review":
-        "{current} installed marketplace Skills currently have no pending update.",
+        "{current} installed Security Market Skills currently have no pending update.",
       "market-guide-install":
-        "The marketplace cache was fetched about {hours} hours ago.",
+        "The Security Market cache was fetched about {hours} hours ago.",
     },
     chats: {
       "chats-total": "{count} sessions collected.",

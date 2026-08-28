@@ -2,13 +2,41 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { brandParams } from "../lib/app-config";
-import { resolveLocaleFromSearch } from "../lib/i18n/locale";
-import type { Locale } from "../lib/i18n/locale";
+import {
+  normalizeCurrency,
+  resolveLocaleFromSearch,
+  resolveLocaleFromSearchParam,
+  type Currency,
+  type Locale,
+} from "../lib/i18n/locale";
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
 import type { SkillHubData } from "../modules/skill-distribution/presentation/SkillHubPage";
 
 /** 兼容拆分前的 `?tab=market` 直达链接：市场已迁至独立 /market 路由。 */
-type SkillsSearchParams = { tab?: "market" | "local" };
+type SkillsSearchParams = {
+  tab?: "market" | "local";
+  /** Directory/manifest identity used to pre-filter the local Skill list. */
+  skill?: string;
+  /** Preserved here so in-page filter updates do not discard i18n state. */
+  locale?: Locale;
+  currency?: Currency;
+};
+
+function safeSkillSearch(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const skill = value.trim();
+  if (
+    skill.length === 0 ||
+    skill.length > 160 ||
+    [...skill].some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code <= 31 || code === 127;
+    })
+  ) {
+    return undefined;
+  }
+  return skill;
+}
 
 interface SkillsLoader extends SkillHubData {
   readonly locale: Locale;
@@ -23,6 +51,9 @@ export const Route = createFileRoute("/skills")({
         : search.tab === "local"
           ? "local"
           : undefined,
+    skill: safeSkillSearch(search.skill),
+    locale: resolveLocaleFromSearchParam(search.locale) ?? undefined,
+    currency: normalizeCurrency(search.currency) ?? undefined,
   }),
   loaderDeps: ({ search }) => ({
     locale: resolveLocaleFromSearch(search as Record<string, unknown>),

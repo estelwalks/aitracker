@@ -56,6 +56,7 @@ export function reportView(report: SecurityScanReportDto): SecurityReportView {
     findings: report.findings,
     branches: report.branches,
     skippedFiles: report.skippedFiles,
+    tokenUsage: report.tokenUsage,
   };
 }
 

@@ -17,7 +17,11 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { APP_ICON_URL, APP_NAME } from "../lib/app-config";
+import {
+  APP_BRAND_ICON_DARK_URL,
+  APP_BRAND_ICON_LIGHT_URL,
+  APP_NAME,
+} from "../lib/app-config";
 import { useI18n } from "../lib/i18n/context";
 import type { MessageKey } from "../lib/i18n/messages";
 import { NativeTrayTitleSync } from "../modules/widget/presentation/NativeTrayTitleSync";
@@ -79,7 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onResize = () => {
       const width = window.innerWidth;
-      setCollapsed(width < 1024);
+      setCollapsed(width < 1120);
       setSidebarWidth(Math.round(Math.min(200, Math.max(168, width * 0.12))));
     };
     onResize();
@@ -110,10 +114,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "gap-2.5"}`}
           >
             <img
-              src={APP_ICON_URL}
+              src={APP_BRAND_ICON_DARK_URL}
               alt=""
               aria-hidden="true"
-              className="aitracker-brand-mark size-7 shrink-0 rounded-md object-cover"
+              className="aitracker-brand-mark aitracker-brand-mark-dark size-7 shrink-0 rounded-md object-cover"
+            />
+            <img
+              src={APP_BRAND_ICON_LIGHT_URL}
+              alt=""
+              aria-hidden="true"
+              className="aitracker-brand-mark aitracker-brand-mark-light size-7 shrink-0 rounded-md object-cover"
             />
             {!collapsed && (
               <div className="min-w-0 leading-tight">
@@ -231,7 +241,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           右侧开始铺开（left = railWidth），不覆盖侧边栏底部的「收起」按钮，
           否则收起后无法再点开侧边栏。 */}
         <div
-          className="fixed right-0 bottom-0 z-40 transition-[left] duration-200"
+          className="aitracker-privacy-dock fixed right-0 bottom-0 z-40 transition-[left] duration-200"
           style={{ left: railWidth }}
         >
           <PrivacyStrip />

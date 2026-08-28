@@ -23,14 +23,16 @@ export const errors = {
     symlinkEscape: "Escalation path or symlink detected",
     notManagedDir: "Target is not a managed Skill directory",
     recycleWriteFailed: "Failed to write to the recycle directory",
-    marketSymlinkForbidden: "Market Skill source must not be a symlink",
-    marketSourceNotDir: "Market Skill source must be a directory",
-    marketSourceSymlink: "Market Skill source must not contain symlinks",
-    invalidSourcePath: "Invalid market Skill source path",
+    marketSymlinkForbidden:
+      "Security Market Skill source must not be a symlink",
+    marketSourceNotDir: "Security Market Skill source must be a directory",
+    marketSourceSymlink:
+      "Security Market Skill source must not contain symlinks",
+    invalidSourcePath: "Invalid Security Market Skill source path",
     sourceOutsideTemp:
-      "Market Skill source is outside the controlled temp directory",
+      "Security Market Skill source is outside the controlled temp directory",
     marketRootNeedsSkillMd:
-      "Market Skill root must contain a regular SKILL.md file",
+      "Security Market Skill root must contain a regular SKILL.md file",
     unsupportedAgent: "Unsupported target agent",
     blacklisted: "This Skill is on the blacklist",
     copySymlinkForbidden: "Copying symlinks is not allowed",
@@ -105,13 +107,13 @@ export const errors = {
     rateRefreshFailed: "Exchange-rate refresh failed; please try again later",
   },
   market: {
-    fieldInvalid: "Invalid market field: {field}",
-    pagingFieldInvalid: "Invalid market paging field: {field}",
-    invalidSkill: "The market returned an invalid Skill record",
-    missingPaging: "The market response is missing paging info",
-    pagingRangeInvalid: "Invalid market paging range",
-    invalidFormat: "The market returned an invalid format",
-    queryInvalid: "Invalid market query",
+    fieldInvalid: "Invalid Security Market field: {field}",
+    pagingFieldInvalid: "Invalid Security Market paging field: {field}",
+    invalidSkill: "The Security Market returned an invalid Skill record",
+    missingPaging: "The Security Market response is missing paging info",
+    pagingRangeInvalid: "Invalid Security Market paging range",
+    invalidFormat: "The Security Market returned an invalid format",
+    queryInvalid: "Invalid Security Market query",
     pageNotPositive: "Page number must be a positive integer",
     limitRange: "Page size must be between 1 and 50",
     searchTooLong: "Search keyword must not exceed 100 characters",
@@ -124,9 +126,9 @@ export const errors = {
       unsupportedAgent: "Contains an unsupported agent",
     },
     api: {
-      http: "Market request failed (HTTP {status})",
+      http: "Security Market request failed (HTTP {status})",
       networkTimeout:
-        "Network unavailable: Skill market request timed out and no local cache exists",
+        "Network unavailable: Security Market request timed out and no local cache exists",
     },
     archive: {
       tarNumericField: "Download contains an invalid tar numeric field",

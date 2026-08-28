@@ -67,6 +67,44 @@ export interface GetInsightPreferencesInput {
   readonly surfaceId?: InsightSurfaceId;
 }
 
+export interface RefreshPageInsightSurfaceInput {
+  readonly surfaceId: InsightSurfaceId;
+}
+
+export interface RefreshPageInsightsInput {
+  readonly locale: Locale;
+}
+
+export interface GetPageInsightRefreshStatusInput {
+  readonly runId: string;
+}
+
+function parseRefreshPageInsightsInput(
+  input: unknown,
+): RefreshPageInsightsInput {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) {
+    throw new AppError("errors.generic");
+  }
+  const locale = (input as Record<string, unknown>).locale;
+  if (!(LOCALES as readonly unknown[]).includes(locale)) {
+    throw new AppError("errors.generic");
+  }
+  return { locale: locale as Locale };
+}
+
+function parseGetPageInsightRefreshStatusInput(
+  input: unknown,
+): GetPageInsightRefreshStatusInput {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) {
+    throw new AppError("errors.generic");
+  }
+  const runId = (input as Record<string, unknown>).runId;
+  if (typeof runId !== "string" || !ENTITY_ID_PATTERN.test(runId)) {
+    throw new AppError("errors.generic");
+  }
+  return { runId };
+}
+
 export function parseGetInsightPreferencesInput(
   input: unknown,
 ): GetInsightPreferencesInput {
@@ -86,6 +124,17 @@ function isSurfaceId(value: unknown): value is InsightSurfaceId {
     typeof value === "string" &&
     (INSIGHT_SURFACE_IDS as readonly string[]).includes(value)
   );
+}
+
+export function parseRefreshPageInsightSurfaceInput(
+  input: unknown,
+): RefreshPageInsightSurfaceInput {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) {
+    throw new AppError("errors.generic");
+  }
+  const surfaceId = (input as Record<string, unknown>).surfaceId;
+  if (!isSurfaceId(surfaceId)) throw new AppError("errors.generic");
+  return { surfaceId };
 }
 
 function parseScope(raw: unknown): InsightScope {
@@ -286,14 +335,34 @@ export const getInsightPreferences = createServerFn({ method: "GET" })
     };
   });
 
-export const refreshPageInsights = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ invalidated: number }> => {
+export const refreshPageInsights = createServerFn({ method: "POST" })
+  .validator(parseRefreshPageInsightsInput)
+  .handler(async ({ data }) => {
+    const { startPageInsightRefreshBatch } =
+      await import("./background-refresh.server.ts");
+    const result = await startPageInsightRefreshBatch(data.locale);
+    return { created: result.created, ...result.run };
+  });
+
+export const getPageInsightRefreshStatus = createServerFn({ method: "GET" })
+  .validator(parseGetPageInsightRefreshStatusInput)
+  .handler(async ({ data }) => {
+    const { getPageInsightRefreshBatch } =
+      await import("./background-refresh.server.ts");
+    const run = await getPageInsightRefreshBatch(data.runId);
+    if (!run) throw new AppError("errors.generic");
+    return run;
+  });
+
+/** Invalidates one surface without expiring unrelated page insight caches. */
+export const refreshPageInsightSurface = createServerFn({ method: "POST" })
+  .validator(parseRefreshPageInsightSurfaceInput)
+  .handler(async ({ data }): Promise<{ invalidated: number }> => {
     const { getCompositionRoot } =
       await import("../../../app/composition.server.ts");
     const store = (await getCompositionRoot()).database.features.insights;
-    return { invalidated: store.invalidateAll?.() ?? 0 };
-  },
-);
+    return { invalidated: store.invalidateSurface?.(data.surfaceId) ?? 0 };
+  });
 
 export const setInsightPreferences = createServerFn({ method: "POST" })
   .validator((input: unknown): SetInsightPreferencesInput =>

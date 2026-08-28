@@ -60,7 +60,10 @@ export function InsightCard({
   showSeverity = true,
   showRotate = true,
   showFallbackStatus = true,
+  showEmpty = false,
+  fallbackLines,
   actions,
+  actionsLayout = "stack",
 }: {
   readonly surfaceId: InsightSurfaceId;
   readonly scope?: InsightScope;
@@ -76,8 +79,14 @@ export function InsightCard({
   readonly showRotate?: boolean;
   /** Hide the fallback status on surfaces whose header should stay minimal. */
   readonly showFallbackStatus?: boolean;
+  /** Keep the titled card visible when the insight service has no data. */
+  readonly showEmpty?: boolean;
+  /** Optional local copy shown while the page insight service is unavailable. */
+  readonly fallbackLines?: readonly string[];
   /** Optional right-hand actions kept outside the shared insight copy. */
   readonly actions?: ReactNode;
+  /** Layout variant for the shared rotate control and right-hand actions. */
+  readonly actionsLayout?: "stack" | "rotate-left" | "title-row";
 }) {
   const { locale, t } = useI18n();
   const { lines, loading, envelope } = usePageInsight({
@@ -86,17 +95,26 @@ export function InsightCard({
     locale,
   });
 
-  if (loading && lines.length === 0) {
+  const renderedLines =
+    lines.length > 0
+      ? lines
+      : (fallbackLines ?? []).map((text, index) => ({
+          id: `fallback-${index}`,
+          text,
+          severity: "info" as const,
+        }));
+
+  if (loading && renderedLines.length === 0 && !showEmpty) {
     return <InsightSkeleton variant={variant} />;
   }
-  if (lines.length === 0) return null;
+  if (renderedLines.length === 0 && !showEmpty) return null;
 
-  const textLines = lines.map((line) => line.text);
+  const textLines = renderedLines.map((line) => line.text);
   // Neutral informational lines should not add a distracting “提示” pill;
   // reserve the badge for actionable attention/risk states.
   const topSeverity =
-    showSeverity && lines[0]?.severity !== "info"
-      ? lines[0]?.severity
+    showSeverity && renderedLines[0]?.severity !== "info"
+      ? renderedLines[0]?.severity
       : undefined;
   const fallbackStatusKey = envelope
     ? insightFallbackStatusLabel(envelope.status)
@@ -145,8 +163,10 @@ export function InsightCard({
       }
       source={envelope?.source}
       enhancedLabel={t("settings.insight.enhanced")}
+      showEmpty={showEmpty}
       pills={fallbackStatus}
       actions={actions}
+      actionsLayout={actionsLayout}
       dotsLabel={dotsLabel ?? t("insights.dots")}
       rotateLabel={showRotate ? (rotateLabel ?? t("insights.rotate")) : null}
       headingLevel={headingLevel}

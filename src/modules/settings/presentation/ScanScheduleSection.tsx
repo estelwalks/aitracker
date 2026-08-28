@@ -3,12 +3,13 @@ import { CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
 import { useI18n } from "../../../lib/i18n/context";
-import type {
-  SecurityClient,
-  SecurityScanCycle,
-  SecurityScanScheduleView,
-  SecurityScanScheduleStatusView,
-  SecurityScanScope,
+import {
+  resolveNextScheduledScanAt,
+  type SecurityClient,
+  type SecurityScanCycle,
+  type SecurityScanScheduleView,
+  type SecurityScanScheduleStatusView,
+  type SecurityScanScope,
 } from "../../security-assessment/index";
 import {
   Field,
@@ -68,6 +69,7 @@ export function ScanScheduleSection({
   const [agents, setAgents] = useState<readonly string[]>([]);
   const [scheduleStatus, setScheduleStatus] =
     useState<SecurityScanScheduleStatusView | null>(null);
+  const [timeDraft, setTimeDraft] = useState<string | null>(null);
 
   useEffect(() => {
     if (client == null) return;
@@ -78,6 +80,7 @@ export function ScanScheduleSection({
       .then(([next, nextStatus]) => {
         if (!cancelled) {
           setSchedule(next);
+          setTimeDraft(next.time);
           setScheduleStatus(nextStatus);
         }
       })
@@ -140,10 +143,16 @@ export function ScanScheduleSection({
     try {
       const saved = await client.setScanSchedule(next);
       setSchedule(saved);
+      if (previous == null || saved.time !== previous.time) {
+        setTimeDraft(saved.time);
+      }
       setScheduleStatus(await client.getScanScheduleStatus());
       toast.success(t("settings.security.schedule.saved"));
     } catch {
-      if (previous != null) setSchedule(previous);
+      if (previous != null) {
+        setSchedule(previous);
+        if (next.time !== previous.time) setTimeDraft(previous.time);
+      }
       toast.error(t("settings.security.schedule.saveFailed"));
     } finally {
       setSaving(false);
@@ -193,12 +202,16 @@ export function ScanScheduleSection({
               failed: lastRun.failedCount,
               skipped: lastRun.skippedCount,
             });
+    const effectiveNextRunAt = resolveNextScheduledScanAt(
+      schedule,
+      scheduleStatus,
+    );
     const nextRunDetail = !schedule.enabled
       ? t("settings.security.schedule.disabledStatus")
       : scheduleStatus?.pending
         ? t("settings.security.schedule.pending")
-        : scheduleStatus?.nextRunAt
-          ? format.formatDateTime(scheduleStatus.nextRunAt, false)
+        : effectiveNextRunAt
+          ? format.formatDateTime(effectiveNextRunAt, false)
           : t("common.loading");
     content = (
       <div>
@@ -231,10 +244,16 @@ export function ScanScheduleSection({
         <Field label={t("settings.security.schedule.time")}>
           <input
             type="time"
-            value={schedule.time}
-            onChange={(event) =>
-              void save({ ...schedule, time: event.target.value })
-            }
+            value={timeDraft ?? schedule.time}
+            onChange={(event) => setTimeDraft(event.target.value)}
+            onBlur={(event) => {
+              const time = event.currentTarget.value;
+              if (!/^\d{2}:\d{2}$/.test(time)) {
+                setTimeDraft(schedule.time);
+              } else if (time !== schedule.time) {
+                void save({ ...schedule, time });
+              }
+            }}
             disabled={disabled}
             className="security-config-input max-w-[9rem]"
           />

@@ -3,8 +3,7 @@ import {
   FileCode2,
   RotateCcw,
   ShieldCheck,
-  Sparkles,
-  TriangleAlert,
+  ShieldX,
   Wrench,
 } from "lucide-react";
 
@@ -18,11 +17,9 @@ import {
 } from "../../../../components/ui/dialog";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";
-import { useSecurityLlmReview } from "../use-security-llm-review";
-import type { SecurityLlmReviewConfidence } from "../../llm-review.contracts";
 import {
-  securityReportEvidenceState,
   severityCounts,
+  securityHistoryEntryHasDetectedRisk,
   skippedReasonCode,
   type SecurityBranchName,
   type SecurityBranchStatus,
@@ -30,22 +27,8 @@ import {
   type SecurityHistoryView,
   type SecuritySeverity,
   type SecuritySkippedReasonCode,
-  type SecurityVerdict,
+  type SecurityTokenUsageView,
 } from "../security-view";
-
-const verdictKeys: Record<SecurityVerdict, MessageKey> = {
-  allow: "security.center.verdict.allow",
-  warn: "security.center.verdict.warn",
-  block: "security.center.verdict.block",
-  unknown: "security.center.verdict.unknown",
-};
-
-const verdictClasses: Record<SecurityVerdict, string> = {
-  allow: "border-ok/30 bg-ok/10 text-ok",
-  warn: "border-warn/30 bg-warn/10 text-warn",
-  block: "border-danger/30 bg-danger/10 text-danger",
-  unknown: "border-border text-muted-foreground",
-};
 
 const branchNameKeys: Record<SecurityBranchName, MessageKey> = {
   static: "security.center.branch.static",
@@ -72,12 +55,6 @@ const severityLabelKeys: Record<SecuritySeverity, MessageKey> = {
   high: "security.center.severity.high",
   medium: "security.center.severity.medium",
   low: "security.center.severity.low",
-};
-
-const llmConfidenceKeys: Record<SecurityLlmReviewConfidence, MessageKey> = {
-  low: "security.center.llm.confidenceLow",
-  medium: "security.center.llm.confidenceMedium",
-  high: "security.center.llm.confidenceHigh",
 };
 
 const skipReasonKeys: Record<SecuritySkippedReasonCode, MessageKey> = {
@@ -112,10 +89,7 @@ export function SkillReportModal({
 }) {
   const { t } = useI18n();
   const report = entry.report;
-  const llm = useSecurityLlmReview(entry);
-  const evidenceState = securityReportEvidenceState(entry);
-  const incomplete = evidenceState === "incomplete";
-  const missingRiskDetails = evidenceState === "risk-details-unavailable";
+  const unsafe = securityHistoryEntryHasDetectedRisk(entry);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -127,16 +101,42 @@ export function SkillReportModal({
         </DialogHeader>
 
         {report == null ? (
-          <p className="px-5 py-12 text-center font-mono text-[12px] text-muted-foreground">
-            {t("security.center.history.noReport")}
-          </p>
+          <>
+            <div className="px-5 py-10 text-center">
+              <Wrench className="mx-auto size-8 text-warn" />
+              <p className="mt-3 text-[14px] font-semibold text-warn">
+                {t("security.center.status.failed")}
+              </p>
+              <p className="mt-2 font-mono text-[12px] text-muted-foreground">
+                {t("security.center.history.noReport")}
+              </p>
+              {entry.errorCode && (
+                <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">
+                  {t("security.center.result.errorUnavailable")}
+                </p>
+              )}
+            </div>
+            <DialogFooter className="border-t border-border/60 px-5 py-3">
+              {onRescan && (
+                <AITrackerButton
+                  variant="ghost"
+                  onClick={() => onRescan(entry)}
+                >
+                  <RotateCcw className="size-3.5" />
+                  {t("security.center.task.rescan")}
+                </AITrackerButton>
+              )}
+              <AITrackerButton onClick={onClose}>
+                {t("security.center.autoScan.close")}
+              </AITrackerButton>
+            </DialogFooter>
+          </>
         ) : (
           <>
             <div className="space-y-4 px-5 py-4">
               <ScoreHeader
                 score={report.riskScore}
-                verdict={report.verdict}
-                partial={incomplete}
+                unsafe={unsafe}
                 counts={severityCounts(report)}
                 dimensions={dimensions}
               />
@@ -144,26 +144,36 @@ export function SkillReportModal({
               {report.findings.length === 0 ? (
                 <div
                   className={`flex items-center justify-center gap-2 py-8 font-mono text-[12px] ${
-                    incomplete || missingRiskDetails
-                      ? "text-amber-500"
-                      : "text-muted-foreground"
+                    unsafe ? "text-danger" : "text-muted-foreground"
                   }`}
                 >
-                  {incomplete || missingRiskDetails ? (
-                    <TriangleAlert className="size-4" />
+                  {unsafe ? (
+                    <ShieldX className="size-4" />
                   ) : (
                     <ShieldCheck className="size-4 text-ok" />
                   )}
-                  {incomplete
-                    ? t("security.center.result.incompleteNoFindings")
-                    : missingRiskDetails
-                      ? t("security.center.result.riskDetailsUnavailable")
-                      : t("security.center.result.noFindings")}
+                  {unsafe
+                    ? t("security.center.result.riskDetailsUnavailable")
+                    : t("security.center.result.noFindings")}
                 </div>
               ) : (
                 <div className="space-y-3">
                   {report.findings.map((finding) => (
-                    <FindingCard key={finding.id} finding={finding} />
+                    <FindingCard
+                      key={finding.id}
+                      finding={finding}
+                      llmReviewed={
+                        finding.source === "static" &&
+                        finding.bypassVerification !== true &&
+                        report.branches.some(
+                          (branch) =>
+                            branch.name === "ruleReview" &&
+                            branch.status === "complete",
+                        ) &&
+                        (report.tokenUsage?.byBranch.ruleReview?.requestCount ??
+                          0) > 0
+                      }
+                    />
                   ))}
                 </div>
               )}
@@ -179,74 +189,8 @@ export function SkillReportModal({
                 </section>
               )}
 
-              {(llm.review != null || llm.canRequest || llm.degraded) && (
-                <section className="rounded-xl bg-surface px-4 py-4 ring-1 ring-border/50">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-mono text-[10.5px] font-semibold text-muted-foreground uppercase">
-                      {t("security.center.llm.title")}
-                    </h4>
-                    <span className="rounded-sm border border-border px-1.5 py-px font-mono text-[10px] text-muted-foreground">
-                      {t("security.center.llm.disclaimer")}
-                    </span>
-                  </div>
-
-                  {llm.review == null ? (
-                    <div className="mt-2.5 space-y-2">
-                      {llm.degraded && (
-                        <p className="text-[12px] text-muted-foreground">
-                          {t("security.center.llm.failed")}
-                        </p>
-                      )}
-                      <AITrackerButton
-                        variant="ghost"
-                        size="sm"
-                        onClick={llm.request}
-                        disabled={llm.loading || !llm.canRequest}
-                      >
-                        <Sparkles className="size-3.5" />
-                        {llm.loading
-                          ? t("security.center.llm.loading")
-                          : t("security.center.llm.trigger")}
-                      </AITrackerButton>
-                    </div>
-                  ) : (
-                    <div className="mt-2.5 space-y-2.5">
-                      <p className="text-[12.5px] leading-relaxed">
-                        {llm.review.summary}
-                      </p>
-                      {llm.review.dimensions.length > 0 && (
-                        <ul className="space-y-1.5">
-                          {llm.review.dimensions.map((dimension) => (
-                            <li
-                              key={dimension.kind}
-                              className="flex items-start gap-2"
-                            >
-                              <span className="mt-0.5 shrink-0 rounded-sm bg-surface-2 px-1.5 py-px font-mono text-[10px] text-muted-foreground">
-                                {dimension.kind}
-                              </span>
-                              <span className="text-[12px] leading-relaxed">
-                                {dimension.analysis}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-muted-foreground">
-                        <span>
-                          {t("security.center.llm.confidence")}:{" "}
-                          {t(llmConfidenceKeys[llm.review.confidence])}
-                        </span>
-                        {llm.review.modelLabel && (
-                          <span>
-                            {t("security.center.llm.modelLabel", {
-                              label: llm.review.modelLabel,
-                            })}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </section>
+              {report.tokenUsage && (
+                <TokenUsageSection usage={report.tokenUsage} />
               )}
 
               {report.branches.length > 0 && (
@@ -334,14 +278,12 @@ export function SkillReportModal({
 
 function ScoreHeader({
   score,
-  verdict,
-  partial,
+  unsafe,
   counts,
   dimensions,
 }: {
   score: number;
-  verdict: SecurityVerdict;
-  partial: boolean;
+  unsafe: boolean;
   counts: Record<SecuritySeverity, number>;
   dimensions: number;
 }) {
@@ -366,15 +308,18 @@ function ScoreHeader({
         </div>
       </div>
       <span
-        className={`rounded-sm border px-1.5 py-px text-[10px] ${verdictClasses[verdict]}`}
+        className={`rounded-sm border px-1.5 py-px text-[10px] ${
+          unsafe
+            ? "border-danger/30 bg-danger/10 text-danger"
+            : "border-ok/30 bg-ok/10 text-ok"
+        }`}
       >
-        {t(verdictKeys[verdict])}
+        {t(
+          unsafe
+            ? "security.center.history.unsafe"
+            : "security.center.history.safe",
+        )}
       </span>
-      {partial && (
-        <span className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-[10px] text-amber-500">
-          {t("security.center.result.statusPartial")}
-        </span>
-      )}
       <div className="ml-auto flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground">
         {severityLabels.map((severity) => (
           <span key={severity} className="inline-flex items-center gap-1.5">
@@ -395,7 +340,13 @@ function ScoreHeader({
   );
 }
 
-function FindingCard({ finding }: { finding: SecurityFindingView }) {
+function FindingCard({
+  finding,
+  llmReviewed,
+}: {
+  finding: SecurityFindingView;
+  llmReviewed: boolean;
+}) {
   const { t } = useI18n();
   const f = finding;
   return (
@@ -410,9 +361,6 @@ function FindingCard({ finding }: { finding: SecurityFindingView }) {
         <span className="text-[13px] font-semibold">{f.ruleName}</span>
         <span className="text-[12px] text-muted-foreground">
           {f.kindDisplay}
-        </span>
-        <span className="font-mono text-[10px] text-muted-foreground/80">
-          {f.id}
         </span>
       </div>
       <dl className="mt-3 space-y-2.5">
@@ -434,6 +382,50 @@ function FindingCard({ finding }: { finding: SecurityFindingView }) {
               : ""}
           </dd>
         </DefRow>
+        <DefRow label={t("security.center.reportModal.forensics")}>
+          <dd className="mt-1.5 grid gap-2 sm:grid-cols-2">
+            <EvidenceField
+              label={t("security.center.reportModal.findingId")}
+              value={f.id}
+            />
+            <EvidenceField
+              label={t("security.center.reportModal.source")}
+              value={t(
+                f.source === "model"
+                  ? "security.center.reportModal.sourceModel"
+                  : llmReviewed
+                    ? "security.center.reportModal.sourceStaticAndModel"
+                    : "security.center.reportModal.sourceStatic",
+              )}
+            />
+            {f.ruleId && (
+              <EvidenceField
+                label={t("security.center.reportModal.ruleId")}
+                value={f.ruleId}
+              />
+            )}
+            {f.cweId && (
+              <EvidenceField
+                label={t("security.center.reportModal.cweId")}
+                value={f.cweId}
+              />
+            )}
+            {f.fileHash && (
+              <EvidenceField
+                label={t("security.center.reportModal.fileHash")}
+                value={f.fileHash}
+                wide
+              />
+            )}
+          </dd>
+        </DefRow>
+        {f.reasoning && (
+          <DefRow label={t("security.center.reportModal.reasoning")}>
+            <dd className="mt-0.5 text-[12.5px] leading-relaxed">
+              {f.reasoning}
+            </dd>
+          </DefRow>
+        )}
         {f.excerpt && (
           <DefRow label={t("security.center.reportModal.code")}>
             <dd className="mt-1 overflow-x-auto rounded-sm border border-border bg-surface-2/50 px-3 py-2">
@@ -445,6 +437,78 @@ function FindingCard({ finding }: { finding: SecurityFindingView }) {
         )}
       </dl>
     </article>
+  );
+}
+
+function EvidenceField({
+  label,
+  value,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+}) {
+  return (
+    <div
+      className={`min-w-0 rounded-lg bg-surface-2/60 px-3 py-2 ${
+        wide ? "sm:col-span-2" : ""
+      }`}
+    >
+      <div className="font-mono text-[9.5px] text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-0.5 break-all font-mono text-[11px]">{value}</div>
+    </div>
+  );
+}
+
+function TokenUsageSection({ usage }: { usage: SecurityTokenUsageView }) {
+  const { t, format } = useI18n();
+  const metrics = [
+    ["requests", usage.requestCount],
+    ["inputTokens", usage.inputTokens],
+    ["outputTokens", usage.outputTokens],
+    ["totalTokens", usage.totalTokens],
+    ["cachedTokens", usage.cachedInputTokens],
+  ] as const;
+  const statusKey =
+    `security.center.reportModal.tokenStatus.${usage.status}` as MessageKey;
+  return (
+    <section className="rounded-xl bg-surface px-4 py-4 ring-1 ring-border/50">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="font-mono text-[10.5px] font-semibold text-muted-foreground uppercase">
+          {t("security.center.reportModal.tokenUsage")}
+        </h4>
+        <span className="rounded-sm border border-border px-1.5 py-px font-mono text-[10px] text-muted-foreground">
+          {t(statusKey)}
+        </span>
+      </div>
+      <dl className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {metrics.map(([key, value]) => (
+          <div key={key} className="rounded-lg bg-surface-2/60 px-3 py-2">
+            <dt className="font-mono text-[9.5px] text-muted-foreground">
+              {t(`security.center.reportModal.${key}` as MessageKey)}
+            </dt>
+            <dd className="aitracker-num mt-0.5 text-[13px] font-semibold">
+              {format.formatNumber(value)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {Object.keys(usage.byModel).length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {Object.entries(usage.byModel).map(([model, modelUsage]) => (
+            <span
+              key={model}
+              className="rounded-md bg-surface-2 px-2 py-1 font-mono text-[10px] text-muted-foreground"
+            >
+              {model} · {format.formatNumber(modelUsage.totalTokens)} token
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

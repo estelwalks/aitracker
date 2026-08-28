@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   type CSSProperties,
   useCallback,
@@ -13,8 +13,8 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   RefreshCw,
-  ShieldBan,
   Trash2,
   Zap,
 } from "lucide-react";
@@ -29,13 +29,13 @@ import {
 } from "../../../components/aitracker";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
+import { STANDARD_PAGE_SIZE } from "../../../lib/pagination";
 import type { AgentUsageOverviewReadModel } from "../usage-overview-contracts";
 import {
   refreshSkillSnapshot,
   requestApprovedBatchUninstall,
   requestApprovedSkillInstall,
   requestApprovedSkillUninstall,
-  updateSkillBlacklist,
   type LocalSkill,
   type SkillAgent,
   type SkillForm,
@@ -44,19 +44,28 @@ import {
 } from "../query";
 import {
   buildSkillWorkspace,
+  primarySkillDirectoryName,
   querySkillAssets,
-  type AssetSourceFilter,
   type SkillAssetView,
 } from "../application";
 import { type SkillCardSecurity, SkillListRow } from "./SkillListRow.tsx";
 import { SkillDetailModal } from "./SkillDetailModal.tsx";
-import { SkillSecurityModal } from "./SkillSecurityModal.tsx";
+import { findSecurityTargetForSkill } from "./security-target.ts";
+import { withSkillSearch } from "./skills-search.ts";
 import { SyncTargetModal } from "./SyncTargetModal.tsx";
 import { ToolOverview } from "./ToolOverview";
-import type { SecuritySkillVerdictReadModel } from "../../security-assessment/index.ts";
+import {
+  getBrowserSecurityClient,
+  getDesktopSecurityClient,
+  isScanActive,
+  type SecuritySkillVerdictReadModel,
+} from "../../security-assessment/index.ts";
+import { SECURITY_SCAN_STARTED_EVENT } from "../../security-assessment/events";
 
 export type SkillsPageProps = {
   initial: SkillWorkspaceSnapshot;
+  /** Optional route-provided Skill identity used to initialize the filter. */
+  initialQuery?: string;
   /** Compact agent-overview projection; never raw events (P1-T1-06/07). */
   usage?: AgentUsageOverviewReadModel;
   showWorkspace?: boolean;
@@ -78,15 +87,14 @@ export interface SkillsDistillationView {
   readonly waiting: number;
 }
 
-const PAGE_SIZE = 12;
-
 type SyncTargetState = { title: string; skills: LocalSkill[] };
 type RemoveTargetState = { title: string; skills: LocalSkill[] };
 type SkillCategoryFilter =
-  "all" | "workflow" | "prompt" | "distilled" | "market";
+  "all" | "workflow" | "prompt" | "distilled" | "market" | "other";
 
 export function SkillsPage({
   initial,
+  initialQuery,
   usage,
   showWorkspace = true,
   showToolOverview = true,
@@ -95,11 +103,14 @@ export function SkillsPage({
   distillation,
 }: SkillsPageProps) {
   const { t, format } = useI18n();
+  const navigate = useNavigate({ from: "/skills" });
   const [snapshot, setSnapshot] = useState<SkillSnapshot>(initial.snapshot);
   const [workspace, setWorkspace] = useState(initial.workspace);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => initialQuery?.trim() ?? "");
   const [agent, setAgent] = useState<"all" | SkillAgent>("all");
-  const [source, setSource] = useState<AssetSourceFilter>("all");
+  const [originFilter, setOriginFilter] = useState<
+    "all" | "distilled" | "market" | "other"
+  >("all");
   const [form, setForm] = useState<"all" | SkillForm>("all");
   const [sourceLabel, setSourceLabel] = useState("all");
   const [page, setPage] = useState(1);
@@ -112,20 +123,36 @@ export function SkillsPage({
   >({});
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null);
   const [syncTarget, setSyncTarget] = useState<SyncTargetState | null>(null);
-  const [securityTarget, setSecurityTarget] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<RemoveTargetState | null>(
     null,
   );
-  const [blacklistTarget, setBlacklistTarget] = useState<LocalSkill | null>(
-    null,
-  );
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const snapshotRef = useRef(snapshot);
+  const directoryNameRefreshRequestedRef = useRef(false);
 
   useEffect(() => {
     snapshotRef.current = snapshot;
   }, [snapshot]);
+
+  useEffect(() => {
+    setQuery(initialQuery?.trim() ?? "");
+    setPage(1);
+  }, [initialQuery]);
+
+  const updateQuery = useCallback(
+    (value: string) => {
+      setQuery(value);
+      setPage(1);
+      void navigate({
+        to: "/skills",
+        search: (previous) => withSkillSearch(previous, value),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
 
   const refresh = useCallback(async (message?: string) => {
     // 安装/卸载/同步后强制重新扫描，避免读到操作前的快照缓存。
@@ -135,6 +162,24 @@ export function SkillsPage({
     setWorkspace(buildSkillWorkspace(next));
     if (message) toast.success(message);
   }, []);
+
+  // Older persisted snapshots predate the safe directory-name projection.
+  // Refresh them once in the background so existing installations stop
+  // falling back to the frontmatter `name` after the schema migration. A
+  // short-lived buggy projection also persisted that same frontmatter name as
+  // `directoryName`, so equal values are treated as stale as well.
+  useEffect(() => {
+    const needsDirectoryNames = snapshot.skills.some((skill) =>
+      skill.installations.some((installation) => {
+        const directoryName = installation.directoryName?.trim();
+        return !directoryName || directoryName === skill.name;
+      }),
+    );
+    if (!needsDirectoryNames || directoryNameRefreshRequestedRef.current)
+      return;
+    directoryNameRefreshRequestedRef.current = true;
+    void refresh().catch(() => {});
+  }, [refresh, snapshot.skills]);
 
   const rescan = async () => {
     setBusy(true);
@@ -174,7 +219,7 @@ export function SkillsPage({
   // Reset to first page when filters change.
   useEffect(() => {
     setPage(1);
-  }, [query, agent, source, sourceLabel]);
+  }, [agent, form, originFilter, query, sourceLabel]);
 
   // --- Derived data ---
 
@@ -218,21 +263,23 @@ export function SkillsPage({
 
   const summary = workspace.summary;
 
-  // 原型对齐：origin 分段 tab 计数（全部/蒸馏/外部/其他）。蒸馏 = 无 source
-  // 元数据的 skill（saveCandidateAsSkill 只写 name/description frontmatter），
-  // 外部 = market，其他 = frontmatter（与原型 all - distilled - external 一致）。
+  // 原型对齐：origin 分段 tab 计数（全部/蒸馏/外部/其他）。
+  // 没有 source 的安装只代表“来源未声明”（常见于用户手动安装），不能
+  // 推断为蒸馏产物；只有保存流程写入的显式 provenance 才计入蒸馏。
   const originCounts = useMemo(() => {
-    const map = new Map(
-      workspace.facets.sources.map((facet) => [facet.value, facet.count]),
-    );
-    const distilled = map.get("unknown") ?? 0;
-    const external = map.get("market") ?? 0;
+    const external = workspace.items.filter((item) =>
+      item.sourceKinds.includes("market"),
+    ).length;
+    const distilled = workspace.items.filter((item) => item.isDistilled).length;
     const total = workspace.summary.skillCount;
+    const other = workspace.items.filter(
+      (item) => !item.isDistilled && !item.sourceKinds.includes("market"),
+    ).length;
     return {
       total,
       distilled,
       external,
-      other: Math.max(0, total - distilled - external),
+      other,
     };
   }, [workspace]);
 
@@ -250,15 +297,17 @@ export function SkillsPage({
   }, [workspace]);
 
   const categoryFilter: SkillCategoryFilter =
-    source === "unknown"
+    originFilter === "distilled"
       ? "distilled"
-      : source === "market"
+      : originFilter === "market"
         ? "market"
-        : form === "workflow"
-          ? "workflow"
-          : form === "prompt"
-            ? "prompt"
-            : "all";
+        : originFilter === "other"
+          ? "other"
+          : form === "workflow"
+            ? "workflow"
+            : form === "prompt"
+              ? "prompt"
+              : "all";
 
   const securitySummary = security
     ? {
@@ -280,19 +329,28 @@ export function SkillsPage({
     const filtered = querySkillAssets(snapshot, {
       text: query,
       agent,
-      source,
+      source: originFilter === "market" ? "market" : "all",
       form,
       updateStatus: "all",
       sort: "name",
       direction: "asc",
     });
-    if (sourceLabel === "all") return filtered;
-    return filtered.filter((skill) =>
+    const originFiltered =
+      originFilter === "distilled"
+        ? filtered.filter((skill) => skill.isDistilled)
+        : originFilter === "other"
+          ? filtered.filter(
+              (skill) =>
+                !skill.isDistilled && !skill.sourceKinds.includes("market"),
+            )
+          : filtered;
+    if (sourceLabel === "all") return originFiltered;
+    return originFiltered.filter((skill) =>
       skill.installations.some(
         (installation) => installation.source?.label === sourceLabel,
       ),
     );
-  }, [agent, form, query, snapshot, source, sourceLabel]);
+  }, [agent, form, originFilter, query, snapshot, sourceLabel]);
 
   // Distinct source labels for the fine-grained source dropdown.
   const sourceOptions = useMemo(() => {
@@ -337,10 +395,14 @@ export function SkillsPage({
     [allAssets, detectedAgents],
   );
 
-  const totalPages = Math.max(1, Math.ceil(assets.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(assets.length / STANDARD_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paged = useMemo(
-    () => assets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    () =>
+      assets.slice(
+        (currentPage - 1) * STANDARD_PAGE_SIZE,
+        currentPage * STANDARD_PAGE_SIZE,
+      ),
     [assets, currentPage],
   );
 
@@ -384,11 +446,51 @@ export function SkillsPage({
 
   // --- Uninstall ---
 
-  const openUninstall = (skill: LocalSkill) =>
+  const openUninstall = (skill: LocalSkill) => {
+    setRemoveError(null);
     setRemoveTarget({ title: skill.name, skills: [skill] });
+  };
+
+  const startSkillSecurityScan = useCallback(
+    async (skill: LocalSkill) => {
+      try {
+        const client =
+          getDesktopSecurityClient() ?? (await getBrowserSecurityClient());
+        if (client == null) {
+          toast.error(t("common.error"));
+          return false;
+        }
+        const status = await client.getStatus();
+        if (isScanActive(status.status)) return true;
+        const target = findSecurityTargetForSkill(
+          skill,
+          await client.listSkills(),
+        );
+        const next = await client.startScan({
+          scope: "single",
+          mode: "quick",
+          trigger: "manual",
+          ...(target
+            ? { skillRef: target.skillRef as `skill:${string}` }
+            : { skillName: primarySkillDirectoryName(skill) }),
+        });
+        window.dispatchEvent(new Event(SECURITY_SCAN_STARTED_EVENT));
+        if (next.status === "model-required") {
+          toast.warning(t("security.center.model.requiredSettings"));
+        }
+        return true;
+      } catch (error) {
+        const ui = toUiError(error);
+        toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
+        return false;
+      }
+    },
+    [t],
+  );
 
   const openBatchUninstall = () => {
     if (checkedSkills.length === 0) return;
+    setRemoveError(null);
     setRemoveTarget({
       title: t("skills.batch.selectedCount", {
         count: format.formatNumber(checkedSkills.length),
@@ -400,27 +502,54 @@ export function SkillsPage({
   const confirmUninstall = async () => {
     if (!removeTarget) return;
     const target = removeTarget;
-    setRemoveTarget(null);
+    setRemoveError(null);
     setBusy(true);
     busyRef.current = true;
     try {
       if (target.skills.length === 1) {
         const uninstalledId = target.skills[0].id;
-        for (const installation of target.skills[0].installations) {
-          await requestApprovedSkillUninstall({
-            data: {
-              confirmed: true,
-              installationRef: installation.installationRef,
-            },
+        const installationRefs = target.skills[0].installations.map(
+          (installation) => installation.installationRef,
+        );
+        if (installationRefs.length === 0) {
+          setRemoveTarget(null);
+          toast.success(t("skills.toast.nothingToUninstall"));
+        } else {
+          // Resolve all refs against one fresh snapshot before removing any
+          // copy. Resolving one-by-one would shift index-based opaque refs
+          // after the first installation is moved to the recycle bin.
+          const result = await requestApprovedBatchUninstall({
+            data: { confirmed: true, installationRefs },
           });
+          setCheckedIds(new Set());
+          setDetailSkillId((current) =>
+            current === uninstalledId ? null : current,
+          );
+          setRemoveTarget(null);
+          await refresh();
+          if (result.failed.length === 0) {
+            toast.success(
+              t("skills.toast.deleted", { name: target.skills[0].name }),
+            );
+          } else {
+            toast.error(
+              t("skills.toast.uninstallFailed", {
+                count: format.formatNumber(result.failed.length),
+                details: result.failed
+                  .map((failure) =>
+                    t("skills.toast.uninstallFailedItem", {
+                      path: failure.installationRef,
+                      error: t(
+                        failure.errorCode ?? "errors.generic",
+                        failure.errorParams,
+                      ),
+                    }),
+                  )
+                  .join(t("skills.toast.uninstallFailedSeparator")),
+              }),
+            );
+          }
         }
-        // 卸载后如果详情弹窗正显示该 skill，直接关闭，避免残留已删除的详情。
-        setDetailSkillId((current) =>
-          current === uninstalledId ? null : current,
-        );
-        await refresh(
-          t("skills.toast.deleted", { name: target.skills[0].name }),
-        );
       } else {
         const installationRefs = [
           ...new Set(
@@ -431,10 +560,12 @@ export function SkillsPage({
         ];
         if (installationRefs.length === 0) {
           toast.success(t("skills.toast.nothingToUninstall"));
+          setRemoveTarget(null);
         } else {
           const result = await requestApprovedBatchUninstall({
             data: { confirmed: true, installationRefs },
           });
+          setRemoveTarget(null);
           setCheckedIds(new Set());
           await refresh();
           if (result.succeeded.length > 0) {
@@ -463,7 +594,9 @@ export function SkillsPage({
       }
     } catch (error) {
       const ui = toUiError(error);
-      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
+      const message = ui ? t(ui.code, ui.params) : t("common.error");
+      setRemoveError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
       busyRef.current = false;
@@ -536,8 +669,8 @@ export function SkillsPage({
   };
 
   const rangeStart =
-    assets.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, assets.length);
+    assets.length === 0 ? 0 : (currentPage - 1) * STANDARD_PAGE_SIZE + 1;
+  const rangeEnd = Math.min(currentPage * STANDARD_PAGE_SIZE, assets.length);
 
   return (
     <div className="space-y-4">
@@ -616,10 +749,7 @@ export function SkillsPage({
             <div className="aitracker-panel flex flex-wrap items-center gap-2 p-2">
               <SearchInput
                 value={query}
-                onChange={(value) => {
-                  setQuery(value);
-                  setPage(1);
-                }}
+                onChange={updateQuery}
                 placeholder={t("skills.searchPlaceholder")}
                 ariaLabel={t("skills.searchPlaceholder")}
                 className="min-w-0 flex-1"
@@ -647,17 +777,29 @@ export function SkillsPage({
                     v: "market" as const,
                     label: `${t("skills.filter.securityMarket")} ${originCounts.external}`,
                   },
+                  {
+                    v: "other" as const,
+                    label: `${t("skills.origin.other")} ${originCounts.other}`,
+                  },
                 ].map((option) => (
                   <button
                     key={option.v}
                     type="button"
+                    disabled={
+                      option.v === "distilled" && originCounts.distilled === 0
+                    }
                     onClick={() => {
-                      setSource(
-                        option.v === "distilled"
-                          ? "unknown"
-                          : option.v === "market"
-                            ? "market"
-                            : "all",
+                      if (
+                        option.v === "distilled" &&
+                        originCounts.distilled === 0
+                      )
+                        return;
+                      setOriginFilter(
+                        option.v === "distilled" ||
+                          option.v === "market" ||
+                          option.v === "other"
+                          ? option.v
+                          : "all",
                       );
                       setForm(
                         option.v === "workflow"
@@ -961,24 +1103,17 @@ export function SkillsPage({
                 })
               }
               onInstalled={() => void refresh()}
-              onRemove={() => openUninstall(detailSkill)}
-              onOpenSecurity={() => {
-                const name = detailSkill.name;
+              onRemove={() => {
                 setDetailSkillId(null);
-                setSecurityTarget(name);
+                openUninstall(detailSkill);
               }}
-              onToggleBlacklist={() => {
-                if (isBlocked) {
-                  void run(
-                    () =>
-                      updateSkillBlacklist({
-                        data: { name: detailSkill.name, blocked: false },
-                      }),
-                    t("skills.toast.unblocked"),
-                  );
-                } else {
-                  setBlacklistTarget(detailSkill);
-                }
+              onOpenSecurity={() => {
+                void (async () => {
+                  const started = await startSkillSecurityScan(detailSkill);
+                  if (!started) return;
+                  setDetailSkillId(null);
+                  await navigate({ to: "/security" });
+                })();
               }}
             />
           )}
@@ -994,85 +1129,77 @@ export function SkillsPage({
             />
           )}
 
-          {/* Real security history for one skill */}
-          {securityTarget && (
-            <SkillSecurityModal
-              skillName={securityTarget}
-              onClose={() => setSecurityTarget(null)}
-            />
-          )}
-
           {/* Uninstall confirmation */}
           {removeTarget && (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-              <div className="aitracker-panel w-full max-w-md bg-popover p-0">
-                <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium">
-                  <AlertTriangle className="size-4 text-danger" />
-                  {t("skills.uninstall.title")}
+            <div
+              className="fixed inset-0 z-[70] flex items-center justify-center bg-background/75 p-4 backdrop-blur-md"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="skill-uninstall-title"
+            >
+              <div className="w-full max-w-[440px] overflow-hidden rounded-2xl border border-danger/25 bg-card shadow-2xl shadow-black/30">
+                <div className="border-b border-border/70 px-5 py-5">
+                  <div className="flex items-start gap-3.5">
+                    <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-danger/10 text-danger ring-1 ring-danger/20">
+                      <AlertTriangle className="size-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <h2
+                        id="skill-uninstall-title"
+                        className="mt-1 text-[17px] font-semibold tracking-tight"
+                      >
+                        {t("skills.uninstall.title")}
+                      </h2>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2 p-4 text-[13px]">
-                  <p>
-                    {removeTarget.skills.length === 1
-                      ? t("skills.uninstall.singleDesc", {
-                          name: removeTarget.skills[0].name,
-                        })
-                      : t("skills.uninstall.batchDesc", {
-                          count: format.formatNumber(
-                            removeTarget.skills.length,
-                          ),
-                        })}
-                  </p>
-                  <p className="text-[12px] text-danger">
-                    {t("skills.uninstall.irreversible")}
-                  </p>
-                </div>
-                <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-                  <AITrackerButton onClick={() => setRemoveTarget(null)}>
-                    {t("common.cancel")}
-                  </AITrackerButton>
-                  <AITrackerButton
-                    variant="danger"
-                    onClick={() => void confirmUninstall()}
-                  >
-                    {t("skills.uninstall.confirm")}
-                  </AITrackerButton>
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* Blacklist confirmation */}
-          {blacklistTarget && (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-              <div className="aitracker-panel w-full max-w-md bg-popover p-0">
-                <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium">
-                  <ShieldBan className="size-4 text-danger" />
-                  {t("skills.blacklist.title")}
+                <div className="space-y-3 px-5 py-5 text-[13px]">
+                  <div className="rounded-xl border border-border/70 bg-surface-2/50 px-3.5 py-3">
+                    <p className="leading-relaxed">
+                      {removeTarget.skills.length === 1
+                        ? t("skills.uninstall.singleDesc", {
+                            name: removeTarget.skills[0].name,
+                          })
+                        : t("skills.uninstall.batchDesc", {
+                            count: format.formatNumber(
+                              removeTarget.skills.length,
+                            ),
+                          })}
+                    </p>
+                    {removeTarget.skills.length === 1 && (
+                      <p className="mt-2 truncate font-mono text-[11px] text-muted-foreground">
+                        {removeTarget.skills[0].name}
+                      </p>
+                    )}
+                  </div>
+                  {removeError && (
+                    <p
+                      role="alert"
+                      className="rounded-xl border border-danger/25 bg-danger/10 px-3.5 py-2.5 text-[12px] leading-relaxed text-danger"
+                    >
+                      {removeError}
+                    </p>
+                  )}
                 </div>
-                <div className="space-y-2 p-4 text-[13px]">
-                  <p>
-                    {t("skills.blacklist.desc", { name: blacklistTarget.name })}
-                  </p>
-                </div>
-                <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-                  <AITrackerButton onClick={() => setBlacklistTarget(null)}>
-                    {t("common.cancel")}
-                  </AITrackerButton>
+
+                <div className="flex justify-end gap-2 border-t border-border/70 bg-surface-2/25 px-5 py-4">
                   <AITrackerButton
-                    variant="danger"
+                    disabled={busy}
                     onClick={() => {
-                      const target = blacklistTarget;
-                      setBlacklistTarget(null);
-                      void run(
-                        () =>
-                          updateSkillBlacklist({
-                            data: { name: target.name, blocked: true },
-                          }),
-                        t("skills.toast.blocked"),
-                      );
+                      setRemoveError(null);
+                      setRemoveTarget(null);
                     }}
                   >
-                    {t("skills.blacklist.confirm")}
+                    {t("common.cancel")}
+                  </AITrackerButton>
+                  <AITrackerButton
+                    variant="danger"
+                    disabled={busy}
+                    onClick={() => void confirmUninstall()}
+                  >
+                    {busy && <Loader2 className="size-3.5 animate-spin" />}
+                    {t("skills.uninstall.confirm")}
                   </AITrackerButton>
                 </div>
               </div>

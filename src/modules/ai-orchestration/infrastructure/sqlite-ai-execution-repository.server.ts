@@ -137,9 +137,9 @@ function insertExecution(
       `INSERT INTO ai_executions
     (request_id, capability, profile_id, provider_id, model_id, prompt_version_id,
      prompt_version, input_fingerprint, status, used_fallback, input_tokens,
-     output_tokens, cost_microusd, cost_confidence, error_code, started_at_ms,
-     finished_at_ms, duration_ms)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     output_tokens, cost_microusd, cost_confidence, error_code, failure_detail,
+     started_at_ms, finished_at_ms, duration_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (request_id) DO NOTHING`,
     )
     .run(
@@ -160,6 +160,7 @@ function insertExecution(
       statusOverride === "budget"
         ? "ai.budget-exceeded"
         : (input.summary.errorCode ?? null),
+      input.summary.failureDetail ?? null,
       input.startedAtMs === undefined ? null : BigInt(input.startedAtMs),
       input.finishedAtMs === undefined ? null : BigInt(input.finishedAtMs),
       input.durationMs === undefined ? null : BigInt(input.durationMs),

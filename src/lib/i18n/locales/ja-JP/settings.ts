@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 export const settings = {
   language: "表示言語",
   languageDesc: "表示言語を切り替えます（即時反映）",
@@ -49,10 +48,13 @@ export const settings = {
     currentActive: "現在有効",
     apiFormatLabel: "API形式",
     protocolLabel: "API形式",
-    protocolOpenai: "OpenAI 互換",
+    protocolOpenai: "OpenAI Completion",
+    protocolOpenaiResponses: "OpenAI Responses",
     protocolAnthropic: "Anthropic",
     protocolOpenaiHint:
       "OpenAI / DeepSeek / Kimi / Qwen などの Chat Completions API に対応",
+    protocolOpenaiResponsesHint:
+      "OpenAI Responses API および互換 /responses エンドポイントに対応",
     protocolAnthropicHint:
       "Claude 公式および Messages API 互換ゲートウェイに対応",
     officialDesc: "DeepSeek · {model} · 推奨モデル",
@@ -77,10 +79,13 @@ export const settings = {
     authBearerHint:
       "Authorization: Bearer を要求するゲートウェイ用（社内 DeepSeek 等）",
     listModels: "モデル一覧を取得",
+    listOfficialModels: "公式モデル一覧を取得",
     listingModels: "取得中…",
     selectModel: "モデルを選択…",
     manualModel: "または手動でモデル名を入力",
     modelFetchHint: "{model}（Key を入力すると一覧を取得できます）",
+    officialModelFetchHint:
+      "API Key を入力して公式一覧を取得するか、モデル名を手動入力してください",
     listModelsDone: "{count} 個のモデルを取得しました",
     listModelsFallback:
       "インターフェースに直接アクセスできません（CORS/ゲートウェイ制限）。この Provider の一般的なモデルを表示しています",
@@ -263,6 +268,7 @@ export const settings = {
       "enhancer-failed": "モデル設定に失敗しました",
       "invalid-output": "強化結果が無効です",
       "no-eligible-candidates": "強化できる対象がありません",
+      pending: "AI 洞察を生成中",
       stale: "データが古い可能性があります",
     },
     fallbackStatus: {
@@ -275,6 +281,33 @@ export const settings = {
       "invalid-output": "AI の出力が無効なため、ルール洞察を表示しています",
       "no-eligible-candidates":
         "強化できる対象がないため、ルール洞察を表示しています",
+      pending:
+        "AI 洞察をバックグラウンドで生成中です。ルール洞察を表示しています",
+    },
+    failureReason: {
+      timeout: "モデルの応答がタイムアウトしました",
+      "empty-content": "モデルが空の内容を返しました",
+      "reasoning-only":
+        "モデルが推論のみを返しました（推論モデルの可能性）。出力上限を増やすか、非推論モデルへの変更をお試しください",
+      "not-json": "モデルの応答が有効な JSON ではありません",
+      "http-error": "モデルサービスが HTTP エラーを返しました",
+      unknown: "予期しないモデル応答",
+    },
+    surfaces: {
+      dashboard: "ダッシュボード",
+      agents: "エージェント",
+      distill: "蒸留",
+      reports: "レポート",
+      memory: "メモリ",
+      security: "セキュリティ",
+      tracker: "使用量トラッカー",
+      skills: "スキル",
+      market: "マーケット",
+      chats: "セッション",
+      "chat-detail": "セッション詳細",
+      widget: "ウィジェット",
+      settings: "設定",
+      sources: "ソース",
     },
     section: {
       title: "AIインサイト",
@@ -297,7 +330,8 @@ export const settings = {
       dailyLimit: "1日の呼び出し上限",
       dailyLimitHint: "空欄の場合は既定の 30 回（サーバー側で適用）",
       refreshInterval: "AIインサイトの更新周期",
-      refreshIntervalHint: "{min}～{max}分ごとに更新（既定値は60分）",
+      refreshIntervalHint:
+        "{min}～{max}分（24時間）ごとに更新（既定値は5時間）",
       minutes: "分",
       intervalInvalid: "有効な更新周期を入力してください",
       intervalSaved: "AIインサイトの更新周期を保存しました",
@@ -305,7 +339,17 @@ export const settings = {
       refreshNowHint: "現在のインサイトキャッシュを消去して再生成します",
       refreshNowButton: "今すぐ更新",
       refreshDone: "AIインサイトを更新しました",
+      refreshStarted: "AIインサイトの再生成をバックグラウンドで開始しました",
+      refreshProgress:
+        "バックグラウンド生成中：{completed}/{total}、失敗 {failed}",
+      refreshCompleted:
+        "バックグラウンド生成完了：成功 {completed}、スキップ {skipped}",
+      refreshCompletedWithFailures:
+        "バックグラウンド生成完了：成功 {completed}、失敗 {failed}、スキップ {skipped}",
       refreshFailed: "AIインサイトの更新に失敗しました",
+      skipped: "スキップ",
+      rulesModeRefreshDisabled:
+        "ローカルルールモードでは AI インサイトの更新は不要です",
       save: "保存",
       saved: "インサイト設定を保存しました",
       saveFailed: "インサイト設定の保存に失敗しました",

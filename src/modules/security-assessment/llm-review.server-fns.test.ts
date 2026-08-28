@@ -38,6 +38,36 @@ test("security LLM aggregate is rebuilt from the authoritative history entry", (
   });
 });
 
+test("security LLM aggregate falls back to persisted finding rows", () => {
+  const request = resolveSecurityLlmReviewRequestFromHistory(
+    "history:findings",
+    [
+      {
+        id: "history:findings",
+        report: {
+          verdict: "allow",
+          rulesVersion: "rules-v1",
+          contentHash: "content-hash-2",
+          categories: {},
+          findings: [
+            { kind: "data_exfiltration", severity: "low" },
+            { kind: "remote_execution", severity: "high" },
+          ],
+        },
+      },
+    ],
+  );
+
+  assert.ok(request);
+  assert.equal(request.aggregate.dimensions.exfil.count, 1);
+  assert.equal(request.aggregate.dimensions.rce.count, 1);
+  assert.deepEqual(request.aggregate.severityCounts, {
+    high: 1,
+    medium: 0,
+    low: 1,
+  });
+});
+
 test("unknown history ids and malformed authority records are rejected", () => {
   assert.equal(
     resolveSecurityLlmReviewRequestFromHistory(

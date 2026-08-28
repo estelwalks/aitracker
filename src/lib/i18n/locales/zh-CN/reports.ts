@@ -83,6 +83,9 @@ export const reports = {
     disabledStatus: "未启用",
     processRequiredHint:
       "应用运行或隐藏到菜单栏时会按时执行；完全退出期间错过的任务会在下次启动后执行。",
+    schedulerOff: "后台调度器未运行，定时生成暂时不会触发。",
+    schedulerOffHint:
+      "当前平台尚未启用后台任务，或调度器启动失败；请使用 macOS/Windows 版本并检查应用日志。",
     runSummary: "{time} · {result}",
     loadFailed: "读取报告计划失败",
     runStatus: {

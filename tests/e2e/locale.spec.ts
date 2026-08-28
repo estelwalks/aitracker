@@ -124,6 +124,9 @@ test("展示货币手动切换 JPY 并校验汇率区与 ?currency 同步", asyn
     .toBe("JPY");
 
   await page.reload();
+  await page.waitForFunction(
+    () => document.documentElement.dataset.aitrackerHydrated === "true",
+  );
   await expect
     .poll(() => new URL(page.url()).searchParams.get("currency"))
     .toBe("JPY");

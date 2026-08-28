@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 export const meta = {
   title: "{appName} V3.0 · AI ツール主権コンソール",
   description:
@@ -7,7 +6,7 @@ export const meta = {
     dashboard: "ダッシュボード · {appName} V3.0",
     agents: "Agent 概要 · {appName} V3.0",
     skills: "Skill 管理 · {appName} V3.0",
-    market: "Skill マーケット · {appName} V3.0",
+    market: "セキュリティマーケット · {appName} V3.0",
     tracker: "バーンランキング · {appName} V3.0",
     security: "セキュリティ検査 · {appName} V3.0",
     sessions: "セッション管理 · {appName} V3.0",

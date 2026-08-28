@@ -102,11 +102,52 @@ export interface InsightEnhancerOptions {
   /** Merge concurrent same-scope calls into one promise. Defaults to true. */
   readonly singleflight?: boolean;
   /**
+   * How many model calls may run concurrently through this enhancer
+   * (page visits and batch items share the pool). Defaults to 3. Kept small
+   * because the gateway is reliable for a few requests but rejects bursts.
+   */
+  readonly maxConcurrentRequests?: number;
+  /**
+   * Attempts per surface, including retries after transient failures
+   * (timeout, provider failure, invalid output). Defaults to 3 (2 retries).
+   * `budget-exceeded` is never retried.
+   */
+  readonly maxAttempts?: number;
+  /** Retry backoff in ms, keyed by the retry attempt number (1-based). */
+  readonly retryDelayMs?: (attempt: number) => number;
+  /** Overrides INSIGHT_MAX_OUTPUT_TOKENS (calibrated for reasoning models). */
+  readonly maxOutputTokens?: number;
+  /** Overrides INSIGHT_MODEL_TIMEOUT_MS. */
+  readonly timeoutMs?: number;
+  /**
    * Persisted budget reservation + execution audit hook. The wiring module
    * adapts this to the composition root's `ai_executions` / `ai_daily_usage`
    * repository. Defaults to no-op.
    */
   readonly recordExecution?: InsightRecordExecution;
+}
+
+function cacheIdentityKey(identity: InsightCacheIdentity): string {
+  return JSON.stringify([
+    identity.surfaceId,
+    identity.scopeHash,
+    identity.evidenceHash,
+    identity.locale,
+    identity.profileId,
+    identity.promptVersionId,
+    identity.promptVersion,
+  ]);
+}
+
+function persistedEnhancementStatus(
+  status: string | null,
+): InsightEnhancementResult["status"] {
+  return status === "budget-exceeded" ||
+    status === "timeout" ||
+    status === "invalid-output" ||
+    status === "enhancer-unavailable"
+    ? status
+    : "enhancer-failed";
 }
 
 function sha256(text: string): string {
@@ -186,22 +227,41 @@ export function createInsightEnhancer(
   const dailyCallLimit = options.dailyCallLimit ?? DEFAULT_DAILY_CALL_LIMIT;
   const singleflight = options.singleflight ?? true;
   const recordExecution = options.recordExecution ?? (() => undefined);
-  const generate = createLLMInsightGenerator({ ai });
+  const maxAttempts = options.maxAttempts ?? 3;
+  const retryDelayMs =
+    options.retryDelayMs ?? ((attempt: number) => attempt * 500);
+  const generate = createLLMInsightGenerator({
+    ai,
+    ...(options.maxOutputTokens !== undefined
+      ? { maxOutputTokens: options.maxOutputTokens }
+      : {}),
+    ...(options.timeoutMs !== undefined
+      ? { timeoutMs: options.timeoutMs }
+      : {}),
+  });
 
   const calls = new Map<string, number>();
   const inflight = new Map<string, Promise<InsightEnhancementResult>>();
-  // The configured gateway is reliable for one request but rejects bursts
-  // from several mounted page cards. Singleflight handles duplicate evidence;
-  // this queue additionally serializes different surfaces.
-  let enhancementQueue = Promise.resolve();
+  // The gateway is reliable for a few requests but rejects bursts from
+  // several mounted page cards. Singleflight handles duplicate evidence;
+  // this bounded semaphore keeps different surfaces (and batch items)
+  // concurrent instead of strictly serial, capped at maxConcurrentRequests.
+  const maxConcurrentRequests = options.maxConcurrentRequests ?? 3;
+  let activeSlots = 0;
+  const slotWaiters: Array<() => void> = [];
 
-  function enqueue<T>(operation: () => Promise<T>): Promise<T> {
-    const next = enhancementQueue.then(operation, operation);
-    enhancementQueue = next.then(
-      () => undefined,
-      () => undefined,
-    );
-    return next;
+  function acquire(): Promise<void> {
+    if (activeSlots < maxConcurrentRequests) {
+      activeSlots += 1;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => slotWaiters.push(resolve));
+  }
+
+  function release(): void {
+    const next = slotWaiters.shift();
+    if (next !== undefined) next();
+    else activeSlots -= 1;
   }
 
   type EnhancementContext = {
@@ -240,6 +300,7 @@ export function createInsightEnhancer(
         canonicalize({
           surface: input.surface,
           locale: input.locale,
+          scope: input.scope ?? {},
           dateKey,
           adapterVersion: input.adapterVersion,
         }),
@@ -275,7 +336,13 @@ export function createInsightEnhancer(
   ): InsightEnhancementResult | null {
     let cached: InsightEnhancementCache | undefined;
     try {
-      cached = repository.findValid(context.identity, nowMs);
+      // The configured refresh period is the contract for AI generation. A
+      // changed evidence sample must not cause every page switch to enqueue a
+      // new model request; the current rule facts are still rendered beside
+      // the cached model analysis until this period expires.
+      cached =
+        repository.findLatestValid?.(context.identity, nowMs) ??
+        repository.findValid(context.identity, nowMs);
     } catch {
       return null;
     }
@@ -289,6 +356,8 @@ export function createInsightEnhancer(
       status: "enhanced-cached",
       lines: mapCachedLines(cached),
       modelLabel: cached.modelLabel ?? undefined,
+      generatedAtMs: cached.generatedAtMs,
+      expiresAtMs: cached.expiresAtMs,
     };
   }
 
@@ -308,14 +377,14 @@ export function createInsightEnhancer(
     }
   }
 
-  async function runEnhancement(
+  async function runEnhancementAttempt(
     input: InsightEnhancerInput,
     profile: ActiveInsightProfile,
     identity: InsightCacheIdentity,
     promptEntry: InsightPrompt,
     evidenceHash: string,
     cacheTtlMs: number,
-  ): Promise<InsightEnhancementResult> {
+  ): Promise<{ result: InsightEnhancementResult; retryable: boolean }> {
     try {
       const prompt = {
         id: promptEntry.id,
@@ -348,14 +417,31 @@ export function createInsightEnhancer(
       }
 
       if (generated.status !== "completed" || generated.text === undefined) {
-        return { status: mapFailureStatus(generated.status), lines: [] };
+        const status = mapFailureStatus(generated.status);
+        return {
+          result: {
+            status,
+            lines: [],
+            ...(generated.failureDetail !== undefined
+              ? { failureDetail: generated.failureDetail }
+              : {}),
+          },
+          // Budget exhaustion is final for this call; everything else
+          // (timeout, provider failure) may succeed on a fresh attempt.
+          retryable: status === "timeout" || status === "enhancer-failed",
+        };
       }
 
       const validation = validateEnhancementOutput(generated.text, input, {
         forbiddenEntities: input.forbiddenEntities,
       });
       if (!validation.ok) {
-        return { status: "invalid-output", lines: [] };
+        // The model's output shape varies per attempt; a fresh attempt may
+        // comply with the schema.
+        return {
+          result: { status: "invalid-output", lines: [] },
+          retryable: true,
+        };
       }
 
       const nowMs = now();
@@ -381,6 +467,7 @@ export function createInsightEnhancer(
           actionId: line.actionId ?? null,
         })),
       };
+      let persisted = true;
       try {
         repository.saveEnhancement({
           mode: ENHANCEMENT_CACHE_MODE,
@@ -389,17 +476,64 @@ export function createInsightEnhancer(
         });
       } catch {
         // Privacy-guard or storage failure: return the enhanced lines anyway,
-        // but do not persist them.
+        // but report that they were not persisted so the caller can mark the
+        // batch item failed instead of silently reporting success.
+        persisted = false;
       }
 
       return {
-        status: "enhanced-ready",
-        lines,
-        modelLabel: profile.label,
+        result: {
+          status: "enhanced-ready",
+          lines,
+          modelLabel: profile.label,
+          generatedAtMs: cacheValue.generatedAtMs,
+          expiresAtMs: cacheValue.expiresAtMs,
+          ...(persisted ? {} : { persisted: false }),
+        },
+        retryable: false,
       };
     } catch {
-      return { status: "enhancer-failed", lines: [] };
+      return {
+        result: { status: "enhancer-failed", lines: [] },
+        retryable: true,
+      };
     }
+  }
+
+  async function runEnhancement(
+    input: InsightEnhancerInput,
+    profile: ActiveInsightProfile,
+    identity: InsightCacheIdentity,
+    promptEntry: InsightPrompt,
+    evidenceHash: string,
+    cacheTtlMs: number,
+  ): Promise<InsightEnhancementResult> {
+    let lastFailureDetail: string | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const { result, retryable } = await runEnhancementAttempt(
+        input,
+        profile,
+        identity,
+        promptEntry,
+        evidenceHash,
+        cacheTtlMs,
+      );
+      if (!retryable || attempt === maxAttempts) return result;
+      if (result.failureDetail !== undefined) {
+        lastFailureDetail = result.failureDetail;
+      }
+      const delayMs = retryDelayMs(attempt);
+      if (delayMs > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    return {
+      status: "enhancer-failed",
+      lines: [],
+      ...(lastFailureDetail !== undefined
+        ? { failureDetail: lastFailureDetail }
+        : {}),
+    };
   }
 
   async function readCached(
@@ -426,30 +560,101 @@ export function createInsightEnhancer(
     const cached = readCachedResult(context, nowMs);
     if (cached !== null) return cached;
 
-    const flightKey = `${input.surface}:${input.locale}:${evidenceHash}`;
+    const flightKey = cacheIdentityKey(identity);
     if (singleflight) {
       const inflightResult = inflight.get(flightKey);
       if (inflightResult) return inflightResult;
     }
 
+    const generation = repository.getRefreshGeneration?.() ?? 0;
+    const generationStartedAtMs =
+      repository.getRefreshGenerationStartedAtMs?.() ?? 0;
+    const refreshWindowActive =
+      generation > 0 &&
+      (repository.hasActiveRefreshRun?.() === true ||
+        (generationStartedAtMs > 0 &&
+          nowMs < generationStartedAtMs + requestTtlMs));
+    const timeBucket = refreshWindowActive
+      ? 0
+      : generation > 0 && generationStartedAtMs > 0
+        ? 1 + Math.floor((nowMs - generationStartedAtMs) / requestTtlMs)
+        : Math.floor(nowMs / requestTtlMs);
+    const ownerId = crypto.randomUUID();
+    const reservationKey = sha256(
+      JSON.stringify(canonicalize({ generation, timeBucket, identity })),
+    );
+    const reservation = repository.claimGeneration?.({
+      reservationKey,
+      generation,
+      timeBucket,
+      identity,
+      ownerId,
+      createdAtMs: nowMs,
+    });
+    if (reservation && !reservation.claimed) {
+      const completedCache = readCachedResult(context, now());
+      if (completedCache !== null) return completedCache;
+      if (reservation.reservation.status === "running") {
+        // Another caller owns this exact identity right now; its result is
+        // written to the cache when it finishes. This is not a failure.
+        return { status: "pending", lines: [] };
+      }
+      return {
+        status: persistedEnhancementStatus(
+          reservation.reservation.resultStatus,
+        ),
+        lines: [],
+      };
+    }
+
+    const finishReservation = (
+      result: InsightEnhancementResult,
+    ): InsightEnhancementResult => {
+      try {
+        repository.finishGeneration?.({
+          reservationKey,
+          ownerId,
+          status:
+            result.status === "enhanced-ready" ||
+            result.status === "enhanced-cached"
+              ? "completed"
+              : "failed",
+          resultStatus: result.status,
+          nowMs: now(),
+        });
+      } catch {
+        // The provider result remains authoritative even if coordination
+        // telemetry cannot be updated. The unique reservation still prevents
+        // a second call during this refresh generation/time bucket.
+      }
+      return result;
+    };
+
     const budgetKey = `${dateKey}:${profile.id}`;
     const used = calls.get(budgetKey) ?? 0;
     const effectiveDailyCallLimit = input.dailyCallLimit ?? dailyCallLimit;
     if (used >= effectiveDailyCallLimit) {
-      return { status: "budget-exceeded", lines: [] };
+      return finishReservation({ status: "budget-exceeded", lines: [] });
     }
     calls.set(budgetKey, used + 1);
 
-    const work = enqueue(() =>
-      runEnhancement(
-        input,
-        profile,
-        identity,
-        promptEntry,
-        evidenceHash,
-        requestTtlMs,
-      ),
-    );
+    const work = (async () => {
+      await acquire();
+      try {
+        return finishReservation(
+          await runEnhancement(
+            input,
+            profile,
+            identity,
+            promptEntry,
+            evidenceHash,
+            requestTtlMs,
+          ),
+        );
+      } finally {
+        release();
+      }
+    })();
     if (singleflight) {
       inflight.set(flightKey, work);
       void work.then(() => inflight.delete(flightKey));

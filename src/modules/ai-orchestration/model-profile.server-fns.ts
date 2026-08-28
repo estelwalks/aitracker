@@ -78,7 +78,7 @@ function parseProfileId(value: unknown): { id: string } {
 export interface ListRemoteModelsInput {
   readonly id?: string;
   readonly mode: "official" | "custom";
-  readonly protocol?: "openai" | "anthropic";
+  readonly protocol?: "openai" | "openai-responses" | "anthropic";
   readonly auth?: "x-api-key" | "bearer";
   readonly apiKey?: string;
   readonly endpoint?: string;
@@ -97,7 +97,9 @@ function parseListRemoteModelsInput(value: unknown): ListRemoteModelsInput {
   const input: ListRemoteModelsInput = {
     mode: candidate.mode,
     ...(typeof candidate.id === "string" ? { id: candidate.id } : {}),
-    ...(candidate.protocol === "openai" || candidate.protocol === "anthropic"
+    ...(candidate.protocol === "openai" ||
+    candidate.protocol === "openai-responses" ||
+    candidate.protocol === "anthropic"
       ? { protocol: candidate.protocol }
       : {}),
     ...(candidate.auth === "x-api-key" || candidate.auth === "bearer"

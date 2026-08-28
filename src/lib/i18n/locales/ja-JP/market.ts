@@ -1,6 +1,5 @@
-// AI 翻訳稿、審校待ち (2026-08)
 export const market = {
-  pageHeader: "Skill マーケット",
+  pageHeader: "セキュリティマーケット",
   pageHeaderDesc: "セキュリティスキャンを通過した Skill のみ収録",
   strip: {
     subtitle:
@@ -8,19 +7,20 @@ export const market = {
   },
   meta: {
     description:
-      "{appName} Skill マーケットの実インデックスを閲覧できます。セキュリティスキャンを通過した Skill のみ収録しています。",
+      "{appName} セキュリティマーケットの実インデックスを閲覧できます。セキュリティスキャンを通過した Skill のみ収録しています。",
   },
   notProvided: "未提供",
   jarvis: {
     available:
-      "市場には {total} 個の Skill、うち {official} 個が公式リリースです。",
-    installed: "この端末に市場 Skill を {count} 個インストール済みです。",
+      "セキュリティマーケットには {total} 個の Skill、うち {official} 個が公式リリースです。",
+    installed:
+      "この端末にセキュリティマーケットの Skill を {count} 個インストール済みです。",
   },
   network: {
     loadFailed:
-      "ネットワークを利用できません：Skill マーケットの読み込みに失敗しました",
+      "ネットワークを利用できません：セキュリティマーケットの読み込みに失敗しました",
     unavailableTitle:
-      "ネットワークを利用できないため、Skill マーケットにアクセスできません",
+      "ネットワークを利用できないため、セキュリティマーケットにアクセスできません",
     unavailableDesc:
       "ローカルにキャッシュされたリストは引き続き閲覧できます。ネットワーク復旧後に最新データへ自動同期されます。",
   },
@@ -33,7 +33,7 @@ export const market = {
     passRate: "セキュリティ通過",
     passRatePage: "このページの通過率",
     installedCount: "インストール済み",
-    hintCurrentPage: "現在のページの集計",
+    hintAllDimensionsPassed: "11 項目のスキャンをすべて通過",
     hintLocalInstalled: "この端末にインストール済み",
     hintDomains: "{count} カテゴリ",
   },
@@ -51,7 +51,7 @@ export const market = {
     nameDesc: "Z-A",
   },
   list: {
-    title: "Skill 一覧（{count}）",
+    title: "セキュリティマーケットの Skill 一覧（{count}）",
     count: "合計 {count} 個の Skill",
     allSafe: "すべてセキュリティスキャン通過",
   },

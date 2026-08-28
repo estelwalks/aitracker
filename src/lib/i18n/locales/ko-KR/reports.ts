@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 /** /reports(브리핑 & 메모리) V3.0 프로토타입 정렬 문구. */
 export const reports = {
   insight: {
@@ -84,6 +83,10 @@ export const reports = {
     disabledStatus: "비활성화됨",
     processRequiredHint:
       "앱이 실행 중이거나 메뉴 표시줄에 숨겨진 동안 실행되며, 종료 중 놓친 작업은 다음 실행 시 처리됩니다.",
+    schedulerOff:
+      "백그라운드 스케줄러가 실행 중이 아니어서 정기 생성이 실행되지 않습니다.",
+    schedulerOffHint:
+      "이 플랫폼에서는 백그라운드 작업이 활성화되지 않았거나 스케줄러 시작에 실패했습니다. macOS/Windows 버전을 사용하고 앱 로그를 확인하세요.",
     runSummary: "{time} · {result}",
     loadFailed: "보고서 일정을 불러오지 못했습니다",
     runStatus: {

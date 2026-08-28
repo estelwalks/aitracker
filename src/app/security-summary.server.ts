@@ -3,6 +3,7 @@ import { DESKTOP_HISTORY_KEY } from "./desktop-state-broker.server.ts";
 import type { MonitoringSecuritySummary } from "../modules/monitoring/contracts.ts";
 import {
   latestHistory,
+  securityHistoryEntryHasDetectedRisk,
   securityHistoryEntryIsSafe,
   summarizeReports,
   type SecurityVerdict,
@@ -118,9 +119,13 @@ export async function getSecuritySkillVerdicts(): Promise<SecuritySkillVerdictRe
     ): SecurityVerdict =>
       securityHistoryEntryIsSafe(entry)
         ? "allow"
-        : entry.report?.verdict === "allow"
-          ? "unknown"
-          : (entry.report?.verdict ?? "unknown");
+        : securityHistoryEntryHasDetectedRisk(entry)
+          ? entry.report?.verdict === "block"
+            ? "block"
+            : "warn"
+          : entry.report?.verdict === "allow"
+            ? "unknown"
+            : (entry.report?.verdict ?? "unknown");
     const legacyGeneric = [...latestByRef.values()].filter(
       (entry) => entry.skillName.trim() === "Skill",
     );

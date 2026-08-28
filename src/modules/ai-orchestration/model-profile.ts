@@ -9,12 +9,13 @@
  * Validation rules: URL protocol http/https without embedded credentials,
  * model charset/length, plus the S-500 spec: name 1..64, model 1..120,
  * apiKey 8..512 for profiles. Recommended profiles use the built-in managed
- * endpoint/protocol and one of the supported DeepSeek models, while their API
- * key is still supplied by the user and stored server-side.
+ * endpoint/protocol and a model fetched from the provider (or entered
+ * manually), while their API key is still supplied by the user and stored
+ * server-side.
  */
 
 export type ProfileMode = "official" | "custom";
-export type ProfileProtocol = "openai" | "anthropic";
+export type ProfileProtocol = "openai" | "openai-responses" | "anthropic";
 
 /**
  * Auth header scheme used against the endpoint. Some Anthropic-format gateways
@@ -23,12 +24,12 @@ export type ProfileProtocol = "openai" | "anthropic";
  */
 export type ProfileAuth = "x-api-key" | "bearer";
 
-/** Default auth scheme for a protocol (openai → Bearer, anthropic → x-api-key). */
+/** Default auth scheme for a protocol (OpenAI formats → Bearer, Anthropic → x-api-key). */
 export function defaultAuth(protocol: ProfileProtocol): ProfileAuth {
   return protocol === "anthropic" ? "x-api-key" : "bearer";
 }
 
-/** Models available in the built-in recommended DeepSeek profile. */
+/** Legacy recommended model labels kept for existing persisted profiles. */
 export const RECOMMENDED_MODEL_OPTIONS = [
   { id: "deepseek-v4-flash", displayName: "DeepSeek-V4-Flash" },
   { id: "deepseek-v4-pro", displayName: "DeepSeek-V4-Pro" },
@@ -54,10 +55,10 @@ export function recommendedModelDisplayName(
   const option = RECOMMENDED_MODEL_OPTIONS.find(
     (candidate) => candidate.id === value,
   );
-  return option?.displayName ?? OFFICIAL_MODEL_DISPLAY_NAME;
+  return option?.displayName ?? value?.trim() ?? OFFICIAL_MODEL_DISPLAY_NAME;
 }
 export const OFFICIAL_ENDPOINT = "https://api.deepseek.com";
-export const OFFICIAL_PROTOCOL: ProfileProtocol = "openai";
+export const OFFICIAL_PROTOCOL: ProfileProtocol = "openai-responses";
 
 /** Max length constraints shared by validation and the settings form. */
 export const PROFILE_NAME_MAX = 64;
@@ -82,6 +83,11 @@ export const protocolMeta: Record<ProfileProtocol, ProtocolMeta> = {
   openai: {
     endpoint: "https://api.openai.com/v1",
     path: "POST /chat/completions",
+    auth: "Authorization: Bearer <API Key>",
+  },
+  "openai-responses": {
+    endpoint: "https://api.openai.com/v1",
+    path: "POST /responses",
     auth: "Authorization: Bearer <API Key>",
   },
   anthropic: {
@@ -240,7 +246,7 @@ function validKey(value: string): boolean {
 
 /**
  * Validate a form payload. Recommended profiles use the managed endpoint and
- * protocol plus a supported model selection. The repository additionally
+ * protocol plus a provider model id. The repository additionally
  * checks that a recommended profile has a stored key before activating it.
  * For edits, an empty key means "keep the stored secret" (the key is never
  * echoed back).
@@ -259,7 +265,11 @@ export function validateModelProfileInput(
     return { ok: false, errorCode: "errors.modelProfile.nameTooLong" };
 
   if (input.mode === "custom") {
-    if (input.protocol !== "openai" && input.protocol !== "anthropic")
+    if (
+      input.protocol !== "openai" &&
+      input.protocol !== "openai-responses" &&
+      input.protocol !== "anthropic"
+    )
       return { ok: false, errorCode: "errors.modelProfile.invalidProtocol" };
 
     const endpoint = input.endpoint?.trim();
@@ -273,9 +283,9 @@ export function validateModelProfileInput(
       return { ok: false, errorCode: "errors.modelProfile.invalidModel" };
   }
 
-  if (input.mode === "official" && input.model?.trim()) {
-    const model = input.model.trim();
-    if (model !== OFFICIAL_MODEL && !isRecommendedModel(model))
+  if (input.mode === "official") {
+    const model = input.model?.trim();
+    if (!model || !MODEL_ID_PATTERN.test(model))
       return { ok: false, errorCode: "errors.modelProfile.invalidModel" };
   }
 

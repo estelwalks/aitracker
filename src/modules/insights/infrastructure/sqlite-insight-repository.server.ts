@@ -13,6 +13,8 @@ import {
 } from "../page/contracts.ts";
 
 const REFRESH_INTERVAL_PREFERENCE_KEY = "insight.refreshIntervalMs";
+const REFRESH_GENERATION_PREFERENCE_KEY = "insight.refreshGeneration";
+const ACTIVE_REFRESH_SLOT = "page-insights";
 
 export type InsightMode = "rules" | "enhanced-manual" | "enhanced-auto";
 
@@ -51,6 +53,49 @@ export interface InsightEnhancementCache extends InsightCacheIdentity {
   readonly expiresAtMs: number;
   readonly status: "ready" | "invalidated";
   readonly lines: readonly InsightEnhancementLine[];
+}
+
+export type InsightRefreshRunStatus = "queued" | "running" | "completed";
+export type InsightRefreshItemStatus =
+  "queued" | "running" | "completed" | "failed" | "skipped";
+
+export interface InsightRefreshRunView {
+  readonly runId: string;
+  readonly locale: string;
+  readonly generation: number;
+  readonly status: InsightRefreshRunStatus;
+  readonly total: number;
+  readonly completed: number;
+  readonly failed: number;
+  readonly skipped: number;
+  readonly createdAtMs: number;
+  readonly startedAtMs: number | null;
+  readonly finishedAtMs: number | null;
+}
+
+export interface InsightRefreshWorkItem {
+  readonly surfaceId: string;
+  readonly scopeJson: string;
+}
+
+/** `InsightRefreshWorkItem` plus persisted execution state (settings progress). */
+export interface InsightRefreshItemView extends InsightRefreshWorkItem {
+  readonly status: InsightRefreshItemStatus;
+  readonly resultStatus: string | null;
+  readonly resultDetail: string | null;
+  readonly finishedAtMs: number | null;
+}
+
+export interface InsightGenerationReservation {
+  readonly reservationKey: string;
+  readonly generation: number;
+  readonly timeBucket: number;
+  readonly identity: InsightCacheIdentity;
+  readonly ownerId: string;
+  readonly status: "running" | "completed" | "failed";
+  readonly resultStatus: string | null;
+  readonly createdAtMs: number;
+  readonly finishedAtMs: number | null;
 }
 
 function safeNumber(value: unknown): number {
@@ -159,6 +204,16 @@ export interface SqliteInsightRepository {
     identity: InsightCacheIdentity,
     nowMs: number,
   ): InsightEnhancementCache | undefined;
+  /**
+   * Returns the newest valid enhancement for the same page/scope/model
+   * identity, even when the underlying evidence hash has changed. The
+   * configured expiry is the freshness boundary for AI text; current rule
+   * facts remain owned by the page read model.
+   */
+  findLatestValid?(
+    identity: InsightCacheIdentity,
+    nowMs: number,
+  ): InsightEnhancementCache | undefined;
   /** Returns false in rules mode without writing either enhancement table. */
   saveEnhancement(input: {
     readonly mode: InsightMode;
@@ -166,9 +221,108 @@ export interface SqliteInsightRepository {
     readonly forbiddenEntities?: readonly string[];
   }): boolean;
   invalidate(cacheKey: string): boolean;
+  /** Mark ready enhancements for one page surface stale. */
+  invalidateSurface?(surfaceId: string): number;
   /** Mark every persisted enhancement stale after the active model changes. */
   invalidateAll?(): number;
   pruneExpired(nowMs: number): number;
+  getRefreshGeneration?(): number;
+  getRefreshGenerationStartedAtMs?(): number;
+  hasActiveRefreshRun?(): boolean;
+  startRefreshRun?(input: {
+    readonly runId: string;
+    readonly locale: string;
+    readonly items: readonly InsightRefreshWorkItem[];
+    readonly nowMs: number;
+  }): { readonly created: boolean; readonly run: InsightRefreshRunView };
+  getRefreshRun?(runId: string): InsightRefreshRunView | undefined;
+  listRefreshItems?(runId: string): readonly InsightRefreshItemView[];
+  startRefreshItem?(
+    runId: string,
+    item: InsightRefreshWorkItem,
+    nowMs: number,
+  ): boolean;
+  finishRefreshItem?(input: {
+    readonly runId: string;
+    readonly item: InsightRefreshWorkItem;
+    readonly status: Exclude<InsightRefreshItemStatus, "queued" | "running">;
+    readonly resultStatus: string;
+    /** Renderer-safe failure attribution of the final attempt, if any. */
+    readonly resultDetail?: string | null;
+    readonly nowMs: number;
+  }): InsightRefreshRunView;
+  /**
+   * Crash recovery, safe to run once per process start: fails any run still
+   * queued/running (re-queuing its in-flight items as failed) and fails any
+   * reservation stuck in 'running'. Completed caches are preserved.
+   */
+  recoverStaleState?(nowMs: number): {
+    readonly runs: number;
+    readonly items: number;
+    readonly reservations: number;
+  };
+  claimGeneration?(
+    value: Omit<
+      InsightGenerationReservation,
+      "status" | "resultStatus" | "finishedAtMs"
+    >,
+  ): {
+    readonly claimed: boolean;
+    readonly reservation: InsightGenerationReservation;
+  };
+  finishGeneration?(input: {
+    readonly reservationKey: string;
+    readonly ownerId: string;
+    readonly status: "completed" | "failed";
+    readonly resultStatus: string;
+    readonly nowMs: number;
+  }): boolean;
+}
+
+function readRefreshRun(
+  row: Readonly<Record<string, unknown>>,
+): InsightRefreshRunView {
+  return {
+    runId: String(row.run_id),
+    locale: String(row.locale),
+    generation: safeNumber(row.generation),
+    status: row.status as InsightRefreshRunStatus,
+    total: safeNumber(row.total_items),
+    completed: safeNumber(row.completed_items),
+    failed: safeNumber(row.failed_items),
+    skipped: safeNumber(row.skipped_items),
+    createdAtMs: safeNumber(row.created_at_ms),
+    startedAtMs: nullableNumber(row.started_at_ms),
+    finishedAtMs: nullableNumber(row.finished_at_ms),
+  };
+}
+
+const REFRESH_RUN_COLUMNS = `run_id, locale, generation, status, total_items,
+  completed_items, failed_items, skipped_items, created_at_ms, started_at_ms,
+  finished_at_ms`;
+
+function readGenerationReservation(
+  row: Readonly<Record<string, unknown>>,
+): InsightGenerationReservation {
+  return {
+    reservationKey: String(row.reservation_key),
+    generation: safeNumber(row.generation),
+    timeBucket: safeNumber(row.time_bucket),
+    identity: {
+      surfaceId: String(row.surface_id),
+      scopeHash: String(row.scope_hash),
+      evidenceHash: String(row.evidence_hash),
+      locale: String(row.locale),
+      profileId: String(row.profile_id),
+      promptVersionId: String(row.prompt_version_id),
+      promptVersion: safeNumber(row.prompt_version),
+    },
+    ownerId: String(row.owner_id),
+    status: row.status as InsightGenerationReservation["status"],
+    resultStatus: row.result_status === null ? null : String(row.result_status),
+    createdAtMs: safeNumber(row.created_at_ms),
+    finishedAtMs: nullableNumber(row.finished_at_ms),
+  };
 }
 
 export function createSqliteInsightRepository(
@@ -269,6 +423,49 @@ export function createSqliteInsightRepository(
     return Number(result.changes);
   }
 
+  function getRefreshGeneration(): number {
+    const row = database
+      .prepare(
+        "SELECT value_json FROM app_preferences WHERE preference_key = ?",
+      )
+      .get(REFRESH_GENERATION_PREFERENCE_KEY);
+    if (!row || typeof row.value_json !== "string") return 0;
+    try {
+      const value = JSON.parse(row.value_json);
+      return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  function getRefreshGenerationStartedAtMs(): number {
+    const row = database
+      .prepare(
+        "SELECT updated_at_ms FROM app_preferences WHERE preference_key = ?",
+      )
+      .get(REFRESH_GENERATION_PREFERENCE_KEY);
+    return row ? safeNumber(row.updated_at_ms) : 0;
+  }
+
+  function hasActiveRefreshRun(): boolean {
+    return (
+      database
+        .prepare(
+          "SELECT run_id FROM insight_refresh_runs WHERE active_slot = ?",
+        )
+        .get(ACTIVE_REFRESH_SLOT) !== undefined
+    );
+  }
+
+  function getRefreshRun(runId: string): InsightRefreshRunView | undefined {
+    const row = database
+      .prepare(
+        `SELECT ${REFRESH_RUN_COLUMNS} FROM insight_refresh_runs WHERE run_id = ?`,
+      )
+      .get(runId);
+    return row ? readRefreshRun(row) : undefined;
+  }
+
   return {
     getPreference,
     getRefreshIntervalMs,
@@ -288,7 +485,301 @@ export function createSqliteInsightRepository(
       );
     },
     setPreference(value) {
-      void writePreference(value);
+      // Preference writes must complete before the server function returns.
+      // The renderer broadcasts a refresh immediately after saving; a
+      // fire-and-forget write could make that refresh observe the old mode.
+      writePreference(value);
+    },
+    getRefreshGeneration,
+    getRefreshGenerationStartedAtMs,
+    hasActiveRefreshRun,
+    startRefreshRun(input) {
+      assertEpoch(input.nowMs);
+      if (!input.runId || !input.locale || input.items.length === 0) {
+        throw new DatabaseError("invalid-argument", "write", {
+          retryable: false,
+        });
+      }
+      const transaction = database.transaction();
+      transaction.begin();
+      try {
+        const active = database
+          .prepare(
+            `SELECT ${REFRESH_RUN_COLUMNS} FROM insight_refresh_runs WHERE active_slot = ?`,
+          )
+          .get(ACTIVE_REFRESH_SLOT);
+        if (active) {
+          transaction.commit();
+          return { created: false, run: readRefreshRun(active) };
+        }
+        const generation = getRefreshGeneration() + 1;
+        database
+          .prepare(
+            `INSERT INTO app_preferences
+              (preference_key, value_json, value_type, updated_at_ms)
+             VALUES (?, ?, 'number', ?)
+             ON CONFLICT (preference_key) DO UPDATE SET
+               value_json = excluded.value_json,
+               value_type = excluded.value_type,
+               updated_at_ms = excluded.updated_at_ms`,
+          )
+          .run(
+            REFRESH_GENERATION_PREFERENCE_KEY,
+            JSON.stringify(generation),
+            BigInt(input.nowMs),
+          );
+        database
+          .prepare(
+            "UPDATE insight_enhancement_cache SET status = 'invalidated' WHERE status = 'ready'",
+          )
+          .run();
+        database
+          .prepare(
+            `INSERT INTO insight_refresh_runs
+              (run_id, active_slot, locale, generation, status, total_items,
+               completed_items, failed_items, skipped_items, created_at_ms)
+             VALUES (?, ?, ?, ?, 'queued', ?, 0, 0, 0, ?)`,
+          )
+          .run(
+            input.runId,
+            ACTIVE_REFRESH_SLOT,
+            input.locale,
+            BigInt(generation),
+            BigInt(input.items.length),
+            BigInt(input.nowMs),
+          );
+        const insertItem = database.prepare(
+          `INSERT INTO insight_refresh_items
+            (run_id, surface_id, scope_json, status)
+           VALUES (?, ?, ?, 'queued')`,
+        );
+        for (const item of input.items) {
+          insertItem.run(input.runId, item.surfaceId, item.scopeJson);
+        }
+        transaction.commit();
+        return { created: true, run: getRefreshRun(input.runId)! };
+      } catch (error) {
+        try {
+          transaction.rollback();
+        } catch {
+          /* preserve original */
+        }
+        throw error;
+      }
+    },
+    getRefreshRun,
+    listRefreshItems(runId) {
+      return database
+        .prepare(
+          `SELECT surface_id, scope_json, status, result_status, result_detail,
+                  finished_at_ms FROM insight_refresh_items
+           WHERE run_id = ? ORDER BY rowid`,
+        )
+        .all(runId)
+        .map((row) => ({
+          surfaceId: String(row.surface_id),
+          scopeJson: String(row.scope_json),
+          status: row.status as InsightRefreshItemStatus,
+          resultStatus:
+            row.result_status === null ? null : String(row.result_status),
+          resultDetail:
+            row.result_detail === null ? null : String(row.result_detail),
+          finishedAtMs: nullableNumber(row.finished_at_ms),
+        }));
+    },
+    startRefreshItem(runId, item, nowMs) {
+      assertEpoch(nowMs);
+      const changed = database
+        .prepare(
+          `UPDATE insight_refresh_items SET status = 'running', started_at_ms = ?
+           WHERE run_id = ? AND surface_id = ? AND scope_json = ? AND status = 'queued'`,
+        )
+        .run(BigInt(nowMs), runId, item.surfaceId, item.scopeJson).changes;
+      if (Number(changed) === 0) return false;
+      database
+        .prepare(
+          `UPDATE insight_refresh_runs
+           SET status = 'running', started_at_ms = COALESCE(started_at_ms, ?)
+           WHERE run_id = ? AND status = 'queued'`,
+        )
+        .run(BigInt(nowMs), runId);
+      return true;
+    },
+    finishRefreshItem(input) {
+      assertEpoch(input.nowMs);
+      const transaction = database.transaction();
+      transaction.begin();
+      try {
+        database
+          .prepare(
+            `UPDATE insight_refresh_items
+             SET status = ?, result_status = ?, result_detail = ?, finished_at_ms = ?
+             WHERE run_id = ? AND surface_id = ? AND scope_json = ?
+               AND status = 'running'`,
+          )
+          .run(
+            input.status,
+            input.resultStatus,
+            input.resultDetail ?? null,
+            BigInt(input.nowMs),
+            input.runId,
+            input.item.surfaceId,
+            input.item.scopeJson,
+          );
+        const counts = database
+          .prepare(
+            `SELECT
+               COUNT(*) AS total,
+               SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+               SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
+               SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) AS skipped,
+               SUM(CASE WHEN status IN ('queued', 'running') THEN 1 ELSE 0 END) AS pending
+             FROM insight_refresh_items WHERE run_id = ?`,
+          )
+          .get(input.runId)!;
+        const pending = safeNumber(counts.pending);
+        database
+          .prepare(
+            `UPDATE insight_refresh_runs SET
+               status = ?, active_slot = ?, completed_items = ?, failed_items = ?,
+               skipped_items = ?, finished_at_ms = ?
+             WHERE run_id = ?`,
+          )
+          .run(
+            pending === 0 ? "completed" : "running",
+            pending === 0 ? null : ACTIVE_REFRESH_SLOT,
+            BigInt(safeNumber(counts.completed)),
+            BigInt(safeNumber(counts.failed)),
+            BigInt(safeNumber(counts.skipped)),
+            pending === 0 ? BigInt(input.nowMs) : null,
+            input.runId,
+          );
+        transaction.commit();
+        return getRefreshRun(input.runId)!;
+      } catch (error) {
+        try {
+          transaction.rollback();
+        } catch {
+          /* preserve original */
+        }
+        throw error;
+      }
+    },
+    recoverStaleState(nowMs) {
+      assertEpoch(nowMs);
+      const transaction = database.transaction();
+      transaction.begin();
+      try {
+        const stale = database
+          .prepare(
+            "SELECT run_id FROM insight_refresh_runs WHERE status IN ('queued', 'running')",
+          )
+          .all();
+        const runIds = stale.map((row) => String(row.run_id));
+        let items = 0;
+        if (runIds.length > 0) {
+          const placeholders = runIds.map(() => "?").join(",");
+          items = Number(
+            database
+              .prepare(
+                `UPDATE insight_refresh_items
+                 SET status = 'failed', result_status = 'recovered',
+                     result_detail = 'recovered', finished_at_ms = ?
+                 WHERE run_id IN (${placeholders})
+                   AND status IN ('queued', 'running')`,
+              )
+              .run(BigInt(nowMs), ...runIds).changes,
+          );
+          database
+            .prepare(
+              `UPDATE insight_refresh_runs
+               SET status = 'completed', active_slot = NULL, finished_at_ms = ?
+               WHERE run_id IN (${placeholders})`,
+            )
+            .run(BigInt(nowMs), ...runIds);
+        }
+        const reservations = Number(
+          database
+            .prepare(
+              `UPDATE insight_generation_reservations
+               SET status = 'failed', result_status = 'recovered', finished_at_ms = ?
+               WHERE status = 'running'`,
+            )
+            .run(BigInt(nowMs)).changes,
+        );
+        transaction.commit();
+        return { runs: runIds.length, items, reservations };
+      } catch (error) {
+        try {
+          transaction.rollback();
+        } catch {
+          /* preserve original */
+        }
+        throw error;
+      }
+    },
+    claimGeneration(value) {
+      assertEpoch(value.createdAtMs);
+      assertIdentity(value.identity);
+      // A failed reservation must not poison the whole refresh window: the
+      // next caller for the same identity re-claims it. Running/completed
+      // reservations keep their exclusivity (ON CONFLICT ... DO NOTHING).
+      const result = database
+        .prepare(
+          `INSERT INTO insight_generation_reservations
+            (reservation_key, generation, time_bucket, surface_id, scope_hash,
+             evidence_hash, locale, profile_id, prompt_version_id, prompt_version,
+             owner_id, status, created_at_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)
+           ON CONFLICT (reservation_key) DO UPDATE SET
+             status = 'running',
+             owner_id = excluded.owner_id,
+             created_at_ms = excluded.created_at_ms
+           WHERE insight_generation_reservations.status = 'failed'`,
+        )
+        .run(
+          value.reservationKey,
+          BigInt(value.generation),
+          BigInt(value.timeBucket),
+          value.identity.surfaceId,
+          value.identity.scopeHash,
+          value.identity.evidenceHash,
+          value.identity.locale,
+          value.identity.profileId ?? "",
+          value.identity.promptVersionId ?? "",
+          BigInt(value.identity.promptVersion ?? 0),
+          value.ownerId,
+          BigInt(value.createdAtMs),
+        );
+      const row = database
+        .prepare(
+          "SELECT * FROM insight_generation_reservations WHERE reservation_key = ?",
+        )
+        .get(value.reservationKey)!;
+      return {
+        claimed: Number(result.changes) > 0,
+        reservation: readGenerationReservation(row),
+      };
+    },
+    finishGeneration(input) {
+      assertEpoch(input.nowMs);
+      return (
+        Number(
+          database
+            .prepare(
+              `UPDATE insight_generation_reservations
+               SET status = ?, result_status = ?, finished_at_ms = ?
+               WHERE reservation_key = ? AND owner_id = ? AND status = 'running'`,
+            )
+            .run(
+              input.status,
+              input.resultStatus,
+              BigInt(input.nowMs),
+              input.reservationKey,
+              input.ownerId,
+            ).changes,
+        ) > 0
+      );
     },
     findValid(identity, nowMs) {
       assertIdentity(identity);
@@ -305,6 +796,28 @@ export function createSqliteInsightRepository(
           identity.surfaceId,
           identity.scopeHash,
           identity.evidenceHash,
+          identity.locale,
+          identity.profileId ?? "",
+          identity.promptVersionId ?? "",
+          BigInt(identity.promptVersion ?? 0),
+          BigInt(nowMs),
+        );
+      return row ? readCache(database, row) : undefined;
+    },
+    findLatestValid(identity, nowMs) {
+      assertIdentity(identity);
+      assertEpoch(nowMs);
+      const row = database
+        .prepare(
+          `SELECT ${CACHE_COLUMNS} FROM insight_enhancement_cache
+        WHERE surface_id = ? AND scope_hash = ? AND locale = ?
+          AND COALESCE(profile_id, '') = ? AND COALESCE(prompt_version_id, '') = ?
+          AND COALESCE(prompt_version, 0) = ? AND status = 'ready' AND expires_at_ms > ?
+        ORDER BY generated_at_ms DESC LIMIT 1`,
+        )
+        .get(
+          identity.surfaceId,
+          identity.scopeHash,
           identity.locale,
           identity.profileId ?? "",
           identity.promptVersionId ?? "",
@@ -351,25 +864,25 @@ export function createSqliteInsightRepository(
         const prior = database
           .prepare(
             `SELECT cache_key FROM insight_enhancement_cache
-          WHERE surface_id = ? AND scope_hash = ? AND evidence_hash = ? AND locale = ?
+          WHERE surface_id = ? AND scope_hash = ? AND locale = ?
             AND COALESCE(profile_id, '') = ? AND COALESCE(prompt_version_id, '') = ?
             AND COALESCE(prompt_version, 0) = ?`,
           )
-          .get(
+          .all(
             value.surfaceId,
             value.scopeHash,
-            value.evidenceHash,
             value.locale,
             value.profileId ?? "",
             value.promptVersionId ?? "",
             BigInt(value.promptVersion ?? 0),
           );
-        if (prior)
+        for (const previous of prior) {
           database
             .prepare(
               "DELETE FROM insight_enhancement_cache WHERE cache_key = ?",
             )
-            .run(String(prior.cache_key));
+            .run(String(previous.cache_key));
+        }
         database
           .prepare(
             `INSERT INTO insight_enhancement_cache
@@ -425,6 +938,21 @@ export function createSqliteInsightRepository(
             )
             .run(cacheKey).changes,
         ) > 0
+      );
+    },
+    invalidateSurface(surfaceId) {
+      if (!surfaceId) {
+        throw new DatabaseError("invalid-argument", "write", {
+          retryable: false,
+        });
+      }
+      return Number(
+        database
+          .prepare(
+            `UPDATE insight_enhancement_cache SET status = 'invalidated'
+        WHERE surface_id = ? AND status = 'ready'`,
+          )
+          .run(surfaceId).changes,
       );
     },
     invalidateAll() {

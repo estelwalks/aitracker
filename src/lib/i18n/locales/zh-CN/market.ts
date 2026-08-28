@@ -1,21 +1,22 @@
 export const market = {
-  pageHeader: "Skill 市场",
+  pageHeader: "安全市场",
   pageHeaderDesc: "仅收录通过安全扫描的 Skill",
   strip: {
     subtitle: "仅收录通过安全扫描的 Skill · 一键分发到本地Agent",
   },
   meta: {
     description:
-      "浏览 {appName} Skill 市场真实索引，仅收录通过安全扫描的 Skill。",
+      "浏览 {appName} 安全市场真实索引，仅收录通过安全扫描的 Skill。",
   },
   notProvided: "未提供",
   jarvis: {
-    available: "市场当前可安装 {total} 个 Skill，其中 {official} 个官方发布。",
-    installed: "本机已从市场安装 {count} 个 Skill。",
+    available:
+      "安全市场当前可安装 {total} 个 Skill，其中 {official} 个官方发布。",
+    installed: "本机已从安全市场安装 {count} 个 Skill。",
   },
   network: {
-    loadFailed: "网络不可用：Skill 市场加载失败",
-    unavailableTitle: "网络不可用，Skill 市场暂不可访问",
+    loadFailed: "网络不可用：安全市场加载失败",
+    unavailableTitle: "网络不可用，安全市场暂不可访问",
     unavailableDesc: "本地已缓存的列表仍可浏览，恢复网络后自动同步最新数据。",
   },
   empty: {
@@ -23,11 +24,11 @@ export const market = {
     noMatchDesc: "换个关键词试试。",
   },
   stats: {
-    totalSkills: "上架 Skill",
+    totalSkills: "安全市场上架 Skill",
     passRate: "安全通过",
     passRatePage: "本页通过率",
     installedCount: "已安装",
-    hintCurrentPage: "当前页统计",
+    hintAllDimensionsPassed: "11 项维度扫描全通过",
     hintLocalInstalled: "本机已安装",
     hintDomains: "{count} 个领域分类",
   },
@@ -45,7 +46,7 @@ export const market = {
     nameDesc: "Z-A",
   },
   list: {
-    title: "Skill 列表（{count}）",
+    title: "安全市场 Skill 列表（{count}）",
     count: "共 {count} 个 Skill",
     allSafe: "全部通过安全扫描",
   },

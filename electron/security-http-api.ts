@@ -137,7 +137,13 @@ export async function handleSecurityHttpApi(
         if (input == null || typeof input !== "object" || Array.isArray(input))
           throw new SecurityHttpError("security.http.invalid_request", 400);
         const fields = input as Record<string, unknown>;
-        const allowed = new Set(["scope", "skillRef", "mode", "trigger"]);
+        const allowed = new Set([
+          "scope",
+          "skillRef",
+          "skillName",
+          "mode",
+          "trigger",
+        ]);
         if (Object.keys(fields).some((key) => !allowed.has(key)))
           throw new SecurityHttpError("security.http.invalid_request", 400);
         if (fields.trigger != null && fields.trigger !== "manual")
@@ -148,6 +154,9 @@ export async function handleSecurityHttpApi(
             ...(fields.skillRef === undefined
               ? {}
               : { skillRef: fields.skillRef }),
+            ...(fields.skillName === undefined
+              ? {}
+              : { skillName: fields.skillName }),
             mode: fields.mode,
             trigger: "manual",
           }),

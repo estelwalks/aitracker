@@ -94,6 +94,7 @@ export function DashboardJarvisInsight() {
       surfaceId="dashboard"
       variant="hero"
       title={t("dashboard.v2.heroTitle")}
+      showEmpty
       dotsLabel={t("dashboard.v2.insightDotsAria")}
       rotateLabel={t("dashboard.v2.rotateInsight")}
     />

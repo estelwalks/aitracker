@@ -27,6 +27,8 @@ import {
   createProfileBackedProvider,
   createModelProfileNetworkOperations,
   diagnoseModelProfile,
+  getActiveModelProfileForExecution,
+  modelRequestUrl,
   modelListUrl,
   type ModelProfileRepository,
 } from "./model-profile.server.ts";
@@ -44,6 +46,44 @@ const VALID_CUSTOM: ModelProfileInput = {
   endpoint: "https://api.deepseek.com/v1",
   model: "deepseek-chat",
 };
+
+test("active model resolution never falls back to a configured but disabled profile", async () => {
+  let executionLookupCount = 0;
+  const profile = {
+    id: "configured-not-active",
+  } as ModelProfile;
+  const resolved = await getActiveModelProfileForExecution({
+    async getActiveView() {
+      return null;
+    },
+    async getProfileForExecution() {
+      executionLookupCount += 1;
+      return profile;
+    },
+  });
+
+  assert.equal(resolved, undefined);
+  assert.equal(executionLookupCount, 0);
+});
+
+test("active model resolution uses the explicitly enabled profile", async () => {
+  const profile = {
+    id: "enabled-profile",
+  } as ModelProfile;
+  const resolved = await getActiveModelProfileForExecution({
+    async getActiveView() {
+      return {
+        id: profile.id,
+      } as Awaited<ReturnType<ModelProfileRepository["getActiveView"]>>;
+    },
+    async getProfileForExecution(id) {
+      assert.equal(id, profile.id);
+      return profile;
+    },
+  });
+
+  assert.equal(resolved, profile);
+});
 
 function mockFetch(
   handler: (url: string, init: RequestInit) => Response | Promise<Response>,
@@ -190,26 +230,40 @@ test("validateModelProfileInput rejects invalid mode / protocol / model", () => 
 
 test("validateModelProfileInput accepts valid custom and official payloads", () => {
   assert.deepEqual(validateModelProfileInput(VALID_CUSTOM), { ok: true });
-  assert.deepEqual(validateModelProfileInput({ mode: "official" }), {
-    ok: true,
-  });
+  assert.deepEqual(
+    validateModelProfileInput({
+      ...VALID_CUSTOM,
+      protocol: "openai-responses",
+      model: "gpt-5.2",
+    }),
+    { ok: true },
+  );
   assert.deepEqual(
     validateModelProfileInput({
       mode: "official",
       name: "官方",
       apiKey: VALID_KEY,
+      model: "deepseek-v4-flash",
     }),
     { ok: true },
   );
-  // Official mode does not require name / protocol / endpoint / model.
+  // Official mode accepts models returned by the provider, without a built-in allowlist.
   assert.deepEqual(
-    validateModelProfileInput({ mode: "official", apiKey: VALID_KEY }),
+    validateModelProfileInput({
+      mode: "official",
+      apiKey: VALID_KEY,
+      model: "provider-model-2026",
+    }),
     { ok: true },
   );
+  assert.deepEqual(validateModelProfileInput({ mode: "official" }), {
+    ok: false,
+    errorCode: "errors.modelProfile.invalidModel",
+  });
 });
 
 test("effective helpers: official fixes protocol/endpoint/model", () => {
-  assert.equal(effectiveProtocol("official", "anthropic"), "openai");
+  assert.equal(effectiveProtocol("official", "anthropic"), "openai-responses");
   assert.equal(effectiveProtocol("custom", "anthropic"), "anthropic");
   assert.equal(
     effectiveEndpoint({ mode: "official" }),
@@ -246,6 +300,10 @@ test("chatUrl/modelListUrl build protocol-specific endpoints", () => {
     "https://api.openai.com/v1/chat/completions",
   );
   assert.equal(
+    chatUrl("openai-responses", "https://api.openai.com/v1/"),
+    "https://api.openai.com/v1/responses",
+  );
+  assert.equal(
     modelListUrl("https://api.deepseek.com/v1"),
     "https://api.deepseek.com/v1/models",
   );
@@ -253,6 +311,65 @@ test("chatUrl/modelListUrl build protocol-specific endpoints", () => {
     modelListUrl("https://api.deepseek.com/v1/"),
     "https://api.deepseek.com/v1/models",
   );
+  assert.equal(
+    modelRequestUrl("official", "openai", "https://api.deepseek.com/"),
+    "https://api.deepseek.com/responses",
+  );
+});
+
+test("recommended model network test uses the OpenAI Responses request format", async () => {
+  let seenUrl = "";
+  let seenBody: unknown;
+  const network = createModelProfileNetworkOperations({
+    fetchFn: mockFetch(async (url, init) => {
+      seenUrl = url;
+      seenBody = JSON.parse(String(init.body));
+      return jsonResponse({ output_text: "OK" });
+    }),
+  });
+
+  const result = await network.test({
+    mode: "official",
+    apiKey: VALID_KEY,
+    model: "provider-model-2026",
+  });
+  assert.equal(result.ok, true);
+  assert.equal(seenUrl, "https://api.deepseek.com/responses");
+  assert.deepEqual(seenBody, {
+    model: "provider-model-2026",
+    max_output_tokens: 16,
+    input: "Reply with OK.",
+  });
+});
+
+test("custom Responses profile test uses Responses body and Bearer auth", async () => {
+  let seenUrl = "";
+  let seenInit: RequestInit | undefined;
+  const network = createModelProfileNetworkOperations({
+    fetchFn: mockFetch(async (url, init) => {
+      seenUrl = url;
+      seenInit = init;
+      return jsonResponse({ output_text: "OK" });
+    }),
+  });
+
+  const result = await network.test({
+    ...VALID_CUSTOM,
+    protocol: "openai-responses",
+    endpoint: "https://api.openai.com/v1",
+    model: "gpt-5.2",
+  });
+  assert.equal(result.ok, true);
+  assert.equal(seenUrl, "https://api.openai.com/v1/responses");
+  assert.equal(
+    (seenInit?.headers as Record<string, string>).authorization,
+    `Bearer ${VALID_KEY}`,
+  );
+  assert.deepEqual(JSON.parse(String(seenInit?.body)), {
+    model: "gpt-5.2",
+    max_output_tokens: 16,
+    input: "Reply with OK.",
+  });
 });
 
 test("model profile network test builds OpenAI request and returns latency", async () => {
@@ -340,6 +457,24 @@ test("model profile list returns remote ids without exposing the key", async () 
   });
   assert.equal(seenUrl, "https://api.deepseek.com/v1/models");
   assert.equal(JSON.stringify(result).includes(VALID_KEY), false);
+});
+
+test("recommended profile fetches the official model list without defaults", async () => {
+  let seenUrl = "";
+  const network = createModelProfileNetworkOperations({
+    fetchFn: mockFetch(async (url) => {
+      seenUrl = url;
+      return jsonResponse({ data: [{ id: "provider-model-2026" }] });
+    }),
+  });
+
+  const result = await network.listModels({
+    mode: "official",
+    apiKey: VALID_KEY,
+  });
+  assert.deepEqual(result.models, ["provider-model-2026"]);
+  assert.equal(result.source, "remote");
+  assert.equal(seenUrl, "https://api.deepseek.com/models");
 });
 
 test("model profile list accepts common provider envelopes and model field names", async () => {
@@ -478,6 +613,23 @@ test("sqlite repository: auth round-trips and blank-key test uses the stored key
   assert.equal(received?.auth, "x-api-key");
 });
 
+test("sqlite repository: custom Responses format persists directly in protocol", async (t) => {
+  await withRepo(t, async (repository, host) => {
+    const saved = await repository.upsert({
+      ...VALID_CUSTOM,
+      protocol: "openai-responses",
+      endpoint: "https://api.openai.com/v1",
+      model: "gpt-5.2",
+    });
+    assert.equal(saved.protocol, "openai-responses");
+    assert.equal(saved.auth, "bearer");
+    const row = host
+      .prepare("SELECT protocol FROM model_profiles WHERE profile_id = ?")
+      .get(saved.id);
+    assert.equal(row?.protocol, "openai-responses");
+  });
+});
+
 test("sqlite repository: listViews never contains the apiKey anywhere", async (t) => {
   await withRepo(t, async (repository) => {
     await repository.upsert(VALID_CUSTOM);
@@ -588,15 +740,20 @@ test("sqlite repository: setActive switches and rejects unknown ids", async (t) 
 });
 
 test("sqlite repository: official mode stores the fixed preset and encrypted key", async (t) => {
-  await withRepo(t, async (repository) => {
+  await withRepo(t, async (repository, host) => {
     const view = await repository.upsert({
       mode: "official",
       name: "官方默认",
       apiKey: VALID_KEY,
+      model: "provider-model-2026",
     });
-    assert.equal(view.protocol, "openai");
+    assert.equal(view.protocol, "openai-responses");
+    const stored = host
+      .prepare("SELECT protocol FROM model_profiles WHERE profile_id = ?")
+      .get(view.id);
+    assert.equal(stored?.protocol, "openai-responses");
     assert.equal(view.endpoint, "https://api.deepseek.com");
-    assert.equal(view.model, "deepseek-chat");
+    assert.equal(view.model, "provider-model-2026");
     const full = await repository.getProfileForExecution(view.id);
     assert.equal(full?.apiKey, VALID_KEY);
   });
@@ -620,13 +777,91 @@ test("sqlite repository: recommended pro model is persisted and exposed", async 
 test("sqlite repository: keyless official profiles cannot be created or activated", async (t) => {
   await withRepo(t, async (repository) => {
     await assert.rejects(
-      () => repository.upsert({ mode: "official" }),
+      () =>
+        repository.upsert({
+          mode: "official",
+          model: "provider-model-2026",
+        }),
       (error: unknown) =>
         error instanceof Error &&
         (error as { code?: unknown }).code ===
           "errors.modelProfile.apiKeyRequired",
     );
   });
+});
+
+test("createProfileBackedProvider: recommended profile uses OpenAI Responses", async () => {
+  const profile: ModelProfile = {
+    id: "m-official",
+    name: "Recommended",
+    mode: "official",
+    protocol: "openai-responses",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.deepseek.com",
+    model: "provider-model-2026",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  let seenUrl = "";
+  let seenBody: unknown;
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async (url, init) => {
+      seenUrl = url;
+      seenBody = JSON.parse(String(init.body));
+      return jsonResponse({
+        output: [{ content: [{ type: "output_text", text: "note" }] }],
+      });
+    }),
+  });
+
+  const response = await provider.invoke({
+    modelId: profile.id,
+    prompt: { id: "p", version: 1, template: "T" },
+    input: { text: "meta" },
+    maxOutputTokens: 128,
+    signal: new AbortController().signal,
+  });
+
+  assert.equal(seenUrl, "https://api.deepseek.com/responses");
+  assert.deepEqual(seenBody, {
+    model: "provider-model-2026",
+    max_output_tokens: 128,
+    input: "T\n\nmeta",
+  });
+  assert.equal(response.text, "note");
+});
+
+test("createProfileBackedProvider: custom Responses profile parses output_text", async () => {
+  const profile: ModelProfile = {
+    id: "m-custom-responses",
+    name: "OpenAI Responses",
+    mode: "custom",
+    protocol: "openai-responses",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.openai.com/v1",
+    model: "gpt-5.2",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  let seenUrl = "";
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async (url) => {
+      seenUrl = url;
+      return jsonResponse({ output_text: "response text" });
+    }),
+  });
+
+  const response = await provider.invoke({
+    modelId: profile.id,
+    prompt: { id: "p", version: 1, template: "T" },
+    input: { text: "meta" },
+    signal: new AbortController().signal,
+  });
+
+  assert.equal(seenUrl, "https://api.openai.com/v1/responses");
+  assert.equal(response.text, "response text");
 });
 
 // ── Profile-backed provider (mocked) ────────────────────────────────────────
@@ -759,7 +994,8 @@ test("createProfileBackedProvider: does not retry permanent client failures", as
       input: { text: "meta" },
       signal: new AbortController().signal,
     }),
-    /HTTP 400/,
+    (error: unknown) =>
+      (error as { code?: string }).code === "ai.provider-http-client",
   );
   assert.equal(calls, 1);
 });
@@ -872,7 +1108,7 @@ test("createProfileBackedProvider: unknown profile throws (executor falls back)"
       signal: new AbortController().signal,
     }),
     (error: unknown) =>
-      (error as { code?: string }).code === "errors.modelProfile.notFound",
+      (error as { code?: string }).code === "ai.profile-unavailable",
   );
 });
 
@@ -973,4 +1209,106 @@ test("diagnoseModelProfile: classifies bounded timeouts", async () => {
   assert.ok(
     report.attempts.every((attempt) => attempt.classification === "timeout"),
   );
+});
+
+// ── Reasoning-model response classification ────────────────────────────────
+
+function customProfile(id: string, endpoint: string): ModelProfile {
+  return {
+    id,
+    name: "Custom",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: VALID_KEY,
+    endpoint,
+    model: "deepseek-v4-flash",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function invokeWith(
+  provider: ReturnType<typeof createProfileBackedProvider>,
+  body: unknown,
+) {
+  return provider.invoke({
+    modelId: "m-classify",
+    prompt: { id: "p", version: 1, template: "T" },
+    input: { text: "meta" },
+    signal: new AbortController().signal,
+  });
+}
+
+test("createProfileBackedProvider: reasoning-only responses are attributed, not generic failures", async () => {
+  const provider = createProfileBackedProvider({
+    resolve: async () =>
+      customProfile("m-classify", "https://api.example.test/v1"),
+    fetchFn: mockFetch(async () =>
+      jsonResponse({
+        choices: [
+          {
+            message: {
+              content: "",
+              reasoning_content: "Let me think about the rules…",
+            },
+            finish_reason: "length",
+          },
+        ],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 8192,
+          total_tokens: 8292,
+          completion_tokens_details: { reasoning_tokens: 8192 },
+        },
+      }),
+    ),
+  });
+  await assert.rejects(
+    () => invokeWith(provider, {}),
+    (error: unknown) =>
+      error instanceof Error &&
+      (error as { code?: unknown }).code === "ai.provider-invalid-response" &&
+      (error as { detail?: unknown }).detail === "reasoning-only",
+  );
+});
+
+test("createProfileBackedProvider: not-json and empty-content responses are distinguished", async () => {
+  const provider = createProfileBackedProvider({
+    resolve: async () =>
+      customProfile("m-classify", "https://api.example.test/v1"),
+    fetchFn: mockFetch(
+      async () => new Response("<html>gateway</html>", { status: 200 }),
+    ),
+  });
+  await assert.rejects(
+    () => invokeWith(provider, {}),
+    (error: unknown) => (error as { detail?: unknown }).detail === "not-json",
+  );
+});
+
+test("createProfileBackedProvider: usage including reasoning tokens is extracted", async () => {
+  const provider = createProfileBackedProvider({
+    resolve: async () =>
+      customProfile("m-classify", "https://api.example.test/v1"),
+    fetchFn: mockFetch(async () =>
+      jsonResponse({
+        choices: [{ message: { content: "note" }, finish_reason: "stop" }],
+        usage: {
+          prompt_tokens: 120,
+          completion_tokens: 640,
+          total_tokens: 760,
+          completion_tokens_details: { reasoning_tokens: 500 },
+        },
+      }),
+    ),
+  });
+  const response = await invokeWith(provider, {});
+  assert.equal(response.text, "note");
+  assert.deepEqual(response.usage, {
+    inputTokens: 120,
+    outputTokens: 640,
+    totalTokens: 760,
+    reasoningTokens: 500,
+  });
+  assert.equal(response.finishReason, "stop");
 });

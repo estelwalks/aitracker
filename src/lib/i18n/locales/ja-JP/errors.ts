@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 export const errors = {
   generic: "操作に失敗しました。もう一度お試しください",
   sources: {
@@ -27,16 +26,16 @@ export const errors = {
     notManagedDir: "対象は管理対象の Skill ディレクトリではありません",
     recycleWriteFailed: "リサイクルディレクトリへの書き込みに失敗しました",
     marketSymlinkForbidden:
-      "マーケットの Skill ソースにシンボリックリンクは許可されません",
+      "セキュリティマーケットの Skill ソースにシンボリックリンクは許可されません",
     marketSourceNotDir:
-      "マーケットの Skill ソースはディレクトリである必要があります",
+      "セキュリティマーケットの Skill ソースはディレクトリである必要があります",
     marketSourceSymlink:
-      "マーケットの Skill ソースにシンボリックリンクを含めることはできません",
-    invalidSourcePath: "マーケットの Skill ソースパスが不正です",
+      "セキュリティマーケットの Skill ソースにシンボリックリンクを含めることはできません",
+    invalidSourcePath: "セキュリティマーケットの Skill ソースパスが不正です",
     sourceOutsideTemp:
-      "マーケットの Skill ソースが管理対象の一時ディレクトリ外にあります",
+      "セキュリティマーケットの Skill ソースが管理対象の一時ディレクトリ外にあります",
     marketRootNeedsSkillMd:
-      "マーケットの Skill ルートには通常ファイル SKILL.md が必要です",
+      "セキュリティマーケットの Skill ルートには通常ファイル SKILL.md が必要です",
     unsupportedAgent: "対象 Agent はサポートされていません",
     blacklisted: "この Skill はブラックリストに登録されています",
     copySymlinkForbidden: "シンボリックリンクのコピーは許可されていません",
@@ -112,13 +111,15 @@ export const errors = {
       "為替レートの更新に失敗しました。後でもう一度お試しください",
   },
   market: {
-    fieldInvalid: "マーケットのフィールド {field} が無効です",
-    pagingFieldInvalid: "マーケットのページングフィールド {field} が無効です",
-    invalidSkill: "マーケットが無効な Skill データを返しました",
-    missingPaging: "マーケットのレスポンスにページング情報がありません",
-    pagingRangeInvalid: "マーケットのページング範囲が無効です",
-    invalidFormat: "マーケットが無効な形式を返しました",
-    queryInvalid: "マーケットのクエリが無効です",
+    fieldInvalid: "セキュリティマーケットのフィールド {field} が無効です",
+    pagingFieldInvalid:
+      "セキュリティマーケットのページングフィールド {field} が無効です",
+    invalidSkill: "セキュリティマーケットが無効な Skill データを返しました",
+    missingPaging:
+      "セキュリティマーケットのレスポンスにページング情報がありません",
+    pagingRangeInvalid: "セキュリティマーケットのページング範囲が無効です",
+    invalidFormat: "セキュリティマーケットが無効な形式を返しました",
+    queryInvalid: "セキュリティマーケットのクエリが無効です",
     pageNotPositive: "ページ番号は正の整数にしてください",
     limitRange: "1 ページあたりの件数は 1 〜 50 の範囲にしてください",
     searchTooLong: "検索キーワードは 100 文字以内にしてください",
@@ -131,9 +132,9 @@ export const errors = {
       unsupportedAgent: "サポートされていない Agent が含まれています",
     },
     api: {
-      http: "マーケット API リクエストに失敗しました（HTTP {status}）",
+      http: "セキュリティマーケット API リクエストに失敗しました（HTTP {status}）",
       networkTimeout:
-        "ネットワークが利用できません：Skill マーケットのリクエストがタイムアウトし、ローカルキャッシュもありません",
+        "ネットワークが利用できません：セキュリティマーケットのリクエストがタイムアウトし、ローカルキャッシュもありません",
     },
     archive: {
       tarNumericField:

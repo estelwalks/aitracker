@@ -158,7 +158,7 @@ async function writeModelProfile(
   _home: string,
   profile: {
     mode?: "official" | "custom";
-    protocol?: "openai" | "anthropic";
+    protocol?: "openai" | "openai-responses" | "anthropic";
     apiKey?: string;
     endpoint?: string;
     model?: string;
@@ -173,7 +173,7 @@ async function writeModelProfile(
   const model = profile.mode === "official" ? "deepseek-chat" : profile.model;
   persistedModel = model
     ? {
-        provider: profile.mode === "official" ? "openai" : protocol,
+        provider: protocol === "anthropic" ? "anthropic" : "openai",
         endpoint:
           profile.mode === "official"
             ? "https://api.deepseek.com/v1"
@@ -257,6 +257,46 @@ test("discovers managed Skills and passes only bounded relative in-memory files"
   assert.equal(JSON.stringify(entry).includes(home), false);
 });
 
+test("single scans can resolve a catalog Skill by its manifest name", async () => {
+  const { home } = await fixture();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+
+  await service.start({
+    scope: "single",
+    skillName: "Demo Skill",
+    mode: "quick",
+  });
+  await waitForTerminal(service);
+
+  const [entry] = await service.history();
+  assert.equal(entry?.status, "complete");
+  assert.equal(entry?.skillName, "demo");
+});
+
+test("discovers AiPy Skills from its home directory", async () => {
+  const { home } = await fixture();
+  const skill = join(home, ".aipyapp", "skills", "aipy-demo");
+  await mkdir(skill, { recursive: true });
+  await writeFile(join(skill, "SKILL.md"), "# AiPy demo\n", "utf8");
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+
+  const target = (await service.listSkills()).find(
+    (candidate) => candidate.name === "aipy-demo",
+  );
+  assert.ok(target);
+  assert.deepEqual(target.agents, ["AiPy"]);
+});
+
 test("deduplicates the same Skill installed for multiple agents", async () => {
   const { home } = await fixture();
   const duplicate = join(home, ".claude", "skills", "renamed-demo");
@@ -318,7 +358,7 @@ test("rejects renderer paths and unknown opaque references", async () => {
   );
 });
 
-test("requires a model for full scans and automatic full scans report model-required", async () => {
+test("falls back to quick scans when AI model detection is unavailable", async () => {
   const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
@@ -332,20 +372,63 @@ test("requires a model for full scans and automatic full scans report model-requ
     skillRef: target.skillRef,
     mode: "full",
   });
-  assert.equal(state.status, "model-required");
+  assert.equal(state.status, "running");
+  assert.equal(state.mode, "quick");
   assert.equal(state.locale, "en-US");
+  await waitForTerminal(service);
   const automatic = await service.start({
     scope: "all",
     mode: "full",
     trigger: "automatic",
   });
-  assert.equal(automatic.status, "model-required");
+  assert.equal(automatic.status, "running");
+  assert.equal(automatic.mode, "quick");
+  await waitForTerminal(service);
 
   persistedModelError = new Error("SQLite model profile read failed");
   await assert.rejects(
-    service.start({ scope: "single", skillRef: target.skillRef, mode: "full" }),
+    service.start({
+      scope: "single",
+      skillRef: target.skillRef,
+      mode: "quick",
+    }),
     /SQLite model profile read failed/u,
   );
+});
+
+test("upgrades every manual scan to full when AI model detection is available", async () => {
+  const { home } = await fixture();
+  await writeModelProfile(home, {
+    protocol: "openai",
+    apiKey: "manual-full-key",
+    endpoint: "https://example.invalid/v1",
+    model: "test-model",
+  });
+  let captured: Record<string, unknown> | undefined;
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+    scanner: (async (request: unknown) => {
+      captured = request as Record<string, unknown>;
+      return report({ mode: "full" });
+    }) as never,
+  });
+  const [target] = await service.listSkills();
+  const state = await service.start({
+    scope: "single",
+    skillRef: target.skillRef,
+    mode: "quick",
+  });
+  assert.equal(state.mode, "full");
+  await waitForTerminal(service);
+  assert.equal(captured?.mode, "full");
+  assert.equal(
+    (captured?.model as { apiKey?: string })?.apiKey,
+    "manual-full-key",
+  );
+  assert.equal(persistedHistory[0]?.mode, "full");
 });
 
 test("automatic scans default to quick when no model is configured", async () => {
@@ -398,7 +481,11 @@ test("persists an automatic run when every unchanged Skill is skipped", async ()
   assert.equal(second.status, "running");
   await waitForTerminal(service);
 
-  assert.equal((await service.history()).length, 1);
+  const history = await service.history();
+  assert.equal(history.length, 2);
+  assert.equal(history[0]?.scanId, second.scanId);
+  assert.equal(history[0]?.status, "skipped");
+  assert.equal(history[0]?.errorCode, "security.scan.unchanged");
   assert.equal(persistedRun?.scanId, second.scanId);
   assert.equal(persistedRun?.trigger, "automatic");
   assert.equal(persistedRun?.status, "complete");
@@ -831,6 +918,119 @@ test("runs the real skill-scanner quick engine through the in-memory boundary", 
   assert.equal(entry.report?.branches[0]?.name, "static");
   assert.equal(entry.report?.branches[0]?.status, "complete");
   assert.equal(entry.report?.scannedFiles, 1);
+});
+
+test("binary files retain skip evidence but finish the scan", async () => {
+  const { home, skill } = await fixture();
+  await writeFile(join(skill, "payload.exe"), Buffer.from([0, 1, 2]));
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+    scanner: (async () => report()) as never,
+  });
+  const [target] = await service.listSkills();
+
+  await service.start({
+    scope: "single",
+    skillRef: target.skillRef,
+    mode: "quick",
+  });
+  await waitForTerminal(service);
+
+  const [entry] = await service.history();
+  assert.equal(service.getStatus().status, "complete");
+  assert.equal(entry.status, "complete");
+  assert.equal(entry.report?.status, "complete");
+  assert.equal(entry.report?.verdict, "allow");
+  assert.deepEqual(entry.report?.skippedFiles, [
+    { path: "payload.exe", reasonCode: "binary", reason: "binary" },
+  ]);
+});
+
+test("exhausted AI analysis retries retain branch evidence but finish the scan", async () => {
+  const { home } = await fixture();
+  const partial = report({ mode: "full" });
+  partial.status = "partial";
+  partial.verdict = "unknown";
+  partial.branches = [
+    { name: "static", status: "complete" },
+    { name: "ruleReview", status: "complete" },
+    { name: "singleFileAnalysis", status: "skipped" },
+    {
+      name: "multiFileAnalysis",
+      status: "failed",
+      detail: "retry exhausted",
+    },
+  ];
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+    scanner: (async () => partial) as never,
+  });
+  await writeModelProfile(home, {
+    protocol: "openai",
+    apiKey: "sk-test-retry-exhausted",
+    model: "test-model",
+  });
+  const [target] = await service.listSkills();
+
+  await service.start({
+    scope: "single",
+    skillRef: target.skillRef,
+    mode: "full",
+  });
+  await waitForTerminal(service);
+
+  const [entry] = await service.history();
+  assert.equal(service.getStatus().status, "complete");
+  assert.equal(entry.status, "complete");
+  assert.equal(entry.report?.status, "complete");
+  assert.equal(entry.report?.verdict, "allow");
+  assert.equal(
+    entry.report?.branches.find((branch) => branch.name === "multiFileAnalysis")
+      ?.status,
+    "failed",
+  );
+});
+
+test("normalizes persisted terminal partial reports from older scans", async () => {
+  const { home } = await fixture();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+    scanner: (async () => report()) as never,
+  });
+  const [target] = await service.listSkills();
+  await service.start({
+    scope: "single",
+    skillRef: target.skillRef,
+    mode: "quick",
+  });
+  await waitForTerminal(service);
+  persistedHistory = persistedHistory.map((entry) => ({
+    ...entry,
+    status: "partial",
+    report: entry.report
+      ? {
+          ...entry.report,
+          status: "partial",
+          verdict: "unknown",
+          branches: [],
+          skippedFiles: [],
+        }
+      : undefined,
+  }));
+
+  const [entry] = await service.history();
+  assert.equal(entry.status, "complete");
+  assert.equal(entry.report?.status, "complete");
+  assert.equal(entry.report?.verdict, "allow");
 });
 
 test("real quick history never projects path assignment or Slack webhook canaries", async () => {

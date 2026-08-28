@@ -65,6 +65,7 @@ const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
   { agent: "OpenCode", suffixes: [".config/opencode/skills"] },
   { agent: "Grok Build", suffixes: [".grok/skills"], envHome: "GROK_HOME" },
   { agent: "Hermes Agent", suffixes: [".hermes/skills"] },
+  { agent: "AiPy", suffixes: [".aipyapp/skills"] },
 ];
 
 interface TrustedSkill {
@@ -446,7 +447,34 @@ function sanitizeReport(
           : scannerSkipReasonCode(file.reason),
       reason: sanitizeText(file.reason, 240, exactSecrets) ?? "scanner-skip",
     })),
+    tokenUsage: parsed.tokenUsage,
   };
+}
+
+/**
+ * Binary payloads and exhausted model-analysis retries are terminal outcomes,
+ * not unfinished work. Keep their evidence in the report, but do not leave
+ * the enclosing Skill/task in a perpetual partial state. Readability limits
+ * such as unavailable files, symlinks, depth and size limits still block a
+ * complete result because the scanner did not intentionally classify them.
+ */
+function finalizeTerminalPartialReport(report: SecurityScanReportDto): void {
+  const hasBlockingSkippedFile = report.skippedFiles.some(
+    (file) => file.reasonCode !== "binary",
+  );
+  const hasBlockingBranch = report.branches.some(
+    (branch) => branch.name === "static" && branch.status !== "complete",
+  );
+  if (hasBlockingSkippedFile || hasBlockingBranch) return;
+
+  report.status = "complete";
+  if (report.verdict !== "unknown") return;
+  report.verdict =
+    report.riskScore <= 40
+      ? "block"
+      : report.riskScore <= 60
+        ? "warn"
+        : "allow";
 }
 
 function parseHistoryEntry(
@@ -479,10 +507,15 @@ function parseHistoryEntry(
   if (item.report !== undefined) {
     try {
       report = sanitizeReport(item.report as ScanSkillReport, exactSecrets);
+      finalizeTerminalPartialReport(report);
     } catch {
       return null;
     }
   }
+  const status =
+    item.status === "partial" && report?.status === "complete"
+      ? "complete"
+      : (item.status as SecurityScanHistoryEntry["status"]);
   return {
     id: item.id.slice(0, 160),
     scanId: item.scanId as SecurityScanHistoryEntry["scanId"],
@@ -491,7 +524,7 @@ function parseHistoryEntry(
     mode: item.mode,
     trigger: item.trigger,
     locale: item.locale as DesktopLocale,
-    status: item.status as SecurityScanHistoryEntry["status"],
+    status,
     startedAt: item.startedAt,
     finishedAt: item.finishedAt,
     ...(report == null ? {} : { report }),
@@ -666,34 +699,27 @@ export class SecurityScannerService {
       throw new Error("A security scan is already running");
     const request = this.#parseStartRequest(input);
     const startingEpoch = this.#epoch;
-    if (request.mode === "full" && !(await this.#modelConfig())) {
-      if (startingEpoch !== this.#epoch)
-        throw new Error("Security scan was cleared");
-      this.#state = {
-        ...emptyState(),
-        scanId: scanId(),
-        status: "model-required",
-        mode: request.mode,
-        trigger: request.trigger,
-        locale: this.#options.locale(),
-        finishedAt: this.#now(),
-        errorCode: "security.modelRequired",
-      };
-      return this.getStatus();
-    }
+    // Scan mode is a service-owned policy, not a renderer preference. The
+    // persistence adapter exposes a model only when a profile is configured
+    // and AI detection is enabled, so every entry point (single, full-list,
+    // retry and scheduled) follows the same rule.
+    const config = await this.#modelConfig();
+    const mode: SecurityScanMode = config ? "full" : "quick";
 
     const discovered = await this.listSkills();
     if (startingEpoch !== this.#epoch)
       throw new Error("Security scan was cleared");
-    const targets = this.#resolveTargets(discovered, {
+    const targets = await this.#resolveTargets(discovered, {
       scope: request.scope,
       skillRef: request.skillRef,
+      skillName: request.skillName,
     });
     return this.#executeScan(
       discovered,
       targets,
-      request.mode,
+      mode,
       request.trigger,
+      config,
     );
   }
 
@@ -702,21 +728,28 @@ export class SecurityScannerService {
    * contract; "agent" narrows by skill agents, "dir" by skill root path prefix
    * (roots live only on the private #trusted map, so dir filtering consults it).
    */
-  #resolveTargets(
+  async #resolveTargets(
     discovered: SecuritySkillTarget[],
     options: {
       scope: SecurityScanScope | "single";
       skillRef?: SecuritySkillTarget["skillRef"];
+      skillName?: string;
       agents?: readonly string[];
       dir?: string | null;
     },
-  ): SecuritySkillTarget[] {
+  ): Promise<SecuritySkillTarget[]> {
     switch (options.scope) {
       case "single": {
         const trusted = options.skillRef
           ? this.#trusted.get(options.skillRef)
           : undefined;
-        return trusted ? [trusted.target] : [];
+        if (trusted) return [trusted.target];
+        if (!options.skillName) return [];
+        for (const candidate of this.#trusted.values()) {
+          if (await this.#matchesSkillName(candidate.root, options.skillName))
+            return [candidate.target];
+        }
+        return [];
       }
       case "all":
         return discovered;
@@ -751,6 +784,7 @@ export class SecurityScannerService {
     targets: SecuritySkillTarget[],
     mode: SecurityScanMode,
     trigger: SecurityScanTrigger,
+    config?: ModelConfig,
   ): Promise<SecurityScanState> {
     if (targets.length === 0)
       throw new Error("No trusted Skill target was found");
@@ -779,7 +813,11 @@ export class SecurityScannerService {
       resultIds: [],
     };
     await this.#persistCurrentRun();
-    const activeRun = this.#run(id, epoch, locale, targets, { mode, trigger });
+    const activeRun = this.#run(id, epoch, locale, targets, {
+      mode,
+      trigger,
+      ...(config ? { config } : {}),
+    });
     this.#activeRun = activeRun;
     void activeRun
       .catch(async () => {
@@ -811,7 +849,8 @@ export class SecurityScannerService {
     if (this.#clearing) throw new Error("Security scanner is being cleared");
     if (this.#state.status === "running" || this.#state.status === "cancelling")
       throw new Error("A security scan is already running");
-    const mode = (await this.#modelConfig()) ? "full" : "quick";
+    const config = await this.#modelConfig();
+    const mode: SecurityScanMode = config ? "full" : "quick";
     const startingEpoch = this.#epoch;
     const discovered = await this.listSkills(
       schedule?.scope === "dir" && schedule.dir
@@ -821,12 +860,12 @@ export class SecurityScannerService {
     if (startingEpoch !== this.#epoch)
       throw new Error("Security scan was cleared");
     const scope = schedule?.scope ?? "all";
-    const targets = this.#resolveTargets(discovered, {
+    const targets = await this.#resolveTargets(discovered, {
       scope,
       agents: scope === "agent" ? schedule?.agents : undefined,
       dir: scope === "dir" ? schedule?.dir : undefined,
     });
-    return this.#executeScan(discovered, targets, mode, "automatic");
+    return this.#executeScan(discovered, targets, mode, "automatic", config);
   }
 
   async history(): Promise<SecurityScanHistoryEntry[]> {
@@ -884,7 +923,13 @@ export class SecurityScannerService {
     if (input == null || typeof input !== "object" || Array.isArray(input))
       throw new TypeError("Security scan request is required");
     const value = input as Record<string, unknown>;
-    const allowed = new Set(["scope", "skillRef", "mode", "trigger"]);
+    const allowed = new Set([
+      "scope",
+      "skillRef",
+      "skillName",
+      "mode",
+      "trigger",
+    ]);
     if (Object.keys(value).some((key) => !allowed.has(key)))
       throw new TypeError("Security scan request contains unsupported fields");
     if (value.scope !== "single" && value.scope !== "all")
@@ -895,15 +940,37 @@ export class SecurityScannerService {
     if (trigger !== "manual" && trigger !== "automatic")
       throw new TypeError("Unsupported security scan trigger");
     let ref = "" as SecuritySkillTarget["skillRef"];
+    const skillName =
+      typeof value.skillName === "string" ? value.skillName.trim() : "";
+    if (
+      skillName.length > 160 ||
+      [...skillName].some((character) => {
+        const code = character.codePointAt(0) ?? 0;
+        return code <= 31 || code === 127;
+      })
+    )
+      throw new TypeError("Invalid Skill name");
     if (value.scope === "single") {
       if (
-        typeof value.skillRef !== "string" ||
-        !/^skill:[a-f0-9]{64}$/u.test(value.skillRef)
+        (typeof value.skillRef !== "string" ||
+          !/^skill:[a-f0-9]{64}$/u.test(value.skillRef)) &&
+        !skillName
       )
-        throw new TypeError("A valid opaque Skill reference is required");
-      ref = value.skillRef as SecuritySkillTarget["skillRef"];
+        throw new TypeError(
+          "A valid opaque Skill reference or name is required",
+        );
+      if (typeof value.skillRef === "string")
+        ref = value.skillRef as SecuritySkillTarget["skillRef"];
+    } else if (value.skillRef != null || skillName) {
+      throw new TypeError("All-skill scans cannot include a Skill target");
     }
-    return { scope: value.scope, mode: value.mode, trigger, skillRef: ref };
+    return {
+      scope: value.scope,
+      mode: value.mode,
+      trigger,
+      skillRef: ref,
+      skillName,
+    };
   }
 
   async #run(
@@ -911,11 +978,12 @@ export class SecurityScannerService {
     epoch: number,
     locale: DesktopLocale,
     targets: SecuritySkillTarget[],
-    request: Required<Pick<SecurityScanStartRequest, "mode" | "trigger">>,
+    request: Required<Pick<SecurityScanStartRequest, "mode" | "trigger">> & {
+      readonly config?: ModelConfig;
+    },
   ): Promise<void> {
     const newEntries: SecurityScanHistoryEntry[] = [];
-    const config =
-      request.mode === "full" ? await this.#modelConfig() : undefined;
+    const config = request.config;
     if (!this.#isActive(id, epoch)) return;
     // Last-known content hash per skill (latest complete scan). Unchanged
     // skills are skipped on automatic runs so repeated monitoring does not
@@ -955,7 +1023,22 @@ export class SecurityScannerService {
           lastContentHash.get(target.skillRef) ===
             contentHashOf(collected.files)
         ) {
+          const entry: SecurityScanHistoryEntry = {
+            id: `${id}:${target.skillRef.slice("skill:".length, "skill:".length + 16)}`,
+            scanId: id,
+            skillRef: target.skillRef,
+            skillName: target.name,
+            mode: request.mode,
+            trigger: request.trigger,
+            locale,
+            status: "skipped",
+            startedAt: itemStartedAt,
+            finishedAt: this.#now(),
+            errorCode: "security.scan.unchanged",
+          };
+          newEntries.push(entry);
           this.#state.progress.skipped += 1;
+          this.#state.resultIds.push(entry.id);
           continue;
         }
         const report = await (this.#options.scanner ?? scanSkill)({
@@ -980,6 +1063,7 @@ export class SecurityScannerService {
           ];
           if (dto.findings.length === 0) dto.verdict = "unknown";
         }
+        finalizeTerminalPartialReport(dto);
         const status = dto.status;
         const entry: SecurityScanHistoryEntry = {
           id: `${id}:${target.skillRef.slice("skill:".length, "skill:".length + 16)}`,
@@ -1128,6 +1212,29 @@ export class SecurityScannerService {
       }
     }
     return null;
+  }
+
+  async #matchesSkillName(root: string, requested: string): Promise<boolean> {
+    if (basename(root) === requested) return true;
+    const marker = await this.#findMarker(root);
+    if (marker == null) return false;
+    let handle;
+    try {
+      handle = await open(join(root, marker), "r");
+      const buffer = Buffer.alloc(64 * 1024);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+      const content = buffer.toString("utf8", 0, bytesRead);
+      const match = content.match(
+        /^---\r?\n[\s\S]*?^name:\s*(.*?)\s*$[\s\S]*?^---\s*$/imu,
+      );
+      if (!match?.[1]) return false;
+      const name = match[1].trim().replace(/^(['"])(.*)\1$/u, "$2");
+      return safeDisplayName(name, "") === requested;
+    } catch {
+      return false;
+    } finally {
+      await handle?.close().catch(() => {});
+    }
   }
 
   #skillName(root: string): string {

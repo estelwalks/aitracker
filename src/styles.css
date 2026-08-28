@@ -17,6 +17,21 @@ body.aitracker-widget-float-document {
   background: transparent !important;
 }
 
+/* Product marks are UI assets, distinct from the macOS/Windows application
+ * icon. The root theme class also covers an explicit theme that differs from
+ * the operating-system preference. */
+.aitracker-brand-mark-light {
+  display: none;
+}
+
+.theme-light .aitracker-brand-mark-dark {
+  display: none;
+}
+
+.theme-light .aitracker-brand-mark-light {
+  display: block;
+}
+
 .aitracker-widget-float-shell,
 .aitracker-widget-float-shell main,
 .aitracker-widget-float-stage {
@@ -347,7 +362,7 @@ body.aitracker-widget-float-document {
   --aitracker-font-section-title: 16px;
   --aitracker-font-page-title: 20px;
   --aitracker-font-metric: 24px;
-  --aitracker-font-metric-hero: 32px;
+  --aitracker-font-metric-hero: 28px;
   --aitracker-readable-font-min: 12px;
 
   --aitracker-line-caption: 18px;
@@ -357,7 +372,7 @@ body.aitracker-widget-float-document {
   --aitracker-line-section-title: 24px;
   --aitracker-line-page-title: 28px;
   --aitracker-line-metric: 28px;
-  --aitracker-line-metric-hero: 36px;
+  --aitracker-line-metric-hero: 32px;
 
   --aitracker-control-height: 32px;
   --aitracker-control-height-sm: 28px;
@@ -1177,6 +1192,21 @@ body:not(.aitracker-widget-float-document)
   max-width: 1720px;
 }
 
+.dashboard-page-stack,
+.dashboard-overview-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.dashboard-page-stack {
+  gap: 14px;
+}
+
+.dashboard-overview-stack {
+  gap: var(--aitracker-space-4);
+}
+
 /* Agent 概览的横向切换条：与原型保持同一套覆盖式滚动控件。 */
 .aitracker-agentbar {
   position: sticky;
@@ -1277,42 +1307,11 @@ body:not(.aitracker-widget-float-document)
   filter: blur(64px);
 }
 
-/* Security keeps the existing hero footprint while using the prototype's
-   severity-aware glow and denser internal composition. */
-.security-briefing-card {
-  min-height: 152.75px;
-}
-
-.security-briefing-actions {
-  display: flex;
-  min-width: max-content;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.security-briefing-health-ring {
-  /* Keep the health copy comfortably inside the ring at the enlarged type
-     scale; the previous 6rem diameter made the percentage read oversized. */
-  width: clamp(7rem, 8vw, 8rem);
-  height: clamp(7rem, 8vw, 8rem);
-  aspect-ratio: 1;
-}
-
 .security-briefing-scan {
   min-height: var(--aitracker-control-height);
   max-width: 100%;
   font-size: var(--aitracker-font-body);
   line-height: 1.25;
-}
-
-.security-briefing-card::before {
-  background: var(--briefing-tone, var(--color-ok));
-}
-
-.security-briefing-card::after {
-  background: var(--color-primary);
-  opacity: 0.075;
 }
 
 .dashboard-insight-hero::before {
@@ -1993,19 +1992,62 @@ body:not(.aitracker-widget-float-document)
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* Compact-height mode targets 13-inch laptops whose browser viewport is often
+   closer to 720px tall after window chrome. It preserves the established type
+   hierarchy while moving the tool rail above the fixed privacy strip. */
+@media (max-height: 760px) and (min-width: 900px) {
+  .dashboard-page-stack,
+  .dashboard-overview-stack {
+    gap: var(--aitracker-space-3);
+  }
+
+  .dashboard-insight-hero:not(.dashboard-insight-inline) {
+    padding: var(--aitracker-space-4) var(--aitracker-space-5);
+  }
+
+  .dashboard-insight-copy[data-variant="hero"] {
+    min-height: 36px;
+  }
+
+  .dashboard-insight-tabs {
+    margin-top: var(--aitracker-space-2);
+  }
+
+  .dashboard-spotlight-card {
+    padding: var(--aitracker-space-3) var(--aitracker-space-4);
+  }
+
+  .dashboard-spotlight-card > strong,
+  .dashboard-spotlight-card > a,
+  .dashboard-spotlight-card > button {
+    margin-top: 6px;
+  }
+
+  .dashboard-range-bar {
+    padding-block: var(--aitracker-space-1);
+  }
+
+  .dashboard-metric-card {
+    padding-block: 10px;
+  }
+}
+
+/* On very short windows the persistent privacy promise would cover interactive
+   content. Hide only the dock; the same privacy copy remains available in the
+   product's normal-height shell. */
+@media (max-height: 680px) {
+  .aitracker-privacy-dock {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   .dashboard-insight-hero {
     padding: 1.25rem;
   }
   .dashboard-insight-orb {
     display: none;
-  }
-  .security-briefing-actions {
-    width: 100%;
-    min-width: 0;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: flex-start;
   }
   .security-briefing-scan {
     flex: 1 1 12rem;

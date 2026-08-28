@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MonitorX, RefreshCw } from "lucide-react";
+import { Loader2, MonitorX, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { brandParams } from "../../../lib/app-config";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import {
+  PAGE_INSIGHT_REFRESH_CHANNEL,
+  PAGE_INSIGHT_REFRESH_EVENT,
+} from "../../insights/index.ts";
+import { refreshPageInsightSurface } from "../../insights/page/server-fns.ts";
+import {
   getDesktopSecurityClient,
   type SecurityClient,
 } from "../query/desktop-client";
 import { getBrowserSecurityClient } from "../query/browser-client";
 import { getSecurityLlmReviewAvailability } from "../llm-review.server-fns";
+import { SECURITY_SCAN_STARTED_EVENT } from "../events";
 import { AutoScanGuide } from "./components/AutoScanGuide";
 import { ScanHistory } from "./components/ScanHistory";
 import { ScanStatus, type ScanStatusNav } from "./components/ScanStatus";
@@ -20,16 +26,20 @@ import { SkillReportModal } from "./components/SkillReportModal";
 import { UnsafeSkillList } from "./components/UnsafeSkillList";
 import {
   countScanTasks,
+  dedupeHistoryByContentHash,
   EMPTY_SECURITY_PROGRESS,
   EMPTY_SECURITY_TOTALS,
   SECURITY_RISK_KINDS,
   effectiveSecurityScanMode,
+  historyForCurrentSkills,
+  clampPercent,
   isScanActive,
   latestHistory,
-  latestScanEntries,
+  resolveNextScheduledScanAt,
   summarizeReports,
   type SecurityHistoryView,
   type SecurityScanMode,
+  type SecurityScanRunView,
   type SecurityScanStateView,
   type SecurityScanTaskView,
   type SecuritySkillView,
@@ -48,10 +58,18 @@ const IDLE_STATE: SecurityScanStateView = {
 const ACTIVE_SCAN_POLL_INTERVAL_MS = 450;
 const IDLE_SCAN_POLL_INTERVAL_MS = 5_000;
 
+function broadcastSecurityInsightRefresh(): void {
+  window.dispatchEvent(new Event(PAGE_INSIGHT_REFRESH_EVENT));
+  if (typeof BroadcastChannel !== "function") return;
+  const channel = new BroadcastChannel(PAGE_INSIGHT_REFRESH_CHANNEL);
+  channel.postMessage({ reason: "security-scan-completed" });
+  channel.close();
+}
+
 export function SecurityAssessmentPage() {
   const { t, format } = useI18n();
   const clientRef = useRef<SecurityClient | null>(null);
-  const previousStatus = useRef<SecurityScanStateView["status"]>("idle");
+  const refreshedInsightScanId = useRef<string | null>(null);
   const [connection, setConnection] = useState<
     "connecting" | "available" | "unavailable"
   >("connecting");
@@ -59,6 +77,8 @@ export function SecurityAssessmentPage() {
   const [skills, setSkills] = useState<readonly SecuritySkillView[]>([]);
   const [scanState, setScanState] = useState<SecurityScanStateView>(IDLE_STATE);
   const [history, setHistory] = useState<readonly SecurityHistoryView[]>([]);
+  const [nextScanAt, setNextScanAt] = useState<string | null>(null);
+  const [latestRun, setLatestRun] = useState<SecurityScanRunView | null>(null);
   const [modelConfigured, setModelConfigured] = useState(false);
   const [aiAssistedEnabled, setAiAssistedEnabled] = useState(false);
   const [selectedReport, setSelectedReport] =
@@ -90,6 +110,19 @@ export function SecurityAssessmentPage() {
     [t],
   );
 
+  const refreshSecurityInsight = useCallback(async () => {
+    try {
+      await refreshPageInsightSurface({
+        data: { surfaceId: "security" },
+      });
+    } catch {
+      // The renderer refresh still lets the page recover when cache
+      // invalidation is temporarily unavailable.
+    } finally {
+      broadcastSecurityInsightRefresh();
+    }
+  }, []);
+
   const refresh = useCallback(
     async (reconnect = false) => {
       if (reconnect) clientRef.current = null;
@@ -98,6 +131,7 @@ export function SecurityAssessmentPage() {
       if (client == null) {
         setConnection("unavailable");
         setLoading(false);
+        setNextScanAt(null);
         return;
       }
       if (client.transport === "desktop") setConnection("available");
@@ -110,11 +144,27 @@ export function SecurityAssessmentPage() {
         setSkills(nextSkills);
         setScanState(nextState);
         setHistory(nextHistory);
+        if (
+          nextState.scanId !== null &&
+          (nextState.status === "complete" || nextState.status === "partial")
+        ) {
+          refreshedInsightScanId.current = nextState.scanId;
+        }
+        void Promise.all([
+          client.getScanSchedule(),
+          client.getScanScheduleStatus(),
+        ])
+          .then(([schedule, status]) => {
+            setNextScanAt(resolveNextScheduledScanAt(schedule, status));
+            setLatestRun(status.lastRun);
+          })
+          .catch(() => setNextScanAt(null));
         setConnection("available");
       } catch (error) {
         if (client.transport === "companion") {
           clientRef.current = null;
           setConnection("unavailable");
+          setNextScanAt(null);
         }
         reportError(error);
       } finally {
@@ -127,6 +177,29 @@ export function SecurityAssessmentPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // A scan can be started from another route immediately before navigation to
+  // this page. Re-read the shared runtime state when that handoff completes so
+  // the in-page progress bar does not wait for the idle polling interval.
+  useEffect(() => {
+    let disposed = false;
+    const syncStartedScan = async () => {
+      try {
+        const client = await getClient();
+        if (client == null || disposed) return;
+        const next = await client.getStatus();
+        if (!disposed) setScanState(next);
+      } catch (error) {
+        if (!disposed) reportError(error);
+      }
+    };
+    const onScanStarted = () => void syncStartedScan();
+    window.addEventListener(SECURITY_SCAN_STARTED_EVENT, onScanStarted);
+    return () => {
+      disposed = true;
+      window.removeEventListener(SECURITY_SCAN_STARTED_EVENT, onScanStarted);
+    };
+  }, [getClient, reportError]);
 
   // The scan setting is the shared gate for both the optional report review
   // and the model-assisted full scan. A configured model alone must never
@@ -159,8 +232,15 @@ export function SecurityAssessmentPage() {
       if (busy) return;
       busy = true;
       try {
-        const next = await client.getStatus();
+        const [next, scheduleStatus] = await Promise.all([
+          client.getStatus(),
+          client.getScanScheduleStatus(),
+        ]);
         if (disposed) return;
+        setLatestRun(scheduleStatus.lastRun);
+        if (scheduleStatus.nextRunAt != null) {
+          setNextScanAt(scheduleStatus.nextRunAt);
+        }
         if (!isScanActive(next.status)) {
           const nextHistory = await client.getHistory();
           if (disposed) return;
@@ -169,7 +249,15 @@ export function SecurityAssessmentPage() {
           // mark the request disposed and leave a completed scan looking empty.
           setHistory(nextHistory);
         }
+        const shouldRefreshInsight =
+          next.scanId !== null &&
+          (next.status === "complete" || next.status === "partial") &&
+          refreshedInsightScanId.current !== next.scanId;
+        if (shouldRefreshInsight) {
+          refreshedInsightScanId.current = next.scanId;
+        }
         setScanState(next);
+        if (shouldRefreshInsight) void refreshSecurityInsight();
       } catch (error) {
         if (!disposed) reportError(error);
       } finally {
@@ -188,28 +276,29 @@ export function SecurityAssessmentPage() {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [connection, reportError, scanState.status]);
-
-  useEffect(() => {
-    const previous = previousStatus.current;
-    previousStatus.current = scanState.status;
-    if (!isScanActive(previous) || isScanActive(scanState.status)) return;
-    if (scanState.status === "complete")
-      toast.success(t("security.center.toast.completed"));
-    else if (scanState.status === "partial")
-      toast.warning(t("security.center.toast.partial"));
-    else if (scanState.status === "failed")
-      toast.error(t("security.center.toast.failed"));
-  }, [scanState.status, t]);
+  }, [connection, refreshSecurityInsight, reportError, scanState.status]);
 
   const latest = latestHistory(history);
+  const latestFinishedAt = [
+    latest?.finishedAt,
+    latestRun?.finishedAt ?? latestRun?.startedAt,
+  ]
+    .filter((value): value is string => value != null)
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+  const scanCount = countScanTasks(history);
   const riskKinds = SECURITY_RISK_KINDS;
-  const latestEntries = useMemo(() => latestScanEntries(history), [history]);
+  const currentHistory = useMemo(
+    () => historyForCurrentSkills(history, skills),
+    [history, skills],
+  );
+  const latestEntries = useMemo(
+    () => dedupeHistoryByContentHash(currentHistory),
+    [currentHistory],
+  );
   const latestTotals = useMemo(
     () => summarizeReports(latestEntries),
     [latestEntries],
   );
-  const historicalTotals = useMemo(() => summarizeReports(history), [history]);
   const statusTotals = isScanActive(scanState.status)
     ? {
         ...EMPTY_SECURITY_TOTALS,
@@ -217,17 +306,10 @@ export function SecurityAssessmentPage() {
         failed: scanState.progress.failed,
         skipped: scanState.progress.skipped,
       }
-    : historicalTotals;
-  const lastScanLabel = latest
-    ? format.formatDateTime(latest.finishedAt, false)
+    : latestTotals;
+  const lastScanLabel = latestFinishedAt
+    ? format.formatDateTime(latestFinishedAt, false)
     : "—";
-  const latestPhase =
-    latest == null
-      ? null
-      : latest.status === "skipped"
-        ? "partial"
-        : latest.status;
-
   const startScan = useCallback(
     async (
       mode: SecurityScanMode,
@@ -279,6 +361,66 @@ export function SecurityAssessmentPage() {
 
   return (
     <div className="space-y-2 pb-12">
+      {connection !== "connecting" && (
+        <SecurityBriefing
+          totals={latestTotals}
+          dimensions={riskKinds.length}
+          lastScan={lastScanLabel}
+          nextScan={
+            nextScanAt === null ? "—" : format.formatDateTime(nextScanAt, false)
+          }
+          scanning={
+            connection !== "available" || isScanActive(scanState.status)
+          }
+          onScan={() =>
+            void startScan(
+              modelConfigured && aiAssistedEnabled ? "full" : "quick",
+            )
+          }
+        />
+      )}
+
+      {connection === "available" && isScanActive(scanState.status) && (
+        <section
+          className="rounded-xl border border-primary/20 bg-card px-4 py-3"
+          aria-live="polite"
+          aria-label={t("security.center.status.scanning")}
+        >
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-mono text-[11px]">
+            <Loader2 className="size-3.5 animate-spin text-primary" />
+            <span className="font-semibold text-foreground">
+              {t("security.center.status.scanning")}
+            </span>
+            {scanState.currentSkill && (
+              <span className="min-w-0 truncate text-muted-foreground">
+                · {scanState.currentSkill}
+              </span>
+            )}
+            <span className="ml-auto text-foreground">
+              {clampPercent(scanState.progress.percent)}%
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-300"
+              style={{ width: `${clampPercent(scanState.progress.percent)}%` }}
+            />
+          </div>
+          <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground">
+            <span>
+              {t("security.center.status.progress", {
+                completed:
+                  scanState.progress.completed +
+                  scanState.progress.failed +
+                  scanState.progress.skipped,
+                total: scanState.progress.queued,
+              })}
+            </span>
+            <span>{scanState.mode ?? "quick"}</span>
+          </div>
+        </section>
+      )}
+
       {connection === "unavailable" ? (
         <section className="grid min-h-[520px] place-items-center rounded-3xl bg-card p-8 text-center shadow-[var(--elev-1)]">
           <div className="max-w-lg">
@@ -312,34 +454,14 @@ export function SecurityAssessmentPage() {
         </div>
       ) : (
         <>
-          <SecurityBriefing
-            totals={latestTotals}
-            dimensions={riskKinds.length}
-            lastScan={lastScanLabel}
-            latestStatus={
-              latestEntries.some(
-                (item) =>
-                  item.status === "partial" || item.status === "skipped",
-              )
-                ? "partial"
-                : latestPhase
-            }
-            scanning={isScanActive(scanState.status)}
-            onScan={() =>
-              void startScan(
-                modelConfigured && aiAssistedEnabled ? "full" : "quick",
-              )
-            }
-          />
-
-          <AutoScanGuide />
+          <AutoScanGuide onNextScanAtChange={setNextScanAt} />
 
           <ScanStatus
             state={scanState}
             totals={statusTotals}
-            scanCount={countScanTasks(history)}
+            scanCount={scanCount}
             dimensions={riskKinds.length}
-            latestFinishedAt={latest?.finishedAt}
+            latestFinishedAt={latestFinishedAt}
             riskKinds={riskKinds}
             onGo={goTo}
           />
@@ -347,6 +469,7 @@ export function SecurityAssessmentPage() {
           <div ref={unsafeListRef}>
             <UnsafeSkillList
               entries={latestEntries}
+              skills={skills}
               onOpenReport={setSelectedReport}
             />
           </div>

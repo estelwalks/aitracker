@@ -71,6 +71,10 @@ function projectSnapshot(value: SkillSnapshotData): SkillSnapshot {
         source: installation.source
           ? { kind: installation.source.kind, label: installation.source.label }
           : null,
+        ...(installation.directoryName
+          ? { directoryName: installation.directoryName }
+          : {}),
+        ...(installation.isDistilled ? { isDistilled: true } : {}),
         updateStatus: installation.updateStatus,
         updateReason: installation.updateReason,
       })),

@@ -81,6 +81,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "hermes",
     "openclaw",
     "antigravity",
+    "aipy",
   ];
   // Native readers plus registry-declared generic adapters are supported.
   const BASELINE_USAGE_NATIVE = new Set([

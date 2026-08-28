@@ -206,7 +206,7 @@ export function DashboardV2Page({
   });
 
   return (
-    <div className="space-y-[16px]">
+    <div className="dashboard-overview-stack">
       {workspaceInitializationState === "loading" ? (
         <section
           className="dashboard-panel flex items-start gap-3 border border-primary/20 bg-primary/5"

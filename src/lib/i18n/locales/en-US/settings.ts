@@ -48,10 +48,13 @@ export const settings = {
     currentActive: "Active now",
     apiFormatLabel: "API format",
     protocolLabel: "API format",
-    protocolOpenai: "OpenAI compatible",
+    protocolOpenai: "OpenAI Completion",
+    protocolOpenaiResponses: "OpenAI Responses",
     protocolAnthropic: "Anthropic",
     protocolOpenaiHint:
       "For Chat Completions APIs such as OpenAI / DeepSeek / Kimi / Qwen",
+    protocolOpenaiResponsesHint:
+      "For the OpenAI Responses API and compatible /responses endpoints",
     protocolAnthropicHint:
       "For Claude official and Messages-API-compatible gateways",
     officialDesc: "DeepSeek · {model} · Recommended model",
@@ -76,10 +79,13 @@ export const settings = {
     authBearerHint:
       "For gateways requiring Authorization: Bearer (e.g. internal DeepSeek gateway)",
     listModels: "Fetch model list",
+    listOfficialModels: "Fetch official model list",
     listingModels: "Fetching…",
     selectModel: "Select model…",
     manualModel: "or type a model name manually",
     modelFetchHint: "{model} (enter a key to fetch the list)",
+    officialModelFetchHint:
+      "Enter an API key to fetch the official list, or type a model name",
     listModelsDone: "Fetched {count} models",
     listModelsFallback:
       "The API is not directly reachable (CORS/gateway limits); showing common models for this provider",
@@ -259,6 +265,7 @@ export const settings = {
       "enhancer-failed": "Model configuration failed",
       "invalid-output": "Invalid enhancer output",
       "no-eligible-candidates": "No eligible content to enhance",
+      pending: "AI insight generating",
       stale: "Data may be stale",
     },
     fallbackStatus: {
@@ -273,6 +280,33 @@ export const settings = {
         "AI returned invalid output; showing rule-based insight",
       "no-eligible-candidates":
         "No eligible content; showing rule-based insight",
+      pending:
+        "AI insight is generating in the background; showing rule-based insight",
+    },
+    failureReason: {
+      timeout: "Model response timed out",
+      "empty-content": "Model returned empty content",
+      "reasoning-only":
+        "Model returned reasoning only (likely a reasoning model) — try raising the output limit or switching to a non-reasoning model",
+      "not-json": "Model response is not valid JSON",
+      "http-error": "Model service returned an HTTP error",
+      unknown: "Unexpected model response",
+    },
+    surfaces: {
+      dashboard: "Dashboard",
+      agents: "Agents",
+      distill: "Distill",
+      reports: "Reports",
+      memory: "Memory",
+      security: "Security",
+      tracker: "Usage tracker",
+      skills: "Skills",
+      market: "Market",
+      chats: "Sessions",
+      "chat-detail": "Session detail",
+      widget: "Widget",
+      settings: "Settings",
+      sources: "Sources",
     },
     section: {
       title: "AI insights",
@@ -298,7 +332,7 @@ export const settings = {
       dailyLimitHint: "Leave empty to default to 30 (server-enforced)",
       refreshInterval: "AI insight refresh interval",
       refreshIntervalHint:
-        "Refresh every {min}–{max} minutes; default is 60 minutes",
+        "Refresh every {min}–{max} minutes (24 hours); default is 5 hours",
       minutes: "minutes",
       intervalInvalid: "Enter a valid refresh interval",
       intervalSaved: "AI insight refresh interval saved",
@@ -306,7 +340,17 @@ export const settings = {
       refreshNowHint: "Clear the current insight cache and regenerate now",
       refreshNowButton: "Refresh now",
       refreshDone: "AI insights refreshed",
+      refreshStarted: "AI insight regeneration started in the background",
+      refreshProgress:
+        "Background generation: {completed}/{total}, {failed} failed",
+      refreshCompleted:
+        "Background generation complete: {completed} succeeded, {skipped} skipped",
+      refreshCompletedWithFailures:
+        "Background generation complete: {completed} succeeded, {failed} failed, {skipped} skipped",
       refreshFailed: "Failed to refresh AI insights",
+      skipped: "Skipped",
+      rulesModeRefreshDisabled:
+        "Refreshing AI insights is not needed in local-rules mode",
       save: "Save",
       saved: "Insight settings saved",
       saveFailed: "Failed to save insight settings",

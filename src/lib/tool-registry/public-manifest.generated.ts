@@ -607,10 +607,10 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       },
       "capabilities": {
         "usage": "adapter",
-        "skills": "unsupported",
+        "skills": "read-write",
         "agents": "unsupported",
         "sessions": "read",
-        "market": "unsupported",
+        "market": "install-target",
         "security": "unsupported"
       }
     },
@@ -772,6 +772,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
     "grok",
     "hermes",
     "openclaw",
-    "antigravity"
+    "antigravity",
+    "aipy"
   ]
 };

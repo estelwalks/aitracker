@@ -153,6 +153,31 @@ test("start rejects extra keys instead of spreading them to the service", async 
   assert.equal(called, false);
 });
 
+test("start forwards a Skill name fallback for catalog targets", async () => {
+  let captured: unknown;
+  const response = await handleSecurityHttpApi(
+    post("/start", {
+      scope: "single",
+      skillName: "Demo Skill",
+      mode: "quick",
+    }),
+    origin,
+    service({
+      start: async (input: unknown) => {
+        captured = input;
+        return {};
+      },
+    }),
+  );
+  assert.equal(response?.status, 202);
+  assert.deepEqual(captured, {
+    scope: "single",
+    skillName: "Demo Skill",
+    mode: "quick",
+    trigger: "manual",
+  });
+});
+
 test("browser directory picker endpoint never accepts a path", async () => {
   const rejectedPath = await handleSecurityHttpApi(
     post("/select-skill-directory", { path: "/Users/private" }),

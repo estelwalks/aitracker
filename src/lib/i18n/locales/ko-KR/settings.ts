@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const settings = {
   language: "표시 언어",
   languageDesc: "표시 언어를 전환합니다 (즉시 적용)",
@@ -49,10 +48,13 @@ export const settings = {
     currentActive: "현재 활성",
     apiFormatLabel: "API 형식",
     protocolLabel: "API 형식",
-    protocolOpenai: "OpenAI 호환",
+    protocolOpenai: "OpenAI Completion",
+    protocolOpenaiResponses: "OpenAI Responses",
     protocolAnthropic: "Anthropic",
     protocolOpenaiHint:
       "OpenAI / DeepSeek / Kimi / Qwen 등 Chat Completions API 지원",
+    protocolOpenaiResponsesHint:
+      "OpenAI Responses API 및 호환 /responses 엔드포인트 지원",
     protocolAnthropicHint: "Claude 공식 및 Messages API 호환 게이트웨이 지원",
     officialDesc: "DeepSeek · {model} · 추천 모델",
     formTitleNew: "새 모델 설정",
@@ -76,10 +78,13 @@ export const settings = {
     authBearerHint:
       "Authorization: Bearer를 요구하는 게이트웨이용 (예: 내부 DeepSeek 게이트웨이)",
     listModels: "모델 목록 가져오기",
+    listOfficialModels: "공식 모델 목록 가져오기",
     listingModels: "가져오는 중…",
     selectModel: "모델 선택…",
     manualModel: "또는 모델 이름을 직접 입력",
     modelFetchHint: "{model}（Key 입력 후 목록 조회 가능）",
+    officialModelFetchHint:
+      "API Key를 입력해 공식 목록을 가져오거나 모델 이름을 직접 입력하세요",
     listModelsDone: "모델 {count}개를 가져왔습니다",
     listModelsFallback:
       "API에 직접 접근할 수 없습니다(CORS/게이트웨이 제한). 이 Provider의 일반적인 모델을 표시합니다",
@@ -258,6 +263,7 @@ export const settings = {
       "enhancer-failed": "모델 설정 실패",
       "invalid-output": "강화 결과가 올바르지 않음",
       "no-eligible-candidates": "강화할 내용이 없음",
+      pending: "AI 인사이트 생성 중",
       stale: "데이터가 오래되었을 수 있음",
     },
     fallbackStatus: {
@@ -271,6 +277,33 @@ export const settings = {
         "AI 출력이 올바르지 않아 규칙 기반 인사이트를 표시합니다",
       "no-eligible-candidates":
         "강화할 내용이 없어 규칙 기반 인사이트를 표시합니다",
+      pending:
+        "AI 인사이트를 백그라운드에서 생성 중입니다. 규칙 기반 인사이트를 표시합니다",
+    },
+    failureReason: {
+      timeout: "모델 응답 시간이 초과되었습니다",
+      "empty-content": "모델이 빈 내용을 반환했습니다",
+      "reasoning-only":
+        "모델이 추론 내용만 반환했습니다(추론 모델일 수 있음). 출력 상한을 늘리거나 비추론 모델로 전환해 보세요",
+      "not-json": "모델 응답이 유효한 JSON이 아닙니다",
+      "http-error": "모델 서비스가 HTTP 오류를 반환했습니다",
+      unknown: "예상치 못한 모델 응답",
+    },
+    surfaces: {
+      dashboard: "대시보드",
+      agents: "에이전트",
+      distill: "증류",
+      reports: "보고서",
+      memory: "메모리",
+      security: "보안",
+      tracker: "사용량 추적",
+      skills: "스킬",
+      market: "마켓",
+      chats: "세션",
+      "chat-detail": "세션 상세",
+      widget: "위젯",
+      settings: "설정",
+      sources: "소스",
     },
     section: {
       title: "AI 인사이트",
@@ -294,7 +327,7 @@ export const settings = {
       dailyLimit: "일일 호출 한도",
       dailyLimitHint: "비워 두면 기본 30회(서버에서 적용)",
       refreshInterval: "AI 인사이트 업데이트 주기",
-      refreshIntervalHint: "{min}~{max}분마다 업데이트(기본값 60분)",
+      refreshIntervalHint: "{min}~{max}분(24시간)마다 업데이트(기본값 5시간)",
       minutes: "분",
       intervalInvalid: "유효한 업데이트 주기를 입력하세요",
       intervalSaved: "AI 인사이트 업데이트 주기를 저장했습니다",
@@ -302,7 +335,16 @@ export const settings = {
       refreshNowHint: "현재 인사이트 캐시를 지우고 즉시 다시 생성합니다",
       refreshNowButton: "즉시 새로고침",
       refreshDone: "AI 인사이트를 새로고침했습니다",
+      refreshStarted: "AI 인사이트 재생성을 백그라운드에서 시작했습니다",
+      refreshProgress: "백그라운드 생성 중: {completed}/{total}, 실패 {failed}",
+      refreshCompleted:
+        "백그라운드 생성 완료: 성공 {completed}, 건너뜀 {skipped}",
+      refreshCompletedWithFailures:
+        "백그라운드 생성 완료: 성공 {completed}, 실패 {failed}, 건너뜀 {skipped}",
       refreshFailed: "AI 인사이트 새로고침에 실패했습니다",
+      skipped: "건너뜀",
+      rulesModeRefreshDisabled:
+        "로컬 규칙 모드에서는 AI 인사이트 새로고침이 필요하지 않습니다",
       save: "저장",
       saved: "인사이트 설정을 저장했습니다",
       saveFailed: "인사이트 설정 저장에 실패했습니다",

@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const nav = {
   home: "홈 개요",
   agents: "Agent 개요",
@@ -8,7 +7,7 @@ export const nav = {
   guard: "보안 검사",
   tracker: "버닝 리더보드",
   skillHub: "스킬 관리",
-  market: "Skill 마켓",
+  market: "보안 마켓",
   resume: "세션",
   widget: "메뉴바 위젯",
   sources: "데이터 소스",

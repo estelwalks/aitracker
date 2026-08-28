@@ -4,6 +4,7 @@ import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import type { Locale } from "../lib/i18n/locale";
+import { STANDARD_PAGE_SIZE } from "../lib/pagination";
 import { getMarketSkills } from "../modules/skill-distribution/query";
 import type { MarketListResult } from "../modules/skill-distribution/query";
 
@@ -18,7 +19,12 @@ export const Route = createFileRoute("/market")({
     let market: Awaited<ReturnType<typeof getMarketSkills>>;
     try {
       market = await getMarketSkills({
-        data: { page: 1, limit: 12, search: "", sort: "stars" },
+        data: {
+          page: 1,
+          limit: STANDARD_PAGE_SIZE,
+          search: "",
+          sort: "stars",
+        },
       });
     } catch {
       // The market is an optional network integration. A cold/offline desktop
@@ -26,7 +32,12 @@ export const Route = createFileRoute("/market")({
       // turning a transient timeout into an SSR 500.
       market = {
         skills: [],
-        pagination: { page: 1, limit: 12, total: 0, pages: 1 },
+        pagination: {
+          page: 1,
+          limit: STANDARD_PAGE_SIZE,
+          total: 0,
+          pages: 1,
+        },
         source: "cache",
         fetchedAt: new Date().toISOString(),
         warning: null,

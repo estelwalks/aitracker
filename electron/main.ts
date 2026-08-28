@@ -802,18 +802,13 @@ function rebuildTray(): void {
     resourcesPath: process.resourcesPath,
     appPath: app.getAppPath(),
   });
-  // NativeImage loads the adjacent `@2x` representation when constructed from
-  // the Template filename. This is required for a crisp, visible status-item
-  // icon on Retina Apple Silicon Macs; retain a PNG-only fallback if a resource
-  // is unexpectedly unavailable or corrupt.
+  // Both platforms use the full-color supplied logo. Retain a PNG fallback if
+  // the native resource is unavailable or corrupt.
   let trayIcon = trayIconPath
     ? nativeImage.createFromPath(trayIconPath)
     : nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
   if (trayIcon.isEmpty()) {
     trayIcon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
-  }
-  if (process.platform === "darwin") {
-    trayIcon.setTemplateImage(true);
   }
 
   const autoLaunch = getAutoLaunchState();

@@ -20,7 +20,7 @@ export type InsightSurfaceId = (typeof INSIGHT_SURFACE_IDS)[number];
 
 /** User-configurable AI insight refresh period bounds. */
 export const DEFAULT_INSIGHT_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
-export const MIN_INSIGHT_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
+export const MIN_INSIGHT_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 export const MAX_INSIGHT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export interface InsightScope {
@@ -103,6 +103,7 @@ export type InsightEnvelopeStatus =
   | "enhancer-failed"
   | "invalid-output"
   | "no-eligible-candidates"
+  | "pending"
   | "stale";
 
 export interface InsightEnvelope {
@@ -115,6 +116,19 @@ export interface InsightEnvelope {
   /** Renderer hint only. True after the server validated auto mode + consent. */
   readonly autoEnhance: boolean;
   readonly modelLabel?: string;
+  /** Effective settings value used for this page's refresh and AI cache. */
+  readonly refreshIntervalMs?: number;
+  /** Actual persisted AI generation time, when this envelope contains AI text. */
+  readonly enhancementGeneratedAtMs?: number;
+  /** Exact expiry time derived from the configured refresh interval. */
+  readonly enhancementExpiresAtMs?: number;
+  /**
+   * Renderer-safe failure attribution of the final failed attempt (e.g.
+   * "reasoning-only", "empty-content", "timeout"). Never raw provider output.
+   */
+  readonly failureDetail?: string;
+  /** False when valid AI text was produced but could not be persisted. */
+  readonly persisted?: boolean;
 }
 
 export interface PageInsightAdapter {
@@ -126,6 +140,8 @@ export interface PageInsightAdapter {
 
 export interface InsightEnhancementInput {
   readonly surface: InsightSurfaceId;
+  /** Scope participates in cache identity; chat detail must not share AI text. */
+  readonly scope?: InsightScope;
   /** Actual evidence adapter version; participates in cache identity only. */
   readonly adapterVersion: number;
   readonly locale: string;
@@ -134,6 +150,8 @@ export interface InsightEnhancementInput {
   readonly dailyCallLimit?: number | null;
   /** Effective cache refresh period from the user's local settings. */
   readonly cacheTtlMs?: number;
+  /** Server-only ownership marker; never serialized into the provider payload. */
+  readonly batchOwned?: boolean;
   readonly candidates: readonly {
     readonly id: string;
     readonly severity: InsightSeverity;
@@ -150,7 +168,8 @@ export type InsightEnhancementStatus =
   | "budget-exceeded"
   | "timeout"
   | "enhancer-failed"
-  | "invalid-output";
+  | "invalid-output"
+  | "pending";
 
 export interface InsightEnhancementResult {
   readonly status: InsightEnhancementStatus;
@@ -160,6 +179,20 @@ export interface InsightEnhancementResult {
     readonly actionId?: InsightActionId;
   }[];
   readonly modelLabel?: string;
+  readonly generatedAtMs?: number;
+  readonly expiresAtMs?: number;
+  /**
+   * Renderer-safe, bounded failure attribution for the final failed attempt
+   * (e.g. "timeout", "empty-content", "reasoning-only"). Never raw provider
+   * output; populated only when the result status is a failure.
+   */
+  readonly failureDetail?: string;
+  /**
+   * False when valid AI text was produced but the SQLite enhancement cache
+   * write failed (privacy guard or storage error). Renderer shows a hint;
+   * batch items are recorded as failed instead of completed.
+   */
+  readonly persisted?: boolean;
 }
 
 export interface InsightEnhancerPort {
@@ -191,5 +224,7 @@ export interface InsightStorePort {
   setPreference(value: InsightPreference): void;
   getRefreshIntervalMs(): number;
   setRefreshIntervalMs(value: number, updatedAtMs: number): void;
+  /** Prevent renderer auto-enhancement while a persistent batch owns calls. */
+  hasActiveRefreshRun?(): boolean;
   invalidateAll?(): number;
 }
