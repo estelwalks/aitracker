@@ -18,7 +18,10 @@ import {
 } from "../../../shared/ui/schedule-config";
 import type { ReportScheduleStatus } from "../server-fns.ts";
 import type { ReportScheduleKind, ReportSchedulesConfig } from "../schedule.ts";
-import { compactScheduleSummaryItems } from "./compact-schedule-summary.ts";
+import {
+  compactDisabledScheduleKinds,
+  compactScheduleSummaryItems,
+} from "./compact-schedule-summary.ts";
 import {
   useReportSchedule,
   type ReportScheduleSyncResult,
@@ -98,6 +101,7 @@ export function ReportSchedule({
       (kind) => schedule[kind].enabled,
     ).length;
     const summaryItems = compactScheduleSummaryItems(schedule, status);
+    const disabledKinds = compactDisabledScheduleKinds(schedule);
     let summary: ReactNode;
     if (!loaded) {
       summary = <span>{t("common.loading")}</span>;
@@ -106,22 +110,35 @@ export function ReportSchedule({
     } else if (summaryItems.length === 0) {
       summary = <span>{t("reports.schedule.allDisabled")}</span>;
     } else {
-      summary = summaryItems.map((item) => {
-        const kind = t(`reports.schedule.kinds.${item.kind}`);
-        let detail: string;
-        if (item.state === "pending") {
-          detail = t("reports.schedule.pending");
-        } else if (item.state === "scheduled") {
-          detail = format.formatDateTime(item.nextRunAt, false);
-        } else {
-          detail = t("common.loading");
-        }
-        return (
-          <span key={item.kind} className="whitespace-nowrap">
-            {kind} · {detail}
-          </span>
-        );
-      });
+      summary = (
+        <>
+          {summaryItems.map((item) => {
+            const kind = t(`reports.schedule.kinds.${item.kind}`);
+            let detail: string;
+            if (item.state === "pending") {
+              detail = t("reports.schedule.pending");
+            } else if (item.state === "scheduled") {
+              detail = format.formatDateTime(item.nextRunAt, false);
+            } else {
+              detail = t("common.loading");
+            }
+            return (
+              <span key={item.kind} className="whitespace-nowrap">
+                {kind} · {detail}
+              </span>
+            );
+          })}
+          {disabledKinds.length > 0 && (
+            <span className="whitespace-nowrap">
+              {t("reports.schedule.disabledKinds", {
+                kinds: disabledKinds
+                  .map((kind) => t(`reports.schedule.kinds.${kind}`))
+                  .join(t("reports.schedule.kindSeparator")),
+              })}
+            </span>
+          )}
+        </>
+      );
     }
 
     return (

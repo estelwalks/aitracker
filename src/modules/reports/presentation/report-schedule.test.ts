@@ -11,7 +11,27 @@ import {
   reportSchedulesPreferenceValue,
   serializeReportSchedules,
 } from "../schedule.ts";
-import { compactScheduleSummaryItems } from "./compact-schedule-summary.ts";
+import {
+  compactDisabledScheduleKinds,
+  compactScheduleSummaryItems,
+} from "./compact-schedule-summary.ts";
+
+test("new report schedules default to 18:00, Friday, and day 31", () => {
+  assert.deepEqual(DEFAULT_REPORT_SCHEDULES.daily, {
+    enabled: false,
+    time: "18:00",
+  });
+  assert.deepEqual(DEFAULT_REPORT_SCHEDULES.weekly, {
+    enabled: false,
+    dayOfWeek: 4,
+    time: "18:00",
+  });
+  assert.deepEqual(DEFAULT_REPORT_SCHEDULES.monthly, {
+    enabled: false,
+    dayOfMonth: 31,
+    time: "18:00",
+  });
+});
 
 test("v2 report schedules round-trip with three independent switches", () => {
   const config = {
@@ -122,6 +142,7 @@ test("compact summary uses real next runs for enabled plans", () => {
       },
     ],
   );
+  assert.deepEqual(compactDisabledScheduleKinds(schedule), ["monthly"]);
 });
 
 test("compact summary distinguishes pending, loading, and all disabled", () => {
@@ -147,6 +168,11 @@ test("compact summary distinguishes pending, loading, and all disabled", () => {
     compactScheduleSummaryItems(DEFAULT_REPORT_SCHEDULES, null),
     [],
   );
+  assert.deepEqual(compactDisabledScheduleKinds(DEFAULT_REPORT_SCHEDULES), [
+    "daily",
+    "weekly",
+    "monthly",
+  ]);
 });
 
 test("reports page uses a collapsed schedule card and Settings stays expanded", async () => {
@@ -164,6 +190,7 @@ test("reports page uses a collapsed schedule card and Settings stays expanded", 
   assert.match(component, /rounded-xl bg-card px-4 py-3/);
   assert.match(component, /SCHEDULE_KINDS\.map/);
   assert.match(component, /summaryItems\.map/);
+  assert.match(component, /reports\.schedule\.disabledKinds/);
   assert.doesNotMatch(component, /flex-1 truncate font-mono/);
   const compactEditor = component.slice(
     component.indexOf("function CompactPlanEditor"),

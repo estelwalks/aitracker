@@ -185,8 +185,8 @@
         "category": "report",
         "defaultSchedule": {
           "kind": "weekly",
-          "weekday": 1,
-          "localTime": "09:00"
+          "weekday": 5,
+          "localTime": "18:00"
         },
         "constraints": {
           "minMinutes": 10080,
@@ -205,7 +205,7 @@
         "id": "reports.generate.daily",
         "executorKey": "generate-report-v1",
         "category": "report",
-        "defaultSchedule": { "kind": "daily", "localTime": "18:30" },
+        "defaultSchedule": { "kind": "daily", "localTime": "18:00" },
         "constraints": {
           "minMinutes": 1440,
           "maxMinutes": 1440,
@@ -225,8 +225,8 @@
         "category": "report",
         "defaultSchedule": {
           "kind": "weekly",
-          "weekday": 1,
-          "localTime": "09:00"
+          "weekday": 5,
+          "localTime": "18:00"
         },
         "constraints": {
           "minMinutes": 10080,
@@ -247,8 +247,8 @@
         "category": "report",
         "defaultSchedule": {
           "kind": "monthly",
-          "dayOfMonth": 1,
-          "localTime": "09:00"
+          "dayOfMonth": 31,
+          "localTime": "18:00"
         },
         "constraints": {
           "minMinutes": 1440,

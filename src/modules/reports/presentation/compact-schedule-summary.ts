@@ -16,8 +16,8 @@ export type CompactScheduleSummaryItem =
 
 /**
  * Builds the collapsed card's status model from the scheduler's real state.
- * Disabled plans are intentionally omitted; an empty result lets the card
- * render its single "all disabled" fallback.
+ * Disabled plans are represented separately by compactDisabledScheduleKinds;
+ * an empty result lets the card render its single "all disabled" fallback.
  */
 export function compactScheduleSummaryItems(
   schedule: ReportSchedulesConfig,
@@ -33,4 +33,10 @@ export function compactScheduleSummaryItems(
     }
     return { kind, state: "loading" };
   });
+}
+
+export function compactDisabledScheduleKinds(
+  schedule: ReportSchedulesConfig,
+): readonly ReportScheduleKind[] {
+  return SCHEDULE_KINDS.filter((kind) => !schedule[kind].enabled);
 }
