@@ -47,6 +47,7 @@ export const sessions = {
     desc: "検索キーワード、ツール、時間範囲を調整して再試行してください。",
   },
   refreshing: "更新中",
+  refreshNow: "今すぐ更新",
   group: {
     today: "今日",
     yesterday: "昨日",

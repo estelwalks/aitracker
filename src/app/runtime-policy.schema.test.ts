@@ -25,7 +25,7 @@ test("runtime policy accepts the embedded source", () => {
   );
   assert.equal(parsed.snapshotPolicies.usage.freshForMinutes, 5);
   assert.equal(parsed.snapshotPolicies.usage.defaultRefreshMinutes, 5);
-  assert.equal(parsed.snapshotPolicies.sessions.freshForMinutes, 30);
+  assert.equal(parsed.snapshotPolicies.sessions.freshForMinutes, 5);
   assert.equal(parsed.snapshotPolicies.skills.freshForMinutes, 60);
   assert.equal(parsed.snapshotPolicies.toolInstallations.freshForMinutes, 360);
   assert.equal(parsed.snapshotPolicies.wslTopology.freshForMinutes, 360);

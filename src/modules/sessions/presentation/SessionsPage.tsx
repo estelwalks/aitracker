@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { MessagesSquare, Sparkles, Wrench } from "lucide-react";
+import { MessagesSquare, RefreshCw, Sparkles, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { InsightCard } from "../../insights/index.ts";
@@ -8,12 +8,13 @@ import {
   Pagination,
   SearchInput,
   Segmented,
+  AITrackerButton,
 } from "../../../components/aitracker.tsx";
 import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { brandColorOf } from "../../../components/BrandIcon.helpers.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
-import { getSessionsQuery } from "../query.ts";
+import { getSessionsQuery, refreshSessionsQuery } from "../query.ts";
 import type {
   SessionFilter,
   SessionPage,
@@ -118,6 +119,9 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     }),
     [filter, page.page, pageSize],
   );
+  const requestRef = useRef(request);
+  requestRef.current = request;
+  const refreshRequestId = useRef(0);
 
   useEffect(() => {
     if (firstRequest.current) {
@@ -141,6 +145,38 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
       cancelled = true;
     };
   }, [request]);
+
+  const refreshNow = async () => {
+    if (loading) return;
+    const refreshRequest = requestRef.current;
+    const requestId = ++refreshRequestId.current;
+    setLoading(true);
+    setError(false);
+    try {
+      const next = await refreshSessionsQuery({ data: refreshRequest });
+      if (
+        requestId === refreshRequestId.current &&
+        requestRef.current === refreshRequest
+      ) {
+        setPage(next);
+        setError(false);
+      }
+    } catch {
+      if (
+        requestId === refreshRequestId.current &&
+        requestRef.current === refreshRequest
+      ) {
+        setError(true);
+      }
+    } finally {
+      if (
+        requestId === refreshRequestId.current &&
+        requestRef.current === refreshRequest
+      ) {
+        setLoading(false);
+      }
+    }
+  };
 
   // 稳定的源列表：以初始（未过滤）页为准，只增不减——选中某个 agent 后
   // 其它 agent tab 不会被隐藏（agent 是切换/筛选，不是单选后隐藏其它）。
@@ -291,6 +327,16 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
               label: t(option.labelKey),
             }))}
           />
+          <AITrackerButton
+            size="sm"
+            disabled={loading}
+            onClick={() => void refreshNow()}
+          >
+            <RefreshCw
+              className={`size-3.5 ${loading ? "animate-spin" : ""}`}
+            />
+            {t(loading ? "sessions.refreshing" : "sessions.refreshNow")}
+          </AITrackerButton>
         </div>
 
         <div
