@@ -206,8 +206,8 @@ test("reports page uses a collapsed schedule card and Settings stays expanded", 
   assert.ok(monthDayInputIndex < timeInputIndex);
   assert.equal(compactEditor.match(/<TimeInput/g)?.length, 1);
   const compactHeader = compactEditor.slice(
-    compactEditor.indexOf('className="flex items-center gap-2"'),
-    compactEditor.indexOf('className="mt-2 flex flex-wrap items-center gap-2"'),
+    compactEditor.indexOf('className="flex min-w-0 items-center gap-2'),
+    compactEditor.indexOf("function SettingsPlanEditor"),
   );
   assert.doesNotMatch(
     compactEditor,
