@@ -222,8 +222,8 @@ welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a
 change. For vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of
 opening a public issue.
 
-AITracker is licensed under the GNU General Public License, version 3 or later.
-See [LICENSE](LICENSE) for the full license text.
+AITracker is licensed under the MIT License. See [LICENSE](LICENSE) for the
+full license text.
 
 The bundled `packages/skill-scanner` component retains its MIT license; see its
 own `LICENSE` and `NOTICE` files.
