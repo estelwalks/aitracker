@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   getReportScheduleStatus,
+  REPORT_SCHEDULE_MODEL_REQUIRED_ERROR,
   syncReportScheduleToTasks,
   type ReportScheduleStatuses,
 } from "../server-fns.ts";
@@ -128,6 +129,14 @@ export function useReportSchedule(): {
       try {
         await saveToPlatform(configured);
         const result = await syncScheduleToTasks(configured);
+        if (
+          !result.ok &&
+          result.errorCode === REPORT_SCHEDULE_MODEL_REQUIRED_ERROR
+        ) {
+          lastSavedRef.current = serializeReportSchedules(previous);
+          setSchedule(previous);
+          await saveToPlatform(previous).catch(() => undefined);
+        }
         await refreshStatus();
         return result;
       } catch {

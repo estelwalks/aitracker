@@ -76,6 +76,7 @@ export const reports = {
     enabled: "已启用定时生成",
     disabled: "已关闭定时生成",
     syncFailed: "定时调度同步失败，本地设置已保留",
+    modelRequired: "请先在“设置 → 模型与 AI”中启用一个模型，才能开启定时报告。",
     editorNote:
       "保存后同步到后台任务调度器；桌面版运行期间按设定节奏自动生成。",
     lastRun: "最近一次生成",
