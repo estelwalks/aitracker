@@ -61,7 +61,7 @@ export const PersistedCandidateSchema = z
     approvalState: z.enum(["waiting-approval", "approved", "cancelled"]),
     selectedSessionRefs: z.array(SessionRefSchema).max(8),
     generatedAt: z.string(),
-    // 批准时写入的知识资产 id，关联记忆库条目（迁移 0004 的 knowledge_asset_id 列）。
+    // 批准时写入的知识资产 id，关联记忆库条目（基线 schema 的 knowledge_asset_id 列）。
     knowledgeAssetId: opaqueId.optional(),
     execution: ExecutionSummarySchema,
   })

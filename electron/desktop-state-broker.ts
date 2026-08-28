@@ -9,7 +9,7 @@ import type { ModelConfig } from "skill-scanner";
 
 interface StoredModelProfile {
   readonly mode: "official" | "custom";
-  readonly protocol: "openai" | "anthropic";
+  readonly protocol: "openai" | "openai-responses" | "anthropic";
   readonly apiKey?: string;
   readonly endpoint?: string;
   readonly model?: string;
@@ -140,7 +140,7 @@ export class DesktopStateBroker {
       "/model-profile",
     );
     if (!profile?.apiKey) return undefined;
-    const provider = profile.mode === "official" ? "openai" : profile.protocol;
+    const provider = profile.protocol === "anthropic" ? "anthropic" : "openai";
     const endpoint =
       profile.mode === "official"
         ? "https://api.deepseek.com/v1"

@@ -56,7 +56,8 @@ export function SkillListRow({
   const { t } = useI18n();
 
   const sourceKind = skill.sourceKinds[0];
-  const isDistilled = sourceKind === "unknown";
+  const isDistilled = skill.isDistilled;
+  const displayName = skill.displayName;
   const sourceLabel =
     sourceKind === "frontmatter"
       ? t("skills.source.frontmatter")
@@ -66,25 +67,25 @@ export function SkillListRow({
           ? t("skills.source.unknown")
           : null;
 
-  const verdict: "ok" | "warn" | "unknown" =
+  const verdict: "ok" | "unsafe" | "unknown" =
     security == null || !security.hasHistory
       ? "unknown"
       : security.riskCount > 0
-        ? "warn"
+        ? "unsafe"
         : "ok";
   const verdictLabel =
     verdict === "ok"
       ? t("skills.security.clean")
-      : verdict === "warn"
-        ? t("skills.security.attention")
+      : verdict === "unsafe"
+        ? t("skills.security.unsafe")
         : t("skills.security.pending");
 
   const installedMap = Object.fromEntries(
     skill.installedAgents.map((agent) => [agent, true]),
   );
   const selectLabel = selected
-    ? t("skills.card.deselect", { name: skill.name })
-    : t("skills.card.select", { name: skill.name });
+    ? t("skills.card.deselect", { name: displayName })
+    : t("skills.card.select", { name: displayName });
 
   return (
     <li
@@ -118,22 +119,22 @@ export function SkillListRow({
           className={`inline-flex shrink-0 items-center gap-1.5 self-center rounded-full border px-2.5 py-1.5 text-[11px] leading-none ${
             verdict === "ok"
               ? "border-ok/25 bg-ok/10 text-ok"
-              : verdict === "warn"
+              : verdict === "unsafe"
                 ? "border-danger/25 bg-danger/10 text-danger"
                 : "border-border bg-surface-2 text-muted-foreground"
           }`}
         >
           {verdict === "ok" ? (
             <ShieldCheck className="size-3.5" />
-          ) : verdict === "warn" ? (
+          ) : verdict === "unsafe" ? (
             <ShieldAlert className="size-3.5" />
           ) : (
             <Shield className="size-3.5" />
           )}
           {verdict === "ok"
             ? t("skills.security.clean")
-            : verdict === "warn"
-              ? t("skills.security.attention")
+            : verdict === "unsafe"
+              ? t("skills.security.unsafe")
               : t("skills.security.pending")}
         </span>
 
@@ -146,9 +147,9 @@ export function SkillListRow({
                 onOpen();
               }}
               className="aitracker-num truncate text-[14px] font-semibold hover:text-primary"
-              title={t("skills.aria.openSkill", { name: skill.name })}
+              title={t("skills.aria.openSkill", { name: displayName })}
             >
-              {skill.name}
+              {displayName}
             </button>
             {isDistilled && (
               <Brain className="size-3.5 shrink-0 text-primary" />

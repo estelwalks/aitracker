@@ -7,7 +7,7 @@ export const nav = {
   guard: "Security Scan",
   tracker: "Burn Leaderboard",
   skillHub: "Skill Management",
-  market: "Skill Market",
+  market: "Security Market",
   resume: "Sessions",
   widget: "Menubar Widget",
   sources: "Data Sources",

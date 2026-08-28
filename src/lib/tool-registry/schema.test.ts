@@ -543,6 +543,7 @@ describe("shared policy packs (TC-POL-001)", () => {
       "hermes",
       "openclaw",
       "antigravity",
+      "aipy",
     ]);
     assert.deepEqual(pack.defaultMarkers, ["SKILL.md", "skill.md"]);
     assert.equal(pack.defaultMaxDepth, 3);

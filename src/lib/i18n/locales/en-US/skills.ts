@@ -65,7 +65,7 @@ export const skills = {
   },
   source: {
     frontmatter: "Metadata",
-    market: "Marketplace",
+    market: "Security Market",
     unknown: "Unknown",
   },
   update: {
@@ -90,7 +90,7 @@ export const skills = {
     install: "Install",
     uninstallAll: "Uninstall all copies",
     addMonitorDir: "Add monitor directory",
-    goMarket: "Browse the market",
+    goMarket: "Browse the Security Market",
     block: "Add to blacklist",
     unblock: "Remove from blacklist",
   },
@@ -283,7 +283,7 @@ export const skills = {
   hub: {
     title: "Skill Hub",
     summary: "{count} local skills",
-    desc: "Manage local Skill assets in one place and install security-scanned Skills from the market.",
+    desc: "Manage local Skill assets in one place and install security-scanned Skills from the Security Market.",
   },
   jarvis: {
     localSkills:
@@ -292,8 +292,9 @@ export const skills = {
       "Security checks completed for {count} local Skills with {risk} findings.",
     securityClean: "All local Skills passed security checks — no findings.",
     marketAvailable:
-      "{total} Skills available in the market, {official} of them official.",
-    marketInstalled: "{count} market Skills installed on this machine.",
+      "{total} Skills available in the Security Market, {official} of them official.",
+    marketInstalled:
+      "{count} Security Market Skills installed on this machine.",
   },
   kpi: {
     localSkills: "Local Skills",
@@ -314,6 +315,7 @@ export const skills = {
   security: {
     detected: "Security checked",
     attention: "Needs attention",
+    unsafe: "Unsafe",
     clean: "Safe",
     pending: "Pending scan",
   },

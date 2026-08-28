@@ -8,6 +8,15 @@ import {
 } from "./cache.server.ts";
 import type { MarketListResult, MarketSkill, MarketSort } from "./types.ts";
 import type { SkillSnapshot } from "../local-skills/types.ts";
+import {
+  countInstalledMarketSkills,
+  type MarketInstalledSkillShape,
+} from "./installed-count.ts";
+
+export {
+  countInstalledMarketSkills,
+  type MarketInstalledSkillShape,
+} from "./installed-count.ts";
 
 /** 外接 Skill API v1 列表根路径（文档：/api/external-api/v1/skills）。 */
 const MARKET_API = `${MARKET_API_BASE}/external-api/v1/skills`;
@@ -28,37 +37,6 @@ export interface MarketApiOptions {
   /** Clock and cache-bypass seams for deterministic unit tests. */
   now?: () => Date;
   skipFreshCache?: boolean;
-}
-
-/** Structural slice of a local skill used to detect market-managed installs. */
-export interface MarketInstalledSkillShape {
-  readonly id: string;
-  readonly installations: readonly {
-    readonly source: { readonly kind: string } | null;
-  }[];
-}
-
-/**
- * Number of distinct local Skills that carry at least one market-managed
- * installation (`installation.source.kind === "market"`). A Skill installed
- * into several Agents is counted once — it is one market Skill, not N copies.
- * Both the full scanner snapshot and the renderer-safe projection satisfy the
- * structural shape, so callers can reuse the same helper.
- */
-export function countInstalledMarketSkills(
-  skills: readonly MarketInstalledSkillShape[],
-): number {
-  const names = new Set<string>();
-  for (const skill of skills) {
-    if (
-      skill.installations.some(
-        (installation) => installation.source?.kind === "market",
-      )
-    ) {
-      names.add(skill.id);
-    }
-  }
-  return names.size;
 }
 
 function sortSkills(skills: MarketSkill[], sort: MarketSort): MarketSkill[] {

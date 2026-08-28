@@ -224,6 +224,10 @@ export function I18nProvider({
   const localeRef = useRef(locale);
   const currencyRef = useRef(displayCurrency);
   const converged = useRef(false);
+  // Incremented synchronously for every local preference write. Hydration
+  // reads SQLite asynchronously; if the user changes a preference while that
+  // read is in flight, its older result must not overwrite the new choice.
+  const preferenceWriteGeneration = useRef(0);
   const desktopI18nStateRef = useRef<DesktopI18nState>({
     localeMode,
     manualLocale,
@@ -281,7 +285,9 @@ export function I18nProvider({
     if (converged.current) return;
     if (typeof window === "undefined") return;
     converged.current = true;
+    const convergenceGeneration = preferenceWriteGeneration.current;
     void listPreferences().then((preferences) => {
+      if (preferenceWriteGeneration.current !== convergenceGeneration) return;
       const localeValue = preferences[LOCALE_STORAGE_KEY];
       const currencyValue = preferences[CURRENCY_STORAGE_KEY];
       const manualStoredLocale = normalizeLocale(
@@ -386,6 +392,7 @@ export function I18nProvider({
 
   const setLocaleMode = useCallback(
     (mode: PreferenceMode, locale?: Locale) => {
+      preferenceWriteGeneration.current += 1;
       const nextLocale =
         mode === "manual" ? (locale ?? systemLocale) : systemLocale;
       const syncedCurrency = mapSystemCurrency(nextLocale);
@@ -425,6 +432,7 @@ export function I18nProvider({
 
   const setCurrencyMode = useCallback(
     (mode: PreferenceMode, currency?: Currency) => {
+      preferenceWriteGeneration.current += 1;
       if (mode === "manual" && currency != null) {
         setManualCurrency(currency);
         void setPreference(CURRENCY_STORAGE_KEY, currency);

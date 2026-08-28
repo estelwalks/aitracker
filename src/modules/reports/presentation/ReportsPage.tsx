@@ -378,7 +378,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
 
       // A period-scoped browser edit belongs to the previous report. It must
       // not shadow the freshly generated server draft.
-      void removePreference(mdKey(selectedKey));
+      await removePreference(mdKey(selectedKey));
       setPreferredReport({ selection, reportId: result.reportId });
       setMode("preview");
       dirtyRef.current = false;

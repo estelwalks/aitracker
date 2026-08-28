@@ -78,6 +78,9 @@ export function createSqliteSkillSnapshotRepository(
                             "frontmatter" | "market",
                           label: String(installation.source_label ?? ""),
                         },
+                  ...(String(installation.directory_name ?? "")
+                    ? { directoryName: String(installation.directory_name) }
+                    : {}),
                   updateStatus: String(installation.update_status) as
                     "current" | "available" | "unknown",
                   updateReason: String(installation.update_reason_code),
@@ -154,7 +157,7 @@ export function createSqliteSkillSnapshotRepository(
               );
               database
                 .prepare(
-                  "INSERT INTO skill_installations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                  "INSERT INTO skill_installations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 )
                 .run(
                   snapshotId,
@@ -168,6 +171,7 @@ export function createSqliteSkillSnapshotRepository(
                   installation.source?.label ?? null,
                   installation.updateStatus,
                   installation.updateReason,
+                  installation.directoryName ?? "",
                 );
             });
           }

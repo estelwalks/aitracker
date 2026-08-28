@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { NodeSqliteDatabase } from "../../../platform/database/infrastructure/node-sqlite-database.server.ts";
 import { loadSessionTranscript } from "./transcript-reader.server.ts";
 
 const FIXTURES = join(
@@ -160,6 +161,63 @@ test("Grok: extracts user_message/assistant_message content and optional thinkin
       transcript.messages[1]?.thinking,
       "Consider the boundary first",
     );
+  });
+});
+
+test("AiPy: extracts ordered USER/LLM text and reasoning from its SQLite database", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "aipy-s300-aaaaaaaaaa";
+    const aipyDir = join(home, "Library", "Application Support", "aipy-pro");
+    await mkdir(aipyDir, { recursive: true });
+    const databasePath = join(aipyDir, "aipy");
+    const database = new NodeSqliteDatabase({ path: databasePath });
+    try {
+      database.exec(`
+        CREATE TABLE task_event (
+          task_id TEXT,
+          type TEXT,
+          content TEXT,
+          reason TEXT,
+          time INTEGER
+        );
+      `);
+      const insert = database.prepare(
+        "INSERT INTO task_event (task_id, type, content, reason, time) VALUES (?, ?, ?, ?, ?)",
+      );
+      insert.run(sessionId, "LLM", "Second reply", "Consider ordering", 2000);
+      insert.run(sessionId, "USER", "First prompt", "ignored", 1000);
+      insert.run(sessionId, "TOOL", "tool output", null, 1500);
+      insert.run("other-session", "USER", "other prompt", null, 500);
+      insert.run(sessionId, "LLM", "Third reply", null, 3000);
+    } finally {
+      database.close();
+    }
+
+    const before = await snapshotTree(home);
+    const transcript = await loadSessionTranscript(
+      { source: "aipy", sessionId },
+      { homeDirectory: home, platform: "darwin" },
+    );
+    const after = await snapshotTree(home);
+
+    assert.equal(transcript.source, "aipy");
+    assert.deepEqual(
+      transcript.messages.map((message) => ({
+        role: message.role,
+        text: message.text,
+        thinking: message.thinking,
+      })),
+      [
+        { role: "user", text: "First prompt", thinking: undefined },
+        {
+          role: "assistant",
+          text: "Second reply",
+          thinking: "Consider ordering",
+        },
+        { role: "assistant", text: "Third reply", thinking: undefined },
+      ],
+    );
+    assert.deepEqual(after, before);
   });
 });
 

@@ -12,20 +12,53 @@ import {
   clampPercent,
   effectiveSecurityScanMode,
   hitDimensionsOf,
+  historyForCurrentSkills,
   latestHistory,
   relativeTimeParts,
   reportNeedsLocaleRefresh,
+  resolveNextScheduledScanAt,
   securityReportEvidenceState,
   securityHistoryEntryIsSafe,
   severityCounts,
   skippedReasonCode,
   summarizeReports,
   unsafeEntries,
+  unsafeScanCount,
   unsafeVerdictTone,
   unresolvedScanCount,
   type SecurityHistoryView,
   type SecurityReportView,
 } from "./security-view.ts";
+
+test("enabled schedules project the next run while the runtime cursor loads", () => {
+  const base = new Date(2026, 7, 27, 9, 0, 0, 0);
+  const schedule = {
+    enabled: true,
+    cycle: "daily",
+    time: "10:00",
+    scope: "all",
+    agents: [],
+    dir: null,
+    notify: false,
+  } as const;
+
+  assert.equal(
+    resolveNextScheduledScanAt(schedule, null, base),
+    new Date(2026, 7, 27, 10, 0, 0, 0).toISOString(),
+  );
+  assert.equal(
+    resolveNextScheduledScanAt(schedule, {
+      lastRun: null,
+      nextRunAt: "2026-08-28T02:30:00.000Z",
+      pending: false,
+    }),
+    "2026-08-28T02:30:00.000Z",
+  );
+  assert.equal(
+    resolveNextScheduledScanAt({ ...schedule, enabled: false }, null, base),
+    null,
+  );
+});
 
 function report(
   overrides: Partial<SecurityReportView> = {},
@@ -64,7 +97,7 @@ test("summarizeReports preserves successes when another Skill fails", () => {
     safe: 1,
     warn: 0,
     danger: 0,
-    unknown: 1,
+    unknown: 0,
     failed: 1,
     skipped: 0,
     findings: 0,
@@ -106,7 +139,7 @@ test("partial allow report is never counted as safe", () => {
   assert.equal(totals.unknown, 1);
 });
 
-test("allow report with a failed branch or skipped file is not safe", () => {
+test("only blocking static branches or unreadable files prevent a safe result", () => {
   assert.equal(
     securityHistoryEntryIsSafe(
       historyEntry({
@@ -123,6 +156,30 @@ test("allow report with a failed branch or skipped file is not safe", () => {
         report: report({
           skippedFiles: [
             {
+              path: "unreadable.txt",
+              reasonCode: "unavailable",
+              reason: "file unavailable",
+            },
+          ],
+        }),
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    securityHistoryEntryIsSafe(
+      historyEntry({
+        report: report({
+          branches: [
+            { name: "static", status: "complete" },
+            {
+              name: "multiFileAnalysis",
+              status: "failed",
+              detail: "retry exhausted",
+            },
+          ],
+          skippedFiles: [
+            {
               path: "asset.bin",
               reasonCode: "binary",
               reason: "binary file",
@@ -131,7 +188,7 @@ test("allow report with a failed branch or skipped file is not safe", () => {
         }),
       }),
     ),
-    false,
+    true,
   );
 });
 
@@ -203,7 +260,7 @@ test("AI-assisted scan mode requires both a model and the feature toggle", () =>
   assert.equal(effectiveSecurityScanMode("full", true, true), "full");
   assert.equal(effectiveSecurityScanMode("full", true, false), "quick");
   assert.equal(effectiveSecurityScanMode("full", false, true), "quick");
-  assert.equal(effectiveSecurityScanMode("quick", true, true), "quick");
+  assert.equal(effectiveSecurityScanMode("quick", true, true), "full");
 });
 
 test("dedupeHistoryByContentHash collapses re-scans and install copies by content hash", () => {
@@ -329,7 +386,7 @@ test("dedupe keeps failed entries without a content hash", () => {
   assert.equal(deduped.length, 2);
 });
 
-test("unsafeEntries includes only explicit warn/block verdicts", () => {
+test("unsafeEntries includes findings even when scanner policy allows use", () => {
   const block = historyEntry({
     id: "history:block",
     skillName: "blocker",
@@ -351,18 +408,57 @@ test("unsafeEntries includes only explicit warn/block verdicts", () => {
     report: undefined,
   });
   const safe = historyEntry({ id: "history:safe", report: report() });
+  const allowedFinding = historyEntry({
+    id: "history:allowed-finding",
+    report: report({
+      verdict: "allow",
+      findings: [
+        {
+          id: "finding:low",
+          kind: "data_exfiltration",
+          severity: "low",
+          source: "static",
+          kindDisplay: "数据泄露",
+          severityDisplay: "低危",
+          ruleName: "HTTP request",
+          message: "HTTP request",
+          remediation: "Review target",
+          path: "scripts/exfil.py",
+          line: 2,
+        },
+      ],
+    }),
+  });
   const partial = historyEntry({
     id: "history:partial",
     status: "partial",
     report: report({ status: "partial", verdict: "allow" }),
   });
   assert.deepEqual(
-    unsafeEntries([safe, block, warn, unknown, failed, partial]).map(
-      (entry) => entry.id,
-    ),
-    ["history:block", "history:warn"],
+    unsafeEntries([
+      safe,
+      block,
+      warn,
+      allowedFinding,
+      unknown,
+      failed,
+      partial,
+    ]).map((entry) => entry.id),
+    ["history:block", "history:warn", "history:allowed-finding"],
   );
   assert.deepEqual(unsafeEntries([safe]), []);
+  assert.equal(securityHistoryEntryIsSafe(allowedFinding), false);
+  assert.deepEqual(summarizeReports([allowedFinding]), {
+    total: 1,
+    safe: 0,
+    warn: 1,
+    danger: 0,
+    unknown: 0,
+    failed: 0,
+    skipped: 0,
+    findings: 1,
+    files: 2,
+  });
 });
 
 test("detected risks stay separate from incomplete and failed scans", () => {
@@ -375,6 +471,7 @@ test("detected risks stay separate from incomplete and failed scans", () => {
   };
   assert.equal(detectedRiskCount(totals), 3);
   assert.equal(unresolvedScanCount(totals), 4);
+  assert.equal(unsafeScanCount(totals), 7);
 });
 
 test("a partial unknown 100-point report is incomplete, not unsafe or clean", () => {
@@ -546,6 +643,101 @@ test("countScanTasks counts unique scanIds", () => {
     1,
   );
   assert.equal(countScanTasks([]), 0);
+});
+
+test("unchanged automatic scans become history tasks without replacing evidence", () => {
+  const previous = historyEntry({
+    id: "history:previous",
+    finishedAt: "2026-08-27T08:00:00.000Z",
+    report: report(),
+  });
+  const unchanged = historyEntry({
+    id: "history:unchanged",
+    scanId: "scan:automatic",
+    trigger: "automatic",
+    status: "skipped",
+    report: undefined,
+    errorCode: "security.scan.unchanged",
+    startedAt: "2026-08-27T08:30:00.000Z",
+    finishedAt: "2026-08-27T08:30:01.000Z",
+  });
+  const task = aggregateScanTask([
+    unchanged,
+    { ...unchanged, id: "history:unchanged-two", skillRef: "skill:two" },
+  ]);
+
+  assert.equal(task.unchanged, true);
+  assert.equal(task.status, "complete");
+  assert.equal(task.totals.total, 2);
+  assert.equal(task.totals.skipped, 2);
+  assert.equal(latestHistory([previous, unchanged])?.id, previous.id);
+  assert.equal(summarizeReports([previous, unchanged]).safe, 1);
+});
+
+test("mixed automatic scans treat reused evidence as neutral, not unsafe", () => {
+  const scanned = historyEntry({
+    id: "history:scanned",
+    scanId: "scan:mixed",
+    trigger: "automatic",
+    report: report(),
+  });
+  const reused = historyEntry({
+    id: "history:reused",
+    scanId: "scan:mixed",
+    skillRef: "skill:reused",
+    trigger: "automatic",
+    status: "skipped",
+    report: undefined,
+    errorCode: "security.scan.unchanged",
+  });
+  const task = aggregateScanTask([scanned, reused]);
+
+  assert.equal(task.unchanged, false);
+  assert.equal(task.safe, true);
+  assert.equal(task.status, "complete");
+  assert.equal(task.totals.total, 2);
+  assert.equal(task.totals.safe, 1);
+  assert.equal(task.totals.skipped, 1);
+  assert.equal(unresolvedScanCount(task.totals), 0);
+});
+
+test("partial entries without findings remain unresolved but not unsafe", () => {
+  const partial = historyEntry({
+    id: "history:partial-review",
+    status: "partial",
+    report: report({ status: "partial", verdict: "allow", findings: [] }),
+  });
+  const task = aggregateScanTask([partial]);
+
+  assert.equal(task.findings.length, 0);
+  assert.equal(task.unsafeEntries.length, 0);
+  assert.equal(unresolvedScanCount(task.totals), 1);
+});
+
+test("historyForCurrentSkills removes deleted assets from current posture", () => {
+  const present = historyEntry({ skillRef: "skill:present" });
+  const deleted = historyEntry({
+    id: "history:deleted",
+    skillRef: "skill:deleted",
+    skillName: "deleted",
+    status: "failed",
+  });
+
+  assert.deepEqual(
+    historyForCurrentSkills(
+      [present, deleted],
+      [
+        {
+          skillRef: "skill:present",
+          name: "present",
+          agents: ["AiPy"],
+          modifiedAt: "2026-08-10T00:00:00.000Z",
+          source: "discovered",
+        },
+      ],
+    ).map((entry) => entry.id),
+    [present.id],
+  );
 });
 
 test("aggregateScanTask builds a single-entry (single-skill) task", () => {

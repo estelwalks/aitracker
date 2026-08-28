@@ -39,6 +39,7 @@ export type InsightEnvelopeStatus =
   | "enhancer-failed"
   | "invalid-output"
   | "no-eligible-candidates"
+  | "pending"
   | "stale";
 
 /** Known in-app route path for each action id (typed for `<Link to={...}>`). */
@@ -67,6 +68,7 @@ const STATUS_LABEL_KEYS: Record<InsightEnvelopeStatus, string> = {
   "enhancer-failed": "settings.insight.status.enhancer-failed",
   "invalid-output": "settings.insight.status.invalid-output",
   "no-eligible-candidates": "settings.insight.status.no-eligible-candidates",
+  pending: "settings.insight.status.pending",
   stale: "settings.insight.status.stale",
 };
 
@@ -86,6 +88,7 @@ const FALLBACK_STATUS_LABEL_KEYS: Partial<
   "invalid-output": "settings.insight.fallbackStatus.invalid-output",
   "no-eligible-candidates":
     "settings.insight.fallbackStatus.no-eligible-candidates",
+  pending: "settings.insight.fallbackStatus.pending",
 };
 
 /** Localized, renderer-safe explanation when AI enhancement fell back to rules. */

@@ -54,6 +54,38 @@ export interface SecurityScanScheduleStatusView {
   readonly nextRunAt: string | null;
   readonly pending: boolean;
 }
+
+/**
+ * UI-safe next occurrence. The durable scheduler cursor wins; while it is
+ * still initializing, project the saved schedule so enabled plans never sit
+ * indefinitely at “—” / “loading”.
+ */
+export function resolveNextScheduledScanAt(
+  schedule: SecurityScanScheduleView,
+  status: SecurityScanScheduleStatusView | null,
+  base: Date = new Date(),
+): string | null {
+  if (!schedule.enabled) return null;
+  if (
+    status?.nextRunAt != null &&
+    Number.isFinite(Date.parse(status.nextRunAt))
+  ) {
+    return status.nextRunAt;
+  }
+  if (schedule.cycle === "hourly") {
+    return new Date(base.getTime() + 60 * 60 * 1_000).toISOString();
+  }
+
+  const [hour = 0, minute = 0] = schedule.time.split(":").map(Number);
+  const next = new Date(base);
+  next.setHours(hour, minute, 0, 0);
+  if (schedule.cycle === "daily") {
+    if (next.getTime() <= base.getTime()) next.setDate(next.getDate() + 1);
+  } else if (next.getTime() <= base.getTime()) {
+    next.setDate(next.getDate() + 7);
+  }
+  return next.toISOString();
+}
 export type SecurityScanPhase =
   | "idle"
   | "running"
@@ -107,13 +139,45 @@ export interface SecurityFindingView {
   readonly source: "static" | "model";
   readonly kindDisplay: string;
   readonly severityDisplay: string;
+  readonly ruleId?: string;
   readonly ruleName: string;
   readonly message: string;
   readonly remediation: string;
+  readonly cweId?: string;
+  readonly bypassVerification?: boolean;
   readonly path: string;
   readonly line?: number;
   readonly excerpt?: string;
+  readonly fileHash?: string;
   readonly reasoning?: string;
+}
+
+export type SecurityTokenUsageStatus =
+  "not_applicable" | "complete" | "partial" | "unavailable";
+
+export interface SecurityTokenUsageBreakdownView {
+  readonly status: SecurityTokenUsageStatus;
+  readonly requestCount: number;
+  readonly reportedRequestCount: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly totalTokens: number;
+  readonly cachedInputTokens: number;
+}
+
+export interface SecurityTokenUsageView extends SecurityTokenUsageBreakdownView {
+  readonly byModel: Readonly<Record<string, SecurityTokenUsageBreakdownView>>;
+  readonly byBranch: Readonly<
+    Partial<
+      Record<
+        | "ruleReview"
+        | "singleFileAnalysis"
+        | "multiFileAnalysis"
+        | "semanticDedup",
+        SecurityTokenUsageBreakdownView
+      >
+    >
+  >;
 }
 
 export interface SecurityBranchView {
@@ -164,6 +228,7 @@ export interface SecurityReportView {
   readonly findings: readonly SecurityFindingView[];
   readonly branches: readonly SecurityBranchView[];
   readonly skippedFiles: readonly SecuritySkippedFileView[];
+  readonly tokenUsage?: SecurityTokenUsageView;
   readonly errorCode?: string;
 }
 
@@ -225,14 +290,29 @@ export const EMPTY_SECURITY_TOTALS: SecurityTotals = {
   files: 0,
 };
 
-/** Only explicit warn/block verdicts are detected risks. */
+/** Findings are detected risks even when scanner policy still allows use. */
 export function detectedRiskCount(totals: SecurityTotals): number {
   return totals.warn + totals.danger;
+}
+
+/** Results that are not safe and results that failed/incomplete need attention. */
+export function unsafeScanCount(totals: SecurityTotals): number {
+  return totals.warn + totals.danger + totals.unknown + totals.failed;
 }
 
 /** Unknown and failed scans require review but are not evidence of risk. */
 export function unresolvedScanCount(totals: SecurityTotals): number {
   return totals.unknown + totals.failed;
+}
+
+const UNCHANGED_SCAN_ERROR_CODE = "security.scan.unchanged";
+
+function securityHistoryEntryIsUnchanged(entry: SecurityHistoryView): boolean {
+  return (
+    entry.trigger === "automatic" &&
+    entry.status === "skipped" &&
+    entry.errorCode === UNCHANGED_SCAN_ERROR_CODE
+  );
 }
 
 /**
@@ -249,6 +329,7 @@ export function dedupeHistoryByContentHash(
 ): SecurityHistoryView[] {
   const latestBySkillRef = new Map<string, SecurityHistoryView>();
   for (const entry of history) {
+    if (securityHistoryEntryIsUnchanged(entry)) continue;
     const previous = latestBySkillRef.get(entry.skillRef);
     if (
       previous &&
@@ -279,31 +360,51 @@ export function dedupeHistoryByContentHash(
   return [...withoutHash, ...latestByKey.values()];
 }
 
+/**
+ * Current posture must not retain deleted Skills. Full history remains intact
+ * for the audit timeline, while status cards and the unsafe list are scoped to
+ * opaque references returned by the latest discovery pass.
+ */
+export function historyForCurrentSkills(
+  history: readonly SecurityHistoryView[],
+  skills: readonly SecuritySkillView[],
+): SecurityHistoryView[] {
+  const currentRefs = new Set(skills.map((skill) => skill.skillRef));
+  return history.filter((entry) => currentRefs.has(entry.skillRef));
+}
+
 export function summarizeReports(
   history: readonly SecurityHistoryView[],
   progress?: SecurityProgressView,
 ): SecurityTotals {
   const totals = dedupeHistoryByContentHash(history).reduce<SecurityTotals>(
-    (result, item) => ({
-      total: result.total + 1,
-      safe: result.safe + (securityHistoryEntryIsSafe(item) ? 1 : 0),
-      warn: result.warn + (item.report?.verdict === "warn" ? 1 : 0),
-      danger: result.danger + (item.report?.verdict === "block" ? 1 : 0),
-      unknown:
-        result.unknown +
-        (item.report?.verdict === "unknown" ||
-        !item.report ||
-        (item.report.verdict === "allow" && !securityHistoryEntryIsSafe(item))
-          ? 1
-          : 0),
-      failed: result.failed + (item.status === "failed" ? 1 : 0),
-      skipped:
-        result.skipped +
-        (item.status === "skipped" ? 1 : 0) +
-        (item.report?.skippedFiles.length ?? 0),
-      findings: result.findings + (item.report?.findings.length ?? 0),
-      files: result.files + (item.report?.scannedFiles ?? 0),
-    }),
+    (result, item) => {
+      const detectedRisk = securityHistoryEntryHasDetectedRisk(item);
+      const blocked = item.report?.verdict === "block";
+      return {
+        total: result.total + 1,
+        safe: result.safe + (securityHistoryEntryIsSafe(item) ? 1 : 0),
+        warn: result.warn + (detectedRisk && !blocked ? 1 : 0),
+        danger: result.danger + (blocked ? 1 : 0),
+        unknown:
+          result.unknown +
+          (item.status !== "failed" &&
+          !detectedRisk &&
+          (item.report?.verdict === "unknown" ||
+            !item.report ||
+            (item.report.verdict === "allow" &&
+              !securityHistoryEntryIsSafe(item)))
+            ? 1
+            : 0),
+        failed: result.failed + (item.status === "failed" ? 1 : 0),
+        skipped:
+          result.skipped +
+          (item.status === "skipped" ? 1 : 0) +
+          (item.report?.skippedFiles.length ?? 0),
+        findings: result.findings + (item.report?.findings.length ?? 0),
+        files: result.files + (item.report?.scannedFiles ?? 0),
+      };
+    },
     EMPTY_SECURITY_TOTALS,
   );
   return {
@@ -314,13 +415,26 @@ export function summarizeReports(
   };
 }
 
+export function securityHistoryEntryHasDetectedRisk(
+  item: SecurityHistoryView,
+): boolean {
+  return (
+    (item.report?.findings.length ?? 0) > 0 ||
+    item.report?.verdict === "warn" ||
+    item.report?.verdict === "block"
+  );
+}
+
 export function securityHistoryEntryIsSafe(item: SecurityHistoryView): boolean {
   return (
     item.status === "complete" &&
     item.report?.status === "complete" &&
     item.report.verdict === "allow" &&
-    item.report.skippedFiles.length === 0 &&
-    !item.report.branches.some((branch) => branch.status === "failed")
+    item.report.findings.length === 0 &&
+    item.report.skippedFiles.every((file) => file.reasonCode === "binary") &&
+    !item.report.branches.some(
+      (branch) => branch.name === "static" && branch.status !== "complete",
+    )
   );
 }
 
@@ -377,10 +491,12 @@ export function latestHistory(
   history: readonly SecurityHistoryView[],
 ): SecurityHistoryView | null {
   return (
-    [...history].sort(
-      (left, right) =>
-        Date.parse(right.finishedAt) - Date.parse(left.finishedAt),
-    )[0] ?? null
+    history
+      .filter((entry) => !securityHistoryEntryIsUnchanged(entry))
+      .sort(
+        (left, right) =>
+          Date.parse(right.finishedAt) - Date.parse(left.finishedAt),
+      )[0] ?? null
   );
 }
 
@@ -410,13 +526,11 @@ export function clampPercent(value: number): number {
 
 /** A model profile is usable for a full scan only when its feature gate is on. */
 export function effectiveSecurityScanMode(
-  requested: SecurityScanMode,
+  _requested: SecurityScanMode,
   modelConfigured: boolean,
   aiAssistedEnabled: boolean,
 ): SecurityScanMode {
-  return requested === "full" && modelConfigured && aiAssistedEnabled
-    ? "full"
-    : "quick";
+  return modelConfigured && aiAssistedEnabled ? "full" : "quick";
 }
 
 /**
@@ -454,7 +568,11 @@ export interface SecurityScanTaskView {
   readonly scope: "all" | "single";
   readonly status: "complete" | "partial" | "failed";
   readonly safe: boolean;
+  /** Automatic scan completed by reusing unchanged prior evidence. */
+  readonly unchanged: boolean;
   readonly entries: readonly SecurityHistoryView[];
+  /** Every entry that did not produce an explicit safe result. */
+  readonly unsafeEntries: readonly SecurityHistoryView[];
   readonly totals: SecurityTotals;
   readonly findings: readonly SecurityTaskFindingView[];
 }
@@ -470,7 +588,8 @@ export function unsafeEntries(
 ): SecurityHistoryView[] {
   return entries.filter(
     (item) =>
-      item.report?.verdict === "warn" || item.report?.verdict === "block",
+      !securityHistoryEntryIsUnchanged(item) &&
+      securityHistoryEntryHasDetectedRisk(item),
   );
 }
 
@@ -523,9 +642,21 @@ export function aggregateScanTask(
     (latest, entry) => Math.max(latest, Date.parse(entry.finishedAt)),
     0,
   );
-  const totals = summarizeReports(entries);
-  const anyFailed = entries.some((entry) => entry.status === "failed");
-  const allComplete = entries.every(
+  const unchangedEntries = entries.filter(securityHistoryEntryIsUnchanged);
+  const evidenceEntries = entries.filter(
+    (entry) => !securityHistoryEntryIsUnchanged(entry),
+  );
+  const unsafeTaskEntries = unsafeEntries(evidenceEntries);
+  const unchanged =
+    entries.length > 0 && unchangedEntries.length === entries.length;
+  const evidenceTotals = summarizeReports(evidenceEntries);
+  const totals = {
+    ...evidenceTotals,
+    total: entries.length,
+    skipped: evidenceTotals.skipped + unchangedEntries.length,
+  };
+  const anyFailed = evidenceEntries.some((entry) => entry.status === "failed");
+  const allComplete = evidenceEntries.every(
     (entry) =>
       entry.status === "complete" &&
       entry.report?.status === "complete" &&
@@ -579,9 +710,17 @@ export function aggregateScanTask(
     finishedAt: new Date(finishedAt).toISOString(),
     trigger: entries[0]?.trigger ?? "manual",
     scope: entries.length > 1 ? "all" : "single",
-    status: anyFailed ? "failed" : allComplete ? "complete" : "partial",
-    safe: entries.length > 0 && entries.every(securityHistoryEntryIsSafe),
+    status: anyFailed
+      ? "failed"
+      : allComplete || unchanged
+        ? "complete"
+        : "partial",
+    safe:
+      evidenceEntries.length > 0 &&
+      evidenceEntries.every(securityHistoryEntryIsSafe),
+    unchanged,
     entries,
+    unsafeEntries: unsafeTaskEntries,
     totals,
     findings,
   };

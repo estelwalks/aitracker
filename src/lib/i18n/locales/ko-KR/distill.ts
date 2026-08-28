@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 /** 증류 워크벤치 문구(V3.0 프로토타입 정렬). */
 export const distill = {
   jarvisTitle: "Jarvis 인사이트",

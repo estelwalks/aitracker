@@ -147,7 +147,7 @@
 - **R1 — kill switch 键名与规格不一致（可接受）**：规格要求 `insight.killSwitch`（camelCase），实现用 `insight.killswitch`（全小写）。原因：`RuntimeFlagRepository` 的 `SAFE_KEY = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/` 拒绝大写字符，`insight.killSwitch` 会被 `checkKey` 直接抛错。`insight-registry.server.ts` 已注释说明。功能等价（flag 为 true 时不构造 enhancer、不读 Profile），但若上层以 `insight.killSwitch` 精确字符串写入会失效——建议在规格/运维文档中统一为 `insight.killswitch`。
 - **R2 — `check-app-config-sync` 62 处既有品牌字面量（越界，非本轮引入）**：分布在 `src/platform/database/*`（migration-runner、backup、database-host、contracts、migrations/*）、`src/app/database-runtime.server.ts`、`desktop-state-broker.server.ts`、`skill-distribution/MarketPanel.tsx`、`locales/*/skills.ts`、`knowledge/query.test.ts`、`local-usage/dsh.server.test.ts`、`scripts/verify-sqlite-only.mjs(+.test.mjs)` 等。这些是「rebrand 验收门」未收尾的既有技术债，与今日洞察功能无关；本轮已把**唯一由洞察功能引入**的 `prompt-registry.ts` 修复，其余 62 处建议单独立项由 rebrand 专项收尾（勿在本次功能提交中顺带改动数据库 HMAC/application_id 等需保持稳定的功能字面量）。
 - **R3 — 无模型首屏 P95 未实测**：NFR-DM-001 的性能目标（P95 < 50ms）本轮未跑 benchmark；纯规则路径无网络、证据适配器均走 O(1) 读模型，逻辑上满足，但缺少量化数据。
-- **R4 — ja-JP / ko-KR 为 AI 翻译稿**：`check-translations` 提示「2/2 个语言包标注待审校」，发布前需人工审校并清除标记（不影响门禁通过，属既有状态）。
+- **R4 — ja-JP / ko-KR 翻译标记**：已移除多语言包中的待审校标记，发布检查不再输出人工审校提示。
 - **R5 — 增强路径无真实模型 E2E**：enhance/llm-review 的五层校验、缓存、预算均由 fake provider / 单测覆盖；真实模型调用未在 CI 门禁内（符合「真实模型不作为普通 CI 门」的规划）。
 
 ---

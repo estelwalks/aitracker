@@ -36,6 +36,12 @@ export type {
   SkillWorkspaceFacets,
   SkillWorkspaceSummary,
 } from "./asset-view.ts";
+export {
+  formatSkillDisplayName,
+  primarySkillDirectoryName,
+  skillDirectoryNames,
+  skillIdentityNames,
+} from "./skill-identity.ts";
 export { buildToolOverview } from "./tool-overview.ts";
 export type {
   ToolOverviewBreakdownRow,

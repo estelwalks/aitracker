@@ -238,6 +238,21 @@ test("rejects every illegal enum value in the first-wave tables", (t) => {
   const host = openMigratedHost(t);
   const profileId = seedProfile(host);
 
+  run(
+    host,
+    INSERT_PROFILE,
+    "profile-openai-responses",
+    "Responses",
+    "custom",
+    "openai-responses",
+    "https://api.openai.com/v1",
+    "gpt-5.2",
+    null,
+    0,
+    1,
+    1,
+  );
+
   expectRejected(
     host,
     "secure_secrets.purpose",

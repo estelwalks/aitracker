@@ -20,9 +20,13 @@ import { useEffect, useState, type ReactNode } from "react";
  *
  * Optional extensions keep every existing caller unchanged:
  * - `icon` swaps the orb glyph (defaults to Sparkles).
- * - `actions` renders into the right-hand action column (before the rotate
- *   button), mirroring the dashboard's `flex shrink-0 flex-col items-end`
- *   column. When omitted the rotate/refresh controls stay in the title row.
+ * - `actions` renders into the right-hand action column, mirroring the
+ *   dashboard's `flex shrink-0 flex-col items-end` column. When omitted the
+ *   rotate/refresh controls stay in the title row.
+ * - `actionsLayout="rotate-left"` places the shared rotate control to the
+ *   left of that action column.
+ * - `actionsLayout="title-row"` places the shared rotate control beside the
+ *   title while keeping the action column on the right.
  * - `pills` renders extra chips in the title row (after the title), matching
  *   the homepage's `dashboard-hero-pill` status pills.
  * - `severity` renders a neutral three-state (info/attention/risk) badge.
@@ -71,6 +75,7 @@ export function JarvisInsight({
   dotsLabel,
   icon: Icon = Sparkles,
   actions,
+  actionsLayout = "stack",
   pills,
   variant = "hero",
   headingLevel = 1,
@@ -81,6 +86,7 @@ export function JarvisInsight({
   onEnhance,
   enhanceLabel,
   enhanceBusy = false,
+  showEmpty = false,
   onAction,
   actionLabel,
 }: {
@@ -97,8 +103,10 @@ export function JarvisInsight({
   dotsLabel?: string;
   /** Orb icon override; defaults to Sparkles. */
   icon?: LucideIcon;
-  /** Right-hand action column content, rendered before the rotate button. */
+  /** Right-hand action column content, positioned by `actionsLayout`. */
   actions?: ReactNode;
+  /** Layout variant for the shared rotate control and right-hand actions. */
+  actionsLayout?: "stack" | "rotate-left" | "title-row";
   /** Extra chips rendered in the title row, after the title. */
   pills?: ReactNode;
   /** hero = the shared page-level prototype card; inline = compact embedding. */
@@ -118,6 +126,8 @@ export function JarvisInsight({
   enhanceLabel?: string;
   /** Show a spinner while an enhance request is in flight. */
   enhanceBusy?: boolean;
+  /** Keep the titled shell visible when no insight line is available yet. */
+  showEmpty?: boolean;
   /** Renders an action button when provided together with `actionLabel`. */
   onAction?: () => void;
   actionLabel?: string;
@@ -172,7 +182,7 @@ export function JarvisInsight({
     };
   }, [hero, line, safeLines.length]);
 
-  if (safeLines.length === 0) return null;
+  if (safeLines.length === 0 && !showEmpty) return null;
 
   const orbStyle = accent
     ? {
@@ -311,27 +321,36 @@ export function JarvisInsight({
                 {refreshButton}
                 {rotateButton}
               </div>
+            ) : actionsLayout === "title-row" ? (
+              <div className="ml-auto flex items-center gap-2">
+                {rotateButton}
+              </div>
             ) : null}
           </div>
           <p
+            data-variant={hero ? "hero" : "inline"}
             className={
               hero
-                ? "aitracker-text-body mt-2 min-h-[48px] leading-6 font-medium tracking-tight text-foreground/90"
-                : "aitracker-text-body mt-2 min-h-[42px] leading-relaxed text-foreground/90"
+                ? "dashboard-insight-copy aitracker-text-body mt-2 min-h-[48px] leading-6 font-medium tracking-tight text-foreground/90"
+                : "dashboard-insight-copy aitracker-text-body mt-2 min-h-[42px] leading-relaxed text-foreground/90"
             }
             aria-label={line}
           >
-            {typed}
-            <span
-              className={`ml-1 inline-block bg-foreground/60 ${
-                hero
-                  ? "h-[17px] w-[8px] translate-y-[3px]"
-                  : "h-[15px] w-[7px] translate-y-[2px]"
-              }`}
-            />
+            {safeLines.length > 0 ? (
+              <>
+                {typed}
+                <span
+                  className={`ml-1 inline-block bg-foreground/60 ${
+                    hero
+                      ? "h-[17px] w-[8px] translate-y-[3px]"
+                      : "h-[15px] w-[7px] translate-y-[2px]"
+                  }`}
+                />
+              </>
+            ) : null}
           </p>
           <div
-            className={`flex gap-1.5 ${hero ? "mt-3.5" : "mt-3"}`}
+            className={`dashboard-insight-tabs flex gap-1.5 ${hero ? "mt-3.5" : "mt-3"}`}
             role="tablist"
             aria-label={dotsLabel}
           >
@@ -353,13 +372,27 @@ export function JarvisInsight({
           </div>
         </div>
         {actions != null ? (
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            {actions}
-            {actionButton}
-            {enhanceButton}
-            {refreshButton}
-            {rotateButton}
-          </div>
+          actionsLayout === "rotate-left" ? (
+            <div className="flex shrink-0 items-center gap-3">
+              {rotateButton}
+              <div className="flex shrink-0 flex-col items-center gap-2">
+                {actions}
+                {actionButton}
+                {enhanceButton}
+                {refreshButton}
+              </div>
+            </div>
+          ) : (
+            <div
+              className={`flex shrink-0 flex-col items-end ${actionsLayout === "title-row" ? "-mt-2 gap-1" : "gap-2"}`}
+            >
+              {actions}
+              {actionButton}
+              {enhanceButton}
+              {refreshButton}
+              {actionsLayout === "title-row" ? null : rotateButton}
+            </div>
+          )
         ) : null}
       </div>
     </section>

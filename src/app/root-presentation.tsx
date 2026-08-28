@@ -67,6 +67,7 @@ function RootAppContent() {
   const { theme } = useTheme();
   return (
     <>
+      <HydrationMarker />
       <ChunkRecoveryCompletion />
       <NavigationPerformanceMarks />
       <PlatformPersistenceSeed />
@@ -80,6 +81,23 @@ function RootAppContent() {
       />
     </>
   );
+}
+
+/**
+ * Expose a small, privacy-neutral readiness signal for browser automation and
+ * integrations that need to wait until the interactive React tree is mounted.
+ * Server-rendered controls can otherwise be visible for a brief interval
+ * before their event handlers are attached.
+ */
+function HydrationMarker() {
+  useEffect(() => {
+    document.documentElement.dataset.aitrackerHydrated = "true";
+    return () => {
+      delete document.documentElement.dataset.aitrackerHydrated;
+    };
+  }, []);
+
+  return null;
 }
 
 /**

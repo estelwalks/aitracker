@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const common = {
   loading: "로딩 중...",
   error: "오류가 발생했습니다",

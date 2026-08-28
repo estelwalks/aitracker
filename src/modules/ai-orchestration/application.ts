@@ -41,6 +41,45 @@ function errorFor(status: AIExecutionStatus): AIError | undefined {
   return undefined;
 }
 
+const SAFE_PROVIDER_ERROR_CODES = new Set<AIError["code"]>([
+  "ai.provider-auth",
+  "ai.provider-rate-limited",
+  "ai.provider-unavailable",
+  "ai.provider-http-client",
+  "ai.provider-network",
+  "ai.provider-invalid-response",
+  "ai.profile-unavailable",
+]);
+
+function safeProviderErrorCode(error: unknown): AIError["code"] {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (
+      typeof code === "string" &&
+      SAFE_PROVIDER_ERROR_CODES.has(code as AIError["code"])
+    ) {
+      return code as AIError["code"];
+    }
+  }
+  if (error instanceof TypeError) return "ai.provider-network";
+  return "ai.provider-failed";
+}
+
+/**
+ * Provider errors may carry a sanitized, bounded attribution string
+ * (`detail`). It is our own classification text (never raw provider output),
+ * but keep a defensive length/safety bound before it reaches telemetry.
+ */
+function extractProviderFailureDetail(error: unknown): string | undefined {
+  if (error && typeof error === "object" && "detail" in error) {
+    const detail = (error as { detail?: unknown }).detail;
+    if (typeof detail === "string" && detail.length > 0) {
+      return detail.replace(/[\r\n]/gu, " ").slice(0, 200);
+    }
+  }
+  return undefined;
+}
+
 function costFor(
   ports: AIOrchestrationPorts,
   response: AIResponse | undefined,
@@ -73,10 +112,16 @@ function withTimeout(
   promise: Promise<AIResponse>,
   signal: AbortSignal,
   timeoutMs: number,
+  onTimeout?: () => void,
 ): Promise<AIResponse> {
   if (timeoutMs <= 0) return Promise.reject(new Error("timeout"));
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+    const timer = setTimeout(() => {
+      // Abort the underlying provider request so a timed-out call stops
+      // consuming gateway resources instead of running in the background.
+      onTimeout?.();
+      reject(new Error("timeout"));
+    }, timeoutMs);
     const abort = () => {
       clearTimeout(timer);
       reject(new Error("cancelled"));
@@ -120,6 +165,8 @@ export async function executeAIRequest(
   const timeoutMs = request.timeoutMs ?? 30_000;
   let response: AIResponse;
   let status: AIExecutionStatus = provider ? "completed" : "offline";
+  let providerErrorCode: AIError["code"] | undefined;
+  let failureDetail: string | undefined;
   try {
     response = provider
       ? await withTimeout(
@@ -132,6 +179,7 @@ export async function executeAIRequest(
           }),
           signal,
           timeoutMs,
+          () => controller.abort(),
         )
       : (ports.offlineFallback?.(request) ?? fallbackResponse(request));
   } catch (error) {
@@ -144,12 +192,21 @@ export async function executeAIRequest(
       status = "timeout";
     } else {
       status = "fallback";
+      providerErrorCode = safeProviderErrorCode(error);
+      failureDetail = extractProviderFailureDetail(error);
     }
     response = ports.offlineFallback?.(request) ?? fallbackResponse(request);
   }
   const elapsed = (ports.now?.() ?? Date.now()) - started;
   void elapsed;
-  return result(request, status, response, costFor(ports, response, request));
+  return result(
+    request,
+    status,
+    response,
+    costFor(ports, response, request),
+    providerErrorCode,
+    failureDetail,
+  );
 }
 
 function result(
@@ -157,6 +214,8 @@ function result(
   status: AIExecutionStatus,
   response: AIResponse | undefined,
   cost: CostState,
+  providerErrorCode?: AIError["code"],
+  failureDetail?: string,
 ): AIExecutionResult {
   const failure = errorFor(status);
   return {
@@ -174,7 +233,8 @@ function result(
         status === "fallback" ||
         status === "timeout" ||
         status === "cancelled",
-      errorCode: failure?.code,
+      errorCode: providerErrorCode ?? failure?.code,
+      ...(failureDetail !== undefined ? { failureDetail } : {}),
     },
   };
 }

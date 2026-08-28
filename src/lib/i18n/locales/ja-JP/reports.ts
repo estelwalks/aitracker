@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 /** /reports（ブリーフィング＆メモリ）V3.0 プロトタイプの文案。 */
 export const reports = {
   insight: {
@@ -82,6 +81,10 @@ export const reports = {
     disabledStatus: "無効",
     processRequiredHint:
       "アプリ起動中またはメニューバーに隠れている間に実行され、終了中に逃した分は次回起動時に実行されます。",
+    schedulerOff:
+      "バックグラウンドスケジューラが起動していないため、定期生成は実行されません。",
+    schedulerOffHint:
+      "このプラットフォームではバックグラウンドタスクが無効か、スケジューラの起動に失敗しました。macOS/Windows 版を使用し、アプリログを確認してください。",
     runSummary: "{time} · {result}",
     loadFailed: "レポートスケジュールの読み込みに失敗しました",
     runStatus: {

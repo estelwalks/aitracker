@@ -818,6 +818,7 @@ async function recordSkill(
     modifiedAt: details.mtime.toISOString(),
     version,
     source: origin?.source ?? frontmatterSource(frontmatter),
+    isDistilled: frontmatter["aitracker-origin"] === "distilled",
     updateStatus: evidence.status,
     updateReason: evidence.reason,
   });

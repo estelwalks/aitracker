@@ -252,6 +252,17 @@ export function createSqliteReportStore(
     async saveDocument(document) {
       transaction(database, () => putDocument(document));
     },
+    async replaceForPeriod(document) {
+      transaction(database, () => {
+        const generatedAt = epoch(document.generatedAt)!;
+        database
+          .prepare(
+            "DELETE FROM reports WHERE definition_id = ? AND generated_at_ms = ? AND report_id <> ?",
+          )
+          .run(document.definitionId, generatedAt, document.reportId);
+        putDocument(document);
+      });
+    },
     async getDocument(reportId) {
       const row = database
         .prepare(`SELECT ${DOCUMENT_COLUMNS} FROM reports WHERE report_id = ?`)

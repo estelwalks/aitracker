@@ -37,7 +37,10 @@ export interface SnapshotSession {
   readonly turns: number;
   readonly editTurns: number;
   readonly totals: { readonly totalTokens: number };
-  readonly cost: { readonly knownUsd: number };
+  readonly cost: {
+    readonly knownUsd: number;
+    readonly estimatedUsd?: number;
+  };
   readonly durationMs: number;
 }
 
@@ -63,6 +66,8 @@ export interface ReportContextAdapterOptions {
    * metrics (sessions, turns, edits and duration).
    */
   readonly usage?: ReportUsageSnapshotReader;
+  /** Shared cached USD→CNY rate used by the Reports header. */
+  readonly usdToCny?: () => number | Promise<number>;
   readonly now?: () => Date;
 }
 
@@ -118,8 +123,12 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
-function fmtCost(n: number): string {
+function fmtCostCny(n: number): string {
   return `¥${n.toFixed(2)}`;
+}
+
+function displayCostCny(cost: { costUsd: number; costCny?: number }): number {
+  return cost.costCny ?? cost.costUsd;
 }
 
 function fmtDuration(min: number): string {
@@ -132,6 +141,7 @@ type EventUsageStats = {
   bySource: Map<string, number>;
   bySourceCost: Map<string, number>;
   projects: Map<string, number>;
+  opaqueEditSources: Set<string>;
   hasEvents: boolean;
 };
 
@@ -142,8 +152,19 @@ function emptyEventUsageStats(): EventUsageStats {
     bySource: new Map(),
     bySourceCost: new Map(),
     projects: new Map(),
+    opaqueEditSources: new Set(),
     hasEvents: false,
   };
+}
+
+function hasOpaqueExecutionTool(
+  tools: readonly { readonly name: string }[],
+): boolean {
+  if (!Array.isArray(tools)) return false;
+  return tools.some((tool) => {
+    const name = tool.name.trim().toLowerCase();
+    return name === "exec" || name === "shell" || name === "bash";
+  });
 }
 
 function usageProjectLabel(
@@ -186,19 +207,32 @@ function collectEventUsage(
 
   for (const bucket of data.aggregateBuckets ?? []) {
     if (bucket.date < range.from || bucket.date > range.to) continue;
-    const project = usageProjectLabel(bucket.projectLabel, bucket.project);
-    if (!project) continue;
-    result.projects.set(
-      project,
-      (result.projects.get(project) ?? 0) + bucket.totalTokens,
-    );
+
+    // Cost and source attribution do not depend on whether the bucket has a
+    // browser-safe project label yet. Fresh in-memory snapshots can still
+    // contain only the raw project reference; skipping the whole bucket here
+    // made the report body show ¥0.00 while the reports header (which prices
+    // the same buckets) showed the real amount.
     const costUsd = estimateUsageBucketCost(bucket);
     result.costUsd += costUsd;
     result.bySourceCost.set(
       bucket.source,
       (result.bySourceCost.get(bucket.source) ?? 0) + costUsd,
     );
+    // Modern agent logs can collapse nested file tools into a generic
+    // `exec`/shell wrapper. Counting every wrapper as an edit would wildly
+    // overstate changes, while reporting zero claims precision we do not have.
+    if (hasOpaqueExecutionTool(bucket.context.tools)) {
+      result.opaqueEditSources.add(bucket.source);
+    }
     result.hasEvents = true;
+
+    const project = usageProjectLabel(bucket.projectLabel, bucket.project);
+    if (!project) continue;
+    result.projects.set(
+      project,
+      (result.projects.get(project) ?? 0) + bucket.totalTokens,
+    );
   }
   return result;
 }
@@ -256,16 +290,21 @@ export function createReportContextPort(
     topProject?: string,
   ): string {
     const rows = stats.bySource;
+    const editSummary =
+      stats.editsComplete === false
+        ? `代码改动数据不完整（已识别 ${stats.edits} 处）`
+        : `代码改动 ${stats.edits} 处`;
     const lines: string[] = [
-      `本时段共 ${stats.sessions} 场 AI 协作会话，覆盖 ${projects.length} 个项目，累计对话 ${stats.turns} 轮、代码改动 ${stats.edits} 处，有效协作时长 ${fmtDuration(stats.durationMin)}。Token 消耗 ${fmtTokens(stats.tokens)}，估算成本 ${fmtCost(stats.costUsd)}。Token 按事件发生日统计（含内部 Agent 调用）；会话数、轮次、代码改动和时长按用户会话统计。`,
+      `本时段共 ${stats.sessions} 场 AI 协作会话，覆盖 ${projects.length} 个项目，累计对话 ${stats.turns} 轮、${editSummary}，有效协作时长 ${fmtDuration(stats.durationMin)}。Token 消耗 ${fmtTokens(stats.tokens)}，估算成本 ${fmtCostCny(displayCostCny(stats))}。Token 按事件发生日统计（含内部 Agent 调用）；会话数、轮次和时长按用户会话统计，代码改动仅统计可识别的编辑工具调用。`,
     ];
     if (rows.length > 0) {
       lines.push("", "按 Agent 统计：");
       lines.push("| Agent | 会话 | Tokens | 成本 | 改动 | 时长 |");
       lines.push("| --- | --- | --- | --- | --- | --- |");
       for (const row of rows) {
+        const edits = row.editsComplete === false ? "—" : String(row.edits);
         lines.push(
-          `| ${row.source} | ${row.sessions} | ${fmtTokens(row.tokens)} | ${fmtCost(row.costUsd)} | ${row.edits} | ${fmtDuration(row.durationMin)} |`,
+          `| ${row.source} | ${row.sessions} | ${fmtTokens(row.tokens)} | ${fmtCostCny(displayCostCny(row))} | ${edits} | ${fmtDuration(row.durationMin)} |`,
         );
       }
     } else {
@@ -294,6 +333,7 @@ export function createReportContextPort(
       });
 
       const bySourceMap = new Map<string, SourceRow>();
+      const sessionCostBySource = new Map<string, number>();
       const projectCount = new Map<string, number>();
       for (const session of inRange) {
         const source = session.source || "unknown";
@@ -309,7 +349,13 @@ export function createReportContextPort(
         row.sessions += 1;
         row.turns += session.turns;
         row.tokens += session.totals.totalTokens;
-        row.costUsd += session.cost.knownUsd;
+        const sessionCostUsd =
+          session.cost.knownUsd + (session.cost.estimatedUsd ?? 0);
+        row.costUsd += sessionCostUsd;
+        sessionCostBySource.set(
+          source,
+          (sessionCostBySource.get(source) ?? 0) + sessionCostUsd,
+        );
         row.edits += session.editTurns;
         row.durationMin += Math.round(session.durationMs / 60_000);
         bySourceMap.set(source, row);
@@ -337,18 +383,32 @@ export function createReportContextPort(
             durationMin: 0,
           };
           row.tokens = tokens;
-          row.costUsd = eventUsage.bySourceCost.get(source) ?? 0;
+          const usageCost = eventUsage.bySourceCost.get(source) ?? 0;
+          // Some native usage records expose total tokens without a complete
+          // input/output breakdown, or carry a model that cannot be priced.
+          // In that case the session snapshot may still contain a usable cost;
+          // do not overwrite it with a misleading zero.
+          row.costUsd =
+            usageCost > 0 ? usageCost : (sessionCostBySource.get(source) ?? 0);
           bySourceMap.set(source, row);
         }
         for (const row of bySourceMap.values()) {
           row.tokens = eventUsage.bySource.get(row.source) ?? 0;
-          row.costUsd = eventUsage.bySourceCost.get(row.source) ?? 0;
+          const usageCost = eventUsage.bySourceCost.get(row.source) ?? 0;
+          row.costUsd =
+            usageCost > 0
+              ? usageCost
+              : (sessionCostBySource.get(row.source) ?? 0);
         }
       }
 
-      const bySource = Array.from(bySourceMap.values()).sort(
-        (a, b) => b.tokens - a.tokens || b.sessions - a.sessions,
-      );
+      const allSourceRows = Array.from(bySourceMap.values());
+      const bySource = allSourceRows
+        // Details describe actual Token usage. Keep session totals separate so
+        // a source with a session but no usage event never becomes a phantom
+        // Agent row, even when the usage snapshot is unavailable.
+        .filter((row) => row.tokens > 0)
+        .sort((a, b) => b.tokens - a.tokens || b.sessions - a.sessions);
       const projectRanking =
         usageData && eventUsage.projects.size > 0
           ? eventUsage.projects
@@ -361,19 +421,40 @@ export function createReportContextPort(
         (a, b) => b[1] - a[1],
       )[0]?.[0];
 
+      let usdToCny = 1;
+      try {
+        const resolved = await options.usdToCny?.();
+        if (
+          typeof resolved === "number" &&
+          Number.isFinite(resolved) &&
+          resolved > 0
+        ) {
+          usdToCny = resolved;
+        }
+      } catch {
+        // Keep USD accounting intact. A missing rate degrades to the previous
+        // numeric display rather than making report generation fail.
+      }
+      const displayRows = bySource.map((row) => ({
+        ...row,
+        costCny: row.costUsd * usdToCny,
+        editsComplete: !eventUsage.opaqueEditSources.has(row.source),
+      }));
+      const costUsd = bySource.reduce((a, x) => a + x.costUsd, 0);
+      const editsComplete = displayRows.every((row) => row.editsComplete);
       const stats: ReportStats = {
         periodLabel: range.label,
-        sessions: bySource.reduce((a, x) => a + x.sessions, 0),
-        turns: bySource.reduce((a, x) => a + x.turns, 0),
+        sessions: allSourceRows.reduce((a, x) => a + x.sessions, 0),
+        turns: allSourceRows.reduce((a, x) => a + x.turns, 0),
         tokens: usageData
           ? eventUsage.tokens
           : bySource.reduce((a, x) => a + x.tokens, 0),
-        costUsd: usageData
-          ? eventUsage.costUsd
-          : bySource.reduce((a, x) => a + x.costUsd, 0),
-        edits: bySource.reduce((a, x) => a + x.edits, 0),
-        durationMin: bySource.reduce((a, x) => a + x.durationMin, 0),
-        bySource,
+        costUsd,
+        costCny: costUsd * usdToCny,
+        edits: allSourceRows.reduce((a, x) => a + x.edits, 0),
+        editsComplete,
+        durationMin: allSourceRows.reduce((a, x) => a + x.durationMin, 0),
+        bySource: displayRows,
         projects,
       };
 

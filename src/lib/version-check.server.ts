@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { APP_ID, APP_VERSION, ENV } from "./app-config";
+import { APP_ID, APP_REPO_URL, APP_VERSION, ENV } from "./app-config";
 
 /**
  * FR-033 — best-effort new-version check requested by the Settings UI.
@@ -25,8 +25,12 @@ export interface VersionCheckResult {
 }
 
 /** Default GitHub repo to poll for releases. Override via env if forked. */
-const RELEASE_OWNER = process.env[ENV.RELEASE_OWNER] ?? APP_ID;
-const RELEASE_REPO = process.env[ENV.RELEASE_REPO] ?? APP_ID;
+const releasePath = new URL(APP_REPO_URL).pathname
+  .split("/")
+  .filter((part) => part.length > 0);
+const RELEASE_OWNER =
+  process.env[ENV.RELEASE_OWNER] ?? releasePath[0] ?? APP_ID;
+const RELEASE_REPO = process.env[ENV.RELEASE_REPO] ?? releasePath[1] ?? APP_ID;
 const CHECK_TIMEOUT_MS = 5_000;
 
 /**

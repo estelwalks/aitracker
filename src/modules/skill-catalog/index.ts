@@ -33,9 +33,13 @@ export {
   buildSkillWorkspace,
   buildToolOverview,
   evaluateInstallability,
+  formatSkillDisplayName,
   parseSkillPackageMetadata,
+  primarySkillDirectoryName,
   projectSkillPackage,
   querySkillAssets,
+  skillDirectoryNames,
+  skillIdentityNames,
   toSkillAssetView,
 } from "./application/index.ts";
 export { SkillsPage } from "./presentation/SkillsPage.tsx";

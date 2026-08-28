@@ -86,6 +86,10 @@ test("model settings follow the prototype's official entry and modal form layout
   assert.match(source, /OFFICIAL_MODEL_DISPLAY_NAME/);
   assert.match(source, /settings\.modelProfiles\.enable/);
   assert.match(source, /settings\.modelProfiles\.officialDeleteDisabled/);
+  assert.match(source, /settings\.modelProfiles\.listOfficialModels/);
+  assert.match(source, /settings\.modelProfiles\.protocolOpenaiResponses/);
+  assert.match(source, /POST \/responses/);
+  assert.doesNotMatch(source, /RECOMMENDED_MODEL_OPTIONS\.map/);
   assert.match(source, /disabled=\{isOfficial\}/);
   assert.match(source, /\{endpoint\} · \{model\}/);
   assert.doesNotMatch(source, /settings\.modelProfiles\.authLabel/);

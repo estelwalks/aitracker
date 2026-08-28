@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
+import { useI18n } from "../../../../lib/i18n/context";
 import { getBrowserSecurityClient } from "../../query/browser-client";
+import { SECURITY_SCAN_COMPLETED_EVENT } from "../../events";
 import {
   getDesktopSecurityClient,
   type SecurityClient,
@@ -17,8 +20,8 @@ import { ScanVortex } from "./ScanVortex";
 
 const ACTIVE_POLL_INTERVAL_MS = 450;
 // Keep the global indicator responsive when a scan is started from another
-// route while reducing background polling once a scan is idle.
-const IDLE_POLL_INTERVAL_MS = 1_000;
+// route while avoiding high-frequency status traffic when no scan is active.
+const IDLE_POLL_INTERVAL_MS = 5_000;
 
 const IDLE_STATE: SecurityScanStateView = {
   scanId: null,
@@ -44,6 +47,24 @@ export function SecurityScanProgressOverlay() {
   const [state, setState] = useState<SecurityScanStateView>(IDLE_STATE);
   const [skills, setSkills] = useState<readonly SecuritySkillView[]>([]);
   const [history, setHistory] = useState<readonly SecurityHistoryView[]>([]);
+  const previousStatusRef = useRef<SecurityScanStateView["status"]>("idle");
+
+  const { t } = useI18n();
+
+  useEffect(() => {
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = state.status;
+    if (!isScanActive(previous) || isScanActive(state.status)) return;
+
+    if (state.status === "complete") {
+      toast.success(t("security.center.toast.completed"));
+    } else if (state.status === "partial") {
+      toast.warning(t("security.center.toast.partial"));
+    } else if (state.status === "failed") {
+      toast.error(t("security.center.toast.failed"));
+    }
+    window.dispatchEvent(new Event(SECURITY_SCAN_COMPLETED_EVENT));
+  }, [state.status, t]);
 
   useEffect(() => {
     let disposed = false;

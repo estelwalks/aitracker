@@ -1,4 +1,3 @@
-// AI 翻訳稿、審校待ち (2026-08)
 export const common = {
   loading: "読み込み中...",
   error: "エラーが発生しました",

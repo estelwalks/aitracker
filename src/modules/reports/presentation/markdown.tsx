@@ -10,7 +10,8 @@ import type { ReactNode } from "react";
  * 标题 / 列表 / 表格 / 引用 / 围栏代码块 / 段落。
  */
 
-const INLINE_TOKEN = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+const INLINE_TOKEN =
+  /(\[[^\]]+\]\([^)]+\)|\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g;
 const FENCE_OPEN = /^```/;
 const LIST_ITEM = /^\s*([-*]|\d+\.)\s+/;
 const HEADING = /^(#{1,4})\s+(.*)$/;
@@ -29,7 +30,45 @@ function tableCells(line: string): string[] {
     .map((cell) => cell.trim());
 }
 
-/** 行内解析：`**粗体**` → <strong>，`` `code` `` → <code>，其余为纯文本。 */
+function numericTokenValue(value: string | undefined): number | null {
+  if (!value) return null;
+  const match = /^([0-9]+(?:\.[0-9]+)?)([KMB])?$/i.exec(
+    value.replace(/[\s,]/g, "").replace(/tokens?$/i, ""),
+  );
+  if (!match) return null;
+  const multiplier =
+    match[2]?.toUpperCase() === "M"
+      ? 1_000_000
+      : match[2]?.toUpperCase() === "K"
+        ? 1_000
+        : match[2]?.toUpperCase() === "B"
+          ? 1_000_000_000
+          : 1;
+  return Number(match[1]) * multiplier;
+}
+
+function removeUnusedAgentRows(
+  head: readonly string[],
+  rows: readonly string[][],
+): string[][] {
+  const isAgentTable = head[0]?.trim().toLowerCase() === "agent";
+  const tokenColumn = head.findIndex(
+    (cell) => cell.trim().toLowerCase() === "tokens",
+  );
+  if (!isAgentTable || tokenColumn < 0) return rows.map((row) => [...row]);
+  return rows.filter((row) => {
+    const tokens = numericTokenValue(row[tokenColumn]);
+    return tokens === null || tokens > 0;
+  });
+}
+
+function safeLinkHref(href: string): string | undefined {
+  return /^(https?:|mailto:)/i.test(href) || href.startsWith("#")
+    ? href
+    : undefined;
+}
+
+/** 行内解析：粗体、斜体、代码与安全链接，其余均为纯文本。 */
 function inline(source: string, key: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   let last = 0;
@@ -38,7 +77,25 @@ function inline(source: string, key: string): ReactNode[] {
   while ((match = INLINE_TOKEN.exec(source))) {
     if (match.index > last) nodes.push(source.slice(last, match.index));
     const token = match[0];
-    if (token.startsWith("**")) {
+    if (token.startsWith("[")) {
+      const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
+      const href = link == null ? undefined : safeLinkHref(link[2]);
+      nodes.push(
+        href == null ? (
+          token
+        ) : (
+          <a
+            key={`${key}-a${index}`}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline"
+          >
+            {link?.[1]}
+          </a>
+        ),
+      );
+    } else if (token.startsWith("**")) {
       nodes.push(
         <strong
           key={`${key}-b${index}`}
@@ -47,7 +104,7 @@ function inline(source: string, key: string): ReactNode[] {
           {token.slice(2, -2)}
         </strong>,
       );
-    } else {
+    } else if (token.startsWith("`")) {
       nodes.push(
         <code
           key={`${key}-c${index}`}
@@ -56,6 +113,8 @@ function inline(source: string, key: string): ReactNode[] {
           {token.slice(1, -1)}
         </code>,
       );
+    } else {
+      nodes.push(<em key={`${key}-i${index}`}>{token.slice(1, -1)}</em>);
     }
     last = match.index + token.length;
     index += 1;
@@ -80,8 +139,17 @@ function Heading({
   return <h4 className={className}>{children}</h4>;
 }
 
-export function MarkdownView({ source }: { source: string }) {
-  const lines = source.replace(/\r/g, "").split("\n");
+export function MarkdownView({
+  source,
+  hideUnusedAgentRows = true,
+}: {
+  source: string;
+  hideUnusedAgentRows?: boolean;
+}) {
+  const lines = source
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\r/g, "")
+    .split("\n");
   const out: ReactNode[] = [];
   let i = 0;
 
@@ -124,18 +192,38 @@ export function MarkdownView({ source }: { source: string }) {
         rows.push(tableCells(lines[i]));
         i += 1;
       }
+      // Keep the header and body on one column model even when a generated
+      // Markdown row omits a trailing cell or contains an extra separator.
+      const alignedRows = rows.map((row) =>
+        head.map((_, column) => row[column] ?? ""),
+      );
+      const normalizedRows = hideUnusedAgentRows
+        ? removeUnusedAgentRows(head, alignedRows)
+        : alignedRows;
+      const numericColumnWidth =
+        head.length > 1 ? `${76 / (head.length - 1)}%` : "76%";
       out.push(
         <div
           key={`t${i}`}
           className="aitracker-xscroll my-3 overflow-x-auto rounded-xl bg-surface-2/60"
         >
-          <table className="aitracker-table w-full min-w-[520px] text-[12px]">
+          <table className="aitracker-table w-full min-w-[520px] table-fixed text-[12px]">
+            <colgroup>
+              {head.map((_, column) => (
+                <col
+                  key={column}
+                  style={{
+                    width: column === 0 ? "24%" : numericColumnWidth,
+                  }}
+                />
+              ))}
+            </colgroup>
             <thead>
               <tr>
                 {head.map((cell, n) => (
                   <th
                     key={n}
-                    className={`px-3 py-2 font-mono text-[10.5px] tracking-[0.06em] text-muted-foreground uppercase ${n ? "text-right" : "text-left"}`}
+                    className="px-3 py-2 text-left font-mono text-[10.5px] tracking-[0.06em] text-muted-foreground uppercase"
                   >
                     {inline(cell, `th${n}`)}
                   </th>
@@ -143,13 +231,10 @@ export function MarkdownView({ source }: { source: string }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, n) => (
+              {normalizedRows.map((row, n) => (
                 <tr key={n}>
                   {row.map((cell, k) => (
-                    <td
-                      key={k}
-                      className={`px-3 py-2 ${k ? "text-right font-mono" : "text-left"}`}
-                    >
+                    <td key={k} className="px-3 py-2 text-left font-mono">
                       {inline(cell, `td${n}-${k}`)}
                     </td>
                   ))}

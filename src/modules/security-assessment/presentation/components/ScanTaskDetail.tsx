@@ -4,9 +4,11 @@ import {
   FileText,
   Layers,
   Lightbulb,
+  RefreshCw,
   ShieldCheck,
   ShieldX,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 
 import {
   Dialog,
@@ -15,7 +17,6 @@ import {
   DialogTitle,
 } from "../../../../components/ui/dialog";
 import { useI18n } from "../../../../lib/i18n/context";
-import type { MessageKey } from "../../../../lib/i18n/messages";
 import {
   detectedRiskCount,
   type SecurityHistoryView,
@@ -42,16 +43,8 @@ export function ScanTaskDetail({
 }) {
   const { t, format } = useI18n();
   const unsafe = detectedRiskCount(task.totals);
-  const taskStatusKeys: Record<SecurityScanTaskView["status"], MessageKey> = {
-    complete: "security.center.result.statusComplete",
-    partial: "security.center.result.statusPartial",
-    failed: "security.center.result.statusFailed",
-  };
-  const skillFindings = [
-    ...new Map(
-      task.findings.map((finding) => [finding.entryId, finding]),
-    ).values(),
-  ];
+  const safe = task.safe || task.unchanged;
+  const failed = task.status === "failed" && unsafe === 0;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -61,19 +54,34 @@ export function ScanTaskDetail({
             <span
               className="size-2 shrink-0 rounded-full"
               style={{
-                background: task.safe ? "var(--ok)" : "var(--danger)",
+                background: safe
+                  ? "var(--ok)"
+                  : failed
+                    ? "var(--warn)"
+                    : "var(--danger)",
               }}
             />
             {t("security.center.task.title")}
             <span className="font-mono text-[11px] font-normal text-muted-foreground">
-              · {t(taskStatusKeys[task.status])} ·{" "}
-              <RelativeTime iso={task.finishedAt} />
+              ·{" "}
+              {t(
+                safe
+                  ? "security.center.history.safe"
+                  : failed
+                    ? "security.center.status.failed"
+                    : "security.center.history.unsafe",
+              )}{" "}
+              · <RelativeTime iso={task.finishedAt} />
             </span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 px-5 py-4">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div
+            className={`grid grid-cols-2 gap-2 ${
+              task.totals.skipped > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"
+            }`}
+          >
             <Cell
               icon={Clock}
               label={t("security.center.task.startTime")}
@@ -96,6 +104,14 @@ export function ScanTaskDetail({
               value={`${unsafe} ${t("security.center.metrics.unit")}`}
               color={unsafe ? "var(--danger)" : undefined}
             />
+            {task.totals.skipped > 0 && (
+              <Cell
+                icon={RefreshCw}
+                label={t("security.center.task.reusedResults")}
+                value={`${task.totals.skipped} ${t("security.center.metrics.unit")}`}
+                color="var(--ok)"
+              />
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-surface-2 px-3.5 py-2.5 font-mono text-[11px] text-muted-foreground">
@@ -107,7 +123,20 @@ export function ScanTaskDetail({
               {t("security.center.task.scope")}：
               {task.scope === "all"
                 ? t("security.center.history.scopeAll")
-                : t("security.center.history.scopeSingle")}
+                : null}
+              {task.scope === "single" && (
+                <Link
+                  to="/skills"
+                  search={{ skill: task.entries[0]?.skillName }}
+                  className="text-primary hover:underline"
+                >
+                  {t("security.center.history.scopeSingleNamed", {
+                    name:
+                      task.entries[0]?.skillName ??
+                      t("security.center.history.scopeSingle"),
+                  })}
+                </Link>
+              )}
             </span>
             <span>
               {t("security.center.task.taskId")}：{task.scanId}
@@ -116,17 +145,20 @@ export function ScanTaskDetail({
 
           <div>
             <h4 className="text-[12.5px] font-semibold">
-              {t("security.center.task.riskDetails", {
-                count: skillFindings.length,
+              {t("security.center.task.unsafeRiskDetails", {
+                skills: task.unsafeEntries.length,
+                findings: task.findings.length,
               })}
             </h4>
-            {skillFindings.length === 0 ? (
+            {task.findings.length === 0 ? (
               <p className="mt-2 rounded-lg bg-surface-2 px-3.5 py-4 text-center font-mono text-[12px] text-ok">
-                {t("security.center.task.noFindings")}
+                {task.unchanged
+                  ? t("security.center.task.unchanged")
+                  : t("security.center.task.noFindings")}
               </p>
             ) : (
               <div className="mt-2 space-y-2">
-                {skillFindings.map((finding, index) => {
+                {task.findings.map((finding, index) => {
                   const source = task.entries.find(
                     (entry) => entry.id === finding.entryId,
                   );

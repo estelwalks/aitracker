@@ -15,6 +15,7 @@ const EXPECTED_SKILL_LABELS = [
   "Hermes Agent",
   "OpenClaw",
   "Antigravity",
+  "AiPy",
 ] as const;
 
 const EXPECTED_SKILL_TOOL_IDS = [
@@ -27,6 +28,7 @@ const EXPECTED_SKILL_TOOL_IDS = [
   "hermes",
   "openclaw",
   "antigravity",
+  "aipy",
 ] as const;
 
 test("AI_TOOLS catalogs all built-in tools with stable ids", () => {
@@ -40,7 +42,7 @@ test("AI_TOOLS catalogs all built-in tools with stable ids", () => {
 });
 
 test("SKILL_AGENT_RULES covers the verified skill agents in UI order", () => {
-  assert.equal(SKILL_AGENT_RULES.length, 9);
+  assert.equal(SKILL_AGENT_RULES.length, 10);
   assert.deepEqual(
     SKILL_AGENT_RULES.map((rule) => rule.toolId),
     [...EXPECTED_SKILL_TOOL_IDS],

@@ -37,6 +37,8 @@ import { APP_ID } from "../../../lib/app-config";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
 import type { MessageKey, MessageParams } from "../../../lib/i18n/messages";
+import { countInstalledMarketSkills } from "../../../lib/local-market/installed-count.ts";
+import { STANDARD_PAGE_SIZE } from "../../../lib/pagination";
 import {
   getMarketSkills,
   getLocalSkills,
@@ -52,8 +54,6 @@ import {
 } from "../query.ts";
 import { compactNumber, formatSizeBytes } from "../../skill-catalog/index.ts";
 import { AgentInstallBar } from "./AgentInstallBar.tsx";
-
-const PAGE_SIZE = 12;
 
 /** Fixed market category taxonomy → upstream `tags` slugs. */
 const MARKET_DOMAINS = [
@@ -186,7 +186,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
     void getMarketSkills({
       data: {
         page,
-        limit: PAGE_SIZE,
+        limit: STANDARD_PAGE_SIZE,
         search: query,
         sort,
         tags: selectedTags,
@@ -241,6 +241,13 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
         (agent) => localSnapshot?.agents[agent]?.installed === true,
       ),
     [localSnapshot],
+  );
+  const installedMarketSkillCount = useMemo(
+    () =>
+      localSnapshot == null
+        ? (result.stats?.installedCount ?? 0)
+        : countInstalledMarketSkills(localSnapshot.skills),
+    [localSnapshot, result.stats?.installedCount],
   );
 
   /**
@@ -303,29 +310,26 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
     setPage(1);
   }, [query, sort, domain]);
 
-  // Page-level real aggregates for the KPI strip.
-  const pageSafeCount = useMemo(
-    () =>
-      result.skills.filter((skill) => securityOf(skill, t) === "safe").length,
-    [result.skills, t],
-  );
+  // Every Skill admitted to the market has passed all security dimensions, so
+  // the pass count is identical to the market's server-reported total.
+  const totalSkillCount = result.stats?.totalSkills ?? 0;
 
   const kpis = [
     {
       label: t("market.stats.totalSkills"),
-      value: format.formatNumber(result.stats?.totalSkills ?? 0),
+      value: format.formatNumber(totalSkillCount),
       hint: t("market.stats.hintDomains", {
         count: format.formatNumber(MARKET_DOMAINS.length),
       }),
     },
     {
       label: t("market.stats.passRate"),
-      value: format.formatNumber(pageSafeCount),
-      hint: t("market.stats.hintCurrentPage"),
+      value: format.formatNumber(totalSkillCount),
+      hint: t("market.stats.hintAllDimensionsPassed"),
     },
     {
       label: t("market.stats.installedCount"),
-      value: format.formatNumber(result.stats?.installedCount ?? 0),
+      value: format.formatNumber(installedMarketSkillCount),
       hint: t("market.stats.hintLocalInstalled"),
     },
   ];
@@ -457,12 +461,10 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
               {t("market.list.count", {
                 count: format.formatNumber(result.pagination?.total ?? 0),
               })}
-              {pageSafeCount === result.skills.length && (
-                <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-ok">
-                  <ShieldCheck className="size-3.5" />
-                  {t("market.list.allSafe")}
-                </span>
-              )}
+              <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-ok">
+                <ShieldCheck className="size-3.5" />
+                {t("market.list.allSafe")}
+              </span>
             </div>
 
             <ul className="overflow-hidden rounded-xl border border-border bg-card">
@@ -591,9 +593,9 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
               pageCount={totalPages}
               onChange={setPage}
               rangeLabel={t("market.pagination.range", {
-                start: (currentPage - 1) * PAGE_SIZE + 1,
+                start: (currentPage - 1) * STANDARD_PAGE_SIZE + 1,
                 end: Math.min(
-                  currentPage * PAGE_SIZE,
+                  currentPage * STANDARD_PAGE_SIZE,
                   result.pagination?.total ?? 0,
                 ),
                 total: result.pagination?.total ?? 0,

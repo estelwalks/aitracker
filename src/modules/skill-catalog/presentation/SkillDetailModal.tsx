@@ -38,10 +38,129 @@ import {
 } from "../query.ts";
 import type { SkillCardSecurity } from "./SkillListRow.tsx";
 import { formatSizeBytes } from "./skill-format.ts";
+import { formatSkillDisplayName } from "../application/index.ts";
 
 /** Browser download of a single text file (no server round-trip needed). */
 function downloadTextFile(fileName: string, content: string): void {
   const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+const zipCrc32Table = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < table.length; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+function zipCrc32(data: Uint8Array): number {
+  let value = 0xffffffff;
+  for (const byte of data) {
+    value = zipCrc32Table[(value ^ byte) & 0xff]! ^ (value >>> 8);
+  }
+  return (value ^ 0xffffffff) >>> 0;
+}
+
+function writeZipUint16(view: DataView, offset: number, value: number): void {
+  view.setUint16(offset, value, true);
+}
+
+function writeZipUint32(view: DataView, offset: number, value: number): void {
+  view.setUint32(offset, value, true);
+}
+
+/** Create a UTF-8, uncompressed ZIP archive in the browser. */
+function createZipBlob(files: readonly SkillFileEntry[]): Blob {
+  const encoder = new TextEncoder();
+  const entries = files.map((file) => {
+    const name = encoder.encode(file.path);
+    const content = encoder.encode(file.content);
+    return { name, content, crc32: zipCrc32(content) };
+  });
+  const localSizes = entries.map(
+    (entry) => 30 + entry.name.length + entry.content.length,
+  );
+  const centralDirectorySize = entries.reduce(
+    (size, entry) => size + 46 + entry.name.length,
+    0,
+  );
+  const localDataSize = localSizes.reduce((size, length) => size + length, 0);
+  const bytes = new Uint8Array(localDataSize + centralDirectorySize + 22);
+  const view = new DataView(bytes.buffer);
+  const centralDirectoryOffset = localDataSize;
+  let offset = 0;
+  const localOffsets: number[] = [];
+
+  for (const [index, entry] of entries.entries()) {
+    localOffsets.push(offset);
+    writeZipUint32(view, offset, 0x04034b50);
+    writeZipUint16(view, offset + 4, 20);
+    writeZipUint16(view, offset + 6, 0x0800);
+    writeZipUint16(view, offset + 8, 0);
+    writeZipUint16(view, offset + 10, 0);
+    writeZipUint16(view, offset + 12, 0);
+    writeZipUint32(view, offset + 14, entry.crc32);
+    writeZipUint32(view, offset + 18, entry.content.length);
+    writeZipUint32(view, offset + 22, entry.content.length);
+    writeZipUint16(view, offset + 26, entry.name.length);
+    writeZipUint16(view, offset + 28, 0);
+    bytes.set(entry.name, offset + 30);
+    bytes.set(entry.content, offset + 30 + entry.name.length);
+    offset += localSizes[index]!;
+  }
+
+  offset = centralDirectoryOffset;
+  for (const [index, entry] of entries.entries()) {
+    writeZipUint32(view, offset, 0x02014b50);
+    writeZipUint16(view, offset + 4, 20);
+    writeZipUint16(view, offset + 6, 20);
+    writeZipUint16(view, offset + 8, 0x0800);
+    writeZipUint16(view, offset + 10, 0);
+    writeZipUint16(view, offset + 12, 0);
+    writeZipUint16(view, offset + 14, 0);
+    writeZipUint32(view, offset + 16, entry.crc32);
+    writeZipUint32(view, offset + 20, entry.content.length);
+    writeZipUint32(view, offset + 24, entry.content.length);
+    writeZipUint16(view, offset + 28, entry.name.length);
+    writeZipUint16(view, offset + 30, 0);
+    writeZipUint16(view, offset + 32, 0);
+    writeZipUint16(view, offset + 34, 0);
+    writeZipUint16(view, offset + 36, 0);
+    writeZipUint32(view, offset + 38, 0);
+    writeZipUint32(view, offset + 42, localOffsets[index]!);
+    bytes.set(entry.name, offset + 46);
+    offset += 46 + entry.name.length;
+  }
+
+  writeZipUint32(view, offset, 0x06054b50);
+  writeZipUint16(view, offset + 4, 0);
+  writeZipUint16(view, offset + 6, 0);
+  writeZipUint16(view, offset + 8, entries.length);
+  writeZipUint16(view, offset + 10, entries.length);
+  writeZipUint32(view, offset + 12, centralDirectorySize);
+  writeZipUint32(view, offset + 16, centralDirectoryOffset);
+  writeZipUint16(view, offset + 20, 0);
+
+  return new Blob([bytes], { type: "application/zip" });
+}
+
+function downloadZipFile(
+  fileName: string,
+  files: readonly SkillFileEntry[],
+): void {
+  const blob = createZipBlob(files);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -482,7 +601,6 @@ export function SkillDetailModal({
   onInstalled,
   onRemove,
   onOpenSecurity,
-  onToggleBlacklist,
 }: {
   skill: LocalSkill;
   security?: SkillCardSecurity;
@@ -493,7 +611,6 @@ export function SkillDetailModal({
   onInstalled: () => void;
   onRemove: () => void;
   onOpenSecurity: () => void;
-  onToggleBlacklist: () => void;
 }) {
   const { t, format } = useI18n();
   const [listing, setListing] = useState<{
@@ -541,6 +658,7 @@ export function SkillDetailModal({
   const usableSet = new Set(usableAgents);
   const firstVersion =
     skill.installations.find((i) => i.version)?.version ?? null;
+  const displayName = formatSkillDisplayName(skill, listing?.root);
 
   // 安装目标多选（与安全市场 AgentInstallBar 一致）：逐个勾选 + 全选，统一安装。
   const installedMap = Object.fromEntries(
@@ -631,12 +749,11 @@ export function SkillDetailModal({
 
   const exportBundle = () => {
     if (!listing) return;
-    listing.files.forEach((entry) =>
-      downloadTextFile(
-        entry.path.split("/").pop() ?? entry.path,
-        entry.content,
-      ),
-    );
+    const archiveFiles = listing.files.map((entry) => ({
+      ...entry,
+      path: `${skill.name}/${entry.path}`,
+    }));
+    downloadZipFile(`${skill.name}.zip`, archiveFiles);
     toast.success(t("skills.toast.exportedTo", { path: listing.root }));
   };
 
@@ -644,7 +761,7 @@ export function SkillDetailModal({
     security == null || !security.hasHistory
       ? "unknown"
       : security.riskCount > 0
-        ? "warn"
+        ? "unsafe"
         : "ok";
 
   return (
@@ -654,7 +771,7 @@ export function SkillDetailModal({
           <DialogTitle className="flex flex-wrap items-center gap-2 pr-8 text-[15px] font-semibold">
             <span>
               {t("skills.detail.rootTitle", {
-                root: listing?.root ?? skill.name,
+                root: displayName,
               })}
             </span>
             {verdict === "ok" && (
@@ -663,10 +780,10 @@ export function SkillDetailModal({
                 {t("skills.security.clean")}
               </span>
             )}
-            {verdict === "warn" && (
-              <span className="inline-flex items-center gap-1 rounded-sm border border-warn/30 bg-warn/10 px-1.5 py-px text-[10px] text-warn">
+            {verdict === "unsafe" && (
+              <span className="inline-flex items-center gap-1 rounded-sm border border-danger/30 bg-danger/10 px-1.5 py-px text-[10px] text-danger">
                 <AlertTriangle className="size-2.5" />{" "}
-                {t("skills.security.attention")}
+                {t("skills.security.unsafe")}
               </span>
             )}
             {blacklisted && (
@@ -809,16 +926,6 @@ export function SkillDetailModal({
 
         <DialogFooter className="mt-3 flex-wrap items-center gap-2">
           <div className="mr-auto flex flex-wrap gap-2">
-            <AITrackerButton
-              size="md"
-              variant="ghost"
-              onClick={onToggleBlacklist}
-            >
-              <ShieldBan className="size-4" />
-              {blacklisted
-                ? t("skills.actions.unblock")
-                : t("skills.actions.block")}
-            </AITrackerButton>
             <AITrackerButton size="md" variant="ghost" onClick={onOpenSecurity}>
               <ShieldCheck className="size-4" />{" "}
               {t("skills.detail.scanSecurity")}

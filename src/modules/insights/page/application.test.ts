@@ -66,6 +66,7 @@ function makeStore(
     ReturnType<InsightStorePort["getEffectivePreference"]>
   > = {},
   refreshIntervalMs = 60 * 60 * 1000,
+  hasActiveRefreshRun: () => boolean = () => false,
 ): InsightStorePort {
   return {
     getEffectivePreference: () => ({
@@ -81,6 +82,7 @@ function makeStore(
     setPreference: () => {},
     getRefreshIntervalMs: () => refreshIntervalMs,
     setRefreshIntervalMs: () => {},
+    hasActiveRefreshRun,
   };
 }
 
@@ -838,6 +840,27 @@ test("read advertises auto enhancement only with current valid consent", async (
     now: () => 2,
   });
   assert.equal((await stale.read("dashboard", {}, "zh-CN")).autoEnhance, false);
+});
+
+test("read keeps renderer auto enhancement enabled during a refresh batch", async () => {
+  let active = true;
+  const app = createPageInsightsApplication({
+    adapters: [makeAdapter()],
+    enhancer: makeEnhancer({ status: "enhanced-ready", lines: [] }),
+    store: makeStore(
+      "enhanced-auto",
+      { consentVersion: "1", consentedAtMs: 1 },
+      60 * 60 * 1000,
+      () => active,
+    ),
+    now: () => 2,
+  });
+
+  // A page visit during a batch may also enhance; the generation reservation
+  // (not a global lock) coordinates ownership with the batch.
+  assert.equal((await app.read("dashboard", {}, "zh-CN")).autoEnhance, true);
+  active = false;
+  assert.equal((await app.read("dashboard", {}, "zh-CN")).autoEnhance, true);
 });
 
 test("read throws AppError when the surface has no adapter", async () => {

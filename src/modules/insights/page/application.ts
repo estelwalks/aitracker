@@ -36,7 +36,7 @@ export interface PageInsightsApplication {
   enhance(
     surfaceId: InsightSurfaceId,
     scope: InsightScope,
-    options: { locale: string; reason: "manual" | "auto" },
+    options: { locale: string; reason: "manual" | "auto" | "batch" },
   ): Promise<InsightEnvelope>;
 }
 
@@ -82,8 +82,10 @@ export function createPageInsightsApplication(options: {
     surfaceId: InsightSurfaceId,
     adapter: PageInsightAdapter,
     bundle: Awaited<ReturnType<PageInsightAdapter["loadEvidence"]>>,
+    scope: InsightScope,
     locale: string,
     preference: InsightPreference,
+    batchOwned = false,
   ) {
     const candidates = composePageCandidates(adapter, bundle);
     const remoteCandidates = composeRemotePageCandidates(adapter, bundle);
@@ -93,6 +95,7 @@ export function createPageInsightsApplication(options: {
       maxLines: getPageRuleConfig(surfaceId).maxLines,
       input: {
         surface: surfaceId,
+        scope,
         adapterVersion: adapter.adapterVersion,
         locale,
         profileId: preference.profileId,
@@ -100,6 +103,7 @@ export function createPageInsightsApplication(options: {
         cacheTtlMs:
           options.store?.getRefreshIntervalMs() ??
           DEFAULT_INSIGHT_REFRESH_INTERVAL_MS,
+        ...(batchOwned ? { batchOwned: true } : {}),
         candidates: remoteCandidates.map((candidate) => ({
           id: candidate.id,
           severity: candidate.severity,
@@ -125,6 +129,13 @@ export function createPageInsightsApplication(options: {
         ...base,
         status: result.status,
         modelLabel: result.modelLabel,
+        // A pending envelope must not re-trigger the renderer's auto-enhance
+        // effect (it would claim the same reservation and loop).
+        ...(result.status === "pending" ? { autoEnhance: false } : {}),
+        ...(result.failureDetail !== undefined
+          ? { failureDetail: result.failureDetail }
+          : {}),
+        ...(result.persisted === false ? { persisted: false } : {}),
       };
     }
 
@@ -202,10 +213,20 @@ export function createPageInsightsApplication(options: {
     );
     return {
       ...base,
+      refreshIntervalMs:
+        options.store?.getRefreshIntervalMs() ??
+        DEFAULT_INSIGHT_REFRESH_INTERVAL_MS,
       status: hasUsefulEnhancement ? result.status : "invalid-output",
       source: hasUsefulEnhancement ? "enhanced" : "rules",
       lines,
       modelLabel: result.modelLabel,
+      ...(result.generatedAtMs !== undefined
+        ? { enhancementGeneratedAtMs: result.generatedAtMs }
+        : {}),
+      ...(result.expiresAtMs !== undefined
+        ? { enhancementExpiresAtMs: result.expiresAtMs }
+        : {}),
+      ...(result.persisted === false ? { persisted: false } : {}),
     };
   }
 
@@ -218,31 +239,42 @@ export function createPageInsightsApplication(options: {
     if (adapter === undefined) throw new AppError("errors.generic");
     const bundle = await adapter.loadEvidence(scope);
     const preference = preferenceFor(surfaceId);
+    const autoAuthorized = hasValidAutoConsent(preference);
+    // Page visits during an active batch may also enhance; singleflight and
+    // the generation reservation dedupe against the batch's own calls.
+    const rendererAutoEnhanceAuthorized = autoAuthorized;
     const base = composeRulesEnvelope({
       adapter,
       bundle,
       locale,
       mode: preference.mode,
       enhancerAvailable: options.enhancer !== undefined,
-      autoEnhanceAuthorized: hasValidAutoConsent(preference),
+      autoEnhanceAuthorized: rendererAutoEnhanceAuthorized,
       now,
     });
+    const baseWithRefreshInterval: InsightEnvelope = {
+      ...base,
+      refreshIntervalMs:
+        options.store?.getRefreshIntervalMs() ??
+        DEFAULT_INSIGHT_REFRESH_INTERVAL_MS,
+    };
     const enhancer = options.enhancer;
-    const autoAuthorized = hasValidAutoConsent(preference);
     const canReadCache =
       enhancer?.readCached !== undefined &&
       preference.mode !== "rules" &&
       (preference.mode === "enhanced-manual" || autoAuthorized);
-    if (!canReadCache) return base;
+    if (!canReadCache) return baseWithRefreshInterval;
 
     const composition = enhancementComposition(
       surfaceId,
       adapter,
       bundle,
+      scope,
       locale,
       preference,
     );
-    if (composition.input.candidates.length === 0) return base;
+    if (composition.input.candidates.length === 0)
+      return baseWithRefreshInterval;
     try {
       const cached = await enhancer.readCached(composition.input);
       if (
@@ -250,19 +282,27 @@ export function createPageInsightsApplication(options: {
         (cached.status === "enhanced-cached" ||
           cached.status === "enhanced-ready")
       ) {
-        return applyEnhancementResult(base, composition, locale, cached);
+        return applyEnhancementResult(
+          baseWithRefreshInterval,
+          composition,
+          locale,
+          cached,
+        );
       }
     } catch {
       // A cache read is an optimization; the deterministic rules envelope is
       // still a valid first paint if the cache store is unavailable.
     }
-    return base;
+    return baseWithRefreshInterval;
   }
 
   async function enhance(
     surfaceId: InsightSurfaceId,
     scope: InsightScope,
-    enhanceOptions: { locale: string; reason: "manual" | "auto" },
+    enhanceOptions: {
+      locale: string;
+      reason: "manual" | "auto" | "batch";
+    },
   ): Promise<InsightEnvelope> {
     const adapter = adapterFor(surfaceId);
     if (adapter === undefined) throw new AppError("errors.generic");
@@ -285,23 +325,33 @@ export function createPageInsightsApplication(options: {
     const reasonAllowed =
       (mode === "enhanced-manual" && enhanceOptions.reason === "manual") ||
       (mode === "enhanced-auto" &&
-        enhanceOptions.reason === "auto" &&
+        (enhanceOptions.reason === "auto" ||
+          enhanceOptions.reason === "batch") &&
         hasValidAutoConsent(preference));
+    const baseWithRefreshInterval: InsightEnvelope = {
+      ...base,
+      refreshIntervalMs:
+        options.store?.getRefreshIntervalMs() ??
+        DEFAULT_INSIGHT_REFRESH_INTERVAL_MS,
+    };
+
     if (!reasonAllowed || enhancer === undefined) {
-      return { ...base, status: "enhancer-unavailable" };
+      return { ...baseWithRefreshInterval, status: "enhancer-unavailable" };
     }
 
     const composition = enhancementComposition(
       surfaceId,
       adapter,
       bundle,
+      scope,
       locale,
       preference,
+      enhanceOptions.reason === "batch",
     );
     const { input } = composition;
 
     if (input.candidates.length === 0) {
-      return { ...base, status: "no-eligible-candidates" };
+      return { ...baseWithRefreshInterval, status: "no-eligible-candidates" };
     }
 
     const result = await enhancer.enhance(input);
@@ -311,18 +361,28 @@ export function createPageInsightsApplication(options: {
     // evidence that arrived while it was running.
     const latestBundle = await adapter.loadEvidence(scope);
     if (evidenceHash(latestBundle) !== evidenceHash(bundle)) {
-      return composeRulesEnvelope({
-        adapter,
-        bundle: latestBundle,
-        locale,
-        mode,
-        enhancerAvailable: enhancer !== undefined,
-        autoEnhanceAuthorized: hasValidAutoConsent(preference),
-        now,
-      });
+      return {
+        ...composeRulesEnvelope({
+          adapter,
+          bundle: latestBundle,
+          locale,
+          mode,
+          enhancerAvailable: enhancer !== undefined,
+          autoEnhanceAuthorized: hasValidAutoConsent(preference),
+          now,
+        }),
+        refreshIntervalMs:
+          options.store?.getRefreshIntervalMs() ??
+          DEFAULT_INSIGHT_REFRESH_INTERVAL_MS,
+      };
     }
 
-    return applyEnhancementResult(base, composition, locale, result);
+    return applyEnhancementResult(
+      baseWithRefreshInterval,
+      composition,
+      locale,
+      result,
+    );
   }
 
   return { read, enhance };

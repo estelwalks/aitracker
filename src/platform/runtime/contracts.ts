@@ -12,9 +12,9 @@ export type RuntimePlatform = "macos" | "windows" | "linux" | "unknown";
 
 export type BackgroundTasksDecisionReason =
   | "desktop-default-enabled"
+  | "web-default-enabled"
   | "explicitly-enabled"
   | "explicitly-disabled"
-  | "web-default-disabled"
   | "test-default-disabled"
   | "linux-planned"
   | "unsupported-platform";
@@ -84,13 +84,16 @@ export function resolveRuntimeIdentity(
     );
   }
 
-  return identity(
-    input.kind,
-    mode,
-    platform,
-    false,
-    input.kind === "web" ? "web-default-disabled" : "test-default-disabled",
-  );
+  // Browser/web mode on a supported desktop platform runs the same local
+  // Node server process, so scheduled work (reports, retention, collectors)
+  // is started there too. The web default deliberately matches desktop:
+  // scheduled features must behave identically in both modes. Web servers on
+  // unsupported platforms are already rejected above.
+  if (input.kind === "web") {
+    return identity(input.kind, mode, platform, true, "web-default-enabled");
+  }
+
+  return identity(input.kind, mode, platform, false, "test-default-disabled");
 }
 
 function identity(

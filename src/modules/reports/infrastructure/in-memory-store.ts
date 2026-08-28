@@ -28,6 +28,23 @@ export function createInMemoryReportStore(): ReportStore & {
       if (index >= 0) documents[index] = structuredClone(document);
       else documents.push(structuredClone(document));
     },
+    async replaceForPeriod(document) {
+      for (let index = documents.length - 1; index >= 0; index -= 1) {
+        const existing = documents[index];
+        if (
+          existing.definitionId === document.definitionId &&
+          existing.generatedAt === document.generatedAt &&
+          existing.reportId !== document.reportId
+        ) {
+          documents.splice(index, 1);
+        }
+      }
+      const index = documents.findIndex(
+        (item) => item.reportId === document.reportId,
+      );
+      if (index >= 0) documents[index] = structuredClone(document);
+      else documents.push(structuredClone(document));
+    },
     async getDocument(reportId) {
       const document = documents.find((item) => item.reportId === reportId);
       return document ? structuredClone(document) : undefined;

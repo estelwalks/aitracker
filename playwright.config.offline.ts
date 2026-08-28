@@ -59,6 +59,8 @@ export default defineConfig({
     env: {
       AITRACKER_USAGE_HOME: offlineHome,
       AITRACKER_E2E_OFFLINE: "1",
+      // Keep the test dev server deterministic: no background scheduler.
+      AITRACKER_ENABLE_BACKGROUND_TASKS: "false",
     },
   },
 });

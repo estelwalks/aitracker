@@ -70,7 +70,10 @@ test("S-005 模型配置页对齐原型：左列表/右表单/操作入口，无
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("API格式")).toBeVisible();
   await expect(
-    dialog.getByRole("button", { name: /OpenAI 兼容/ }),
+    dialog.getByRole("button", { name: /OpenAI Completion/ }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: /OpenAI Responses/ }),
   ).toBeVisible();
   await expect(dialog.getByRole("button", { name: /Anthropic/ })).toBeVisible();
   await expect(

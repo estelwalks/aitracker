@@ -22,24 +22,6 @@ function pngSize(path: string): { width: number; height: number } {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-function pngDensity(path: string): { x: number; y: number; unit: number } {
-  const bytes = readFileSync(path);
-  let offset = 8;
-  while (offset < bytes.length) {
-    const length = bytes.readUInt32BE(offset);
-    const type = bytes.subarray(offset + 4, offset + 8).toString("ascii");
-    if (type === "pHYs") {
-      return {
-        x: bytes.readUInt32BE(offset + 8),
-        y: bytes.readUInt32BE(offset + 12),
-        unit: bytes[offset + 16],
-      };
-    }
-    offset += length + 12;
-  }
-  throw new Error(`${path} is missing a pHYs density chunk`);
-}
-
 test("tray fallback is an inline PNG data URL", () => {
   assert.match(TRAY_ICON_DATA_URL, /^data:image\/png;base64,/u);
   const png = Buffer.from(
@@ -49,37 +31,44 @@ test("tray fallback is an inline PNG data URL", () => {
   assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
 });
 
-test("real template PNG assets have valid signatures and 1x/2x dimensions", () => {
-  const assetRoot = join(projectRoot, "public", "build");
-  assert.deepEqual(pngSize(join(assetRoot, TRAY_ICON_FILENAME)), {
-    width: 16,
-    height: 16,
-  });
-  assert.deepEqual(pngSize(join(assetRoot, "tray-iconTemplate@2x.png")), {
-    width: 32,
-    height: 32,
-  });
-  // Electron's macOS Tray guidance specifies 144 dpi for the Retina image.
-  assert.deepEqual(pngDensity(join(assetRoot, "tray-iconTemplate@2x.png")), {
-    x: 5669,
-    y: 5669,
-    unit: 1,
-  });
+test("the shared tray logo is a valid application icon asset", () => {
+  assert.deepEqual(
+    pngSize(
+      join(
+        projectRoot,
+        "public",
+        "brand-logos",
+        "ai-tracker",
+        TRAY_ICON_FILENAME,
+      ),
+    ),
+    { width: 1024, height: 1024 },
+  );
 });
 
-test("tray source assets are trackable and packaging preserves the native pair", () => {
-  for (const asset of [
-    "tray-iconTemplate.png",
-    "tray-iconTemplate@2x.png",
-    "tray-iconTemplate.svg",
-  ]) {
-    const ignored = spawnSync(
-      "git",
-      ["check-ignore", "--quiet", `public/build/${asset}`],
-      { cwd: projectRoot },
-    );
-    assert.equal(ignored.status, 1, `${asset} must not be ignored by git`);
-  }
+test("the fallback is still a valid PNG", () => {
+  const png = Buffer.from(
+    TRAY_ICON_DATA_URL.replace("data:image/png;base64,", ""),
+    "base64",
+  );
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.deepEqual(
+    { width: png.readUInt32BE(16), height: png.readUInt32BE(20) },
+    { width: 16, height: 16 },
+  );
+});
+
+test("packaging preserves the shared tray logo and removes template resources", () => {
+  const ignored = spawnSync(
+    "git",
+    [
+      "check-ignore",
+      "--quiet",
+      `public/brand-logos/ai-tracker/${TRAY_ICON_FILENAME}`,
+    ],
+    { cwd: projectRoot },
+  );
+  assert.equal(ignored.status, 1, "the tray logo must not be ignored by git");
 
   const builderConfig = readFileSync(
     join(projectRoot, "electron-builder.yml"),
@@ -87,25 +76,33 @@ test("tray source assets are trackable and packaging preserves the native pair",
   );
   assert.match(
     builderConfig,
-    /extraResources:\s*[\s\S]*?- from: public\/build\s+to: tray[\s\S]*?tray-iconTemplate\.png[\s\S]*?tray-iconTemplate@2x\.png/u,
+    /from: public\/brand-logos\/ai-tracker\/ai-tracker-icon-app\.png\s+to: tray\/ai-tracker-icon-app\.png/u,
   );
+  assert.doesNotMatch(builderConfig, /tray-iconTemplate/u);
   assert.match(
     builderConfig,
     /extraResources:\s*[\s\S]*?- from: \.output\s+to: web/u,
   );
 });
 
-test("development and packaged paths target their bundled public assets", () => {
+test("development and packaged paths target the shared tray logo", () => {
+  const developmentPath = join(
+    projectRoot,
+    "public",
+    "brand-logos",
+    "ai-tracker",
+    TRAY_ICON_FILENAME,
+  );
   assert.equal(
     findTrayIconPath({
       isPackaged: false,
       resourcesPath: "/unused",
       appPath: projectRoot,
     }),
-    join(projectRoot, "public", "build", TRAY_ICON_FILENAME),
+    developmentPath,
   );
   const packagedPath = join(
-    "/Applications/AITracker/Resources",
+    "C:\\Program Files\\AITracker\\resources",
     "tray",
     TRAY_ICON_FILENAME,
   );
@@ -113,7 +110,7 @@ test("development and packaged paths target their bundled public assets", () => 
     findTrayIconPath(
       {
         isPackaged: true,
-        resourcesPath: "/Applications/AITracker/Resources",
+        resourcesPath: "C:\\Program Files\\AITracker\\resources",
         appPath: "/unused",
       },
       (candidate) => candidate === packagedPath,
@@ -122,7 +119,7 @@ test("development and packaged paths target their bundled public assets", () => 
   );
 });
 
-test("missing development icon falls back without a path warning", () => {
+test("missing development logo falls back without a path warning", () => {
   assert.equal(
     findTrayIconPath({
       isPackaged: false,

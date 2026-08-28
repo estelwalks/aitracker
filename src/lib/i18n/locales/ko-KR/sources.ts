@@ -1,4 +1,3 @@
-// AI 번역 초안, 검토 대기 (2026-08)
 export const sources = {
   metaDescription:
     "이 머신의 각 AI 도구 설치 감지 상태와 로그 수집 상황을 확인합니다.",

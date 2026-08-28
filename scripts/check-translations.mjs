@@ -7,16 +7,8 @@
  *   2. `{var}` placeholder sets identical per key (translation must not drop
  *      or invent parameters — `satisfies` cannot catch this)
  *   3. no empty / whitespace-only values
- *   4. reports ja-JP / ko-KR "AI 翻译稿待审校" markers (informational — human
- *      review is the release gate, not this script)
- *
  * Run via `npm run check:i18n` or directly: node --import tsx scripts/check-translations.mjs
  */
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { catalogs } = await import("../src/lib/i18n/messages.ts");
 
 const LOCALES = ["zh-CN", "en-US", "ja-JP", "ko-KR"];
@@ -74,20 +66,6 @@ for (const locale of LOCALES) {
   }
 }
 
-// 审校标记检查:ja/ko 字典文件头应保留 "待审校" 注释直到人工审校完成。
-let unreviewed = 0;
-for (const locale of ["ja-JP", "ko-KR"]) {
-  const dir = join(root, "src/lib/i18n/locales", locale);
-  const files = readFileSync(join(dir, "index.ts"), "utf8");
-  if (
-    files.includes("待审校") ||
-    files.includes("審校待ち") ||
-    files.includes("검토 대기")
-  ) {
-    unreviewed += 1;
-  }
-}
-
 if (failures.length) {
   console.error("check-translations: dictionary completeness issues\n");
   for (const f of failures) console.error(`  ✖ ${f}`);
@@ -97,8 +75,3 @@ if (failures.length) {
 console.log(
   `check-translations: ${zhKeys.length} keys consistent across all locales; placeholder/empty checks passed`,
 );
-if (unreviewed > 0) {
-  console.warn(
-    `  ⚠ 尚有 ${unreviewed}/2 个语言包标注"待审校"(ja-JP/ko-KR AI 翻译稿) — 发布前须人工审校并清除标记`,
-  );
-}

@@ -39,6 +39,8 @@ export interface TokenUsage {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly totalTokens: number;
+  /** Reasoning-model output tokens consumed before the visible answer. */
+  readonly reasoningTokens?: number;
 }
 
 export interface AIResponse {
@@ -76,6 +78,12 @@ export interface AIExecutionSummary {
   readonly cost: CostState;
   readonly usedFallback: boolean;
   readonly errorCode?: AIErrorCode;
+  /**
+   * Bounded, renderer-safe failure attribution (e.g. "reasoning-only",
+   * "empty-content", "not-json", "http-error:429"). Provider-originated,
+   * sanitized at the provider boundary; never raw response text.
+   */
+  readonly failureDetail?: string;
 }
 
 export interface AIExecutionResult {
@@ -89,6 +97,13 @@ export type AIErrorCode =
   | "ai.timeout"
   | "ai.cancelled"
   | "ai.provider-failed"
+  | "ai.provider-auth"
+  | "ai.provider-rate-limited"
+  | "ai.provider-unavailable"
+  | "ai.provider-http-client"
+  | "ai.provider-network"
+  | "ai.provider-invalid-response"
+  | "ai.profile-unavailable"
   | "ai.invalid-request";
 
 export interface AIError {
