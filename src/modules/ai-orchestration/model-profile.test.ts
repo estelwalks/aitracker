@@ -827,7 +827,8 @@ test("createProfileBackedProvider: recommended profile uses OpenAI Responses", a
   assert.deepEqual(seenBody, {
     model: "provider-model-2026",
     max_output_tokens: 128,
-    input: "T\n\nmeta",
+    instructions: "T",
+    input: "meta",
   });
   assert.equal(response.text, "note");
 });
@@ -894,6 +895,44 @@ test("createProfileBackedProvider: resolves profile and parses OpenAI response",
   assert.equal(response.text, "note");
   assert.equal(response.providerId, "profile");
   assert.equal(response.modelId, profile.id);
+});
+
+test("createProfileBackedProvider: keeps the OpenAI system prompt separate", async () => {
+  const profile: ModelProfile = {
+    id: "m-chat-shape",
+    name: "Chat shape",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.example.test/v1",
+    model: "chat-model",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  let requestBody: unknown;
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async (_url, init) => {
+      requestBody = JSON.parse(String(init.body));
+      return jsonResponse({ choices: [{ message: { content: "note" } }] });
+    }),
+  });
+
+  await provider.invoke({
+    modelId: profile.id,
+    prompt: { id: "p", version: 1, template: "REPORT_INSTRUCTIONS" },
+    input: { text: "REPORT_DATA" },
+    signal: new AbortController().signal,
+  });
+
+  assert.deepEqual(requestBody, {
+    model: "chat-model",
+    max_tokens: 8192,
+    messages: [
+      { role: "system", content: "REPORT_INSTRUCTIONS" },
+      { role: "user", content: "REPORT_DATA" },
+    ],
+  });
 });
 
 test("createProfileBackedProvider: retries transient gateway failures", async () => {
@@ -1077,11 +1116,13 @@ test("createProfileBackedProvider: anthropic headers and content parsing", async
   };
   let seenUrl = "";
   let seenKey = "";
+  let seenBody: unknown;
   const provider = createProfileBackedProvider({
     resolve: async () => profile,
     fetchFn: mockFetch(async (url, init) => {
       seenUrl = url;
       seenKey = (init.headers as Record<string, string>)["x-api-key"] ?? "";
+      seenBody = JSON.parse(String(init.body));
       return jsonResponse({ content: [{ type: "text", text: "claude note" }] });
     }),
   });
@@ -1093,6 +1134,12 @@ test("createProfileBackedProvider: anthropic headers and content parsing", async
   });
   assert.match(seenUrl, /\/messages$/);
   assert.equal(seenKey, "sk-ant-0987654321");
+  assert.deepEqual(seenBody, {
+    model: "claude-sonnet-4",
+    max_tokens: 8192,
+    system: "T",
+    messages: [{ role: "user", content: "meta" }],
+  });
   assert.equal(response.text, "claude note");
 });
 
@@ -1311,4 +1358,154 @@ test("createProfileBackedProvider: usage including reasoning tokens is extracted
     reasoningTokens: 500,
   });
   assert.equal(response.finishReason, "stop");
+});
+
+// ── Three-protocol response compatibility (regression) ──────────────────────
+
+test("createProfileBackedProvider: Responses output separates reasoning from the answer", async () => {
+  const provider = createProfileBackedProvider({
+    resolve: async () =>
+      customProfile("m-responses-typed", "https://api.openai.com/v1"),
+    fetchFn: mockFetch(async () =>
+      jsonResponse({
+        id: "resp-1",
+        status: "completed",
+        output: [
+          {
+            type: "reasoning",
+            summary: [
+              { type: "summary_text", text: "Let me think carefully…" },
+            ],
+            content: [
+              { type: "summary_text", text: "Reasoning detail A" },
+              { type: "summary_text", text: "Reasoning detail B" },
+            ],
+          },
+          {
+            type: "message",
+            role: "assistant",
+            content: [
+              {
+                type: "output_text",
+                text: '{"lines":[{"candidateId":"c1","analysis":"已确认"}]}',
+              },
+            ],
+          },
+        ],
+        usage: {
+          input_tokens: 100,
+          output_tokens: 500,
+          total_tokens: 600,
+          output_tokens_details: { reasoning_tokens: 480 },
+        },
+      }),
+    ),
+  });
+  const response = await invokeWith(provider, {});
+  // The reasoning item's content must never leak into the answer text.
+  assert.equal(
+    response.text,
+    '{"lines":[{"candidateId":"c1","analysis":"已确认"}]}',
+  );
+  assert.equal(response.finishReason, "stop");
+  assert.deepEqual(response.usage, {
+    inputTokens: 100,
+    outputTokens: 500,
+    totalTokens: 600,
+    reasoningTokens: 480,
+  });
+});
+
+test("createProfileBackedProvider: Responses reasoning-only output is attributed", async () => {
+  const provider = createProfileBackedProvider({
+    resolve: async () =>
+      customProfile("m-responses-reasoning", "https://api.openai.com/v1"),
+    fetchFn: mockFetch(async () =>
+      jsonResponse({
+        id: "resp-2",
+        status: "incomplete",
+        incomplete_details: { reason: "max_output_tokens" },
+        output: [
+          {
+            type: "reasoning",
+            content: [{ type: "summary_text", text: "Deep thinking…" }],
+          },
+        ],
+      }),
+    ),
+  });
+  await assert.rejects(
+    () => invokeWith(provider, {}),
+    (error: unknown) =>
+      (error as { code?: unknown }).code === "ai.provider-invalid-response" &&
+      (error as { detail?: unknown }).detail === "reasoning-only",
+  );
+});
+
+test("createProfileBackedProvider: anthropic thinking blocks stay out of the answer", async () => {
+  const profile: ModelProfile = {
+    id: "m-anthropic-thinking",
+    name: "Anthropic",
+    mode: "custom",
+    protocol: "anthropic",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.anthropic.com/v1",
+    model: "claude-sonnet",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async () =>
+      jsonResponse({
+        content: [
+          { type: "thinking", thinking: "Private chain of thought…" },
+          {
+            type: "text",
+            text: '{"lines":[{"candidateId":"c1","analysis":"分析完成"}]}',
+          },
+        ],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 50, output_tokens: 90 },
+      }),
+    ),
+  });
+  const response = await invokeWith(provider, {});
+  assert.equal(
+    response.text,
+    '{"lines":[{"candidateId":"c1","analysis":"分析完成"}]}',
+  );
+  assert.equal(response.finishReason, "stop");
+  assert.deepEqual(response.usage, {
+    inputTokens: 50,
+    outputTokens: 90,
+    totalTokens: 140,
+  });
+});
+
+test("createProfileBackedProvider: anthropic max_tokens stop maps to length", async () => {
+  const profile: ModelProfile = {
+    id: "m-anthropic-length",
+    name: "Anthropic",
+    mode: "custom",
+    protocol: "anthropic",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.anthropic.com/v1",
+    model: "claude-sonnet",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async () =>
+      jsonResponse({
+        content: [{ type: "text", text: "partial" }],
+        stop_reason: "max_tokens",
+        usage: { input_tokens: 50, output_tokens: 600 },
+      }),
+    ),
+  });
+  const response = await invokeWith(provider, {});
+  assert.equal(response.text, "partial");
+  assert.equal(response.finishReason, "length");
 });

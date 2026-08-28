@@ -275,18 +275,7 @@ export function createInsightEnhancer(
   async function buildContext(
     input: InsightEnhancerInput,
   ): Promise<EnhancementContext | null> {
-    let profile: ActiveInsightProfile | null = null;
-    try {
-      profile = input.profileId
-        ? resolveProfile
-          ? await resolveProfile(input.profileId)
-          : null
-        : resolveActiveProfile
-          ? await resolveActiveProfile()
-          : null;
-    } catch {
-      profile = null;
-    }
+    const profile = await resolveConfiguredProfile(input.profileId);
     if (profile === null) return null;
 
     const nowMs = now();
@@ -328,6 +317,26 @@ export function createInsightEnhancer(
         promptVersion: promptEntry.version,
       },
     };
+  }
+
+  async function resolveConfiguredProfile(
+    profileId?: string | null,
+  ): Promise<ActiveInsightProfile | null> {
+    try {
+      return profileId
+        ? resolveProfile
+          ? await resolveProfile(profileId)
+          : null
+        : resolveActiveProfile
+          ? await resolveActiveProfile()
+          : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function isAvailable(profileId?: string | null): Promise<boolean> {
+    return (await resolveConfiguredProfile(profileId)) !== null;
   }
 
   function readCachedResult(
@@ -437,9 +446,14 @@ export function createInsightEnhancer(
       });
       if (!validation.ok) {
         // The model's output shape varies per attempt; a fresh attempt may
-        // comply with the schema.
+        // comply with the schema. Attribute the rejection so the settings
+        // page can say WHY instead of a generic "模型响应异常".
         return {
-          result: { status: "invalid-output", lines: [] },
+          result: {
+            status: "invalid-output",
+            lines: [],
+            failureDetail: `invalid-output:${validation.reason}`,
+          },
           retryable: true,
         };
       }
@@ -662,5 +676,5 @@ export function createInsightEnhancer(
     return work;
   }
 
-  return { id: INSIGHT_ENHANCER_ID, readCached, enhance };
+  return { id: INSIGHT_ENHANCER_ID, isAvailable, readCached, enhance };
 }

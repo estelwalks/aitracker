@@ -329,6 +329,7 @@ export const settings = {
         "后台生成完成：成功 {completed}，失败 {failed}，跳过 {skipped}",
       refreshFailed: "刷新今日洞察失败",
       skipped: "跳过",
+      recovered: "批次中断，已标记失败（可重新刷新）",
       rulesModeRefreshDisabled: "仅本地规则模式下无需刷新 AI 洞察",
       save: "保存",
       saved: "今日洞察设置已保存",

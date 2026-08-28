@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
-import { posix, win32 } from "node:path";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, posix, win32 } from "node:path";
 import test from "node:test";
 
-import { normalizeProjectPathFor } from "./project-path.ts";
+import {
+  canonicalizeProjectPathFor,
+  normalizeProjectPathFor,
+} from "./project-path.ts";
 
 test("win32: home itself becomes ~", () => {
   assert.equal(
@@ -77,6 +82,44 @@ test("relative paths pass through untouched on both implementations", () => {
   );
   assert.equal(
     normalizeProjectPathFor(win32, "unknown", "C:\\Users\\u"),
+    "unknown",
+  );
+});
+
+test("canonicalizes home/absolute path variants to one Git repository identity", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-project-path-"));
+  const homeDirectory = join(root, "home");
+  const repositoryRoot = join(homeDirectory, "Documents", "Dev", "repo");
+  const nestedDirectory = join(repositoryRoot, "src", "feature");
+  try {
+    await mkdir(join(repositoryRoot, ".git"), { recursive: true });
+    await mkdir(nestedDirectory, { recursive: true });
+
+    const absolute = await canonicalizeProjectPathFor(
+      posix,
+      `${nestedDirectory}/../feature/`,
+      homeDirectory,
+    );
+    const homeRelative = await canonicalizeProjectPathFor(
+      posix,
+      "~/Documents/Dev/repo/src/feature",
+      homeDirectory,
+    );
+
+    assert.equal(absolute, "~/Documents/Dev/repo");
+    assert.equal(homeRelative, absolute);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("preserves non-path project markers for later classification", async () => {
+  assert.equal(
+    await canonicalizeProjectPathFor(posix, "quick-conversation", "/home/u"),
+    "quick-conversation",
+  );
+  assert.equal(
+    await canonicalizeProjectPathFor(posix, "unknown", "/home/u"),
     "unknown",
   );
 });

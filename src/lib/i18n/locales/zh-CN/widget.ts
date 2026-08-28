@@ -54,7 +54,7 @@ export const widget = {
   securityRuns: "{count} 次检测",
   securityCoverage: "覆盖 {count} 个 Skill",
   lastScan: "上次扫描 {time}",
-  scanNow: "立即扫描",
+  scanNow: "立即检测",
   goScan: "去检测",
   // 用量 Tab
   usageTitle: "Token 消耗",

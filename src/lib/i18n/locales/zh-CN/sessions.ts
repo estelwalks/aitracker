@@ -88,7 +88,8 @@ export const sessions = {
     turns: "轮次",
     turnsShort: "{count} 轮",
     edits: "改动",
-    resumeDirHint: "恢复仅由本地受控服务执行，不会向浏览器公开命令或目录。",
+    resumeDirHint:
+      "恢复会先进入会话所属项目目录，再执行恢复命令；目录不会向浏览器公开。",
     statusReason: "状态说明：",
   },
   toast: {
@@ -122,9 +123,10 @@ export const sessions = {
     historyLoading: "加载中…",
     historyUnavailable: "会话历史加载失败",
     cliResumable: "CLI 可恢复",
-    cliHint: "凭会话 ID 在本地直接续接对话，恢复命令仅在本地受控执行",
+    cliHint: "恢复会先进入会话所属项目目录，再执行本地恢复命令",
     clientSession: "客户端会话",
-    clientHint: "{source} 为图形客户端，无命令行恢复方式",
+    clientHint:
+      "{source} 不支持自动恢复，请复制会话 ID 后在对应客户端中手动恢复",
     sessionId: "会话 ID",
     reportTitle: "会话简报",
     reportOverview: "会话概览",

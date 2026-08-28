@@ -231,7 +231,7 @@ export const insights = {
         "{count}개의 세션을 복구할 수 있습니다. 보관하거나 증류하세요.",
       "chats-empty": "아직 세션이 없습니다. 데이터 소스를 연결하면 표시됩니다.",
       "chats-resume":
-        "복구 명령에는 프로젝트 경로가 포함되어 터미널에 붙여 넣으면 원래 작업 디렉터리로 돌아갑니다.",
+        "복구할 때 기본 터미널에서 세션의 프로젝트 디렉터리를 연 다음 복구 명령을 실행합니다.",
       "chats-distill":
         "재사용할 세션은 증류 워크벤치로 보내세요. 기록을 뒤지는 것보다 Skill로 만드는 편이 빠릅니다.",
       "chats-guide-inventory": "세션 스냅샷에 현재 세션 {count}개가 있습니다.",
@@ -248,7 +248,7 @@ export const insights = {
       "chat-detail-recoverable":
         "이 세션은 복구하거나 증류할 수 있습니다. 상세 페이지에서 시작하세요.",
       "chat-detail-resume":
-        "이 세션은 복구해 컨텍스트를 이어갈 수 있습니다. 복구 명령에는 프로젝트 경로가 포함됩니다.",
+        "이 세션은 복구해 컨텍스트를 이어갈 수 있습니다. 복구할 때 먼저 프로젝트 디렉터리로 이동합니다.",
       "chat-detail-guide-turns":
         "이 세션에 재시도 턴 {count}개가 기록되어 있습니다.",
       "chat-detail-guide-tokens":

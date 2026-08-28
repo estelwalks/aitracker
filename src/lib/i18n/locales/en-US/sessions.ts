@@ -92,7 +92,7 @@ export const sessions = {
     turnsShort: "{count} turns",
     edits: "Edits",
     resumeDirHint:
-      "Recovery runs through a controlled local service; no command or directory is exposed to the browser.",
+      "Recovery first enters the session's project directory, then runs the resume command; the directory is never exposed to the browser.",
     statusReason: "Status:",
   },
   toast: {
@@ -130,9 +130,10 @@ export const sessions = {
     historyUnavailable: "Failed to load session history",
     cliResumable: "CLI resumable",
     cliHint:
-      "Resume locally with the session ID; the recovery command runs only under local control",
+      "Recovery first enters the session's project directory, then runs the local resume command",
     clientSession: "Client session",
-    clientHint: "{source} is a GUI client with no command-line resume option",
+    clientHint:
+      "{source} does not support automatic recovery; copy the session ID and resume it manually in the client",
     sessionId: "Session ID",
     reportTitle: "Session briefing",
     reportOverview: "Overview",

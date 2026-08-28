@@ -58,7 +58,7 @@ export const widget = {
   securityRuns: "{count}회 검사",
   securityCoverage: "{count}개 Skill 커버",
   lastScan: "마지막 스캔 {time}",
-  scanNow: "지금 스캔",
+  scanNow: "지금 검사",
   goScan: "검사하러 가기",
   // 사용량 탭
   usageTitle: "토큰 사용량",

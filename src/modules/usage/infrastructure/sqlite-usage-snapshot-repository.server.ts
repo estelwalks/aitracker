@@ -46,6 +46,60 @@ interface PersistedProjectIdentity {
   readonly kind: UsageProjectKind;
 }
 
+interface ProjectIdentityWithRef extends PersistedProjectIdentity {
+  readonly ref: string;
+}
+
+function parentPathSegment(ref: string): string | null {
+  const segments = ref
+    .trim()
+    .replaceAll("\\", "/")
+    .split("/")
+    .filter((segment) => segment.length > 0 && segment !== "~");
+  return segments.length > 1 ? segments[segments.length - 2]! : null;
+}
+
+/**
+ * Keep distinct workspace identities distinct while making equal base labels
+ * understandable in the UI. The path is never persisted; only a parent
+ * segment (or an installation-scoped short HMAC suffix) is used for display.
+ */
+function disambiguateWorkspaceProjectLabels(
+  projects: readonly ProjectIdentityWithRef[],
+): ReadonlyMap<string, string> {
+  const labels = new Map<string, string>();
+  const groups = new Map<string, ProjectIdentityWithRef[]>();
+  for (const project of projects) {
+    if (project.kind !== "workspace") {
+      labels.set(project.refHash, project.label);
+      continue;
+    }
+    const group = groups.get(project.label) ?? [];
+    group.push(project);
+    groups.set(project.label, group);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      labels.set(group[0]!.refHash, group[0]!.label);
+      continue;
+    }
+
+    const parentLabels = group.map((project) => parentPathSegment(project.ref));
+    const parentsAreDistinct =
+      parentLabels.every((parent): parent is string => parent !== null) &&
+      new Set(parentLabels).size === parentLabels.length;
+    group.forEach((project, index) => {
+      const parent = parentLabels[index];
+      const suffix = parentsAreDistinct
+        ? parent!
+        : `${parent ?? "project"} · ${project.refHash.slice(-8)}`;
+      labels.set(project.refHash, `${project.label} · ${suffix}`);
+    });
+  }
+  return labels;
+}
+
 function emptyHydration(): SnapshotHydrateResult<UsageSnapshotDto> {
   return {
     source: "default",
@@ -291,6 +345,28 @@ export function createSqliteUsageSnapshotRepository(
     async save(envelope) {
       if (envelope.data == null) throw new TypeError("snapshot data required");
       const compact = compactUsageSnapshot(envelope.data);
+      const projectRefs = new Set<string>();
+      for (const bucket of compact.aggregateBuckets ?? []) {
+        projectRefs.add(bucket.project);
+      }
+      for (const bucket of compact.trackerBuckets ?? []) {
+        if (bucket.dimension === "project") projectRefs.add(bucket.identity);
+      }
+      const resolvedProjects = [...projectRefs].map((ref) => ({
+        ref,
+        ...resolveProjectIdentity(ref),
+      }));
+      const projectLabels =
+        disambiguateWorkspaceProjectLabels(resolvedProjects);
+      const resolveProjectForWrite = (
+        projectRef: string,
+      ): PersistedProjectIdentity => {
+        const project = resolveProjectIdentity(projectRef);
+        return {
+          ...project,
+          label: projectLabels.get(project.refHash) ?? project.label,
+        };
+      };
       commitGeneration({
         database,
         domain: "usage",
@@ -365,7 +441,7 @@ export function createSqliteUsageSnapshotRepository(
           }
 
           buckets.forEach((bucket, sequence) => {
-            const project = resolveProjectIdentity(bucket.project);
+            const project = resolveProjectForWrite(bucket.project);
             const bucketId = hashSensitiveRef(
               options.hmacKey,
               "usage-aggregate-bucket",
@@ -435,7 +511,7 @@ export function createSqliteUsageSnapshotRepository(
             let entityLabel = bucket.label;
             let projectKind: UsageProjectKind | null = null;
             if (bucket.dimension === "project") {
-              const project = resolveProjectIdentity(bucket.identity);
+              const project = resolveProjectForWrite(bucket.identity);
               entityKey = project.refHash;
               entityLabel = project.label;
               projectKind = project.kind;

@@ -208,6 +208,37 @@ test("OpenAI Responses request uses input, max_output_tokens and output_text", a
   assert.match(request.instructions, /aggregate JSON/);
 });
 
+test("OpenAI Responses typed output separates reasoning from the answer", async () => {
+  const service = createDashboardAIInsightService({
+    resolveConfig: async () => responsesConfig,
+    fetch: (async () =>
+      Response.json({
+        id: "resp-1",
+        status: "completed",
+        output: [
+          {
+            type: "reasoning",
+            summary: [{ type: "summary_text", text: "Let me think…" }],
+            content: [{ type: "summary_text", text: "Reasoning detail" }],
+          },
+          {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: validOutput() }],
+          },
+        ],
+      })) as typeof fetch,
+  });
+
+  const result = await service.refresh(input());
+  // The reasoning item must not leak into the answer: the insight still parses.
+  assert.equal(result.status, "ready");
+  assert.equal(
+    result.insight?.headline,
+    "Usage is steady and cache coverage is improving.",
+  );
+});
+
 test("Anthropic request uses the messages endpoint, x-api-key auth and system template", async () => {
   let sentUrl: string | undefined;
   let sentHeaders: Record<string, string> | undefined;

@@ -348,6 +348,8 @@ export const settings = {
         "バックグラウンド生成完了：成功 {completed}、失敗 {failed}、スキップ {skipped}",
       refreshFailed: "AIインサイトの更新に失敗しました",
       skipped: "スキップ",
+      recovered:
+        "バッチが中断され、失敗としてマークされました（再更新で再試行）",
       rulesModeRefreshDisabled:
         "ローカルルールモードでは AI インサイトの更新は不要です",
       save: "保存",

@@ -33,7 +33,11 @@ test("launches only the registered tokenized command without a shell", async () 
     resolveExecutable: async (file) => file,
   });
 
-  await executor.execute({ source: "codex", sessionId: "safe-id_01" });
+  await executor.execute({
+    source: "codex",
+    sessionId: "safe-id_01",
+    cwd: "/Users/demo/project",
+  });
 
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0]?.slice(0, 2), ["codex", ["resume", "safe-id_01"]]);
@@ -42,6 +46,7 @@ test("launches only the registered tokenized command without a shell", async () 
     shell: false,
     stdio: "ignore",
     windowsHide: true,
+    cwd: "/Users/demo/project",
   });
   assert.equal(child.unrefCalled, true);
 });
@@ -58,7 +63,11 @@ test("uses the resolved executable path when the resolver returns one", async ()
     resolveExecutable: async () => "/custom/bin/codex",
   });
 
-  await executor.execute({ source: "codex", sessionId: "safe-id_01" });
+  await executor.execute({
+    source: "codex",
+    sessionId: "safe-id_01",
+    cwd: "/Users/demo/project",
+  });
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.[0], "/custom/bin/codex");
@@ -75,10 +84,18 @@ test("rejects unregistered sources and unsafe ids before spawning", async () => 
   });
 
   await assert.rejects(
-    executor.execute({ source: "unknown-tool", sessionId: "safe-id" }),
+    executor.execute({
+      source: "unknown-tool",
+      sessionId: "safe-id",
+      cwd: "/Users/demo/project",
+    }),
   );
   await assert.rejects(
-    executor.execute({ source: "codex", sessionId: "bad;argument" }),
+    executor.execute({
+      source: "codex",
+      sessionId: "bad;argument",
+      cwd: "/Users/demo/project",
+    }),
   );
   assert.equal(calls, 0);
 });
@@ -92,7 +109,11 @@ test("cancels a pending launch without exposing or executing another command", a
   });
 
   const pending = executor.execute(
-    { source: "codex", sessionId: "safe-id_02" },
+    {
+      source: "codex",
+      sessionId: "safe-id_02",
+      cwd: "/Users/demo/project",
+    },
     controller.signal,
   );
   controller.abort();

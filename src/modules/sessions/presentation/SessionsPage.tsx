@@ -22,6 +22,7 @@ import type {
   SessionSummary,
 } from "../contracts.ts";
 import { ResumeSessionButton } from "./ResumeSessionButton.tsx";
+import { SessionIdCopyButton } from "./SessionIdCopyButton.tsx";
 
 const RANGE_OPTIONS: Array<{
   value: NonNullable<SessionFilter["range"]>;
@@ -559,6 +560,8 @@ function SessionRow({
       <div className="flex shrink-0 items-center gap-2">
         {session.resumeAvailable ? (
           <ResumeSessionButton session={session} />
+        ) : detailAvailable ? (
+          <SessionIdCopyButton sessionId={session.sessionId} />
         ) : null}
       </div>
     </li>

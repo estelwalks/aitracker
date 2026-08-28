@@ -144,12 +144,17 @@ function currentAppIconPath(): string | null {
   return findAppIconPath(nativeIconLocationInput(), nativeIconAppearance());
 }
 
+function loadCurrentAppIcon(): Electron.NativeImage | null {
+  const iconPath = currentAppIconPath();
+  if (!iconPath) return null;
+  const icon = nativeImage.createFromPath(iconPath);
+  return icon.isEmpty() ? null : icon;
+}
+
 /** Apply the OS appearance variant to runtime Dock and taskbar surfaces. */
 function applyNativeAppIcon(): void {
-  const iconPath = currentAppIconPath();
-  if (!iconPath) return;
-  const icon = nativeImage.createFromPath(iconPath);
-  if (icon.isEmpty()) return;
+  const icon = loadCurrentAppIcon();
+  if (!icon) return;
 
   if (process.platform === "darwin") app.dock?.setIcon(icon);
   for (const window of [mainWindow, widgetWindow]) {
@@ -930,7 +935,7 @@ async function createMainWindow(): Promise<void> {
     // 立即显示窗口（深色底避免白屏闪烁）：首次完整扫描可能耗时较久，
     // 等待 ready-to-show 会让用户以为应用没有启动。
     show: true,
-    backgroundColor: "#0b0b10",
+    backgroundColor: nativeIconAppearance() === "dark" ? "#0b0b10" : "#f6f7f9",
     title: APP_NAME,
     webPreferences: {
       preload: join(currentDirectory, "preload.cjs"),
@@ -970,7 +975,17 @@ async function createMainWindow(): Promise<void> {
 
   // This local document gives immediate visual feedback. The application URL
   // is loaded separately once the local server and preference store are ready.
-  startupDocument = createStartupDocument(currentPreferences.locale);
+  const startupIcon = loadCurrentAppIcon();
+  if (!startupIcon) {
+    throw new Error(
+      "Native startup icon is missing; run npm run generate:native-icons",
+    );
+  }
+  startupDocument = createStartupDocument(
+    currentPreferences.locale,
+    nativeIconAppearance(),
+    startupIcon.toDataURL(),
+  );
   await mainWindow.loadURL(startupDocument);
   reportStartupMilestone("startup-screen-ready");
 }

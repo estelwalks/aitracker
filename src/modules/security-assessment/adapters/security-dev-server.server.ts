@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 
-import type { ModelConfig } from "skill-scanner";
+import { ProviderSchema, type ModelConfig } from "skill-scanner";
 
 import { ENV } from "../../../lib/app-config.ts";
 import { SECURITY_LLM_REVIEW_PREF_KEY } from "../llm-review.contracts.ts";
@@ -126,13 +126,39 @@ interface StoredModelProfile {
   readonly model?: string;
 }
 
+type ScannerProtocol = "openai-responses" | "openai-completions" | "anthropic";
+
+/**
+ * Bridge the app's protocol names to both older and protocol-aware
+ * skill-scanner contracts. Older packages only accept `openai`; protocol-aware
+ * versions accept the explicit three-value format.
+ */
+function scannerProtocol(profile: StoredModelProfile): ScannerProtocol {
+  return profile.protocol === "openai"
+    ? "openai-completions"
+    : profile.protocol;
+}
+
+function scannerProvider(profile: StoredModelProfile): string | undefined {
+  const protocol = scannerProtocol(profile);
+  const parsed = ProviderSchema.safeParse(protocol);
+  return parsed.success
+    ? parsed.data
+    : ProviderSchema.safeParse(
+          protocol === "anthropic" ? "anthropic" : "openai",
+        ).success
+      ? protocol === "anthropic"
+        ? "anthropic"
+        : "openai"
+      : undefined;
+}
+
 export function toSecurityModelConfig(
   profile: StoredModelProfile | null | undefined,
   enabled: boolean,
 ): ModelConfig | undefined {
   if (!enabled) return undefined;
   if (!profile?.apiKey) return undefined;
-  const provider = profile.protocol === "anthropic" ? "anthropic" : "openai";
   const endpoint =
     profile.mode === "official"
       ? "https://api.deepseek.com/v1"
@@ -142,8 +168,7 @@ export function toSecurityModelConfig(
           : "https://api.openai.com/v1"));
   const model = profile.mode === "official" ? "deepseek-chat" : profile.model;
   if (!model) throw new Error("Active model profile has no model");
-  return {
-    provider,
+  const config: Record<string, unknown> = {
     endpoint,
     apiKey: profile.apiKey,
     liteModel: model,
@@ -151,6 +176,9 @@ export function toSecurityModelConfig(
     timeoutMs: 120_000,
     maxAgentTurns: 8,
   };
+  const provider = scannerProvider(profile);
+  if (provider !== undefined) config.provider = provider;
+  return config as ModelConfig;
 }
 
 /** Server-process persistence adapter; all writes use the sole SQLite runtime. */

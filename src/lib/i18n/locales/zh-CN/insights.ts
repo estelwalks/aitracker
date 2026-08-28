@@ -187,8 +187,7 @@ export const insights = {
       "chats-top-source": "会话最多的来源是「{name}」，可重点关注其用量。",
       "chats-recoverable": "有 {count} 段会话可恢复，建议归档或蒸馏。",
       "chats-empty": "暂无会话数据，接入数据来源后即可查看。",
-      "chats-resume":
-        "恢复命令会带上项目路径，粘贴到终端就能回到原来的工作目录。",
+      "chats-resume": "恢复会在默认终端进入会话所属项目目录，再执行恢复命令。",
       "chats-distill":
         "值得复用的会话记得丢进蒸馏工作台，沉淀成 Skill 比翻历史更快。",
       "chats-guide-inventory": "会话快照当前共记录 {count} 段会话。",
@@ -202,7 +201,7 @@ export const insights = {
       "chat-detail-tokens": "本次会话累计消耗 {tokens} tokens。",
       "chat-detail-recoverable": "该会话可恢复或蒸馏为经验，建议在详情页发起。",
       "chat-detail-resume":
-        "可恢复该会话继续之前的上下文，恢复命令会带上项目路径。",
+        "可恢复该会话继续之前的上下文，恢复时会先进入所属项目目录。",
       "chat-detail-guide-turns": "当前会话记录了 {count} 个重试轮次。",
       "chat-detail-guide-tokens": "当前会话记录了 {count} 次子 Agent 调用。",
       "chat-detail-guide-state":

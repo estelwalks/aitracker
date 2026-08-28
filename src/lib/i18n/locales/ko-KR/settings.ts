@@ -343,6 +343,8 @@ export const settings = {
         "백그라운드 생성 완료: 성공 {completed}, 실패 {failed}, 건너뜀 {skipped}",
       refreshFailed: "AI 인사이트 새로고침에 실패했습니다",
       skipped: "건너뜀",
+      recovered:
+        "배치가 중단되어 실패로 표시되었습니다(다시 새로고침하여 재시도)",
       rulesModeRefreshDisabled:
         "로컬 규칙 모드에서는 AI 인사이트 새로고침이 필요하지 않습니다",
       save: "저장",

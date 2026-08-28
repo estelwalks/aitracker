@@ -92,7 +92,7 @@ export const sessions = {
     turnsShort: "{count} ターン",
     edits: "編集回数",
     resumeDirHint:
-      "復元は管理されたローカルサービスで実行され、コマンドやディレクトリはブラウザに公開されません。",
+      "復元時はまずセッションのプロジェクトディレクトリに移動してから復元コマンドを実行します。ディレクトリはブラウザに公開されません。",
     statusReason: "状態：",
   },
   toast: {
@@ -130,10 +130,10 @@ export const sessions = {
     historyUnavailable: "セッション履歴を読み込めませんでした",
     cliResumable: "CLI で復元可能",
     cliHint:
-      "セッション ID でローカルに再開します。復元コマンドは管理されたローカル処理でのみ実行されます",
+      "復元時はまずセッションのプロジェクトディレクトリに移動してからローカル復元コマンドを実行します",
     clientSession: "クライアントセッション",
     clientHint:
-      "{source} は GUI クライアントのため、コマンドラインでの復元はありません",
+      "{source} は自動復元に対応していません。セッション ID をコピーしてクライアントで手動復元してください",
     sessionId: "セッション ID",
     reportTitle: "セッション簡報",
     reportOverview: "概要",

@@ -240,6 +240,15 @@ export function createPageInsightsApplication(options: {
     const bundle = await adapter.loadEvidence(scope);
     const preference = preferenceFor(surfaceId);
     const autoAuthorized = hasValidAutoConsent(preference);
+    const enhancer = options.enhancer;
+    let modelConfigured: boolean | undefined;
+    if (preference.mode !== "rules" && enhancer?.isAvailable !== undefined) {
+      try {
+        modelConfigured = await enhancer.isAvailable(preference.profileId);
+      } catch {
+        modelConfigured = false;
+      }
+    }
     // Page visits during an active batch may also enhance; singleflight and
     // the generation reservation dedupe against the batch's own calls.
     const rendererAutoEnhanceAuthorized = autoAuthorized;
@@ -248,8 +257,10 @@ export function createPageInsightsApplication(options: {
       bundle,
       locale,
       mode: preference.mode,
-      enhancerAvailable: options.enhancer !== undefined,
-      autoEnhanceAuthorized: rendererAutoEnhanceAuthorized,
+      enhancerAvailable: enhancer !== undefined,
+      modelConfigured,
+      autoEnhanceAuthorized:
+        rendererAutoEnhanceAuthorized && modelConfigured !== false,
       now,
     });
     const baseWithRefreshInterval: InsightEnvelope = {
@@ -258,10 +269,10 @@ export function createPageInsightsApplication(options: {
         options.store?.getRefreshIntervalMs() ??
         DEFAULT_INSIGHT_REFRESH_INTERVAL_MS,
     };
-    const enhancer = options.enhancer;
     const canReadCache =
       enhancer?.readCached !== undefined &&
       preference.mode !== "rules" &&
+      modelConfigured !== false &&
       (preference.mode === "enhanced-manual" || autoAuthorized);
     if (!canReadCache) return baseWithRefreshInterval;
 
