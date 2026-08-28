@@ -10,6 +10,7 @@ out/
 .output/
 .tanstack/
 test-results/
+tests/fixtures/performance/fixture-10x.events.json
 .aitracker-lab/
 .tt-lab/
 .env

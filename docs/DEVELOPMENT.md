@@ -74,7 +74,10 @@ corresponding `npm run generate:*` command; do not edit them manually.
 
 Performance fixtures under `tests/fixtures/performance/` are deterministic and
 versioned so benchmarks are reproducible. Rebuild them with
-`npm run perf:fixtures` when their schema changes.
+`npm run perf:fixtures` when their schema changes. The 10x performance fixture
+is intentionally generated on demand and ignored by Git; both
+`npm run perf:benchmark` and `npm run verify:read-model-budgets` regenerate it
+before running.
 
 ## Packaging
 
