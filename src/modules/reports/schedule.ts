@@ -50,9 +50,9 @@ export const REPORT_TASK_IDS = {
 export const DEFAULT_REPORT_SCHEDULES: ReportSchedulesConfig = {
   version: 2,
   configured: false,
-  daily: { enabled: false, time: "18:30" },
-  weekly: { enabled: false, dayOfWeek: 0, time: "09:00" },
-  monthly: { enabled: false, dayOfMonth: 1, time: "09:00" },
+  daily: { enabled: false, time: "18:00" },
+  weekly: { enabled: false, dayOfWeek: 4, time: "18:00" },
+  monthly: { enabled: false, dayOfMonth: 31, time: "18:00" },
 };
 
 export const DEFAULT_REPORT_SCHEDULE: LegacyReportScheduleConfig = {
