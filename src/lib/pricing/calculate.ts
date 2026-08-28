@@ -117,8 +117,7 @@ export function calculateCost(
   semantics: TokenSemantics,
 ): CostResult {
   const cacheWriteRate = rate.usdNanoPerMillion.cacheWrite; // string | null
-  const unpricedCacheWrite =
-    tokens.cacheWrite > 0n && cacheWriteRate === null;
+  const unpricedCacheWrite = tokens.cacheWrite > 0n && cacheWriteRate === null;
 
   const tier = selectTierRates(rate, tokens);
   const input = perMillion(tokens.input, tier.input);

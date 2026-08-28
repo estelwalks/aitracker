@@ -15,7 +15,7 @@ import {
   REPORT_TASK_IDS,
   reportDefinitionIdForSchedule,
   type ScheduleGranularity,
-} from "../../../reports/index.ts";
+} from "../../../reports/application/index.ts";
 
 /**
  * Application ports used by task executors. The registry deliberately accepts

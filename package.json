@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "AITracker local AI development asset dashboard",
   "private": true,
+  "workspaces": [
+    "packages/skill-scanner"
+  ],
   "license": "GPL-3.0-or-later",
   "main": "build/electron/main.js",
   "sideEffects": false,
@@ -18,7 +21,7 @@
     "lab:first-run:prepare": "node scripts/first-run-lab.mjs --prepare-only",
     "lab:first-run:seed": "node scripts/first-run-lab.mjs --seed-only",
     "build": "vite build",
-    "build:skill-scanner": "npm --prefix ../skill-scanner run build",
+    "build:skill-scanner": "npm --prefix packages/skill-scanner run build",
     "prebuild:electron": "npm run build:skill-scanner && npm run generate:native-icons",
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/bundle-preload.mjs",
     "build:desktop": "npm run build && npm run build:electron",
@@ -30,7 +33,7 @@
     "dist:mac:arm64": "npm run build:desktop && electron-builder --mac dmg --arm64 --publish never",
     "dist:win": "npm run build:desktop && electron-builder --win",
     "dist:win:x64": "npm run build:desktop && electron-builder --win nsis --x64 --publish never",
-    "postinstall": "install-electron --no",
+    "postinstall": "npm run build:skill-scanner && install-electron --no",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:route-performance": "playwright test tests/e2e/route-open-performance.spec.ts",
@@ -39,12 +42,14 @@
     "verify:database": "npm run test:database && npm run verify:database-schema && npm run verify:browser-server-boundary && npm run verify:sqlite-only && npm run verify:bundle-no-sqlite",
     "test:scripts": "node --test scripts/check-open-source-hygiene.test.mjs scripts/verify-browser-server-boundary.test.mjs scripts/verify-module-boundaries.test.mjs scripts/verify-sqlite-only.test.mjs",
     "test:unit": "node --import tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\" \"electron/**/*.test.ts\" \"electron/**/*.test.mjs\"",
-    "test:all": "npm run test:unit && npm run test:scripts && npm run test:database",
+    "test:scanner": "npm --prefix packages/skill-scanner test",
+    "test:all": "npm run test:unit && npm run test:scripts && npm run test:database && npm run test:scanner",
     "perf:fixtures": "node scripts/performance/generate-fixtures.mjs",
     "perf:benchmark": "node scripts/performance/benchmark.mjs",
     "verify:read-model-budgets": "node --import tsx scripts/verify-read-model-budgets.mts",
     "check:i18n": "tsc --noEmit && node --import tsx --test src/lib/i18n/locale.test.ts src/lib/i18n/messages.test.ts src/lib/i18n/format.test.ts electron/i18n.test.ts electron/prefs.test.ts && node --import tsx scripts/check-translations.mjs && node scripts/check-hardcoded-text.mjs && node scripts/check-locale-sync.mjs && node --import tsx scripts/check-app-config-sync.mjs",
-    "lint": "eslint .",
+    "typecheck": "tsc --noEmit && npm --prefix packages/skill-scanner run typecheck",
+    "lint": "eslint . && npm --prefix packages/skill-scanner run lint",
     "format": "prettier --write .",
     "generate:manifest": "node --import tsx scripts/generate-tool-manifest.mjs",
     "generate:tool-imports": "node --import tsx scripts/generate-tool-imports.mjs",
@@ -116,7 +121,7 @@
     "react-hook-form": "^7.71.2",
     "react-resizable-panels": "^4.6.5",
     "recharts": "^2.15.4",
-    "skill-scanner": "file:../skill-scanner",
+    "skill-scanner": "file:packages/skill-scanner",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
@@ -147,5 +152,9 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.0.16"
-  }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "npm@10.9.2"
 }

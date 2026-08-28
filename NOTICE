@@ -7,3 +7,6 @@ version 3 or later. See LICENSE for the full license text.
 This distribution includes third-party packages. Their licenses and notices
 remain the property of their respective copyright holders and are available
 from the package metadata and lockfile in this repository.
+
+The bundled packages/skill-scanner component is licensed under the MIT
+License. See packages/skill-scanner/LICENSE and packages/skill-scanner/NOTICE.

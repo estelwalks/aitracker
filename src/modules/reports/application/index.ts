@@ -24,6 +24,16 @@ import type {
 } from "../contracts.ts";
 import { periodStartDate } from "../period.ts";
 
+// Task-scheduler-facing report primitives are re-exported from this public
+// application entry so other modules do not depend on presentation exports or
+// deep-import report internals.
+export { monthKeyOf } from "../period.ts";
+export {
+  REPORT_TASK_IDS,
+  reportDefinitionIdForSchedule,
+  type ScheduleGranularity,
+} from "../schedule.ts";
+
 export interface ReportsApplicationOptions {
   readonly store: ReportStore;
   readonly context: ReportContextPort;

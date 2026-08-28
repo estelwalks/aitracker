@@ -1,0 +1,14 @@
+{
+  "mode": "full",
+  "locale": "zh-CN",
+  "model": {
+    "provider": "openai",
+    "endpoint": "https://api.openai.com/v1",
+    "apiKey": "sk-your-api-key",
+    "liteModel": "gpt-4o-mini",
+    "proModel": "gpt-4o",
+    "timeoutMs": 120000,
+    "contextWindowTokens": 1000000,
+    "maxAgentTurns": 12
+  }
+}

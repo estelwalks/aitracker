@@ -297,7 +297,11 @@ test("P2-10: sqlite quota store reserve() counts a fresh date separately from a 
   assert.equal(await port.reserve("2026-08-07"), true);
   // The new day resets the counter and has its own budget.
   assert.equal(await port.reserve("2026-08-08"), true);
-  assert.deepEqual(await port.read(), { date: "2026-08-08", used: 1, limit: 3 });
+  assert.deepEqual(await port.read(), {
+    date: "2026-08-08",
+    used: 1,
+    limit: 3,
+  });
 });
 
 test("sqlite quota store resets the counter when the date changes", async (t) => {

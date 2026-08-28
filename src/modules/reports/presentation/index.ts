@@ -16,6 +16,7 @@ import type {
 import type { SessionDensity } from "../period.ts";
 
 export { ReportSchedule } from "./ReportSchedule.tsx";
+export { MarkdownView } from "./markdown.tsx";
 
 export type ReportsViewModel = ReportsModuleContract;
 

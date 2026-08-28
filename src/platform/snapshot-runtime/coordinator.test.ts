@@ -343,14 +343,11 @@ test("successful refresh clears accumulated warning codes (P2-2)", async () => {
   assert.ok(
     coordinator.readLatest().warningCodes.includes("collection-failed"),
   );
-  const coordinator2 = createCoordinator(
-    memoryRepository({}),
-    {
-      collect: async () => ({
-        data: { events: 1, tokens: 100 },
-      }),
-    },
-  );
+  const coordinator2 = createCoordinator(memoryRepository({}), {
+    collect: async () => ({
+      data: { events: 1, tokens: 100 },
+    }),
+  });
   await coordinator2.ensureHydrated();
   await coordinator2.refreshNow();
   assert.deepEqual(coordinator2.readLatest().warningCodes, []);

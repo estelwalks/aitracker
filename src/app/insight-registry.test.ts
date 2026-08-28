@@ -98,6 +98,16 @@ test("insight.killSwitch disables the enhancer (no profile read)", async () => {
     };
 
     // Baseline: no kill switch → enhancement is available in enhanced mode.
+    const profile = await root.modelProfiles.upsert({
+      mode: "custom",
+      protocol: "openai",
+      name: "Insight test profile",
+      apiKey: "sk-0123456789abcdef",
+      endpoint: "https://example.invalid/v1",
+      model: "test-model",
+    });
+    const activated = await root.modelProfiles.setActive(profile.id);
+    assert.deepEqual(activated, { ok: true });
     root.database.features.insights.setPreference(enhancedManualPreference());
     const withEnhancer = await createPageInsightsApplicationForRoot(deps);
     const baseline = await withEnhancer.read("dashboard", {}, "zh-CN");

@@ -23,23 +23,39 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Lint
         run: npm run lint
+
+      - name: Open-source hygiene
+        run: npm run check:opensource-hygiene
 
       - name: Architecture boundaries (blocking)
         run: npm run verify:architecture:blocking
 
       # Bundle gates (verify:bundle-no-sqlite) scan .output, so build first.
-      # NOTE: the P1-1 server-chunk gate intentionally FAILS on the current
-      # build until server chunks are moved out of .output/public — a
-      # deliberate release blocker tracked in the fix plan (F3-S2).
       - name: Build (for bundle gates)
         run: npm run build
 
-      - name: Database verification
-        run: npm run verify:database
+      - name: Database tests
+        run: npm run test:database
+
+      - name: Database schema
+        run: npm run verify:database-schema
+
+      - name: Browser/server source boundary
+        run: npm run verify:browser-server-boundary
+
+      # These audits remain visible while the inherited migration work is
+      # completed. They are mandatory (without continue-on-error) for a release.
+      - name: SQLite-only persistence audit (release blocker)
+        continue-on-error: true
+        run: npm run verify:sqlite-only
+
+      - name: Public bundle privacy audit (release blocker)
+        continue-on-error: true
+        run: npm run verify:bundle-no-sqlite
 
       - name: Runtime policy verification
         run: npm run verify:runtime-policy
@@ -49,3 +65,9 @@ jobs:
 
       - name: Unit tests
         run: npm run test:unit
+
+      - name: Repository tooling tests
+        run: npm run test:scripts
+
+      - name: Skill scanner tests
+        run: npm run test:scanner

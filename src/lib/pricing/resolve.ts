@@ -409,9 +409,7 @@ export function resolvePrice(
         packageVersion: registry.version,
         knownUsdNano: cost.knownUsdNano,
         cacheSavingsUsdNano: cost.cacheSavingsUsdNano,
-        ...(cost.unpricedCacheWrite
-          ? { unpricedCacheWrite: true }
-          : {}),
+        ...(cost.unpricedCacheWrite ? { unpricedCacheWrite: true } : {}),
         costBreakdown: cost.breakdown,
         sourceLabel: rule.rate.source.label,
       };

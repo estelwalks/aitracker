@@ -195,9 +195,7 @@ test("P1-9: forbidden private content is skipped, never fatal to the write", asy
 });
 
 test("P1-9: a mixed write keeps the valid documents and drops only the bad one", async () => {
-  const directory = mkdtempSync(
-    join(tmpdir(), "aitracker-search-repo-mixed-"),
-  );
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-search-repo-mixed-"));
   try {
     const host = openHost(directory);
     const repository = createSqliteSearchIndexRepository({ database: host });
@@ -307,9 +305,7 @@ test("P2-13: full rebuild with more than 500 documents never exceeds SQLite plac
     // Rebuild with a subset: the rows absent from the new snapshot must be
     // deleted in chunks (the old single NOT IN with 1200 placeholders would
     // still fit, so exercise a genuinely large set twice to cross chunks).
-    const kept = documents.filter(
-      (_, index) => index < 600 || index >= 1100,
-    );
+    const kept = documents.filter((_, index) => index < 600 || index >= 1100);
     const second = await repository.write(
       createSnapshot(kept, "2026-08-07T00:01:00.000Z"),
     );
