@@ -135,6 +135,8 @@ export const skills = {
   },
   agentOverview: {
     title: "Agent概览 · {appName}",
+    loadFailed: "Agent 数据加载失败",
+    loadFailedDesc: "本地用量与安全数据未能加载，请重试。",
     insightTitle: "今日洞察",
     dedicatedInsight: "专属洞察",
     insightDescription:

@@ -163,3 +163,49 @@ test("does not cache SSR documents that contain the route manifest", async () =>
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("refuses to serve Nitro server-function chunks from /assets before token validation", async () => {
+  const root = await fixture();
+  const server = await startLocalWebServer(root, {
+    securityScanner: scanner(),
+  });
+  try {
+    const assetsDirectory = join(root, "public", "assets");
+    await mkdir(assetsDirectory, { recursive: true });
+    const chunk = join(assetsDirectory, "composition.server-abc123.js");
+    await writeFile(
+      chunk,
+      "const secrets = 'DatabaseSync node:sqlite aitracker.v1.db';",
+    );
+
+    // The rejection happens inside servePublicAsset, ahead of the capability
+    // token: an unauthenticated request gets 404 (not 401, not the chunk).
+    const withoutToken = await fetch(
+      `${server.origin}/assets/composition.server-abc123.js`,
+    );
+    assert.equal(withoutToken.status, 404);
+
+    // Even an authenticated request must not receive the chunk; the static
+    // file logic must not run for server chunks at all.
+    const bootstrap = await fetch(server.createBrowserBootstrapUrl(), {
+      redirect: "manual",
+    });
+    const cookie = bootstrap.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
+    assert.equal(bootstrap.status, 303);
+    const withToken = await fetch(
+      `${server.origin}/assets/composition.server-abc123.js`,
+      { headers: { cookie } },
+    );
+    assert.equal(withToken.status, 404);
+    assert.equal(await withToken.text(), "Not Found");
+
+    // Regular hashed browser assets in the same directory keep serving.
+    await writeFile(join(assetsDirectory, "index-abc123.js"), "browser chunk");
+    const served = await fetch(`${server.origin}/assets/index-abc123.js`);
+    assert.equal(served.status, 200);
+    assert.equal(await served.text(), "browser chunk");
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

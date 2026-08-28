@@ -60,32 +60,115 @@ test("query uses stable relevance ordering and stale filtering", () => {
 });
 
 test("rejects private fields and paths from public projection", () => {
-  assert.throws(() =>
-    createSnapshot(
-      [
-        documentFromPublic({
-          id: "bad",
-          type: "finding",
-          sourceRef: "finding.bad",
-          title: "bad",
-          textSummary: "prompt=secret",
-        }),
-      ],
-      "2026-08-07T00:00:00.000Z",
-    ),
+  // A genuine credential value shape is still rejected...
+  const credential = createSnapshot(
+    [
+      documentFromPublic({
+        id: "bad",
+        type: "finding",
+        sourceRef: "finding.bad",
+        title: "bad",
+        textSummary: "api_key: sk-abc123def456ghi789jkl",
+      }),
+    ],
+    "2026-08-07T00:00:00.000Z",
   );
-  assert.throws(() =>
-    createSnapshot(
-      [
-        documentFromPublic({
-          id: "bad",
-          type: "finding",
-          sourceRef: "finding.bad",
-          title: "bad",
-          textSummary: "/Users/private/file",
-        }),
-      ],
-      "2026-08-07T00:00:00.000Z",
-    ),
+  assert.equal(credential.documents.length, 0);
+  assert.equal(credential.skipped, 1);
+
+  // ...and so is an absolute user path.
+  const path = createSnapshot(
+    [
+      documentFromPublic({
+        id: "bad",
+        type: "finding",
+        sourceRef: "finding.bad",
+        title: "bad",
+        textSummary: "/Users/private/file",
+      }),
+    ],
+    "2026-08-07T00:00:00.000Z",
   );
+  assert.equal(path.documents.length, 0);
+  assert.equal(path.skipped, 1);
+});
+
+test("P1-9: standalone technical words in titles/summaries are legal index terms", () => {
+  const snapshot = createSnapshot(
+    [
+      documentFromPublic({
+        id: "session:token-stats",
+        type: "session",
+        sourceRef: "session.token-stats",
+        title: "Token 使用统计",
+        tags: ["token"],
+        textSummary: "本月 token 消耗与 prompt 工程实践",
+      }),
+      documentFromPublic({
+        id: "skill:prompt-eng",
+        type: "skill",
+        sourceRef: "skill.prompt-eng",
+        title: "prompt 工程",
+        tags: ["prompt"],
+        textSummary: "如何撰写高质量 prompt 模板",
+      }),
+      documentFromPublic({
+        id: "knowledge:content",
+        type: "knowledge",
+        sourceRef: "knowledge.content",
+        title: "Content 策略",
+        textSummary: "content 与 response 的关系",
+      }),
+    ],
+    "2026-08-07T00:00:00.000Z",
+  );
+  assert.equal(snapshot.documents.length, 3);
+  assert.equal(snapshot.skipped, 0);
+});
+
+test("P1-9: a path or credential-shaped title is skipped, not fatal", () => {
+  const path = createSnapshot(
+    [
+      documentFromPublic({
+        id: "agent:leak",
+        type: "agent",
+        sourceRef: "agent.leak",
+        title: "/Users/alice/secret.txt",
+        textSummary: "safe",
+      }),
+      documentFromPublic({
+        id: "agent:ok",
+        type: "agent",
+        sourceRef: "agent.ok",
+        title: "正常 Agent",
+        textSummary: "safe",
+      }),
+    ],
+    "2026-08-07T00:00:00.000Z",
+  );
+  assert.deepEqual(
+    path.documents.map((document) => document.id),
+    ["agent:ok"],
+  );
+  assert.equal(path.skipped, 1);
+
+  const credential = createSnapshot(
+    [
+      documentFromPublic({
+        id: "agent:key-leak",
+        type: "agent",
+        sourceRef: "agent.key-leak",
+        title: "api_key: sk-abc123def456ghi789jkl",
+        textSummary: "safe",
+      }),
+    ],
+    "2026-08-07T00:00:00.000Z",
+  );
+  assert.equal(credential.documents.length, 0);
+  assert.equal(credential.skipped, 1);
+});
+
+test("a snapshot with no skipped documents reports skipped: 0", () => {
+  const snapshot = createSnapshot(docs, "2026-08-07T00:00:00.000Z");
+  assert.equal(snapshot.skipped, 0);
 });

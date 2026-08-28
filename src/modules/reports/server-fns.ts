@@ -125,6 +125,12 @@ export interface SaveReportBodyResult {
   readonly saved: boolean;
   readonly content?: ReportContent;
   readonly errorCode?: string;
+  /**
+   * True when the submitted body exceeded the durable storage boundary
+   * (60,000 chars) and was truncated on save. The renderer must surface this
+   * (P1-10) instead of the save appearing lossless.
+   */
+  readonly truncated?: boolean;
 }
 
 /** Atomically replace the Markdown file belonging to an existing report. */
@@ -150,7 +156,13 @@ export const saveReportBody = createServerFn({ method: "POST" })
       return { saved: false, errorCode: "errors.reports.invalidContent" };
     }
     const { saveReportBody: save } = await import("./api.server.ts");
-    return save(data.reportId, data.body);
+    const result = await save(data.reportId, data.body);
+    return {
+      ...result,
+      ...(result.saved && result.content?.truncated === true
+        ? { truncated: true }
+        : {}),
+    };
   });
 
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);

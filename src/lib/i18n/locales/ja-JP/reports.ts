@@ -34,6 +34,8 @@ export const reports = {
   },
   period: {
     weekSuffix: "週",
+    monthShort: "{month}月",
+    weekShort: "{date}週",
   },
   schedule: {
     title: "自動定期生成",
@@ -115,6 +117,7 @@ export const reports = {
     dayHint: "点は日ごとのセッション密度を表します",
     weekHint: "任意の日をクリックすると週全体を選択",
     monthHint: "月を選択",
+    weekdayNarrow: "月火水木金土日",
   },
   header: {
     sessions: "{count} 件",
@@ -130,6 +133,7 @@ export const reports = {
     emptyDesc: "「今すぐ生成」でこの期間のレポートを作成できます。",
     draft: "今すぐ生成",
     save: "保存",
+    truncated: "本文が 60,000 文字を超えるため、切り詰められます。",
     regenerate: "再生成",
     rewriteTitle: "レポートを再生成しますか？",
     rewriteDesc:

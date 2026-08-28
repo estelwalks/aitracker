@@ -67,6 +67,17 @@ export const market = {
   },
   installed: "インストール済み",
   domainAll: "すべて",
+  domain: {
+    ai: "AIと自動化",
+    dev: "開発",
+    data: "データと分析",
+    ops: "運用",
+    security: "セキュリティとテスト",
+    productivity: "生産性",
+    docs: "ドキュメント",
+    cloud: "クラウドとパフォーマンス",
+    design: "デザインとフロントエンド",
+  },
   card: {
     detail: "詳細",
     publisher: "発行元",

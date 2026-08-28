@@ -21,10 +21,12 @@ files:
   - node_modules/skill-scanner/package.json
   - node_modules/zod/**/*
 extraResources:
-  # Keep the supplied application logo outside the asar so both macOS and
-  # Windows can load the same native tray image.
-  - from: public/brand-logos/ai-tracker/ai-tracker-icon-app.png
-    to: tray/ai-tracker-icon-app.png
+  # Native tray/window APIs require raster images. The build generates these
+  # light/dark derivatives from the two canonical SVG files.
+  - from: build/native-icons
+    to: native-icons
+    filter:
+      - "**/*"
   - from: .output
     to: web
     filter:
@@ -36,7 +38,7 @@ mac:
       arch:
         - x64
         - arm64
-  icon: public/brand-logos/ai-tracker/ai-tracker-icon-app.png
+  icon: public/favicon.svg
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -52,7 +54,7 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: public/brand-logos/ai-tracker/ai-tracker-icon-app.png
+  icon: public/favicon.svg
 nsis:
   artifactName: "${productName}-Setup-${version}-${arch}.${ext}"
   oneClick: false

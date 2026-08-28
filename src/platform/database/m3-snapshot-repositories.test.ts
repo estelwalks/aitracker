@@ -148,21 +148,19 @@ test("usage aggregate generation is atomic and never reads or writes legacy even
     ),
     3,
   );
-  assert.equal(
-    Number(
-      database.prepare("SELECT count(*) AS count FROM usage_events").get()!
-        .count,
-    ),
-    0,
-  );
-  assert.equal(
-    Number(
+  // Migration 0002 (P2-14) removed the legacy event tables entirely; the
+  // aggregate repository must never recreate them.
+  for (const legacy of ["usage_events", "usage_event_command_stats"]) {
+    assert.equal(
       database
-        .prepare("SELECT count(*) AS count FROM usage_event_command_stats")
-        .get()!.count,
-    ),
-    0,
-  );
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        )
+        .get(legacy),
+      undefined,
+      `legacy table ${legacy} must not exist after migration 0002`,
+    );
+  }
   assert.ok(
     !stringifySqliteRows(
       database.prepare("SELECT * FROM usage_aggregate_buckets").all(),

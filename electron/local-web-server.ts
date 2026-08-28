@@ -84,6 +84,24 @@ function isInside(basePath: string, candidatePath: string): boolean {
   );
 }
 
+/**
+ * Nitro/TanStack Start server-function chunks (`*.server-<hash>.js`) are
+ * emitted into `.output/public/assets` but execute only inside the Node server
+ * handler. They carry the server implementation (secret-key paths, database
+ * locations, bearer request construction, schema) and are never needed by the
+ * browser. `servePublicAsset` runs before capability-token validation, so
+ * these chunks must be rejected outright — even an authenticated request gets
+ * 404. If one is ever needed in the renderer it must be delivered through a
+ * token-protected route instead.
+ */
+const SERVER_CHUNK_PATH_PATTERN = /\.server-[A-Za-z0-9_-]+\.js$/;
+
+function isServerChunkPath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/assets/") && SERVER_CHUNK_PATH_PATTERN.test(pathname)
+  );
+}
+
 async function servePublicAsset(
   request: IncomingMessage,
   response: ServerResponse,
@@ -92,6 +110,16 @@ async function servePublicAsset(
 ): Promise<boolean> {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return false;
+  }
+
+  // Server-function chunks must never be served as static assets, least of
+  // all ahead of capability-token validation (review finding P1-1).
+  if (isServerChunkPath(pathname)) {
+    response.statusCode = 404;
+    securityResponseHeaders(response);
+    response.setHeader("Content-Type", "text/plain; charset=utf-8");
+    response.end("Not Found");
+    return true;
   }
 
   const decodedPath = decodeURIComponent(pathname);

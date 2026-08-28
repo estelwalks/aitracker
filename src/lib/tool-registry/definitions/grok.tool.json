@@ -72,6 +72,7 @@
     "usage": {
       "mode": "native",
       "reader": "grok-turn-v1",
+      "maxFileSizeBytes": 67108864,
       "paths": [
         {
           "targets": [

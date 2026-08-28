@@ -1,7 +1,8 @@
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { dirname, join } from "node:path";
 
-import { APP_DATA_DIR, APP_ID, ENV } from "../lib/app-config.ts";
+import { APP_DATA_DIR, APP_ID, APP_VERSION, ENV } from "../lib/app-config.ts";
 import { SystemClock } from "../platform/persistence/clock.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
 import type { SnapshotRefreshPort } from "../platform/snapshot-runtime/contracts.ts";
@@ -74,6 +75,7 @@ import { createNodeResumeExecutor } from "../modules/sessions/infrastructure/nod
 import { createUsageCollector } from "../modules/usage/infrastructure/usage-collector.server.ts";
 import { createUsageSnapshotRuntime } from "../modules/usage/infrastructure/usage-snapshot-runtime.server.ts";
 import type { UsageSnapshotRuntime } from "../modules/usage/contracts.ts";
+import type { LocalUsageEvent } from "../lib/local-usage/types.ts";
 import type { MonitoringRuntime } from "../modules/monitoring/index.ts";
 import { createMonitoringRuntime } from "../modules/monitoring/application/index.ts";
 
@@ -329,6 +331,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     },
   });
 
+  // P2-18: the usage collector's raw snapshot carries per-event skill-call
+  // evidence (`context.skills`) that the compacted persisted DTO drops (its
+  // `details` are always empty). Capture the evidence at collection time and
+  // hand it to the Skill collector so `lastUsedAt` works in production.
+  let latestSkillUsageEvents: LocalUsageEvent[] = [];
+
   const usageSnapshot = createUsageSnapshotRuntime({
     repository: databaseRuntime.features.usageSnapshots,
     now: () => clock.now().getTime(),
@@ -367,6 +375,35 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
           },
         },
       });
+      // P2-18: refresh the skill-usage evidence from this collection. A
+      // budget-exhausted/unhealthy result may carry a compacted previous
+      // snapshot (empty details) — keep the last good evidence in that case.
+      if (result.snapshot.details.length > 0) {
+        latestSkillUsageEvents = result.snapshot.details.filter(
+          (event) => (event.context?.skills?.length ?? 0) > 0,
+        );
+      }
+      // P2-3: budget exhaustion / cancellation must keep the last-known-good
+      // and mark the commit stale — never replace good data with an empty
+      // snapshot stamped as freshly collected.
+      if (result.budgetExhausted || result.cancelled) {
+        const previous = request.previous?.data;
+        if (previous == null) {
+          if (result.cancelled) throw new Error("usage:cancelled");
+          return {
+            data: result.snapshot,
+            sourceFingerprint: result.snapshot.generatedAt,
+            scannedItems: 0,
+          };
+        }
+        return {
+          data: previous,
+          sourceFingerprint: request.previous?.sourceFingerprint ?? undefined,
+          scannedItems: 0,
+          reusedItems: 0,
+          staleRefreshed: true,
+        };
+      }
       const refs = result.snapshot.details.map((event) => event.project);
       if (refs.length > 0) {
         await classificationService
@@ -422,6 +459,9 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     repository: databaseRuntime.features.skillSnapshots,
     now: () => clock.now().getTime(),
     requestRefresh: deferredPort(() => refreshPorts.skills),
+    // P2-18: skill-call usage evidence captured from the last real usage
+    // collection (the persisted usage DTO keeps no event details).
+    usageEventsProvider: () => latestSkillUsageEvents,
   });
 
   const emptyInstallationEnvelope: Envelope<
@@ -494,11 +534,19 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       const finishedAtMs = Date.now();
       const audit = databaseRuntime.features.aiExecutions;
       {
+        // P2-11: classify every execution by an explicit prompt-id prefix so
+        // security/dashboard calls never mix into the distillation ledger.
+        // Capability values stay within the persisted AICapability set
+        // ('distillation' | 'report' | 'security' | 'page-insight').
         const capability = request.prompt.id.startsWith("report")
           ? "report"
           : request.prompt.id.startsWith("insight.")
             ? "page-insight"
-            : "distillation";
+            : request.prompt.id.startsWith("security.")
+              ? "security"
+              : request.prompt.id.startsWith("dashboard.")
+                ? "page-insight"
+                : "distillation";
         const amountUsd = result.summary.cost.amountUsd;
         try {
           audit.recordWithBudget({
@@ -687,6 +735,29 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
         // persisted retentionDays preference is read for parity/logging only;
         // each table's own expires_at_ms drives the actual deletion.
         return applyDatabaseRetention(databaseRuntime.database, Date.now());
+      },
+    },
+    // S-03 (T-03-01/02): daily online backup + retention pruning. Backups live
+    // next to the database under `<data>/backups`; retention uses a fixed
+    // 30-day horizon for daily backups (pre-migration backups are kept longer
+    // by the backup subsystem itself).
+    backup: {
+      async apply({ signal }) {
+        if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        const { createOnlineBackup, pruneBackups } =
+          await import("../platform/database/backup.server.ts");
+        const host = databaseRuntime.database;
+        const backupsDirectory = join(dirname(host.path), "backups");
+        await createOnlineBackup({
+          host,
+          backupsDirectory,
+          appVersion: APP_VERSION,
+          sqliteVersion: host.runtimeVersions.sqliteVersion,
+          kind: "daily",
+        });
+        if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        pruneBackups({ backupsDirectory, keepDays: 30 });
+        return {};
       },
     },
     reports,

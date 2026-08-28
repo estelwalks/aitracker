@@ -234,6 +234,7 @@ export const BASELINE_SKILL_AGENTS: readonly BaselineSkillAgent[] = [
 ];
 
 const GENERIC_MAX = 8 * 1024 * 1024;
+const NATIVE_MAX = 64 * 1024 * 1024;
 const AIPY_MAX = 512 * 1024 * 1024;
 
 export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
@@ -275,7 +276,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX,
+    maxFileSizeBytes: GENERIC_MAX
   },
   {
     source: "gemini-cli",
@@ -285,7 +286,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX,
+    maxFileSizeBytes: NATIVE_MAX
   },
   {
     source: "kimi-code",
@@ -309,7 +310,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX,
+    maxFileSizeBytes: GENERIC_MAX
   },
   {
     source: "grok",
@@ -319,7 +320,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX,
+    maxFileSizeBytes: NATIVE_MAX
   },
   {
     source: "github-copilot",
@@ -411,7 +412,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: true,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX,
+    maxFileSizeBytes: GENERIC_MAX
   },
   {
     source: "openclaw",
@@ -429,7 +430,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX,
+    maxFileSizeBytes: NATIVE_MAX,
   },
   {
     source: "antigravity",
@@ -452,7 +453,7 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
     ],
     customMapping: false,
     hasSqliteQuery: false,
-    maxFileSizeBytes: GENERIC_MAX,
+    maxFileSizeBytes: NATIVE_MAX,
   },
 ];
 

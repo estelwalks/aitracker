@@ -23,15 +23,13 @@
 export const APP_NAME = "AITracker";
 export const APP_ID = "aitracker";
 
-/** Browser favicon from the AITracker brand package. [safe] */
-export const APP_FAVICON_URL =
-  "/brand-logos/ai-tracker/ai-tracker-icon-mono.png";
+/** Theme-aware browser favicons. [safe] */
+export const APP_FAVICON_DARK_URL = "/favicon-dark.svg";
+export const APP_FAVICON_LIGHT_URL = "/favicon.svg";
 
 /** Theme-aware product marks used inside the application UI. [safe] */
-export const APP_BRAND_ICON_DARK_URL =
-  "/brand-logos/ai-tracker/ai-tracker-icon-color-dark.png";
-export const APP_BRAND_ICON_LIGHT_URL =
-  "/brand-logos/ai-tracker/ai-tracker-icon-color-light.png";
+export const APP_BRAND_ICON_DARK_URL = APP_FAVICON_DARK_URL;
+export const APP_BRAND_ICON_LIGHT_URL = APP_FAVICON_LIGHT_URL;
 
 /** Product version shown in the UI; bump together with package.json `version`. */
 export const APP_VERSION = "1.0.0";

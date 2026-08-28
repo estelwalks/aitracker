@@ -110,6 +110,12 @@ export interface ReportContent {
   readonly title: string;
   readonly body: string;
   readonly generatedAt: string;
+  /**
+   * Set by the save path when the submitted body exceeded the durable
+   * storage boundary (60,000 chars, see `domain.REPORT_BODY_MAX`) and was
+   * therefore truncated. The renderer must surface this to the user (P1-10).
+   */
+  readonly truncated?: boolean;
 }
 
 export interface ReportStore {

@@ -40,6 +40,13 @@ export interface CostResult {
   /** Notional cache-read saving vs billing cached tokens at the input rate. */
   cacheSavingsUsdNano: bigint;
   breakdown: CostBreakdown;
+  /**
+   * True when the event carried cache-write tokens but the matched rate has no
+   * cache-write price: the known components (input/output/cacheRead/reasoning)
+   * are still billed at the real rate and only the cache-write component is
+   * unbilled (flagged, never silently estimated at a wrong rate).
+   */
+  unpricedCacheWrite: boolean;
 }
 
 /** nanoUSD for `tokens` at `rateNano` nanoUSD-per-million. Integer floor division. */
@@ -96,18 +103,22 @@ export interface TokenSemantics {
 }
 
 /**
- * Compute the nanoUSD cost for a matched rate. Returns `null` when the cost is
- * unknowable (cache-write tokens present but no cache-write price).
+ * Compute the nanoUSD cost for a matched rate.
+ *
+ * A missing cache-write price no longer discards the whole match (review
+ * finding P1-6): the known components are billed at the real rate and the
+ * cache-write component is unbilled and flagged via `unpricedCacheWrite`, so
+ * an event with cache-write tokens never silently falls back to the generic
+ * estimate while the real rate for input/output/cacheRead is known.
  */
 export function calculateCost(
   rate: RateRule,
   tokens: PricingTokens,
   semantics: TokenSemantics,
-): CostResult | null {
+): CostResult {
   const cacheWriteRate = rate.usdNanoPerMillion.cacheWrite; // string | null
-  if (tokens.cacheWrite > 0n && cacheWriteRate === null) {
-    return null;
-  }
+  const unpricedCacheWrite =
+    tokens.cacheWrite > 0n && cacheWriteRate === null;
 
   const tier = selectTierRates(rate, tokens);
   const input = perMillion(tokens.input, tier.input);
@@ -136,5 +147,6 @@ export function calculateCost(
     knownUsdNano: input + output + cacheRead + cacheWrite + reasoning,
     cacheSavingsUsdNano,
     breakdown: { input, output, cacheRead, cacheWrite, reasoning },
+    unpricedCacheWrite,
   };
 }

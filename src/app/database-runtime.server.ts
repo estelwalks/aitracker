@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { APP_DATA_DIR, APP_VERSION } from "../lib/app-config.ts";
 import { createSqlitePerformanceRolloutRepository } from "./sqlite-performance-rollout-repository.server.ts";
@@ -33,7 +33,9 @@ import {
 import { DatabaseError } from "../platform/database/contracts.ts";
 import { DatabaseHost } from "../platform/database/database-host.server.ts";
 import { createSqliteHttpCacheRepository } from "../platform/database/http-cache-repository.server.ts";
+import { createPreMigrationBackup } from "../platform/database/backup.server.ts";
 import { runMigrations } from "../platform/database/migration-runner.server.ts";
+import { LATEST_MIGRATION_VERSION } from "../platform/database/migrations/index.ts";
 import { createSqliteRuntimeFlagRepository } from "../platform/database/runtime-flag-repository.server.ts";
 import { createSqliteInstallationSnapshotRepository } from "../platform/discovery/sqlite-installation-snapshot-repository.server.ts";
 import { createSqliteWslSnapshotRepository } from "../platform/discovery/sqlite-wsl-snapshot-repository.server.ts";
@@ -54,14 +56,45 @@ export interface CreateDatabaseRuntimeOptions {
 export async function createDatabaseRuntime(
   options: CreateDatabaseRuntimeOptions,
 ) {
-  const host = DatabaseHost.open({
-    path:
-      options.databasePath ??
-      join(options.dataRoot, APP_DATA_DIR, "data", DATABASE_FILE),
-    versionsProvider:
-      options.versionsProvider ?? new NodeRuntimeVersionsProvider(),
-  });
+  const databasePath =
+    options.databasePath ??
+    join(options.dataRoot, APP_DATA_DIR, "data", DATABASE_FILE);
+  // Backups live next to the database under `<data>/backups`, mirroring the
+  // daily backup executor and the recovery planning path.
+  const backupsDirectory = join(dirname(databasePath), "backups");
+  let host: DatabaseHost;
   try {
+    host = DatabaseHost.open({
+      path: databasePath,
+      versionsProvider:
+        options.versionsProvider ?? new NodeRuntimeVersionsProvider(),
+    });
+  } catch (error) {
+    await recordRecoveryGuidance(error, backupsDirectory);
+    throw error;
+  }
+  try {
+    // Architecture §10.2: a mandatory pre-migration backup must exist before
+    // any schema migration is applied. Taken only when the database already
+    // exists and lags the bundled lineage (a fresh install has nothing to
+    // protect yet). A backup failure is recorded but does not block startup:
+    // the migration runner is transactional and forward-only.
+    try {
+      const versionRow = host.prepare("PRAGMA user_version").get();
+      const schemaVersion = Number(
+        versionRow === undefined ? 0 : (Object.values(versionRow)[0] ?? 0),
+      );
+      if (schemaVersion > 0 && schemaVersion < LATEST_MIGRATION_VERSION) {
+        await createPreMigrationBackup({
+          host,
+          backupsDirectory,
+          appVersion: APP_VERSION,
+          sqliteVersion: host.runtimeVersions.sqliteVersion,
+        });
+      }
+    } catch (backupError) {
+      console.error("[database] pre-migration backup failed", backupError);
+    }
     const migration = runMigrations({
       database: host,
       appVersion: APP_VERSION,
@@ -163,6 +196,7 @@ export async function createDatabaseRuntime(
     } catch {
       // Preserve the initialization error; there is no alternate store.
     }
+    await recordRecoveryGuidance(error, backupsDirectory);
     throw error;
   }
 }
@@ -177,4 +211,56 @@ function assertHealthy(database: DatabaseHost): void {
       retryable: false,
     });
   }
+}
+
+/**
+ * Corruption-recovery guidance (architecture §10.3).
+ *
+ * When opening or migrating the database fails with a corruption signal, the
+ * startup path records what recovery could offer instead of silently dying.
+ * `planRecovery` is read-only and needs only the backups directory (no open
+ * connection), so it can run even after `DatabaseHost.open` itself failed.
+ * Automatic restore is deliberately NOT performed here: `restoreFromBackup`
+ * requires explicit user confirmation, which the startup path cannot supply.
+ * The guidance is logged and attached to the thrown error so the desktop
+ * warmup boundary can surface a stable code to the user.
+ */
+async function recordRecoveryGuidance(
+  error: unknown,
+  backupsDirectory: string,
+): Promise<void> {
+  if (!isCorruptionFailure(error)) return;
+  try {
+    const { planRecovery } =
+      await import("../platform/database/recovery.server.ts");
+    const plan = await planRecovery({ backupsDirectory });
+    const guidance =
+      plan.kind === "backup-available"
+        ? "recovery.backup-available"
+        : plan.kind === "manifest-corrupt"
+          ? "recovery.manifest-corrupt"
+          : `recovery.no-backup:${plan.reason}`;
+    console.error(`[database] ${guidance}`);
+    if (error instanceof Error) {
+      (error as Error & { recoveryGuidance?: string }).recoveryGuidance =
+        guidance;
+    }
+  } catch {
+    // Guidance is best effort; the original startup failure is authoritative.
+  }
+}
+
+/** True when the error (or its sanitized cause chain) is a corruption signal. */
+function isCorruptionFailure(error: unknown): boolean {
+  let current = error;
+  for (
+    let depth = 0;
+    depth < 8 && current instanceof DatabaseError;
+    depth += 1
+  ) {
+    if (current.code === "corrupt" || current.code === "integrity-check-failed")
+      return true;
+    current = current.cause;
+  }
+  return false;
 }

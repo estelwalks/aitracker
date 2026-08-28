@@ -34,6 +34,8 @@ export interface UsageSnapshotRuntimeOptions {
     readonly sourceFingerprint?: string | null;
     readonly scannedItems?: number;
     readonly reusedItems?: number;
+    /** P2-3: data is the reused last-known-good; commit must stay stale. */
+    readonly staleRefreshed?: boolean;
   }>;
 }
 
@@ -63,17 +65,21 @@ export function createUsageSnapshotRuntime(
       if (result.cancelled) throw new Error("usage:cancelled");
       if (result.budgetExhausted && previous?.data != null) {
         // Budget exhausted: keep last-known-good without a failed commit.
+        // P2-3: mark the commit stale so the UI never reports a fresh
+        // collection that did not happen.
         return {
           data: previous.data,
           sourceFingerprint: previous.sourceFingerprint ?? undefined,
           scannedItems: 0,
           reusedItems: 0,
+          staleRefreshed: true,
         };
       }
       if (result.retainedPreviousSnapshot && previous?.data != null) {
         return {
           data: previous.data,
           sourceFingerprint: previous.sourceFingerprint ?? undefined,
+          staleRefreshed: true,
         };
       }
       return {

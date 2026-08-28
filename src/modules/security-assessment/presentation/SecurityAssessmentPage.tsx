@@ -8,8 +8,8 @@ import { useI18n } from "../../../lib/i18n/context";
 import {
   PAGE_INSIGHT_REFRESH_CHANNEL,
   PAGE_INSIGHT_REFRESH_EVENT,
+  refreshPageInsightSurface,
 } from "../../insights/index.ts";
-import { refreshPageInsightSurface } from "../../insights/page/server-fns.ts";
 import {
   getDesktopSecurityClient,
   type SecurityClient,

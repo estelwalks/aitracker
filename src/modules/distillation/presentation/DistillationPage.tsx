@@ -773,7 +773,9 @@ export function DistillationPage({
                           });
                         }}
                       />
-                      已选 {selectedCandidateIds.size} 条
+                      {t("distill.selectedCandidates", {
+                        count: selectedCandidateIds.size,
+                      })}
                     </label>
                     {selectedCandidateIds.size > 0 && (
                       <button
@@ -783,7 +785,7 @@ export function DistillationPage({
                           void removeCandidates([...selectedCandidateIds])
                         }
                       >
-                        删除选中
+                        {t("distill.deleteSelected")}
                       </button>
                     )}
                   </div>

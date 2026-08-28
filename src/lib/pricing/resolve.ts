@@ -269,12 +269,11 @@ function applyProfile(
       input.tokens,
       semantics,
     );
-    if (cost === null)
-      return { ...base, confidence: "unpriced", reason: "unpriced" };
     return {
       ...base,
       knownUsdNano: cost.knownUsdNano,
       cacheSavingsUsdNano: cost.cacheSavingsUsdNano,
+      ...(cost.unpricedCacheWrite ? { unpricedCacheWrite: true } : {}),
       costBreakdown: cost.breakdown,
     };
   }
@@ -392,17 +391,6 @@ export function resolvePrice(
     const rule = top;
     if (rule.rate) {
       const cost = calculateCost(rule.rate, input.tokens, semantics);
-      if (cost === null) {
-        // cache-write tokens present but no cache-write price -> fallback.
-        return applyFallback(
-          registry,
-          opts,
-          input,
-          normalized.normalizedModel,
-          rule.id,
-          "no-rate-match",
-        );
-      }
       return {
         rawModel: input.rawModel,
         normalizedModel: normalized.normalizedModel,
@@ -421,6 +409,9 @@ export function resolvePrice(
         packageVersion: registry.version,
         knownUsdNano: cost.knownUsdNano,
         cacheSavingsUsdNano: cost.cacheSavingsUsdNano,
+        ...(cost.unpricedCacheWrite
+          ? { unpricedCacheWrite: true }
+          : {}),
         costBreakdown: cost.breakdown,
         sourceLabel: rule.rate.source.label,
       };

@@ -283,6 +283,28 @@ export async function prepareReleaseDataReset(
   };
 }
 
+/**
+ * Persist the release-reset completion marker without touching any data.
+ *
+ * Used when the user declines the destructive reset at launch: the marker
+ * stops every later launch from re-prompting, while the existing data stays in
+ * place and startup proceeds through the normal database open/migration path.
+ * The marker content is identical to a completed reset, because from the
+ * reset's perspective the decision for this release is final either way.
+ */
+export async function markReleaseDataResetComplete(
+  options: ReleaseDataResetOptions,
+): Promise<void> {
+  if (
+    (options.platform !== "darwin" && options.platform !== "win32") ||
+    !options.isPackaged
+  ) {
+    return;
+  }
+  const { markerPath } = resolveResetPaths(options);
+  await writeMarkerAtomically(markerPath, options.appVersion);
+}
+
 /** Test-only-friendly reader that does not expose or accept a deletion path. */
 export async function readReleaseDataResetMarker(
   options: ReleaseDataResetOptions,

@@ -87,6 +87,12 @@ export interface ElectronMessages {
       quit: string;
       clearAndContinue: string;
     };
+    releaseDataReset: {
+      title: string;
+      body: string; // {dataDir}
+      confirm: string;
+      cancel: string;
+    };
   };
 }
 
@@ -143,6 +149,12 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
         quit: "退出",
         clearAndContinue: "清除数据并继续",
       },
+      releaseDataReset: {
+        title: "需要清除旧版本数据",
+        body: "检测到 {dataDir} 下的数据来自不兼容的旧版本。为正常启动，{appName} 需要删除这些数据（建议先备份）。是否继续？",
+        confirm: "清除数据并继续",
+        cancel: "保留数据",
+      },
     },
   },
   "en-US": {
@@ -197,6 +209,12 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
           "Detected an older data format (v{oldVer}) that is incompatible with the current version ({curVer}). Back up the ~/{dataDir}/ directory, then clear the data and restart.",
         quit: "Quit",
         clearAndContinue: "Clear data and continue",
+      },
+      releaseDataReset: {
+        title: "Clear old-version data",
+        body: "Data under {dataDir} comes from an incompatible older version. To start normally, {appName} needs to delete it (back it up first). Continue?",
+        confirm: "Clear data and continue",
+        cancel: "Keep data",
       },
     },
   },
@@ -253,6 +271,12 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
         quit: "終了",
         clearAndContinue: "データを消去して続行",
       },
+      releaseDataReset: {
+        title: "旧バージョンのデータを削除",
+        body: "{dataDir} のデータは互換性のない旧バージョンのものです。正常に起動するには {appName} がこのデータを削除する必要があります（先にバックアップしてください）。続行しますか？",
+        confirm: "データを削除して続行",
+        cancel: "データを保持",
+      },
     },
   },
   "ko-KR": {
@@ -307,6 +331,12 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
           "이전 버전의 데이터 형식(v{oldVer})을 감지했습니다. 현재 버전({curVer})과 호환되지 않습니다. ~/{dataDir}/ 디렉터리를 백업한 후 데이터를 삭제하고 다시 시작하세요.",
         quit: "종료",
         clearAndContinue: "데이터 삭제 후 계속",
+      },
+      releaseDataReset: {
+        title: "이전 버전 데이터 삭제",
+        body: "{dataDir}의 데이터가 호환되지 않는 이전 버전에서 온 것입니다. 정상적으로 시작하려면 {appName}에서 이 데이터를 삭제해야 합니다(먼저 백업하세요). 계속하시겠습니까?",
+        confirm: "데이터 삭제 후 계속",
+        cancel: "데이터 유지",
       },
     },
   },

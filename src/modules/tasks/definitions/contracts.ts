@@ -8,6 +8,7 @@ export const JOB_EXECUTOR_KEYS = [
   "generate-report-v1",
   "refresh-exchange-v1",
   "refresh-installation-v1",
+  "backup-daily-v1",
 ] as const;
 export const JOB_I18N_KEYS = [
   "tasks.usageRefresh",
@@ -16,6 +17,7 @@ export const JOB_I18N_KEYS = [
   "tasks.retentionApply",
   "tasks.reportsGenerate",
   "tasks.installationsRefresh",
+  "tasks.backupDaily",
 ] as const;
 
 export type JobExecutorKey = (typeof JOB_EXECUTOR_KEYS)[number];

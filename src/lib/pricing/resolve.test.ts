@@ -435,17 +435,27 @@ test("Doubao tiered: 200k input lands on open tier (parity with baseline at USD@
   assert.equal(res.rateRuleId, "volcengine/doubao-seed-2-0-code/2026-07-27");
 });
 
-test("cacheWrite tokens with null cacheWrite rate -> fallback estimate", () => {
-  // gpt-5.6-sol has cacheWrite: null; an event with cache-write tokens cannot
-  // be priced exactly -> the packaged fallback applies (estimated generic).
+test("cacheWrite tokens with null cacheWrite rate keep the real rate for known components (P1-6)", () => {
+  // gpt-5.6-sol has cacheWrite: null. The event still matches the real rate:
+  // input/output/cacheRead are billed at the official rate and only the
+  // cache-write component is unbilled (flagged), instead of falling back to
+  // the generic estimate.
   const res = resolvePrice(
     registry,
-    lookup("gpt-5.6-sol", { input: 1n, cacheWrite: 1_000_000n }),
+    lookup("gpt-5.6-sol", {
+      input: 1_000_000n,
+      output: 1_000_000n,
+      cacheWrite: 1_000_000n,
+    }),
     {},
   );
   assert.equal(res.confidence, "estimated");
-  assert.equal(res.reason, "no-rate-match");
-  assert.equal(res.fallbackProfileId, "api-generic-v1");
+  assert.equal(res.rateRuleId, "openai/gpt-5.6-sol/2026-07-27");
+  assert.equal(res.reason, "no-route-evidence");
+  assert.equal(res.fallbackProfileId, undefined);
+  // 1M input ($5) + 1M output ($30) at the official rates; cacheWrite unbilled.
+  assert.equal(res.knownUsdNano, 5_000_000_000n + 30_000_000_000n);
+  assert.equal(res.unpricedCacheWrite, true);
 });
 
 test("cacheWrite tokens with known cacheWrite rate (claude-opus-4) are billed", () => {

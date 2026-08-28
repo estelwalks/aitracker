@@ -36,7 +36,7 @@ import {
   restoreDesktopSecurityHistory,
 } from "../../../app/desktop-state-broker.server.ts";
 import { getCompositionRoot } from "../../../app/composition.server.ts";
-import { getActiveModelProfileForExecution } from "../../ai-orchestration/model-profile.server.ts";
+import { getActiveModelProfileForExecution } from "../../ai-orchestration/index.ts";
 
 /**
  * Browser-dev-only security backend.

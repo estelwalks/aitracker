@@ -58,9 +58,9 @@ import {
   getBrowserSecurityClient,
   getDesktopSecurityClient,
   isScanActive,
+  SECURITY_SCAN_STARTED_EVENT,
   type SecuritySkillVerdictReadModel,
 } from "../../security-assessment/index.ts";
-import { SECURITY_SCAN_STARTED_EVENT } from "../../security-assessment/events";
 
 export type SkillsPageProps = {
   initial: SkillWorkspaceSnapshot;

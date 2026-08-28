@@ -152,7 +152,7 @@ function officialEntry(name: string): ModelProfileView {
 }
 
 export function ModelProfilesSection() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [profiles, setProfiles] = useState<ModelProfileView[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -222,7 +222,9 @@ export function ModelProfilesSection() {
     }
     try {
       if (profile.id === activeId) return;
-      const result = await setActiveModelProfile({ data: { id: profile.id } });
+      const result = await setActiveModelProfile({
+        data: { id: profile.id, locale },
+      });
       if (!result.ok) {
         toast.error(
           result.errorCode

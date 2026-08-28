@@ -65,6 +65,17 @@ export const market = {
   },
   installed: "설치됨",
   domainAll: "전체",
+  domain: {
+    ai: "AI 및 자동화",
+    dev: "개발",
+    data: "데이터 및 분석",
+    ops: "운영",
+    security: "보안 및 테스트",
+    productivity: "생산성",
+    docs: "문서",
+    cloud: "클라우드 및 성능",
+    design: "디자인 및 프론트엔드",
+  },
   card: {
     detail: "상세",
     publisher: "게시자",

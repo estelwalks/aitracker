@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 /**
- * Block new hardcoded Chinese UI strings in routes/components (I18N-003-3).
+ * Block new hardcoded Chinese UI strings in routes/components/module
+ * presentation layers (I18N-003-3).
  *
- * Strategy: scan `src/routes/**` and `src/components/**` for CJK characters
+ * Strategy: scan `src/routes/**`, `src/components/**` and the presentation
+ * sub-directories of every feature module (e.g. `src/modules/feature/
+ * presentation`, `src/modules/feature/query/presentation`) for CJK characters
  * inside string literals / JSX text. False-positive guards:
  *   - comments (`//`, `/* * /`, `/** * /`) are stripped before scanning;
+ *   - backtick template literals (generated artifacts/document templates) are
+ *     treated as data — UI copy must use t("…") or JSX text;
  *   - whitelisted files (data-bearing modules with 不翻译 values) are skipped;
  *   - whitelisted patterns (tool names, product names, tech terms) pass;
  *   - Chinese inside an existing `t("…")` call is fine (it's the zh-CN
@@ -81,15 +86,20 @@ const DATA_VALUES = [
   "低危",
   "内置规则",
   "用户规则",
+  // 蒸馏产物包生成模板的兜底来源标签（生成的 Skill 文件内容,非 UI 文案）
+  "近期素材",
 ];
 
 const CJK_RE = /[一-鿿぀-ヿ가-힯]/;
 
 function stripComments(source) {
+  // Block-comment opener must not be preceded by a word character — a `/*`
+  // inside a string/template (e.g. generated content like `scripts/*`) is not
+  // a comment start, and matching it would swallow the rest of the file.
   return source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^A-Za-z0-9_])\/\*[\s\S]*?\*\//g, "$1")
     .replace(/^\s*\/\/.*$/gm, "")
-    .replace(/\/\/.*$/g, "");
+    .replace(/\/\/.*$/gm, "");
 }
 
 /** label 映射行:中文值作对象 key,值为字典 key(如 高危: "security.severity.high") */
@@ -109,7 +119,7 @@ function listFiles() {
   // approach relied on a Unix shell that is not available on Windows, where
   // Git Bash's find.exe mangles the `*.tsx` glob (MSYS argument conversion).
   const files = [];
-  for (const dir of ["src/routes", "src/components"]) {
+  for (const dir of ["src/routes", "src/components", "src/modules"]) {
     let entries;
     try {
       entries = readdirSync(join(root, dir), {
@@ -125,7 +135,16 @@ function listFiles() {
       }
     }
   }
-  return files.filter((f) => !f.endsWith(".test.ts"));
+  return files.filter((f) => {
+    if (f.endsWith(".test.ts") || f.endsWith(".test.tsx")) return false;
+    // Feature modules are only scanned at their presentation layer
+    // (`src/modules/*/presentation`, `src/modules/*/query/presentation`, …).
+    // Application/domain layers may legitimately hold CJK data values.
+    if (f.startsWith("src/modules/")) {
+      return f.split("/").includes("presentation");
+    }
+    return true;
+  });
 }
 
 const violations = [];
@@ -133,7 +152,22 @@ for (const file of listFiles()) {
   if (WHITELISTED_FILES.has(file)) continue;
   const source = stripComments(readFileSync(join(root, file), "utf8"));
   const lines = source.split("\n");
+  // Backtick template literals carry generated artifacts / document templates
+  // (e.g. distilled Skill pack files). Their CJK content is product data, not
+  // UI copy — UI strings must use t("…") or JSX text. Track a depth counter so
+  // multi-line (and nested) templates are skipped as data.
+  let templateDepth = 0;
   lines.forEach((line, index) => {
+    // Only unescaped backticks open/close a template literal (generated
+    // content embeds escaped `` \` `` markers).
+    const backticks = (line.match(/(?<!\\)`/g) ?? []).length;
+    const lineStartsInsideTemplate = templateDepth > 0;
+    const lineOpensTemplate = templateDepth === 0 && backticks > 0;
+    // Odd unescaped backtick count toggles one open/close boundary.
+    if (backticks % 2 === 1) {
+      templateDepth += templateDepth === 0 ? 1 : -1;
+    }
+    if (lineStartsInsideTemplate || lineOpensTemplate) return;
     if (!CJK_RE.test(line)) return;
     // 已迁移行:t("…") 或 t( 跨行调用、字典 key 引用不算违规。
     if (/\bt\(\s*["']/.test(line)) return;

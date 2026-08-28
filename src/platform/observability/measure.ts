@@ -92,6 +92,16 @@ export function measureReadModel<T>(
       durationMs,
     );
     options.metrics.increment(`${prefix}.${name}.dto_bytes`, dtoBytes);
+    // P2-14 minimal wiring: surface forbidden DTO field leaks as a counter
+    // metric instead of failing the read path — a legitimate future field
+    // name must never take down a query. Counter only fires when hits exist.
+    const forbidden = findForbiddenDtoFields(value as unknown);
+    if (forbidden.length > 0) {
+      options.metrics.increment(
+        `${prefix}.${name}.forbidden_fields`,
+        forbidden.length,
+      );
+    }
   }
   return { value, measurement: { name, durationMs, dtoBytes } };
 }

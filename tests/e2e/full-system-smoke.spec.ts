@@ -1,4 +1,9 @@
 import { expect, test, type Page } from "playwright/test";
+import { PUBLIC_TOOL_MANIFEST } from "../../src/lib/tool-registry/public-manifest.generated";
+
+// F6-S3: the sources page's tool total comes from the same registry the server
+// projects, so derive the expected count from the manifest, not a magic number.
+const TOOL_COUNT = PUBLIC_TOOL_MANIFEST.tools.length;
 
 const ROUTES = [
   "/",
@@ -39,7 +44,10 @@ async function assertRouteHealthy(page: Page, route: string) {
   await expect(page.getByRole("heading", { name: "页面加载失败" })).toHaveCount(
     0,
   );
-  await page.waitForTimeout(300);
+  // Deterministic settle barrier instead of a fixed sleep: the hydration i18n
+  // effect writes `?locale=` (suite convention), so late async page errors
+  // surface before the final assertion.
+  await page.waitForURL(/locale=/, { timeout: 30_000 }).catch(() => undefined);
   expect(pageErrors, `${route} 不应触发未捕获页面错误`).toEqual([]);
 }
 
@@ -66,7 +74,9 @@ test("数据来源页支持状态筛选和平台目录", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "重新扫描", exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByText("36", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText(String(TOOL_COUNT), { exact: true }).first(),
+  ).toBeVisible();
   await expect(page.getByTestId("source-card-claude-code")).toBeVisible();
   await expect(
     page.getByText("~/.claude/projects", { exact: true }),

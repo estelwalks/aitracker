@@ -74,6 +74,13 @@ export interface SnapshotRuntimeOptions<T> {
     readonly sourceFingerprint?: string | null;
     readonly scannedItems?: number;
     readonly reusedItems?: number;
+    /**
+     * True when `data` is the previous last-known-good reused unchanged
+     * (budget exhaustion / degraded health, P2-3): the commit must preserve
+     * the original `generatedAt` and report `stale` instead of re-stamping a
+     * fresh timestamp on data that was never actually collected.
+     */
+    readonly staleRefreshed?: boolean;
   }>;
   /** Optional task-runtime port; requestRefresh/invalidate delegate to it. */
   readonly requestRefresh?: SnapshotRefreshPort;

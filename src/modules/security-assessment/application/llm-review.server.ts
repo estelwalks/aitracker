@@ -17,7 +17,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import type { AIExecutorPort } from "../../ai-orchestration/index.ts";
-import { getActiveModelProfileForExecution } from "../../ai-orchestration/model-profile.server.ts";
+import { getActiveModelProfileForExecution } from "../../ai-orchestration/index.ts";
 import { APP_NAME } from "../../../lib/app-config.ts";
 import {
   SECURITY_LLM_DIMENSIONS,

@@ -55,6 +55,9 @@
     "security": "unsupported"
   },
   "modelObservation": {
-    "modelField": "model"
+    "modelField": "model",
+    "tokenSemantics": {
+      "reasoningIncludedInOutput": false
+    }
   }
 }

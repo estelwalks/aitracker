@@ -11,11 +11,11 @@ import type {
   MonitoringRecorder,
 } from "../../../monitoring/contracts.ts";
 import {
+  monthKeyOf,
   REPORT_TASK_IDS,
   reportDefinitionIdForSchedule,
   type ScheduleGranularity,
-} from "../../../reports/schedule.ts";
-import { monthKeyOf } from "../../../reports/period.ts";
+} from "../../../reports/index.ts";
 
 /**
  * Application ports used by task executors. The registry deliberately accepts
@@ -45,6 +45,10 @@ export interface ApplyRetentionPort {
   apply(request: { readonly signal: AbortSignal }): Promise<unknown>;
 }
 
+export interface ApplyBackupPort {
+  apply(request: { readonly signal: AbortSignal }): Promise<unknown>;
+}
+
 export interface ExecutorRegistryOptions {
   readonly usage?: RefreshUsagePort;
   readonly sessions?: RefreshSessionsPort;
@@ -52,6 +56,8 @@ export interface ExecutorRegistryOptions {
   readonly exchange?: RefreshExchangePort;
   readonly installation?: RefreshInstallationPort;
   readonly retention?: ApplyRetentionPort;
+  /** Daily online backup + retention pruning (S-03 backup subsystem). */
+  readonly backup?: ApplyBackupPort;
   readonly reports?: ReportsApplication;
   /** Reads the persisted report cadence so one task can produce daily or weekly reports. */
   readonly reportSchedule?: () => Promise<ScheduleGranularity | undefined>;
@@ -97,7 +103,11 @@ function bindUsage(usage: RefreshUsagePort | undefined): TaskExecutor {
 
 function bindPort(
   port:
-    RefreshSessionsPort | RefreshSkillsPort | ApplyRetentionPort | undefined,
+    | RefreshSessionsPort
+    | RefreshSkillsPort
+    | ApplyRetentionPort
+    | ApplyBackupPort
+    | undefined,
 ): TaskExecutor {
   return async (context) => {
     if (!port) return unavailable();
@@ -224,6 +234,7 @@ export function createExecutorRegistry(
       options.monitoring,
     ),
     "apply-retention-v1": bindPort(options.retention),
+    "backup-daily-v1": bindPort(options.backup),
     "generate-report-v1": bindReports(options.reports, options.reportSchedule),
   };
   const allowed = new Set<string>(JOB_EXECUTOR_KEYS);

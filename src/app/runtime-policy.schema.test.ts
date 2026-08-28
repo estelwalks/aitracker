@@ -23,8 +23,8 @@ test("runtime policy accepts the embedded source", () => {
     parsed.snapshotPolicies.exchangeRates.defaultRefreshMinutes,
     1440,
   );
-  assert.equal(parsed.snapshotPolicies.usage.freshForMinutes, 1);
-  assert.equal(parsed.snapshotPolicies.usage.defaultRefreshMinutes, 1);
+  assert.equal(parsed.snapshotPolicies.usage.freshForMinutes, 5);
+  assert.equal(parsed.snapshotPolicies.usage.defaultRefreshMinutes, 5);
   assert.equal(parsed.snapshotPolicies.sessions.freshForMinutes, 30);
   assert.equal(parsed.snapshotPolicies.skills.freshForMinutes, 60);
   assert.equal(parsed.snapshotPolicies.toolInstallations.freshForMinutes, 360);
@@ -39,14 +39,14 @@ test("runtime policy accepts the embedded source", () => {
     maxProjectClassifiers: 8,
   });
   assert.equal(parsed.rollout.defaultStage, "new-default");
-  assert.equal(parsed.scheduledJobs.tasks.length, 10);
+  assert.equal(parsed.scheduledJobs.tasks.length, 11);
   const usageRefresh = parsed.scheduledJobs.tasks.find(
     (task) => task.id === "usage.refresh",
   );
   assert.ok(usageRefresh);
   assert.deepEqual(usageRefresh.defaultSchedule, {
     kind: "interval",
-    minutes: 1,
+    minutes: 5,
   });
   assert.equal(usageRefresh.constraints.minMinutes, 1);
   assert.equal(usageRefresh.constraints.singleFlight, true);

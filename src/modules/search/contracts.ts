@@ -26,6 +26,12 @@ export interface SearchIndexSnapshot {
   readonly generatedAt: string;
   readonly stale: boolean;
   readonly documents: readonly SearchDocument[];
+  /**
+   * Number of input documents dropped by the privacy/shape guard when the
+   * snapshot was built. Absent on hand-built snapshots; `createSnapshot`
+   * always sets it (0 = nothing skipped).
+   */
+  readonly skipped?: number;
 }
 
 export interface SearchQuery {

@@ -27,6 +27,7 @@ export const memory = {
   originManual: "수동",
   sourceDistill: "증류",
   sourceUnknown: "알 수 없는 소스",
+  titleFallback: "메모리",
   insightTitle: "오늘의 인사이트",
   insightEmpty: "아직 메모리 항목이 없습니다: 증류를 실행하세요.",
   insightTotal: "메모리 {total}개: 프로필 {profile}개, 작업 메모리 {task}개.",

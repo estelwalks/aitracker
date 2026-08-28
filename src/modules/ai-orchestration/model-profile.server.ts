@@ -718,19 +718,11 @@ export interface ModelProfileRepository {
 /**
  * Resolve credentials only for the explicitly enabled profile.
  *
- * Keeping this lookup shared prevents model consumers from silently falling
- * back to the first configured profile when the user has not enabled one.
+ * Shared (browser-safe) lookup so model consumers never silently fall back to
+ * the first configured profile when the user has not enabled one. Defined in
+ * `model-profile.ts` and re-exported from the public module index.
  */
-export async function getActiveModelProfileForExecution(
-  repository: Pick<
-    ModelProfileRepository,
-    "getActiveView" | "getProfileForExecution"
-  >,
-): Promise<ModelProfile | undefined> {
-  const active = await repository.getActiveView();
-  if (!active) return undefined;
-  return repository.getProfileForExecution(active.id);
-}
+export { getActiveModelProfileForExecution } from "./model-profile.ts";
 
 /**
  * Provider adapter that resolves a saved profile at invoke time by

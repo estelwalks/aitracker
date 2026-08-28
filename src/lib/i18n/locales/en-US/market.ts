@@ -65,6 +65,17 @@ export const market = {
   },
   installed: "Installed",
   domainAll: "All",
+  domain: {
+    ai: "AI & Automation",
+    dev: "Development",
+    data: "Data & Analytics",
+    ops: "Operations",
+    security: "Security & Testing",
+    productivity: "Productivity",
+    docs: "Documentation",
+    cloud: "Cloud & Performance",
+    design: "Design & Frontend",
+  },
   card: {
     detail: "Details",
     publisher: "Publisher",
