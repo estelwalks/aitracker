@@ -80,6 +80,8 @@ export const reports = {
     enabled: "Scheduled generation enabled",
     disabled: "Scheduled generation disabled",
     syncFailed: "Failed to sync the schedule; local settings kept",
+    modelRequired:
+      "Enable a model in Settings → Models & AI before turning on scheduled reports.",
     editorNote:
       "Saved settings drive the background task scheduler; generation runs automatically while the app is running.",
     lastRun: "Last generation",

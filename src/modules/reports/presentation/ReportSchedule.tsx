@@ -7,15 +7,20 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
 
 import { useI18n } from "../../../lib/i18n/context";
+import { listModelProfiles } from "../../ai-orchestration/index.ts";
 import {
   ScheduleChip,
   ScheduleField,
   ScheduleSectionHeading,
   ScheduleToggle,
 } from "../../../shared/ui/schedule-config";
-import type { ReportScheduleStatus } from "../server-fns.ts";
+import {
+  REPORT_SCHEDULE_MODEL_REQUIRED_ERROR,
+  type ReportScheduleStatus,
+} from "../server-fns.ts";
 import type { ReportScheduleKind, ReportSchedulesConfig } from "../schedule.ts";
 import {
   compactDisabledScheduleKinds,
@@ -58,6 +63,33 @@ export function ReportSchedule({
     useReportSchedule();
   const [open, setOpen] = useState(false);
   const [savingKind, setSavingKind] = useState<ReportScheduleKind | null>(null);
+  const [modelAvailability, setModelAvailability] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [hasEnabledModel, setHasEnabledModel] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listModelProfiles()
+      .then(({ profiles, activeProfileId }) => {
+        if (cancelled) return;
+        const activeProfile = profiles.find(
+          (profile) => profile.id === activeProfileId,
+        );
+        setHasEnabledModel(
+          Boolean(activeProfile?.apiKeyMasked && activeProfile.model?.trim()),
+        );
+        setModelAvailability("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setHasEnabledModel(false);
+        setModelAvailability("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const saveSchedule = async (
     kind: ReportScheduleKind,
@@ -80,7 +112,11 @@ export function ReportSchedule({
     kind: ReportScheduleKind,
   ) => {
     if (!result.ok) {
-      toast.error(t("reports.schedule.syncFailed"));
+      toast.error(
+        result.errorCode === REPORT_SCHEDULE_MODEL_REQUIRED_ERROR
+          ? t("reports.schedule.modelRequired")
+          : t("reports.schedule.syncFailed"),
+      );
       return;
     }
     toast.success(
@@ -94,6 +130,35 @@ export function ReportSchedule({
       ),
     );
   };
+
+  const requestSave = (
+    kind: ReportScheduleKind,
+    next: ReportSchedulesConfig,
+  ) => {
+    const enabling = !schedule[kind].enabled && next[kind].enabled;
+    if (enabling && (modelAvailability !== "ready" || !hasEnabledModel)) {
+      toast.error(t("reports.schedule.modelRequired"));
+      return;
+    }
+    void saveSchedule(kind, next);
+  };
+
+  const modelRequiredNotice =
+    modelAvailability !== "loading" && !hasEnabledModel ? (
+      <div
+        role="status"
+        className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-warn/10 px-3 py-2 text-[11px] text-warn"
+      >
+        <span>{t("reports.schedule.modelRequired")}</span>
+        <Link
+          to="/settings"
+          search={{ section: "model" }}
+          className="font-semibold underline decoration-warn/40 underline-offset-2 hover:decoration-warn"
+        >
+          {t("settings.insight.configureModel")}
+        </Link>
+      </div>
+    ) : null;
 
   if (variant === "card") {
     const enabledCount = SCHEDULE_KINDS.filter(
@@ -180,6 +245,8 @@ export function ReportSchedule({
           </div>
         )}
 
+        {modelRequiredNotice}
+
         {open && loaded && !statusError && (
           <div className="mt-3 divide-y divide-border/40">
             {SCHEDULE_KINDS.map((kind) => (
@@ -189,7 +256,7 @@ export function ReportSchedule({
                 schedule={schedule}
                 status={status?.[kind]}
                 saving={savingKind !== null}
-                onSave={(next) => void saveSchedule(kind, next)}
+                onSave={(next) => requestSave(kind, next)}
               />
             ))}
           </div>
@@ -248,7 +315,7 @@ export function ReportSchedule({
             schedule={schedule}
             status={status?.[kind]}
             saving={savingKind !== null}
-            onSave={(next) => void saveSchedule(kind, next)}
+            onSave={(next) => requestSave(kind, next)}
             lastRun={lastRunText(t, format, status?.[kind])}
           />
         ))}
@@ -264,6 +331,7 @@ export function ReportSchedule({
       <ScheduleSectionHeading icon={<CalendarClock className="size-3.5" />}>
         {t("reports.schedule.title")}
       </ScheduleSectionHeading>
+      {modelRequiredNotice}
       {content}
     </div>
   );

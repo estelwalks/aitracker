@@ -67,8 +67,31 @@ async function isolatedRoot<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+async function enableTestModel(): Promise<void> {
+  const root = await getCompositionRoot();
+  const profile = await root.modelProfiles.upsert({
+    name: "report-schedule-test",
+    mode: "custom",
+    protocol: "openai",
+    endpoint: "https://example.com/v1",
+    model: "report-test-model",
+    apiKey: "sk-report-schedule-test",
+  });
+  assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
+}
+
+test("sync rejects enabled schedules without an enabled model", async () => {
+  await isolatedRoot(async () => {
+    assert.deepEqual(await syncReportScheduleToTaskPreference(base), {
+      ok: false,
+      errorCode: "errors.reports.modelRequired",
+    });
+  });
+});
+
 test("sync persists all three tasks independently and disables legacy", async () => {
   await isolatedRoot(async () => {
+    await enableTestModel();
     const result = await syncReportScheduleToTaskPreference(base);
     assert.deepEqual(result, { ok: true });
     const root = await getCompositionRoot();
@@ -141,6 +164,7 @@ test("composition startup migrates the legacy app preference before scheduling",
 
 test("independent switches do not overwrite another task preference", async () => {
   await isolatedRoot(async () => {
+    await enableTestModel();
     await syncReportScheduleToTaskPreference(base);
     await syncReportScheduleToTaskPreference({
       ...base,
@@ -158,6 +182,33 @@ test("independent switches do not overwrite another task preference", async () =
       (await root.preferences.get("reports.generate.monthly"))?.enabled,
       true,
     );
+  });
+});
+
+test("sync allows disabling existing schedules after the model is removed", async () => {
+  await isolatedRoot(async () => {
+    const root = await getCompositionRoot();
+    const profile = await root.modelProfiles.upsert({
+      name: "temporary-report-model",
+      mode: "custom",
+      protocol: "openai",
+      endpoint: "https://example.com/v1",
+      model: "report-test-model",
+      apiKey: "sk-report-schedule-test",
+    });
+    assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
+    assert.deepEqual(await syncReportScheduleToTaskPreference(base), {
+      ok: true,
+    });
+    assert.deepEqual(await root.modelProfiles.remove(profile.id), { ok: true });
+
+    const result = await syncReportScheduleToTaskPreference({
+      ...base,
+      daily: { ...base.daily, enabled: false },
+      weekly: { ...base.weekly, enabled: false },
+      monthly: { ...base.monthly, enabled: false },
+    });
+    assert.deepEqual(result, { ok: true });
   });
 });
 

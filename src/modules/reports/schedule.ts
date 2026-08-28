@@ -3,6 +3,7 @@ import type { PreferenceValue } from "../../lib/preferences/client.ts";
 
 export type ReportScheduleKind = "daily" | "weekly" | "monthly";
 export type ScheduleGranularity = ReportScheduleKind;
+export const REPORT_SCHEDULE_KINDS = ["daily", "weekly", "monthly"] as const;
 
 export interface DailyReportSchedule {
   readonly enabled: boolean;
