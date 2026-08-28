@@ -58,10 +58,6 @@ export interface ElectronMessages {
     quit: string;
   };
   dialog: {
-    closeHint: {
-      message: string;
-      ok: string;
-    };
     startupFailure: {
       title: string;
       message: string;
@@ -109,10 +105,6 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
       quit: "退出",
     },
     dialog: {
-      closeHint: {
-        message: "{appName} 将继续在菜单栏运行，可通过托盘图标重新打开",
-        ok: "知道了",
-      },
       startupFailure: {
         title: "启动失败",
         message: "{appName} 无法初始化本地运行环境。",
@@ -169,11 +161,6 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
       quit: "Quit",
     },
     dialog: {
-      closeHint: {
-        message:
-          "{appName} will keep running in the menu bar — reopen it from the tray icon",
-        ok: "Got it",
-      },
       startupFailure: {
         title: "Startup failed",
         message: "{appName} could not initialize its local runtime.",
@@ -230,11 +217,6 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
       quit: "終了",
     },
     dialog: {
-      closeHint: {
-        message:
-          "{appName} はメニューバーで実行を続けます。トレイアイコンから再度開けます",
-        ok: "了解しました",
-      },
       startupFailure: {
         title: "起動に失敗しました",
         message: "{appName} はローカル実行環境を初期化できませんでした。",
@@ -291,11 +273,6 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
       quit: "종료",
     },
     dialog: {
-      closeHint: {
-        message:
-          "{appName}는 메뉴 막대에서 계속 실행됩니다. 트레이 아이콘으로 다시 열 수 있습니다",
-        ok: "확인",
-      },
       startupFailure: {
         title: "시작 실패",
         message: "{appName}에서 로컬 런타임을 초기화할 수 없습니다.",
