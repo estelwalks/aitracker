@@ -5,6 +5,7 @@ import type { SnapshotEnvelope } from "../../../platform/snapshot-runtime/contra
 import type { SnapshotRepository } from "../../../platform/snapshot-runtime/contracts.ts";
 import type { SnapshotRefreshPort } from "../../../platform/snapshot-runtime/contracts.ts";
 import { RUNTIME_POLICY } from "../../../app/runtime-policy.generated.ts";
+import type { LocalUsageEvent } from "../../../lib/local-usage/types.ts";
 
 /**
  * P3-T3-02: Skill snapshot coordinator.
@@ -19,6 +20,14 @@ export interface SkillSnapshotRuntimeOptions {
   readonly repository: SnapshotRepository<SkillSnapshotData>;
   readonly requestRefresh?: SnapshotRefreshPort;
   readonly now?: () => number;
+  /**
+   * P2-18: production source of skill-call usage evidence. The usage snapshot
+   * runtime persists a compacted DTO whose `details` are always empty, so the
+   * composition captures the raw usage events (with `context.skills`) at
+   * collection time and injects them here. Without a provider, `lastUsedAt`
+   * stays null in production.
+   */
+  readonly usageEventsProvider?: () => LocalUsageEvent[];
   readonly collect?: (request: {
     readonly signal: AbortSignal;
     readonly previous: SnapshotEnvelope<SkillSnapshotData> | null;
@@ -67,8 +76,12 @@ export function createSkillSnapshotRuntime(
       const { scanLocalSkills } =
         await import("../../../lib/local-skills/scanner.server.ts");
       // P5-T5-03: the signal flows into the scanner (directory walks stop on
-      // cancellation).
-      const snapshot = await scanLocalSkills({ signal });
+      // cancellation). P2-18: structured skill-call evidence from the usage
+      // pipeline feeds each skill's lastUsedAt in production.
+      const snapshot = await scanLocalSkills({
+        signal,
+        usageEvents: options.usageEventsProvider?.() ?? [],
+      });
       const data = toSkillSnapshotData(snapshot);
       return {
         data,

@@ -377,7 +377,9 @@ async function loadTrackerEvidence(scope: InsightScope) {
     evidence.push(
       statusEvidence(
         "tracker.topProject",
-        topProject.key,
+        // P2-1: hydrated snapshots key projects by ref hash — the display-safe
+        // label (final segment) must be rendered instead of the hash.
+        topProject.label ?? topProject.key,
         observedAt,
         freshness,
       ),

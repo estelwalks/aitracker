@@ -1,6 +1,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
+import { LoadErrorPanel } from "../components/LoadErrorPanel";
 import { RoutePending } from "../components/RoutePending";
 import { SkillsPage } from "../modules/skill-catalog/presentation";
 import { getAgentUsageOverview } from "../modules/skill-catalog/usage-overview-query";
@@ -14,14 +15,20 @@ export const Route = createLazyFileRoute("/agents")({
   component: AgentsRoute,
 });
 
+type LoadState = "loading" | "ready" | "error";
+
 function AgentsRoute() {
   const { locale, ...initial } = Route.useLoaderData();
   const [usage, setUsage] = useState<AgentUsageOverviewReadModel | null>(null);
   const [securityVerdicts, setSecurityVerdicts] =
     useState<SecuritySkillVerdictReadModel | null>(null);
+  const [status, setStatus] = useState<LoadState>("loading");
+  // Bump to re-run the loader data fetch after a failure (retry button).
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setStatus("loading");
     void Promise.all([
       getAgentUsageOverview({ data: { locale } }),
       getSecuritySkillVerdicts(),
@@ -30,18 +37,32 @@ function AgentsRoute() {
         if (cancelled) return;
         setUsage(nextUsage);
         setSecurityVerdicts(nextVerdicts);
+        setStatus("ready");
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setStatus("error");
+      });
     return () => {
       cancelled = true;
     };
-  }, [locale]);
+  }, [locale, attempt]);
 
-  if (usage == null) return <RoutePending />;
+  // P2-16: a failed loader fetch must never leave a permanent skeleton.
+  if (status === "error") {
+    return (
+      <LoadErrorPanel
+        titleKey="skills.agentOverview.loadFailed"
+        descriptionKey="skills.agentOverview.loadFailedDesc"
+        onRetry={() => setAttempt((value) => value + 1)}
+      />
+    );
+  }
+
+  if (status === "loading") return <RoutePending />;
   return (
     <SkillsPage
       initial={initial}
-      usage={usage}
+      usage={usage ?? undefined}
       securityVerdicts={securityVerdicts ?? undefined}
       showWorkspace={false}
     />

@@ -8,21 +8,17 @@
 //   * `aitracker.v1.db`            — the database file name;
 //   * `secure_secrets`             — the ciphertext table name.
 //
-// SERVER-FUNCTION CHUNKS ARE EXCLUDED FROM THE FAILING ASSERTION, AND THE
-// EXCLUSION IS REPORTED IN FULL. The Nitro build emits TanStack Start
-// server-function chunks into the same `.output/public/assets` directory
-// (`*.server-*.js`, e.g. `legacy-usage-collector.server-XXXX.js`). Those
-// modules exist to be executed by the Node server handler, so the hard
-// assertion covers the remaining, genuinely browser-executed chunks
-// (fix-batch-4 conclusion).
-//
-// The exclusion is never silent: every excluded chunk is listed with the
-// markers it actually contains and with the emitted chunks that reference its
-// file name. An excluded chunk that both carries a marker and is referenced by
-// another emitted chunk is printed as a WARN, because a `__vite__mapDeps`
-// dependency table can put it into a lazy browser edge — that residual belongs
-// to the server-function split, not to this gate, and is registered for a
-// follow-up batch. `.output/server/**` is out of scope by design.
+// The Nitro build emits TanStack Start server-function chunks into the same
+// `.output/public/assets` directory (`*.server-*.js`, e.g.
+// `legacy-usage-collector.server-XXXX.js`). Those modules execute only in the
+// Node server handler, so they are not part of the browser-execution
+// assertion — but a server chunk that carries a forbidden marker means server
+// implementation (database paths, secret handling, schema) reached
+// `.output/public`, where the Electron local server previously served it
+// before capability-token validation. That is a hard FAIL, never a WARN.
+// Every server chunk present in public is listed with the markers it contains;
+// marker hits inside them fail the gate exactly like browser chunks.
+// `.output/server/**` is out of scope by design.
 //
 // Exit code 0 when clean; 1 when a marker is found or `.output/public` is
 // missing (run `npm run build` first).
@@ -100,7 +96,7 @@ export async function analyzeBundle(outputDir) {
     sources.set(file, await readFile(file, "utf8"));
   }
 
-  const excluded = [];
+  const serverChunks = [];
   const violations = [];
   let scanned = 0;
 
@@ -108,18 +104,19 @@ export async function analyzeBundle(outputDir) {
     const repoPath = toRepoPath(file);
     const source = sources.get(file) ?? "";
     if (SERVER_CHUNK_PATTERN.test(file)) {
-      const baseName = file.split(/[/\\]/).pop();
-      excluded.push({
+      // Server-function chunks are not browser-executed, so the hard assertion
+      // below does not apply to them — but a marker inside one still means
+      // server implementation landed in `.output/public/assets`, where the
+      // local server previously served it before token validation. That is a
+      // release-blocking FAIL (P1-1), not an informational WARN.
+      for (const hit of findMarkerHits(source)) {
+        violations.push({ file: repoPath, ...hit });
+      }
+      serverChunks.push({
         path: repoPath,
         markers: [
           ...new Set(findMarkerHits(source).map((hit) => hit.marker)),
         ].sort(),
-        referencedBy: files
-          .filter(
-            (other) =>
-              other !== file && (sources.get(other) ?? "").includes(baseName),
-          )
-          .map(toRepoPath),
       });
       continue;
     }
@@ -128,7 +125,7 @@ export async function analyzeBundle(outputDir) {
       violations.push({ file: repoPath, ...hit });
     }
   }
-  return { scanned, excluded, violations };
+  return { scanned, serverChunks, violations };
 }
 
 async function main() {
@@ -157,25 +154,16 @@ async function main() {
     return;
   }
 
-  const { scanned, excluded, violations } = await analyzeBundle(outputDir);
+  const { scanned, serverChunks, violations } = await analyzeBundle(outputDir);
   console.log(`verify-bundle-no-sqlite: ${toRepoPath(outputDir)}`);
   console.log(`  browser chunks asserted: ${scanned}`);
-  console.log(`  server-function chunks excluded: ${excluded.length}`);
-  const flagged = [];
-  for (const chunk of excluded) {
+  console.log(`  server chunks present in public: ${serverChunks.length}`);
+  for (const chunk of serverChunks) {
     const markers =
       chunk.markers.length > 0
         ? `markers: ${chunk.markers.join(", ")}`
         : "no markers";
     console.log(`    - ${chunk.path} (${markers})`);
-    if (chunk.markers.length > 0 && chunk.referencedBy.length > 0) {
-      flagged.push(chunk);
-    }
-  }
-  for (const chunk of flagged) {
-    console.log(
-      `  WARN: ${chunk.path} carries ${chunk.markers.join(", ")} and is referenced by ${chunk.referencedBy.join(", ")} — server-function split residual, registered for a follow-up batch`,
-    );
   }
 
   if (violations.length > 0) {

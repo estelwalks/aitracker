@@ -15,6 +15,7 @@
 | 版本 | 修改时间 | 修改内容 |
 | ---- | -------- | -------- |
 | v1.0 | 2026-08-28 | 依据深度审查报告 13×P1 / 18×P2 拆分修复任务，按数据正确性 → 安全合规 → 健壮性 → 门禁四批推进 |
+| v1.1 | 2026-08-28 | 产品决策：**不处理涉及合规/隐私口径的项**（P1-2、P1-3、P1-7、P2-4、P2-5、D4 及相关 P3）；其余全部修复。P1-9 仅修守卫误伤（不改隐私口径）；P1-5/6/8 属计价正确性照常修复 |
 
 ## 0. 背景与范围
 
@@ -29,6 +30,7 @@
 - 涉及数据库的改动必须走新增迁移（0002+），并同步放开 `scripts/verify-database-schema.mts` 的钉死断言（P2-14）。
 - 生成产物（`*.generated.ts`、`public-manifest.generated.ts`、`job-catalog.generated.ts`）由脚本再生成并提交，不手改。
 - 涉及合规口径的改动（P1-2 蒸馏、P1-7 Antigravity）需要产品确认后实施；未确认前不做行为变更，只做文档标注。
+- **2026-08-28 产品决策**：涉及合规/隐私口径的项（P1-2、P1-3、P1-7、P2-4、P2-5）**不处理**，相关 Epic/Story 标记 ❌ 跳过；其余任务按计划执行。
 - 新增测试必须包含复现原缺陷的负向用例（先红后绿）。
 
 ## 2. Epic 总览与依赖
@@ -85,14 +87,9 @@ flowchart LR
 - [ ] F1-T6: `calculate.ts:107-110` 改为返回"已知分量计价 + cacheWrite 降级"而非整体 null；`resolve.ts:393-405` 相应调整 fallback 组装。
 - [ ] F1-T7: 补 Codex+gpt-5.6-sol+cacheWrite fixture 断言（修复前 $5.25 → 修复后按真实费率 + cacheWrite 降级标记）；回归 `tool-registry-expected-diff`。
 
-### Story F1-S4：Antigravity 估算口径（P1-7，需产品确认，0.5 人日）
+### Story F1-S4：Antigravity 估算口径（P1-7）❌ 跳过（合规口径，产品决策不处理）
 
-**验收标准**：二选一落地——(a) 按架构文档 §4 将 Antigravity 降回 `usage: unsupported`（删除估算实现与事件产出）；或 (b) 文档修订为"允许估算并明示"，且 totals/bySource/byModel/daily 将 `measurement=estimated` 隔离为独立视图。**未获确认前不改行为，仅在工具 JSON 与文档标注 TODO**。
-
-#### Tasks
-
-- [ ] F1-T8: 向产品确认口径，记录决策到本清单修订记录。
-- [ ] F1-T9: 按决策实施（删除估算路径 或 隔离 estimated 汇总 + `aggregate.ts:131-137` 增加 measurement 维度），补负向测试。
+> 2026-08-28 决策：不处理。Antigravity 估算行为维持现状。
 
 ### Story F1-S5：totalTokens 口径统一（P1-8，1.5 人日）
 
@@ -154,15 +151,9 @@ flowchart LR
 
 ## 5. Epic F3 — 隐私与安全（约 4.5 人日）
 
-### Story F3-S1：蒸馏入站脱敏与显式同意（P1-2，需产品确认，1.5 人日）
+### Story F3-S1：蒸馏入站脱敏与显式同意（P1-2）❌ 跳过（合规口径，产品决策不处理）
 
-**验收标准**：发送给 LLM 的片段文本经过 `sanitizeDistilledText`（路径→~、凭据值→[REDACTED]）；会话标题/项目名按 `remoteEligible` 规则剔除或哈希；UI 在首次使用蒸馏时展示"将发送所选会话的原始片段"一次性确认；合规文档（CLEAN_ROOM / 需求规格）新增"蒸馏例外"章节。**产品未确认前只做文档标注**。
-
-#### Tasks
-
-- [ ] F3-T1: `domain.ts` 增加入站脱敏函数（复用 `sanitizeDistilledText`）；`application/index.ts` 组装 input 前应用。
-- [ ] F3-T2: `api.server.ts` 增加确认参数透传；前端 `DistillationPage` 增加确认 UI。
-- [ ] F3-T3: 更新 `docs/compliance/CLEAN_ROOM.md` 与需求文档；补脱敏负向测试。
+> 2026-08-28 决策：不处理。蒸馏行为维持现状，合规文档暂不修订。
 
 ### Story F3-S2：服务端实现分块移出公开目录 + 门禁 FAIL（P1-1，1 人日）
 
@@ -173,23 +164,19 @@ flowchart LR
 - [ ] F3-T4: 排查 server 分块进入 public 的构建配置（`vite.config.ts`/TanStack 分块策略），移出或加鉴权；与 `local-web-server.ts` 的静态服务路径协同。
 - [ ] F3-T5: `verify-bundle-no-sqlite.mjs` 断言改为失败；补充打包产物检查脚本（`grep -l "DatabaseSync" .output/public/assets/*.js` 应为空）。
 
-### Story F3-S3：dormant dashboard AI 洞察处置（P1-3，0.5 人日）
+### Story F3-S3：dormant dashboard AI 洞察处置（P1-3）❌ 跳过（隐私口径，产品决策不处理）
 
-**验收标准**：该服务删除，或改为：payload 只含匿名计数桶（count/tokens，不含项目名/路径）+ 走 `getCompositionRoot().aiExecutor`（进 `ai_executions` 审计与日预算）。
+> 2026-08-28 决策：不处理。dormant 服务维持现状（无页面接线）。
 
-#### Tasks
+### Story F3-S4：重置安全确认（P2-6，1 人日）
 
-- [ ] F3-T6: 删除 `ai-insight.server.ts` 的 LLM 路径（保留规则化 insight），或按验收标准改造；确认无页面引用后移除相关 server fn 注册。
+**验收标准**：`release-data-reset` 删除前弹出确认对话框（或改为移动到回收站/备份目录），marker 丢失时不再静默删除。
 
-### Story F3-S4：密钥与重置安全（P2-4/5/6，1.5 人日）
-
-**验收标准**：HMAC 密钥改为随机生成并持久化（复用 `file-secret-codec` 的 `secure/secrets.key` 0600 模式或同族实现），project 哈希不可由 dataRoot 重算；桌面端模型 API key 使用 safeStorage（Electron 可用时），composition 注释与实现一致；`release-data-reset` 删除前弹出确认对话框（或改为移动到回收站/备份目录），marker 丢失时不再静默删除。
+> 注：原 F3-S4 中的 P2-4（HMAC 密钥随机化）与 P2-5（safeStorage）属隐私/凭据口径，产品决策**不处理**，已移除。
 
 #### Tasks
 
-- [ ] F3-T7: `database-runtime.server.ts:75-77` 换随机密钥文件（首启生成、wx 防竞态、chmod 0600）；旧库兼容（密钥缺失时重哈希导致旧行失配的处理方案：迁移 0002 重建哈希列，或保留旧派生密钥读取、新随机密钥写入）。
-- [ ] F3-T8: composition 注入 safeStorage codec（Electron 侧），web 模式保留文件 codec；修正 `composition.server.ts:201-204` 注释。
-- [ ] F3-T9: `release-data-reset.ts` 增加确认交互（`dialog.showMessageBox`）与"移动至备份目录"替代 `rm -rf` 的选项；补测试。
+- [ ] F3-T7: `release-data-reset.ts` 增加确认交互（`dialog.showMessageBox`）与"移动至备份目录"替代 `rm -rf` 的选项；补测试。
 
 ## 6. Epic F4 — 数据平台与生命周期（约 5 人日）
 
@@ -331,10 +318,65 @@ flowchart LR
 
 | 项 | 说明 | 影响 |
 | --- | ---- | ---- |
-| P1-2 蒸馏口径 | 需产品确认"用户授权原始片段"与 CLEAN_ROOM 的边界 | 决定 F3-S1 行为变更 or 仅文档 |
-| P1-7 Antigravity | 估算 vs unsupported 二选一 | 决定 F1-S4 实现方向 |
-| P1-10 报告上限 | 60K vs 2MB 统一方向 | 影响 F2-S2 与 UI |
+| ~~P1-2 蒸馏口径~~ | ~~需产品确认~~ | ✅ 2026-08-28 决策：不处理 |
+| ~~P1-7 Antigravity~~ | ~~估算 vs unsupported 二选一~~ | ✅ 2026-08-28 决策：不处理 |
+| P1-10 报告上限 | 60K vs 2MB 统一方向 | 影响 F2-S2 与 UI（默认按 2MB 提升存储上限） |
 | Claude cache 语义 | `input_tokens` 是否含 cache-read 待真实日志核实 | 影响 F1-T4 的 Claude 声明 |
 | Codex archived_sessions | move 还是 copy 决定双计风险 | 影响 F1-S7 去重测试 |
-| HMAC 密钥迁移 | 旧库哈希列与新密钥的兼容方案 | 影响 F3-T7 与数据可见性 |
 | P2-8 写放大 | 增量代际提交改动面较大 | M1 可先调周期，增量作为可选 |
+
+## 12. 执行状态（2026-08-28 首轮实施完成）
+
+### 已完成（代码 + 测试 + tsc 全绿）
+
+| 编号 | 内容 | 验证 |
+| ---- | ---- | ---- |
+| P1-4 | Grok 去重键加 sessionId | scanner 15/15（含新增跨会话用例） |
+| P1-5 | `tokenSemantics.reasoningIncludedInOutput=false`（dsh/workbuddy/antigravity）+ schema | verify:tool-registry OK；DSH 1M reasoning → $0.87 端到端测试 |
+| P1-6 | cacheWrite 无价按分量计价 + `unpricedCacheWrite` 标记 | resolve/parity/dynamic 32/32；gpt-5.6-sol 保留官方费率 $35 |
+| P1-8 | totalTokens 统一含 reasoning（claude/codex/generic）+ golden 更新 | local-usage 78/78 |
+| P1-9 | search 守卫改形态匹配 + 单文档跳过 + 守卫收敛 | search 17/17 |
+| P1-10 | 报告 60K 截断显式提示（DB CHECK 无法改，采用截断信号 + toast） | reports 10/10 |
+| P1-11 | sessions unknown_models 批量查询 + SQL LIMIT/OFFSET | sessions 5/5 |
+| P1-12 | modules 展示层硬编码中文全量迁移 + 脚本覆盖 presentation | check:i18n 全绿（2641 keys） |
+| P1-13 | 工具趋势图本地日期键 + events 计数口径 | tool-overview 12/12 |
+| P2-1 | 分类索引二次哈希（path-shaped 过滤 + byProject label + insight label） | 投影/边界测试全过 |
+| P2-2/3 | warningCodes 清理 + stale-refreshed 状态（含 composition 预算耗尽路径） | coordinator 13/13 |
+| P2-6 | release-data-reset 确认对话框（默认取消）+ 取消写 marker | electron 30/30 |
+| P2-7 | 启动屏障排除 cancelled | scheduler 28/28 |
+| P2-8 | usage 刷新周期 1→5 分钟 | verify:runtime-policy / job-catalog OK |
+| P2-9/F6-S1 | 模块边界 9→0（blocking 通过）+ CI workflow（含 build 门禁说明） | verify:architecture:blocking 通过 |
+| P2-10 | 蒸馏配额原子预留（reserve） | distillation 35/35 |
+| P2-11 | 审计 capability 前缀白名单（security/page-insight） | tsc + composition 4/4 |
+| P2-13 | search 重建差集分块删除 | 1200 文档跨块测试 |
+| P2-14 | 迁移 0002 删除 8 张死表 + 放开钉死断言 | test:database 142/142 |
+| P2-15 | ja/ko 路由标题复用主字典（SSR/hydration 一致） | i18n 33/33 |
+| P2-16 | agents 错误面板+重试（LoadErrorPanel）/sources 轮询清理/insight 缓存 LRU | e2e 25/25 |
+| P2-17 | generic 跨文件去重 + workbuddy 缓存路径 + 采集内存上限（JSONL 256MB 预检、zstd 解压上限、4 工具 maxFileSizeBytes） | local-usage 78/78 |
+| P2-18 | lastUsedAt 采集时捕获注入 + market 协调器优先 | local-skills 33/33 |
+| P1-1 | 运行时 404 拒绝 server chunk + 门禁 FAIL（verify-bundle-no-sqlite） | electron 30/30；门禁 5/5 |
+| D2 | backup.daily 调度 + 迁移前备份 + 损坏恢复指引接线 | backup+recovery 29/29 |
+| F7-2 | 死代码清理：dashboard 3 组件、usage-readers.ts、findForbiddenDtoFields 接线 | tsc 全绿 |
+| F6-S3 | e2e 工具数动态化 + 固定等待替换 | e2e 25/25 |
+
+### 遗留（登记）
+
+| 项 | 说明 | 处置 |
+| ---- | ---- | ---- |
+| verify:bundle-no-sqlite 门禁红 | 当前构建产物含 server chunk（P1-1 故意拦截）。构建层修复（把 `*.server-*.js` 移出 `.output/public` 或改 token 保护路径，`_ssr/` 已有独立副本，public 中为冗余产物）为后续任务 F3-S2b；完成前 CI 的 verify:database 步骤预期红 | 待办 |
+| skill 协调器绕过 3 处 | skill-distribution 卸载、skill-catalog 安装/卸载/同步、安全扫描 monitor 需要真实安装路径/source.slug，持久化快照按隐私设计剥离路径，无法改用协调器——设计约束，维持现状 | 关闭（设计正确） |
+| P2-12 | 分类索引 getMany N+1、dashboard/工具聚合 O(rows×events)——性能优化无正确性影响 | 待办（低优先级） |
+| P1-2/P1-3/P1-7/P2-4/P2-5 | 合规/隐私口径，产品决策不处理 | 关闭 |
+| P3 小项 | sitemap BASE_URL TODO、minimumComparableEvents 注释对齐、docs/V3.0_TrustTools 本地快照清理、`$schema` 引用 | 待办（低优先级） |
+| `verify:sqlite-only` 8 处 localStorage 违规 | 审查时确认为 HEAD 既有状态（需确认是否本轮子代理引入——由下一轮验证时核对） | 待确认 |
+
+### 验证基线（本轮实施后）
+
+```bash
+npx tsc --noEmit                              # 0 错误
+npx tsc -p tsconfig.electron.json --noEmit    # 0 错误
+npm run test:unit                             # 全量单测
+npm run check:i18n                            # 全绿
+node scripts/verify-module-boundaries.mjs --blocking   # 通过
+npm run verify:job-catalog && npm run verify:runtime-policy   # OK
+```

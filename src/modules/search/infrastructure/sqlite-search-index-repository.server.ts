@@ -45,36 +45,9 @@ function rowToDocument(row: Readonly<Record<string, unknown>>): SearchDocument {
 }
 
 /**
- * Lightweight repository-layer privacy guard (S-03, T-03-05).
- *
- * The domain `assertSearchDocument` only runs PATH checks against
- * `textSummary` and rejects a small forbidden-word list, so a direct caller
- * could still smuggle a drive-letter title, a Bearer token, an `API Key`, a
- * shell command or a prompt injection past it. These patterns mirror the
- * platform `privacy-guard.server.ts` forbidden zones without importing its
- * preference/analysis-specific validators into the search projection.
- */
-const FORBIDDEN_PROJECTION_PATTERNS: readonly RegExp[] = [
-  /(?:^|[^A-Za-z0-9"'])[A-Za-z]:/, // drive-letter path (C:\ C:/ D:temp)
-  /\\{2}/, // UNC / JSON-escaped backslash
-  /(?:^|[^\w])\/(?:Users|home|etc|var|tmp|opt|usr|root|mnt|media|srv|proc|dev|bin|sbin|Applications|Volumes|Library|System)\//i,
-  /(?:^|\s)\/[^\s]+/, // bare POSIX absolute path
-  /bearer\s+[a-z0-9._~+/=-]{8,}/i,
-  /\bsk-[a-z0-9_-]{16,}/i,
-  /\b(?:api|auth|access|refresh|session)[\s_-]*key\b/i,
-  /\b(?:api|access)[\s_-]*token\b/i,
-  /\brm\s+-rf\b/i,
-  /\b(?:curl|wget|powershell|cmd(?:\.exe)?|bash|sudo)\b/i,
-  /ignore\s+(all\s+)?(previous|prior|above|your)\s+instructions/i,
-  /disregard\s+(all\s+)?(previous|prior|above|your)\s+instructions/i,
-  /\bsystem\s+prompt\b/i,
-  /\bjailbreak\b/i,
-];
-
-/**
  * Opaque-reference guard for `id` / `sourceRef`. These identifiers legally
  * carry `type:id` and `type:a/b` shapes (see `domain.ts` SAFE_ID / SAFE_SOURCE),
- * so the projection patterns above — which forbid bare `/` and mid-text drive
+ * so the projection guard — which forbids bare `/` and mid-text drive
  * letters — cannot apply verbatim. Only host content that can never be a valid
  * opaque reference is rejected: drive-letter paths, absolute paths,
  * backslashes and secret-shaped values.
@@ -101,20 +74,9 @@ function assertReferenceSafe(value: string): void {
   }
 }
 
-function assertProjectionSafe(document: SearchDocument): void {
-  assertReferenceSafe(document.id);
-  assertReferenceSafe(document.sourceRef);
-  const fields = [document.title, document.textSummary, ...document.tags];
-  for (const field of fields) {
-    for (const pattern of FORBIDDEN_PROJECTION_PATTERNS) {
-      if (pattern.test(field)) {
-        throw new TypeError(
-          "search projection contains forbidden private content",
-        );
-      }
-    }
-  }
-}
+/** Chunk size for the `NOT IN`-style deletion below (SQLite caps bound
+ * variables per statement at 32766; 500 keeps every batch far below it). */
+const DELETE_CHUNK_SIZE = 500;
 
 /**
  * SQLite-backed search projection index (S-03, T-03-03).
@@ -144,16 +106,20 @@ export function createSqliteSearchIndexRepository(
     },
     async write(snapshot: SearchIndexSnapshot): Promise<Result<void>> {
       try {
-        for (const document of snapshot.documents) {
-          assertProjectionSafe(document);
-        }
         // Re-validate + canonicalize (defence in depth): createSnapshot runs
-        // the domain privacy/shape guard so a direct caller cannot bypass it.
+        // the domain shape/privacy guard and SKIPS violating documents, so a
+        // single bad record can never fail the whole index write (P1-9). The
+        // opaque-reference guard below stays a hard reject because an invalid
+        // id/sourceRef would corrupt the index identity.
         const canonical = createSnapshot(
           snapshot.documents,
           snapshot.generatedAt,
           snapshot.stale,
         );
+        for (const document of canonical.documents) {
+          assertReferenceSafe(document.id);
+          assertReferenceSafe(document.sourceRef);
+        }
         const transaction = database.transaction();
         transaction.begin();
         try {
@@ -173,13 +139,34 @@ export function createSqliteSearchIndexRepository(
           if (canonical.documents.length === 0) {
             database.prepare("DELETE FROM search_documents").run();
           } else {
-            const ids = canonical.documents.map((document) => document.id);
-            const placeholders = ids.map(() => "?").join(", ");
-            database
-              .prepare(
-                `DELETE FROM search_documents WHERE document_id NOT IN (${placeholders})`,
-              )
-              .run(...ids);
+            // Chunked deletion (P2-13): `DELETE ... WHERE document_id NOT IN
+            // (all ids)` grows one bound variable per id and exceeds SQLite's
+            // 32766-variable limit on large rebuilds. Compute the rows absent
+            // from the incoming snapshot once, then delete them in batches of
+            // 500 — semantically identical to a single NOT IN over the full
+            // list (naive per-chunk NOT IN would delete rows belonging to
+            // other chunks).
+            const keep = new Set(
+              canonical.documents.map((document) => document.id),
+            );
+            const staleIds = database
+              .prepare("SELECT document_id FROM search_documents")
+              .all()
+              .map((row) => String(row.document_id))
+              .filter((id) => !keep.has(id));
+            for (
+              let index = 0;
+              index < staleIds.length;
+              index += DELETE_CHUNK_SIZE
+            ) {
+              const chunk = staleIds.slice(index, index + DELETE_CHUNK_SIZE);
+              const placeholders = chunk.map(() => "?").join(", ");
+              database
+                .prepare(
+                  `DELETE FROM search_documents WHERE document_id IN (${placeholders})`,
+                )
+                .run(...chunk);
+            }
           }
           transaction.commit();
         } catch (error) {

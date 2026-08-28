@@ -120,6 +120,16 @@ function fakeQuota(
         };
         return { ...state };
       },
+      async reserve(date: string) {
+        calls.push(`reserve:${date}`);
+        if (state.used >= state.limit) return false;
+        state = {
+          date,
+          used: state.date === date ? state.used + 1 : 1,
+          limit: state.limit,
+        };
+        return true;
+      },
     },
     calls,
     snapshot: () => ({ ...state }),
@@ -135,7 +145,7 @@ interface Harness {
 
 /**
  * Application harness with an optional quota port. `quota: false` omits the
- * port entirely (degrade-to-unlimited path); `failRead`/`failIncrement`
+ * port entirely (degrade-to-unlimited path); `failRead`/`failReserve`
  * simulate ledger I/O failures (which must never block distillation).
  */
 function setupApp(
@@ -144,7 +154,7 @@ function setupApp(
     used?: number;
     limit?: number;
     failRead?: boolean;
-    failIncrement?: boolean;
+    failReserve?: boolean;
   } = {},
 ): Harness {
   const {
@@ -152,7 +162,7 @@ function setupApp(
     used = 0,
     limit = DISTILL_DAILY_QUOTA,
     failRead = false,
-    failIncrement = false,
+    failReserve = false,
   } = options;
   const state = fakeQuota({ date: TODAY, used, limit });
   let invoked = false;
@@ -172,8 +182,11 @@ function setupApp(
               return state.port.read();
             },
             async increment(date: string) {
-              if (failIncrement) throw new Error("quota write exploded");
               return state.port.increment(date);
+            },
+            async reserve(date: string) {
+              if (failReserve) throw new Error("quota reserve exploded");
+              return state.port.reserve(date);
             },
           },
         }
@@ -259,6 +272,34 @@ test("sqlite quota store accumulates same-date increments and reports the row", 
   assert.equal(Math.max(0, current.limit - current.used), 18);
 });
 
+test("P2-10: sqlite quota store reserve() is atomic and never overshoots the limit", async (t) => {
+  const port = createSqliteDistillQuotaStore(database(t), {
+    limit: 3,
+    today: () => TODAY,
+  });
+  // A fresh day starts at 0 and the first reserve inserts the row.
+  assert.equal(await port.reserve(TODAY), true);
+  assert.equal(await port.reserve(TODAY), true);
+  assert.equal(await port.reserve(TODAY), true);
+  assert.deepEqual(await port.read(), { date: TODAY, used: 3, limit: 3 });
+  // The 4th reservation must be refused, not counted.
+  assert.equal(await port.reserve(TODAY), false);
+  assert.deepEqual(await port.read(), { date: TODAY, used: 3, limit: 3 });
+});
+
+test("P2-10: sqlite quota store reserve() counts a fresh date separately from a previous day", async (t) => {
+  const host = database(t);
+  const port = createSqliteDistillQuotaStore(host, {
+    limit: 3,
+    today: () => "2026-08-08",
+  });
+  assert.equal(await port.reserve("2026-08-07"), true);
+  assert.equal(await port.reserve("2026-08-07"), true);
+  // The new day resets the counter and has its own budget.
+  assert.equal(await port.reserve("2026-08-08"), true);
+  assert.deepEqual(await port.read(), { date: "2026-08-08", used: 1, limit: 3 });
+});
+
 test("sqlite quota store resets the counter when the date changes", async (t) => {
   const port = createSqliteDistillQuotaStore(database(t), {
     limit: 20,
@@ -279,16 +320,24 @@ test("a real-model request with exhausted quota is rejected before the model run
     "errors.distillation.quotaExceeded",
   );
   assert.equal(harness.aiInvoked(), false);
-  assert.equal(harness.calls.filter((call) => call === "read").length, 1);
+  assert.ok(
+    harness.calls.includes(`reserve:${TODAY}`),
+    `expected an atomic reserve for ${TODAY}, got ${JSON.stringify(harness.calls)}`,
+  );
 });
 
-test("a real-model run under the limit records one usage for today", async () => {
+test("a real-model run under the limit reserves one usage for today", async () => {
   const harness = setupApp({ used: 3, limit: 20 });
   const result = await harness.app.start(request());
   assert.equal(result.ok, true);
   assert.ok(
-    harness.calls.includes(`increment:${TODAY}`),
-    `expected an increment for ${TODAY}, got ${JSON.stringify(harness.calls)}`,
+    harness.calls.includes(`reserve:${TODAY}`),
+    `expected an atomic reserve for ${TODAY}, got ${JSON.stringify(harness.calls)}`,
+  );
+  assert.equal(
+    harness.calls.some((call) => call.startsWith("increment:")),
+    false,
+    "the reservation already counted the call; no second increment",
   );
   assert.equal(harness.snapshot().used, 4);
 });
@@ -317,8 +366,8 @@ test("a failing quota read degrades to unlimited instead of blocking the run", a
   assert.equal(harness.aiInvoked(), true);
 });
 
-test("a failing quota increment never fails the completed run", async () => {
-  const harness = setupApp({ failIncrement: true });
+test("a failing quota reserve never blocks the completed run", async () => {
+  const harness = setupApp({ failReserve: true });
   const result = await harness.app.start(request());
   assert.equal(result.ok, true);
   assert.equal(harness.aiInvoked(), true);

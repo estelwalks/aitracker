@@ -10,6 +10,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  nativeTheme,
   Notification,
   powerMonitor,
   safeStorage,
@@ -73,10 +74,18 @@ import {
   TRAY_TITLE_PREF_KEY,
   updateTrayTitleIfChanged,
 } from "./tray-title.js";
-import { findTrayIconPath, TRAY_ICON_DATA_URL } from "./tray-icon.js";
+import {
+  findAppIconPath,
+  findTrayIconPath,
+  type NativeIconAppearance,
+} from "./tray-icon.js";
 import {
   completeReleaseDataResetAfterWarmup,
+  markReleaseDataResetComplete,
   prepareReleaseDataReset,
+  readReleaseDataResetMarker,
+  type ReleaseDataReset,
+  type ReleaseDataResetOptions,
 } from "./release-data-reset.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
@@ -116,6 +125,35 @@ let currentPreferences: LocalePreferences = {
   displayCurrency: "USD",
   currencySource: "fallback",
 };
+
+function nativeIconAppearance(): NativeIconAppearance {
+  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+}
+
+function nativeIconLocationInput() {
+  return {
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appPath: app.getAppPath(),
+  } as const;
+}
+
+function currentAppIconPath(): string | null {
+  return findAppIconPath(nativeIconLocationInput(), nativeIconAppearance());
+}
+
+/** Apply the OS appearance variant to runtime Dock and taskbar surfaces. */
+function applyNativeAppIcon(): void {
+  const iconPath = currentAppIconPath();
+  if (!iconPath) return;
+  const icon = nativeImage.createFromPath(iconPath);
+  if (icon.isEmpty()) return;
+
+  if (process.platform === "darwin") app.dock?.setIcon(icon);
+  for (const window of [mainWindow, widgetWindow]) {
+    if (window && !window.isDestroyed()) window.setIcon(icon);
+  }
+}
 
 async function hasCloseHintBeenShown(): Promise<boolean> {
   if (!desktopStateBroker) throw new Error("Desktop state broker unavailable");
@@ -262,6 +300,7 @@ async function showWidgetWindow(
     alwaysOnTop: true,
     skipTaskbar: true,
     show: false,
+    icon: currentAppIconPath() ?? undefined,
     title: APP_NAME,
     webPreferences: {
       preload: join(currentDirectory, "preload.cjs"),
@@ -797,18 +836,18 @@ async function applyPreferences(prefs: Record<string, unknown>): Promise<void> {
  * auto-launch checkbox state stay in sync.
  */
 function rebuildTray(): void {
-  const trayIconPath = findTrayIconPath({
-    isPackaged: app.isPackaged,
-    resourcesPath: process.resourcesPath,
-    appPath: app.getAppPath(),
-  });
-  // Both platforms use the full-color supplied logo. Retain a PNG fallback if
-  // the native resource is unavailable or corrupt.
-  let trayIcon = trayIconPath
-    ? nativeImage.createFromPath(trayIconPath)
-    : nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
+  const trayIconPath = findTrayIconPath(
+    nativeIconLocationInput(),
+    nativeIconAppearance(),
+  );
+  if (!trayIconPath) {
+    throw new Error(
+      "Native tray icons are missing; run npm run generate:native-icons",
+    );
+  }
+  const trayIcon = nativeImage.createFromPath(trayIconPath);
   if (trayIcon.isEmpty()) {
-    trayIcon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
+    throw new Error(`Native tray icon is invalid: ${trayIconPath}`);
   }
 
   const autoLaunch = getAutoLaunchState();
@@ -865,6 +904,7 @@ async function createMainWindow(): Promise<void> {
   const mainWindowSize = resolveMainWindowSize();
   mainWindow = new BrowserWindow({
     ...mainWindowSize,
+    icon: currentAppIconPath() ?? undefined,
     // 无边框 + 自绘标题栏：隐藏系统原生标题栏与窗口按钮，由渲染进程
     // 提供与主题一致的深色标题栏（macOS 保留原生红绿灯按钮）。
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
@@ -956,6 +996,60 @@ async function resolveApplicationOrigin(): Promise<string> {
   return localWebServer.origin;
 }
 
+/**
+ * The initial-schema-v1 release replaces the previous migration lineage, so a
+ * packaged first launch would delete `~/.aitracker` without asking (review
+ * finding P2-6). Ask for explicit consent whenever the reset would actually
+ * run. Declining persists the completion marker without removing any data, so
+ * later launches do not re-prompt and startup continues through the normal
+ * database open/migration path — if the old database is incompatible the
+ * renderer surfaces the startup-failure diagnostic instead.
+ */
+async function prepareReleaseDataResetWithConfirmation(
+  options: ReleaseDataResetOptions,
+): Promise<ReleaseDataReset> {
+  const resetWillRun =
+    (options.platform === "darwin" || options.platform === "win32") &&
+    options.isPackaged &&
+    (await readReleaseDataResetMarker(options)) === null;
+  if (!resetWillRun) {
+    return prepareReleaseDataReset(options);
+  }
+  if (await confirmReleaseDataReset()) {
+    return prepareReleaseDataReset(options);
+  }
+  try {
+    await markReleaseDataResetComplete(options);
+  } catch (error) {
+    // The marker only suppresses the prompt on future launches; failing to
+    // write it must not block startup, and data has not been touched.
+    console.warn(
+      "AITracker release-data-reset completion marker write failed",
+      error,
+    );
+  }
+  return {
+    status: "already-completed",
+    markInitializationComplete: async () => undefined,
+  };
+}
+
+async function confirmReleaseDataReset(): Promise<boolean> {
+  const resetMessages =
+    electronMessages[currentPreferences.locale].dialog.releaseDataReset;
+  const { response } = await dialog.showMessageBox(mainWindow!, {
+    type: "warning",
+    message: resetMessages.title,
+    detail: resetMessages.body,
+    buttons: [resetMessages.confirm, resetMessages.cancel],
+    // Safe default: Enter/Escape decline the destructive reset.
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true,
+  });
+  return response === 0;
+}
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -1016,6 +1110,11 @@ if (!hasSingleInstanceLock) {
     .whenReady()
     .then(async () => {
       if (process.platform === "darwin") app.dock?.show();
+      applyNativeAppIcon();
+      nativeTheme.on("updated", () => {
+        applyNativeAppIcon();
+        if (tray) rebuildTray();
+      });
       app.on("activate", () => {
         if (mainWindow && !mainWindow.isDestroyed()) showMainWindow();
         else void createMainWindow();
@@ -1066,7 +1165,7 @@ if (!hasSingleInstanceLock) {
       // This window does not need the application origin and therefore gives
       // feedback even on a truly cold start.
       await createMainWindow();
-      const releaseDataReset = await prepareReleaseDataReset({
+      const releaseDataReset = await prepareReleaseDataResetWithConfirmation({
         platform: process.platform,
         isPackaged: app.isPackaged,
         appVersion: app.getVersion(),

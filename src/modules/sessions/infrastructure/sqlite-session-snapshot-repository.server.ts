@@ -8,6 +8,7 @@ import {
   msToIso,
 } from "../../../platform/database/snapshot-generation.server.ts";
 import type { SnapshotRepository } from "../../../platform/snapshot-runtime/contracts.ts";
+import type { SnapshotHydrateResult } from "../../../platform/snapshot-runtime/contracts.ts";
 import type { SessionStatus } from "../contracts.ts";
 import type { SessionSnapshotData } from "./session-snapshot.contracts.ts";
 
@@ -18,6 +19,25 @@ export interface SqliteSessionSnapshotRepositoryOptions {
   readonly createId?: () => string;
 }
 
+/** Optional paging for a direct snapshot read (P1-11). When omitted the full
+ * snapshot is loaded — the coordinator's default and the only mode the
+ * in-memory snapshot runtime uses. */
+export interface SessionSnapshotPage {
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
+/**
+ * Concrete repository surface: `load` additionally accepts optional SQL-level
+ * paging, which the generic `SnapshotRepository` contract does not declare.
+ */
+export interface SqliteSessionSnapshotRepository
+  extends SnapshotRepository<SessionSnapshotData> {
+  load(
+    page?: SessionSnapshotPage,
+  ): Promise<SnapshotHydrateResult<SessionSnapshotData>>;
+}
+
 const n = (value: unknown): number => Number(value ?? 0);
 const b = (value: unknown): boolean => Number(value) === 1;
 const micros = (value: number): number =>
@@ -25,19 +45,53 @@ const micros = (value: number): number =>
 
 export function createSqliteSessionSnapshotRepository(
   options: SqliteSessionSnapshotRepositoryOptions,
-): SnapshotRepository<SessionSnapshotData> {
+): SqliteSessionSnapshotRepository {
   const { database } = options;
   return {
-    async load() {
+    async load(page?: SessionSnapshotPage) {
       return loadGeneration({
         database,
         domain: "sessions",
         readData(snapshotId, generation) {
-          const sessions = database
+          // P1-11: read every unknown-model row for this snapshot in ONE
+          // batch query, then group in memory — replaces the per-session
+          // `session_unknown_models` lookup (N+1).
+          const unknownModelsBySession = new Map<string, string[]>();
+          for (const row of database
             .prepare(
-              "SELECT * FROM sessions WHERE snapshot_id=? ORDER BY started_at_ms DESC, source_id, session_id",
+              "SELECT source_id, session_id, model_id FROM session_unknown_models WHERE snapshot_id=? ORDER BY model_id",
             )
-            .all(snapshotId)
+            .all(snapshotId)) {
+            const key = `${String(row.source_id)}\u0000${String(row.session_id)}`;
+            const models = unknownModelsBySession.get(key);
+            if (models) models.push(String(row.model_id));
+            else unknownModelsBySession.set(key, [String(row.model_id)]);
+          }
+          // Optional SQL-level paging (default: full snapshot, compatible
+          // with every existing caller). SQLite accepts `LIMIT -1` for
+          // "all rows" when only an offset is supplied.
+          const limit =
+            page?.limit == null
+              ? page?.offset == null
+                ? null
+                : -1
+              : Math.max(1, Math.trunc(page.limit));
+          const offset =
+            page?.offset == null ? null : Math.max(0, Math.trunc(page.offset));
+          let sessionsSql =
+            "SELECT * FROM sessions WHERE snapshot_id=? ORDER BY started_at_ms DESC, source_id, session_id";
+          const sessionsParams: (number | string)[] = [snapshotId];
+          if (limit != null) {
+            sessionsSql += " LIMIT ?";
+            sessionsParams.push(limit);
+            if (offset != null) {
+              sessionsSql += " OFFSET ?";
+              sessionsParams.push(offset);
+            }
+          }
+          const sessions = database
+            .prepare(sessionsSql)
+            .all(...sessionsParams)
             .map((row) => ({
               sessionId: String(row.session_id),
               source: String(row.source_id),
@@ -65,16 +119,10 @@ export function createSqliteSessionSnapshotRepository(
                 pricedEvents: n(row.priced_events),
                 estimatedEvents: n(row.estimated_events),
                 unknownEvents: n(row.unknown_events),
-                unknownModels: database
-                  .prepare(
-                    "SELECT model_id FROM session_unknown_models WHERE snapshot_id=? AND source_id=? AND session_id=? ORDER BY model_id",
-                  )
-                  .all(
-                    snapshotId,
-                    String(row.source_id),
-                    String(row.session_id),
-                  )
-                  .map((item) => String(item.model_id)),
+                unknownModels:
+                  unknownModelsBySession.get(
+                    `${String(row.source_id)}\u0000${String(row.session_id)}`,
+                  ) ?? [],
                 complete: b(row.cost_complete),
               },
               subagentCalls: n(row.subagent_calls),

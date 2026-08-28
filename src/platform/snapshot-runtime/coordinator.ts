@@ -89,6 +89,10 @@ export function createSnapshotCoordinator<T>(
 
   const statusOf = (envelope: SnapshotEnvelope<T>): SnapshotStatus => {
     if (invalidated && envelope.data != null) return "stale";
+    // P2-3: a stale-refreshed commit carries an explicit stale status that age
+    // must not re-promote to fresh (the data was never recollected).
+    if (envelope.status === "stale") return "stale";
+    if (envelope.status === "failed") return "failed";
     if (envelope.status === "empty" || envelope.data == null) return "empty";
     if (envelope.generatedAt == null) return "stale";
     const age = Math.max(0, now() - Date.parse(envelope.generatedAt));
@@ -139,19 +143,27 @@ export function createSnapshotCoordinator<T>(
     data: T,
     extra: Partial<SnapshotEnvelope<T>> = {},
     signal?: AbortSignal,
+    staleRefreshed = false,
   ): Promise<SnapshotEnvelope<T>> => {
     const nowIso = new Date(now()).toISOString();
+    // P2-3: a reused last-known-good must keep its original generatedAt (and
+    // read as stale), otherwise the UI claims a fresh collection that never
+    // happened.
+    const generatedAt = staleRefreshed ? (current.generatedAt ?? nowIso) : nowIso;
     const next: SnapshotEnvelope<T> = {
       schemaVersion: 1,
       revision: createRevision(),
-      generatedAt: nowIso,
+      generatedAt,
       sourceFingerprint: null,
-      status: "fresh",
+      // P2-2: a successful commit clears accumulated warnings; stale-refreshed
+      // commits surface a single explicit code instead.
+      status: staleRefreshed ? "stale" : "fresh",
       data,
       diagnostics: {
         ...emptyDiagnostics(),
         lastAttemptAt: nowIso,
-        lastSuccessAt: nowIso,
+        lastSuccessAt: staleRefreshed ? current.diagnostics.lastSuccessAt : nowIso,
+        warningCodes: staleRefreshed ? ["stale-refreshed"] : [],
       },
       ...extra,
     };
@@ -177,9 +189,12 @@ export function createSnapshotCoordinator<T>(
         {
           sourceFingerprint: collected.sourceFingerprint ?? null,
           diagnostics: {
-            ...current.diagnostics,
             lastAttemptAt: new Date(startedAt).toISOString(),
-            lastSuccessAt: new Date(now()).toISOString(),
+            // P2-3: a stale-refreshed commit keeps the original lastSuccessAt.
+            lastSuccessAt:
+              collected.staleRefreshed === true
+                ? current.diagnostics.lastSuccessAt
+                : new Date(now()).toISOString(),
             durationMs: now() - startedAt,
             ...(collected.scannedItems !== undefined
               ? { scannedItems: collected.scannedItems }
@@ -187,10 +202,15 @@ export function createSnapshotCoordinator<T>(
             ...(collected.reusedItems !== undefined
               ? { reusedItems: collected.reusedItems }
               : {}),
-            warningCodes: current.diagnostics.warningCodes,
+            // P2-2: successful commits clear accumulated warning codes; a
+            // stale-refreshed commit surfaces exactly one explicit code.
+            warningCodes: collected.staleRefreshed
+              ? ["stale-refreshed"]
+              : [],
           },
         },
         signal,
+        collected.staleRefreshed === true,
       );
       void envelope;
       return view(current);

@@ -68,6 +68,44 @@ const insightReads = new Map<string, Promise<InsightEnvelope>>();
 const insightEnhancements = new Map<string, Promise<InsightEnvelope>>();
 let insightCacheVersion = 0;
 
+/** Per-surface cap for the module-level insight caches (P2-16: bounded memory). */
+const SURFACE_CACHE_LIMIT = 50;
+
+function surfaceOfKey(key: string): string {
+  const separator = key.indexOf("|");
+  return separator === -1 ? key : key.slice(0, separator);
+}
+
+/**
+ * Insert into a module-level Map with a simple per-surface LRU cap: once a
+ * surface exceeds SURFACE_CACHE_LIMIT entries, its oldest (first-inserted)
+ * entries are evicted. Reads (`touchKey`) move entries to the newest end.
+ */
+function boundedSet<V>(map: Map<string, V>, key: string, value: V): void {
+  map.set(key, value);
+  const surface = surfaceOfKey(key);
+  let excess = 0;
+  for (const existingKey of map.keys()) {
+    if (surfaceOfKey(existingKey) === surface) excess += 1;
+  }
+  excess -= SURFACE_CACHE_LIMIT;
+  if (excess <= 0) return;
+  for (const existingKey of map.keys()) {
+    if (excess <= 0) break;
+    if (surfaceOfKey(existingKey) !== surface) continue;
+    map.delete(existingKey);
+    excess -= 1;
+  }
+}
+
+/** Move an existing entry to the most-recently-used (end) position. */
+function touchKey<V>(map: Map<string, V>, key: string): void {
+  const value = map.get(key);
+  if (value === undefined) return;
+  map.delete(key);
+  map.set(key, value);
+}
+
 function stableScopeKey(scope: InsightScope | undefined): string {
   return JSON.stringify({
     range: scope?.range ?? null,
@@ -92,6 +130,7 @@ function isCachedInsightFresh(
 function readCachedInsight(key: string): CachedInsight | undefined {
   const entry = insightCache.get(key);
   if (entry === undefined || !isCachedInsightFresh(entry)) return undefined;
+  touchKey(insightCache, key);
   return entry;
 }
 
@@ -106,7 +145,7 @@ function cacheInsight(
   if (envelope.source === "rules" && previous?.envelope.source === "enhanced") {
     return previous.envelope;
   }
-  insightCache.set(key, {
+  boundedSet(insightCache, key, {
     envelope,
     cachedAtMs: Date.now(),
     refreshIntervalMs,
@@ -130,7 +169,7 @@ function requestPageInsight(
       envelope.refreshIntervalMs ?? refreshIntervalMs,
     );
   });
-  insightReads.set(key, request);
+  boundedSet(insightReads, key, request);
   void request.then(
     () => {
       if (insightReads.get(key) === request) insightReads.delete(key);
@@ -158,7 +197,7 @@ function requestEnhancement(
       envelope.refreshIntervalMs ?? refreshIntervalMs,
     );
   });
-  insightEnhancements.set(key, request);
+  boundedSet(insightEnhancements, key, request);
   void request.then(
     () => {
       if (insightEnhancements.get(key) === request) {

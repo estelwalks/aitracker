@@ -22,6 +22,13 @@ import { zstdDecompressSync } from "node:zlib";
 const ZSTD_MAGIC = 0xfd2fb528;
 /** Zstandard magic as the first four bytes of a file. */
 export const ZSTD_MAGIC_BYTES = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+/**
+ * P2-17: a decompressed DSH session log above this cap is rejected. The
+ * compressed file is bounded by the adapter's maxFileSizeBytes, but
+ * decompression can expand far beyond that, so the plaintext is capped
+ * independently to keep collection memory bounded.
+ */
+const MAX_DECOMPRESSED_SESSION_BYTES = 256 * 1024 * 1024;
 
 export interface ZstdFrameRange {
   start: number;
@@ -124,6 +131,7 @@ export function decodeZstdSessionLog(buffer: Buffer): string {
     throw new Error("zstd session log is empty or header-less");
   }
   const parts: string[] = [];
+  let totalBytes = 0;
   for (const frame of frames) {
     let plaintext: Buffer;
     try {
@@ -132,6 +140,14 @@ export function decodeZstdSessionLog(buffer: Buffer): string {
       throw new Error(
         `corrupt zstd session log: frame at byte ${frame.start} failed validation`,
         { cause: error },
+      );
+    }
+    // P2-17: bail early once the accumulated plaintext exceeds the cap so a
+    // pathological log never stays resident in memory at full size.
+    totalBytes += plaintext.length;
+    if (totalBytes > MAX_DECOMPRESSED_SESSION_BYTES) {
+      throw new Error(
+        `zstd session log exceeds the ${MAX_DECOMPRESSED_SESSION_BYTES}-byte decompressed size limit`,
       );
     }
     parts.push(plaintext.toString("utf8"));

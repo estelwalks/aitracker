@@ -37,6 +37,8 @@ export const reports = {
   },
   period: {
     weekSuffix: "week",
+    monthShort: "{month}",
+    weekShort: "{date}",
   },
   schedule: {
     title: "Automatic scheduled generation",
@@ -121,6 +123,7 @@ export const reports = {
     dayHint: "Dots show per-day session density",
     weekHint: "Click any day to select the whole week",
     monthHint: "Pick a month",
+    weekdayNarrow: "MTWTFSS",
   },
   header: {
     sessions: "{count} sessions",
@@ -136,6 +139,7 @@ export const reports = {
     emptyDesc: "Click “Generate now” to create a report for this period.",
     draft: "Generate now",
     save: "Save",
+    truncated: "Body exceeds 60,000 characters and will be truncated.",
     regenerate: "Regenerate",
     rewriteTitle: "Regenerate report?",
     rewriteDesc:

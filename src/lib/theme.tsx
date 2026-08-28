@@ -52,6 +52,23 @@ export function resolveThemeClass(
     : "";
 }
 
+/** Keep browser chrome aligned with both system and explicit app themes. */
+export function syncFaviconTheme(theme: ThemeId, prefersLight: boolean): void {
+  const light = document.querySelector<HTMLLinkElement>("#app-favicon-light");
+  const dark = document.querySelector<HTMLLinkElement>("#app-favicon-dark");
+  if (!light || !dark) return;
+
+  if (theme === "system") {
+    light.media = "(prefers-color-scheme: light)";
+    dark.media = "(prefers-color-scheme: dark)";
+    return;
+  }
+
+  const useLight = resolveThemeClass(theme, prefersLight) === "theme-light";
+  light.media = useLight ? "all" : "not all";
+  dark.media = useLight ? "not all" : "all";
+}
+
 const ThemeCtx = createContext<{
   theme: ThemeId;
   setTheme: (t: ThemeId) => void;
@@ -116,6 +133,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.classList.remove("theme-light");
     const cls = resolveThemeClass(theme, systemPrefersLight);
     if (cls) root.classList.add(cls);
+    syncFaviconTheme(theme, systemPrefersLight);
     if (hydrated) void setPreference(THEME_PREFERENCE_KEY, theme);
   }, [hydrated, systemPrefersLight, theme]);
 

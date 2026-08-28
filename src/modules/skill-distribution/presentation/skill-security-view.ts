@@ -1,5 +1,5 @@
 import type { SecurityHistoryView } from "../../security-assessment/index.ts";
-import { skillIdentityNames } from "../../skill-catalog/application/skill-identity.ts";
+import { skillIdentityNames } from "../../skill-catalog/index.ts";
 import type { LocalSkill } from "../../skill-catalog/query/contracts.ts";
 
 export function projectSkillSecurityView(

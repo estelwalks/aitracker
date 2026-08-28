@@ -316,7 +316,7 @@ export async function runDevDesktop() {
   vite.once("exit", (code) => shutdown(code ?? 1));
 
   try {
-    await waitForServer(`${origin}/favicon.ico`);
+    await waitForServer(`${origin}/favicon.svg`);
     await warmStaticViteModules(origin);
     // Vite automatically builds the explicit optimizeDeps.include batch while
     // serving these modules. Do not expose Electron to the module graph until

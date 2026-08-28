@@ -26,6 +26,7 @@ export const memory = {
   originManual: "手動",
   sourceDistill: "蒸留",
   sourceUnknown: "不明なソース",
+  titleFallback: "メモリ",
   insightTitle: "今日のインサイト",
   insightEmpty: "メモリ項目はまだありません：蒸留を実行してください。",
   insightTotal:

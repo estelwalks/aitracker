@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftRight,
   Boxes,
@@ -80,11 +80,27 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
   const { t, format } = useI18n();
   const [summary, setSummary] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
+  // P2-16: the rescan poll chain must be cancellable — keep the pending
+  // timeout handle and a mount flag so unmount clears the timer and no
+  // setState/toast fires after the page is gone.
+  const pollTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
   const [migrationSource, setMigrationSource] =
     useState<MigrationSourceSelection | null>(null);
   const [statusFilter, setStatusFilter] = useState<SourcesQueryStatus | "all">(
     "all",
   );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (pollTimerRef.current !== null) {
+        window.clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, []);
   const statusCounts = useMemo(() => {
     const counts = {
       "has-data": 0,
@@ -136,9 +152,11 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
       }
       const startedAt = Date.now();
       const poll = async () => {
+        if (!mountedRef.current) return;
         if (Date.now() - startedAt > 600_000) return;
         try {
           const next = await getSourcesQuery();
+          if (!mountedRef.current) return;
           setSummary(next);
           if (hasSkillCountChanged(next)) {
             toast.success(t("sources.toast.rescanDone"));
@@ -147,9 +165,14 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
         } catch {
           // transient; retry on the next tick
         }
-        window.setTimeout(() => void poll(), 15_000);
+        if (!mountedRef.current) return;
+        pollTimerRef.current = window.setTimeout(() => void poll(), 15_000);
       };
-      window.setTimeout(() => void poll(), 15_000);
+      if (pollTimerRef.current !== null) {
+        window.clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      pollTimerRef.current = window.setTimeout(() => void poll(), 15_000);
     } catch (error) {
       const ui = toUiError(error);
       toast.error(ui ? t(ui.code, ui.params) : t("common.error"));

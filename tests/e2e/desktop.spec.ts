@@ -1,4 +1,10 @@
 import { expect, test, type Page } from "playwright/test";
+import { PUBLIC_TOOL_MANIFEST } from "../../src/lib/tool-registry/public-manifest.generated";
+
+// F6-S3: the sources page's tool total is derived from the same registry the
+// server projects (`AI_TOOLS`), so assert against the manifest instead of a
+// magic number.
+const TOOL_COUNT = PUBLIC_TOOL_MANIFEST.tools.length;
 
 test.beforeEach(async ({ page }) => {
   // 固定浏览器系统语言为 zh-CN 且无存储偏好，保证默认语言为中文
@@ -42,7 +48,10 @@ async function openRouteWithoutPageErrors(
   await expect(page.getByRole("heading", { name: "页面加载失败" })).toHaveCount(
     0,
   );
-  await page.waitForTimeout(300);
+  // Let the client settle before asserting zero page errors. The hydration
+  // i18n effect writes `?locale=` (existing suite convention), so waiting for
+  // it is a deterministic settle barrier instead of a fixed sleep.
+  await page.waitForURL(/locale=/, { timeout: 30_000 }).catch(() => undefined);
   expect(pageErrors, `${path} 不应触发未捕获页面错误`).toEqual([]);
 }
 
@@ -146,11 +155,10 @@ test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({
 test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
   // V3.0 拆分后市场为独立 /market 路由（安全市场，列表样式）
   await page.goto("/market");
-  // 等待 React 水合完成：URL 出现 locale 参数即 search-param 同步已接管；
-  // 搜索框由 SSR 先渲染，若在 onChange 挂载前 fill，React 不会收到 input
-  // 事件，搜索不会触发（水合竞态）。
+  // 等待 React 水合完成：URL 出现 locale 参数即 search-param 同步已接管
+  // （React 在 hydration commit 期间挂载 onChange，早于写入 ?locale= 的 i18n
+  // effect），因此 fill 前无需再固定 sleep —— fill 本身会等待输入框可编辑。
   await page.waitForURL(/locale=/, { timeout: 15_000 });
-  await page.waitForTimeout(1000);
 
   const search = page.getByPlaceholder("搜索 Skill 名称、源路径或能力");
   await search.fill("draw.io");
@@ -186,8 +194,9 @@ test("安全页浏览器下检测服务已连接", async ({ page }) => {
   // 播报摘要（健康度）可见
   await expect(page.getByText("健康度", { exact: true }).first()).toBeVisible();
 
-  // 短暂 settle 后不应有未捕获页面错误
-  await page.waitForTimeout(300);
+  // 短暂 settle 后不应有未捕获页面错误（以 hydration 的 ?locale= 写入为
+  // 确定性 settle 屏障，替代固定等待）
+  await page.waitForURL(/locale=/, { timeout: 30_000 }).catch(() => undefined);
   expect(pageErrors, "/security 不应触发未捕获页面错误").toEqual([]);
 });
 
@@ -215,8 +224,9 @@ test("安全页连接检测服务且不自动触发扫描", async ({ page }) => 
     page.getByText("本机伴随服务不可用", { exact: true }),
   ).toHaveCount(0);
 
-  // 不点击扫描 CTA；settle 后断言没有扫描进行中的标记
-  await page.waitForTimeout(600);
+  // 不点击扫描 CTA；以 hydration 的 ?locale= 写入作为 settle 屏障后断言
+  // 没有扫描进行中的标记（替代固定等待）
+  await page.waitForURL(/locale=/, { timeout: 30_000 }).catch(() => undefined);
   await expect(page.getByText(/检测进度：/)).toHaveCount(0);
   await expect(page.getByText("扫描中", { exact: true })).toHaveCount(0);
 
@@ -266,7 +276,7 @@ test("本地采集状态仅在数据来源页展示真实结果", async ({ page 
     .textContent();
   const connectedCount = Number(connectedLabel?.match(/\d+/)?.[0] ?? NaN);
   const missingCount = Number(missingLabel?.match(/\d+$/)?.[0] ?? NaN);
-  expect(connectedCount + missingCount).toBe(36);
+  expect(connectedCount + missingCount).toBe(TOOL_COUNT);
   await expect(page.getByText(/扫描目录：/).first()).toBeVisible();
 });
 

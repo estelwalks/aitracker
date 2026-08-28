@@ -64,12 +64,21 @@
     "sessions": {
       "mode": "resume",
       "reader": "dsh-session-v1",
-      "command": ["dsh", "--profile", "tui", "--resume", "{sessionId}"]
+      "command": [
+        "dsh",
+        "--profile",
+        "tui",
+        "--resume",
+        "{sessionId}"
+      ]
     },
     "market": "unsupported",
     "security": "unsupported"
   },
   "modelObservation": {
-    "modelField": "model"
+    "modelField": "model",
+    "tokenSemantics": {
+      "reasoningIncludedInOutput": false
+    }
   }
 }

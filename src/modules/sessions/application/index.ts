@@ -76,7 +76,11 @@ export function createSessionQueryService(
         MAX_PAGE_SIZE,
         Math.max(1, Math.trunc(request.pageSize ?? 25)),
       );
-      const all = [...(await repository.list(request.signal))];
+      // P1-11: the repository serves the persisted snapshot already loaded in
+      // memory (snapshot architecture), so paging runs against it without
+      // materializing a second full copy. Direct SQL readers can additionally
+      // page at the source via the repository `load({ limit, offset })`.
+      const all = await repository.list(request.signal);
       const now = Date.now();
       const filtered = all.filter((item) =>
         matches(item, request.filter ?? {}, now),

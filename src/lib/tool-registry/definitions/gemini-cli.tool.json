@@ -51,6 +51,7 @@
     "usage": {
       "mode": "native",
       "reader": "gemini-session-v1",
+      "maxFileSizeBytes": 67108864,
       "paths": [
         {
           "targets": [

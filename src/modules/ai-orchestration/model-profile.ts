@@ -315,3 +315,23 @@ export function toModelProfileView(profile: ModelProfile): ModelProfileView {
     updatedAt: profile.updatedAt,
   };
 }
+
+/** The two repository reads needed to resolve the enabled profile. */
+export interface ActiveModelProfileLookup {
+  getActiveView(): Promise<ModelProfileView | null>;
+  getProfileForExecution(id: string): Promise<ModelProfile | undefined>;
+}
+
+/**
+ * Resolve credentials only for the explicitly enabled profile.
+ *
+ * Keeping this lookup shared prevents model consumers from silently falling
+ * back to the first configured profile when the user has not enabled one.
+ */
+export async function getActiveModelProfileForExecution(
+  repository: ActiveModelProfileLookup,
+): Promise<ModelProfile | undefined> {
+  const active = await repository.getActiveView();
+  if (!active) return undefined;
+  return repository.getProfileForExecution(active.id);
+}

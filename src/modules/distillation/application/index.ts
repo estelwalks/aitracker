@@ -34,7 +34,7 @@ import {
   qualifySkillFiles,
   type SkillQualification,
 } from "../qualify.ts";
-import { localDateKey, type DistillQuota } from "../quota.ts";
+import { localDateKey } from "../quota.ts";
 import { compactSegmentMaterials } from "../compression.ts";
 
 /** Marker separating the controlled metadata context from user-picked segments. */
@@ -230,22 +230,28 @@ export function createDistillationApplication(
         return err("errors.distillation.invalidSelection");
       if (request.signal?.aborted) return err("errors.distillation.cancelled");
 
-      // B-600 server-side quota: a real-model request that has exhausted
-      // today's quota is rejected BEFORE the model is invoked. A missing or
-      // failing quota port degrades to unlimited — distillation must never be
-      // blocked by quota bookkeeping itself.
+      // B-600 / P2-10: atomically reserve one daily call BEFORE the model is
+      // invoked. `reserve` performs the limit check and the increment in a
+      // single ledger write, so concurrent starts can never overshoot the
+      // daily limit (the old read-then-increment was a check-then-act race).
+      // A successful reservation counts even if the run later fails — the
+      // quota is an upper-bound control, not an exact billing counter. A
+      // missing or failing quota port degrades to unlimited: distillation
+      // must never be blocked by quota bookkeeping itself.
       const realModel = isRealModelRequest(request);
-      let quotaState: DistillQuota | undefined;
       if (realModel && ports.quota) {
+        let reserved = false;
         try {
-          quotaState = await ports.quota.read();
+          reserved = await ports.quota.reserve(localDateKey(now()));
         } catch {
-          quotaState = undefined;
+          reserved = true; // ledger failure → degrade to unlimited
         }
-        if (quotaState && quotaState.used >= quotaState.limit) {
-          return err("errors.distillation.quotaExceeded", {
-            limit: quotaState.limit,
-          });
+        if (!reserved) {
+          const current = await ports.quota.read().catch(() => undefined);
+          return err(
+            "errors.distillation.quotaExceeded",
+            current ? { limit: current.limit } : undefined,
+          );
         }
       }
 
@@ -319,15 +325,8 @@ export function createDistillationApplication(
         execution.summary.status !== "completed"
       )
         return err("errors.distillation.aiFailed");
-      // Record one real-model call for today once the run actually completes.
-      // A failed write must never fail the run; offline runs never get here.
-      if (realModel && ports.quota) {
-        try {
-          await ports.quota.increment(localDateKey(now()));
-        } catch {
-          // Quota bookkeeping is best-effort; the run itself succeeded.
-        }
-      }
+      // The daily quota was already consumed atomically by `reserve` before
+      // the model call (P2-10); no second increment here.
       const candidateOutput = candidate(
         nextId(),
         request.selection.sessionRefs,

@@ -207,6 +207,82 @@ test("Grok native reader uses keyed modelUsage, reported totals, component fallb
   }
 });
 
+test("Grok dedup key includes sessionId so equal per-session eventIds never collide", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-grok-cross-session-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const firstSessionDirectory = join(
+    homeDirectory,
+    ".grok",
+    "sessions",
+    "project",
+    "session-alpha",
+  );
+  const secondSessionDirectory = join(
+    homeDirectory,
+    ".grok",
+    "sessions",
+    "project",
+    "session-beta",
+  );
+  await mkdir(firstSessionDirectory, { recursive: true });
+  await mkdir(secondSessionDirectory, { recursive: true });
+  const turnOne = (sessionId: string, inputTokens: number) =>
+    `${JSON.stringify({
+      timestamp: 1785142860,
+      method: "session/update",
+      params: {
+        sessionId,
+        update: {
+          sessionUpdate: "turn_completed",
+          usage: {
+            modelUsage: {
+              "grok-4.5-build": {
+                inputTokens,
+                cachedReadTokens: 20,
+                outputTokens: 10,
+                totalTokens: inputTokens + 30,
+              },
+            },
+          },
+        },
+        _meta: { eventId: "turn-1", agentTimestampMs: 1785142860000 },
+      },
+    })}\n`;
+  await writeFile(
+    join(firstSessionDirectory, "updates.jsonl"),
+    turnOne("session-alpha", 100),
+  );
+  await writeFile(
+    join(secondSessionDirectory, "updates.jsonl"),
+    turnOne("session-beta", 200),
+  );
+
+  try {
+    const result = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = result.details.filter((event) => event.source === "grok");
+    assert.equal(
+      events.length,
+      2,
+      "two sessions sharing eventId turn-1 must both be retained",
+    );
+    assert.deepEqual(
+      new Set(events.map((event) => event.totalTokens)),
+      new Set([130, 230]),
+    );
+    assert.equal(new Set(events.map((event) => event.sessionId)).size, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("OpenClaw native reader merges active/archive/reset copies as a multiset and keeps genuine repeats", async () => {
   const root = join(
     tmpdir(),
@@ -851,7 +927,7 @@ test("discovers Windows-style alternate homes and nested cumulative Codex events
   }
 });
 
-test("generic adapters prefer structured sessions and distinguish file fallbacks", async () => {
+test("generic adapters dedupe identical records across files, keeping structured sessions", async () => {
   const root = join(
     tmpdir(),
     `aitracker-generic-session-${process.pid}-${Date.now()}`,
@@ -896,7 +972,10 @@ test("generic adapters prefer structured sessions and distinguish file fallbacks
     const events = snapshot.details.filter(
       (event) => event.source === "kimi-code",
     );
-    assert.equal(events.length, 4);
+    // P2-17: identical records across rotated copies collapse to one — the
+    // structured-session pair and the session-less pair each dedupe to a
+    // single event instead of accumulating duplicates.
+    assert.equal(events.length, 2);
     assert.ok(
       events.every((event) =>
         /^session_[a-f0-9]{20}$/.test(event.sessionId ?? ""),
@@ -912,7 +991,7 @@ test("generic adapters prefer structured sessions and distinguish file fallbacks
     }
     assert.deepEqual(
       [...counts.values()].sort((left, right) => right - left),
-      [2, 1, 1],
+      [1, 1],
     );
     assert.doesNotMatch(
       JSON.stringify(snapshot),
@@ -922,6 +1001,109 @@ test("generic adapters prefer structured sessions and distinguish file fallbacks
       JSON.stringify(snapshot),
       /same-a\.jsonl|fallback-a\.jsonl/,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("generic dedup also covers cache-reused entries (rotated copy scenario)", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-generic-cache-dedup-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const sessionDirectory = join(homeDirectory, ".kimi", "sessions");
+  const cacheDirectory = join(root, "cache");
+  await mkdir(sessionDirectory, { recursive: true });
+
+  const record = {
+    timestamp: "2026-07-26T10:00:00.000Z",
+    session_id: "shared-rotated-session",
+    model: "kimi-test",
+    usage: { input_tokens: 5, output_tokens: 2 },
+  };
+  const firstFile = join(sessionDirectory, "copy-b.jsonl");
+  const secondFile = join(sessionDirectory, "copy-a.jsonl");
+
+  try {
+    // Scan 1: only the old copy exists — parsed and cached with one event.
+    await writeFile(firstFile, `${JSON.stringify(record)}\n`);
+    let snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    let events = snapshot.details.filter(
+      (event) => event.source === "kimi-code",
+    );
+    assert.equal(events.length, 1);
+
+    // Scan 2: the rotated copy appears while the old copy is cache-reused.
+    // The same record must still count once across the parse + cache paths.
+    await writeFile(secondFile, `${JSON.stringify(record)}\n`);
+    snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    events = snapshot.details.filter((event) => event.source === "kimi-code");
+    assert.equal(events.length, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("WorkBuddy dedup covers cache-reused entries (rotated copy scenario)", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-workbuddy-cache-dedup-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const projectsDirectory = join(homeDirectory, ".workbuddy", "projects");
+  const cacheDirectory = join(root, "cache");
+  await mkdir(projectsDirectory, { recursive: true });
+
+  const record = {
+    id: "workbuddy-rotated-response",
+    timestamp: new Date("2026-07-26T10:00:00.000Z").getTime(),
+    type: "function_call",
+    sessionId: "private-rotated-session",
+    cwd: join(homeDirectory, "private-project"),
+    providerData: {
+      requestModelName: "Auto",
+      rawUsage: {
+        prompt_tokens: 1_000,
+        completion_tokens: 200,
+        cache_read_input_tokens: 300,
+      },
+    },
+  };
+  const firstFile = join(projectsDirectory, "copy-b.jsonl");
+  const secondFile = join(projectsDirectory, "copy-a.jsonl");
+
+  try {
+    // Scan 1: only the old copy exists — parsed and cached with one event.
+    await writeFile(firstFile, `${JSON.stringify(record)}\n`);
+    let snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    let events = snapshot.details.filter(
+      (event) => event.source === "workbuddy",
+    );
+    assert.equal(events.length, 1);
+
+    // Scan 2: the rotated copy appears while the old copy is cache-reused.
+    // The same response must still count once across the parse + cache paths.
+    await writeFile(secondFile, `${JSON.stringify(record)}\n`);
+    snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    events = snapshot.details.filter((event) => event.source === "workbuddy");
+    assert.equal(events.length, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -566,7 +566,12 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         if (outcome.status === "rejected") return true;
         return (
           REQUIRED_STARTUP_TASK_IDS.has(outcome.value.definition.id) &&
-          outcome.value.run.status !== "succeeded"
+          outcome.value.run.status !== "succeeded" &&
+          // P2-7: a cancelled startup task (collector timeout / abort) must not
+          // take the whole application down with it — the snapshot stays empty
+          // and the scheduler retries in the background. Only genuine failures
+          // (rejected wait or failed terminal) fail the startup barrier.
+          outcome.value.run.status !== "cancelled"
         );
       });
       if (requiredFailure) throw new TaskSchedulerStartupError();

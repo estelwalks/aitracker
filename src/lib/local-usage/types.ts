@@ -148,6 +148,12 @@ export interface LocalUsageTotals extends LocalTokenCounts {
 
 export interface LocalUsageBreakdown extends LocalUsageTotals {
   key: string;
+  /**
+   * Display-safe project label (final path segment) when the breakdown key is
+   * an opaque ref hash (P2-1): consumers must render `label ?? key` so a
+   * hydrated snapshot never shows a base64url hash as a project name.
+   */
+  label?: string;
 }
 
 export interface LocalUsageDaily extends LocalUsageTotals {

@@ -141,6 +141,9 @@ export const skills = {
   },
   agentOverview: {
     title: "Agent overview · {appName}",
+    loadFailed: "Failed to load agent data",
+    loadFailedDesc:
+      "Local usage and security data failed to load. Please retry.",
     insightTitle: "Today's insight",
     dedicatedInsight: "Dedicated insight",
     insightDescription:

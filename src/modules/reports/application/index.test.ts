@@ -268,6 +268,31 @@ test("saving an edit writes a new content revision and readContent returns it", 
   );
 });
 
+test("P1-10: an inline body over the storage boundary returns an explicit truncation signal", async () => {
+  const state = app({ inlineContent: true });
+  const generated = await state.app.generate({
+    definitionId: "reports.daily",
+    trigger: "manual",
+  });
+  assert.equal(generated.ok, true);
+  if (!generated.ok) return;
+
+  const large = await state.app.saveContent(
+    generated.value.reportId,
+    `# 长正文\n\n${"x".repeat(70_000)}`,
+  );
+  assert.equal(large.ok, true);
+  assert.equal(large.ok && large.value.truncated, true);
+
+  // A body within the boundary is not flagged.
+  const short = await state.app.saveContent(
+    generated.value.reportId,
+    "# 短正文",
+  );
+  assert.equal(short.ok, true);
+  assert.equal(short.ok && short.value.truncated, undefined);
+});
+
 test("legacy inline bodies remain readable and migrate to a file reference", async () => {
   const state = app();
   await state.store.saveDocument({

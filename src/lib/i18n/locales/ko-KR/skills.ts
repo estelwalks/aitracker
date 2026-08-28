@@ -141,6 +141,9 @@ export const skills = {
   },
   agentOverview: {
     title: "Agent 개요 · {appName}",
+    loadFailed: "Agent 데이터를 불러오지 못했습니다",
+    loadFailedDesc:
+      "로컬 사용량 및 보안 데이터를 불러오지 못했습니다. 다시 시도해 주세요.",
     insightTitle: "오늘의 인사이트",
     dedicatedInsight: "전용 인사이트",
     insightDescription:

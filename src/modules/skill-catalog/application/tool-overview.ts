@@ -188,7 +188,9 @@ function rank(
     rows.set(key, {
       key,
       tokens: current.tokens + event.totalTokens,
-      events: current.events + 1,
+      // P1-13: aggregate rows carry the original event count (event.events);
+      // a plain +1 undercounts against the dashboard for bucketed snapshots.
+      events: current.events + (event.events ?? 1),
       sessions: sessionsByKey?.get(key) ?? null,
       estimatedCostUsd: null,
       estimatedCostIsPartial: false,
@@ -219,8 +221,12 @@ function rank(
 function trend(events: readonly DashboardV2Event[]): ToolOverviewTrendPoint[] {
   const rows = new Map<string, number>();
   for (const event of events) {
-    const date = event.timestamp.slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) continue;
+    // P1-13: local calendar date, matching the dashboard/calendar aggregation
+    // (the ISO prefix is UTC and shifts evening events to the next day in
+    // negative-offset timezones).
+    const timestamp = new Date(event.timestamp);
+    if (Number.isNaN(timestamp.getTime())) continue;
+    const date = `${timestamp.getFullYear()}-${String(timestamp.getMonth() + 1).padStart(2, "0")}-${String(timestamp.getDate()).padStart(2, "0")}`;
     rows.set(date, (rows.get(date) ?? 0) + event.totalTokens);
   }
   return [...rows.entries()]
@@ -572,6 +578,12 @@ export function buildToolOverview(
         (total, event) => total + event.totalTokens,
         0,
       );
+      // P1-13: count original scanner events (aggregate rows carry `events`),
+      // matching the dashboard and rank() aggregation.
+      const eventCount = events.reduce(
+        (total, event) => total + (event.events ?? 1),
+        0,
+      );
       const active = events.length > 0;
       const state: ToolOverviewState = active
         ? "active"
@@ -585,7 +597,7 @@ export function buildToolOverview(
         active,
         state,
         tokens,
-        events: events.length,
+        events: eventCount,
         share: totalPeriodTokens === 0 ? 0 : (tokens / totalPeriodTokens) * 100,
         sessions: sessionsForSource(snapshot, tool.id, period, from, to),
         subagentCalls: subagentsForSource(snapshot, tool.id, period, from, to),

@@ -309,3 +309,49 @@ test("invalidate marks stale and requests a refresh through the port", async () 
   assert.deepEqual(requests, ["event"]);
   assert.equal(coordinator.readLatest().status, "stale");
 });
+
+test("stale-refreshed commit keeps the original generatedAt and reads stale (P2-3)", async () => {
+  const repo = memoryRepository({
+    initial: envelope({ events: 5, tokens: 500 }, "r0"),
+  });
+  const coordinator = createCoordinator(repo, {
+    collect: async () => ({
+      data: { events: 5, tokens: 500 },
+      staleRefreshed: true,
+    }),
+  });
+  await coordinator.ensureHydrated();
+  const before = coordinator.readLatest();
+  await coordinator.refreshNow();
+  const after = coordinator.readLatest();
+  assert.equal(after.status, "stale");
+  assert.equal(after.generatedAt, before.generatedAt);
+  assert.deepEqual(after.warningCodes, ["stale-refreshed"]);
+  assert.equal(after.data?.events, 5);
+});
+
+test("successful refresh clears accumulated warning codes (P2-2)", async () => {
+  const repo = memoryRepository({});
+  const coordinator = createCoordinator(repo, {
+    collect: async ({ signal }) => {
+      if (signal.aborted) throw new Error("AbortError");
+      throw new Error("boom");
+    },
+  });
+  await coordinator.ensureHydrated();
+  await coordinator.refreshNow();
+  assert.ok(
+    coordinator.readLatest().warningCodes.includes("collection-failed"),
+  );
+  const coordinator2 = createCoordinator(
+    memoryRepository({}),
+    {
+      collect: async () => ({
+        data: { events: 1, tokens: 100 },
+      }),
+    },
+  );
+  await coordinator2.ensureHydrated();
+  await coordinator2.refreshNow();
+  assert.deepEqual(coordinator2.readLatest().warningCodes, []);
+});

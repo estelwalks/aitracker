@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 import {
+  DROP_LEGACY_USAGE_TABLES_SQL,
   INITIAL_SCHEMA_SQL,
   LATEST_MIGRATION_VERSION,
   MIGRATIONS,
@@ -41,14 +42,6 @@ const REQUIRED_TABLES = [
   "snapshot_generations",
   "snapshot_heads",
   "snapshot_warnings",
-  "usage_sources",
-  "usage_source_diagnostics",
-  "usage_events",
-  "usage_event_tool_calls",
-  "usage_event_skill_calls",
-  "usage_event_command_stats",
-  "usage_event_output_summaries",
-  "usage_daily_aggregates",
   "project_classifications",
   "sessions",
   "session_unknown_models",
@@ -84,6 +77,21 @@ const REQUIRED_TABLES = [
   "usage_tracker_buckets",
 ] as const;
 
+/**
+ * Legacy usage snapshot tables removed by migration 0002 (P2-14). Production
+ * never read or wrote them; they must be absent from the final schema.
+ */
+const LEGACY_USAGE_TABLES = [
+  "usage_sources",
+  "usage_source_diagnostics",
+  "usage_events",
+  "usage_event_tool_calls",
+  "usage_event_skill_calls",
+  "usage_event_command_stats",
+  "usage_event_output_summaries",
+  "usage_daily_aggregates",
+] as const;
+
 const REQUIRED_VIEWS = [
   "v_active_model_profile",
   "v_latest_reports",
@@ -97,14 +105,26 @@ function scalar(database: DatabaseSync, sql: string): unknown {
 }
 
 const files = readdirSync(migrationsDirectory).sort();
-assert.deepEqual(files, ["0001_initial_schema.ts", "index.ts"]);
-assert.equal(MIGRATIONS.length, 1);
+assert.deepEqual(files, [
+  "0001_initial_schema.ts",
+  "0002_drop_legacy_usage_tables.ts",
+  "index.ts",
+]);
+assert.ok(MIGRATIONS.length >= 1, "at least the baseline migration must exist");
 assert.deepEqual(MIGRATIONS[0], {
   version: 1,
   name: "0001_initial_schema",
   sql: INITIAL_SCHEMA_SQL,
 });
-assert.equal(LATEST_MIGRATION_VERSION, 1);
+assert.equal(
+  MIGRATIONS.find((migration) => migration.version === 2)?.name,
+  "0002_drop_legacy_usage_tables",
+  "migration 0002 must drop the legacy usage tables",
+);
+assert.equal(
+  LATEST_MIGRATION_VERSION,
+  MIGRATIONS[MIGRATIONS.length - 1].version,
+);
 assert.doesNotMatch(INITIAL_SCHEMA_SQL, /ALTER\s+TABLE/i);
 assert.doesNotMatch(INITIAL_SCHEMA_SQL, /PRAGMA\s+user_version/i);
 assert.equal(
@@ -117,6 +137,7 @@ const database = new DatabaseSync(":memory:");
 try {
   database.exec("PRAGMA foreign_keys = ON;");
   database.exec(INITIAL_SCHEMA_SQL);
+  database.exec(DROP_LEGACY_USAGE_TABLES_SQL);
 
   const objects = database
     .prepare(
@@ -133,6 +154,17 @@ try {
     .sort();
   assert.deepEqual(tables, [...REQUIRED_TABLES].sort());
   assert.deepEqual(views, [...REQUIRED_VIEWS].sort());
+  for (const legacy of LEGACY_USAGE_TABLES) {
+    assert.equal(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        )
+        .get(legacy),
+      undefined,
+      `legacy table ${legacy} must be dropped by migration 0002`,
+    );
+  }
   for (const row of objects.filter((item) => item.type === "table")) {
     assert.match(String(row.sql).trim(), /\)\s*STRICT$/);
   }

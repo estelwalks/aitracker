@@ -33,6 +33,8 @@ export const reports = {
   },
   period: {
     weekSuffix: "주",
+    monthShort: "{month}월",
+    weekShort: "{date}주",
   },
   schedule: {
     title: "자동 정기 생성",
@@ -117,6 +119,7 @@ export const reports = {
     dayHint: "점은 일별 세션 밀도를 나타냅니다",
     weekHint: "아무 날이나 클릭하면 전체 주 선택",
     monthHint: "월 선택",
+    weekdayNarrow: "월화수목금토일",
   },
   header: {
     sessions: "{count}개",
@@ -132,6 +135,7 @@ export const reports = {
     emptyDesc: "「지금 생성」을 눌러 이 기간의 보고서를 만드세요.",
     draft: "지금 생성",
     save: "저장",
+    truncated: "본문이 60,000자를 초과하여 잘립니다.",
     regenerate: "다시 생성",
     rewriteTitle: "보고서를 다시 생성할까요?",
     rewriteDesc:

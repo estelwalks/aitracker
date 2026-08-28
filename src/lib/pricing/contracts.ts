@@ -506,6 +506,12 @@ export interface PricingResolution {
   knownUsdNano?: bigint;
   /** Notional cache-read saving in nanoUSD (when a rate matched). */
   cacheSavingsUsdNano?: bigint;
+  /**
+   * True when the event carried cache-write tokens but the matched rate had no
+   * cache-write price (P1-6): known components were billed at the real rate,
+   * only the cache-write component is unbilled.
+   */
+  unpricedCacheWrite?: boolean;
   /** Per-token cost breakdown in nanoUSD (when a rate or estimate applied). */
   costBreakdown?: {
     input: bigint;

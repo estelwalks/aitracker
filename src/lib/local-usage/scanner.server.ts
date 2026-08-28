@@ -63,6 +63,10 @@ const MAX_DISCOVERED_ENTRIES_PER_SOURCE =
   SCANNER_POLICY?.maxDiscoveredEntriesPerSource ?? 30_000;
 const MAX_JSONL_LINE_LENGTH =
   SCANNER_POLICY?.maxJsonlLineLength ?? 16 * 1024 * 1024;
+// P2-17: whole-file cap applied before streaming a JSONL log. A single
+// oversized line is already bounded by MAX_JSONL_LINE_LENGTH, but a
+// pathological file must never be pulled into the line reader at all.
+const MAX_JSONL_FILE_BYTES = 256 * 1024 * 1024;
 const FUTURE_TIMESTAMP_TOLERANCE_MS =
   SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
 // Antigravity's estimated transcript events were added in v14. Rebuild once so cached Claude
@@ -168,6 +172,13 @@ interface PersistentGenericFileEntry extends PersistentFileEntryBase {
     "claude-code" | "codex" | "gemini-cli" | "grok" | "openclaw"
   >;
   events: LocalUsageEvent[];
+  /**
+   * P2-17: optional per-event dedup identities (parallel to `events`, used by
+   * workbuddy). Present on entries parsed after the fix; older in-memory
+   * entries and other generic sources omit it and fall back to an event
+   * fingerprint at aggregate time.
+   */
+  identities?: string[];
   diagnostics: LocalUsageDiagnostic[];
 }
 
@@ -433,6 +444,17 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
   const diagnostics = Array.isArray(entry.diagnostics)
     ? entry.diagnostics.filter(isCachedDiagnostic)
     : [];
+  // P2-17: workbuddy stores a parallel per-event identity array. Malformed or
+  // length-mismatched identities degrade to the aggregate fingerprint rather
+  // than discarding the (already validated) cached events.
+  const identities =
+    Array.isArray(entry.identities) &&
+    entry.identities.length === entry.events.length &&
+    entry.identities.every(
+      (identity) => typeof identity === "string" && identity.length > 0,
+    )
+      ? entry.identities
+      : undefined;
   return {
     source: source as PersistentGenericFileEntry["source"],
     path,
@@ -440,6 +462,7 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
     size: entry.size,
     malformedLines: entry.malformedLines,
     events: entry.events,
+    ...(identities == null ? {} : { identities }),
     diagnostics,
   };
 }
@@ -684,8 +707,19 @@ async function readJsonLines(
   filePath: string,
   onRecord: (record: JsonObject) => void,
   signal?: AbortSignal,
-): Promise<number> {
+): Promise<{ malformedLines: number; oversized: boolean }> {
   let malformedLines = 0;
+  // P2-17: stat pre-check before streaming so a file above the whole-file cap
+  // is skipped instead of buffered (bounded collection memory). Callers turn
+  // the flag into a file-too-large diagnostic.
+  try {
+    const fileStat = await stat(filePath);
+    if (fileStat.size > MAX_JSONL_FILE_BYTES) {
+      return { malformedLines: 0, oversized: true };
+    }
+  } catch {
+    // Stat failure is non-fatal; the stream reports read errors below.
+  }
   const input = createReadStream(filePath, {
     encoding: "utf8",
     highWaterMark: 64 * 1024,
@@ -721,7 +755,7 @@ async function readJsonLines(
     input.destroy();
   }
 
-  return malformedLines;
+  return { malformedLines, oversized: false };
 }
 
 function claudeEventFromRecord(
@@ -745,8 +779,14 @@ function claudeEventFromRecord(
   );
   const outputTokens = tokenValue(usage.output_tokens);
   const reasoningOutputTokens = tokenValue(usage.reasoning_output_tokens);
+  // P1-8: totalTokens includes every consumed component — reasoning is parsed
+  // separately from output and must not be dropped from the grand total.
   const totalTokens =
-    inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
+    inputTokens +
+    cachedInputTokens +
+    cacheCreationInputTokens +
+    outputTokens +
+    reasoningOutputTokens;
 
   if (totalTokens === 0) {
     return undefined;
@@ -810,6 +850,7 @@ async function scanClaude(
   let filesReused = 0;
   let filesParsed = 0;
   let malformedLines = 0;
+  const claudeDiagnostics: LocalUsageDiagnostic[] = [];
   const cacheEntries: PersistentClaudeFileEntry[] = [];
 
   for (const file of selected.files) {
@@ -831,40 +872,50 @@ async function scanClaude(
         "claude-code",
         `${basename(root)}:${relative(root, file.path)}`,
       );
-      const fileMalformedLines = await readJsonLines(
-        file.path,
-        (record) => {
-          const parsed = claudeEventFromRecord(
-            record,
-            fallbackSessionId,
-            homeDirectory,
-          );
-          if (parsed != null) {
-            claudeEvents.push({ messageId: parsed.id, event: parsed.event });
-            for (const toolUseId of collectClaudeToolUseIds(record.message)) {
-              toolUseEventById.set(toolUseId, parsed.event);
+      const { malformedLines: fileMalformedLines, oversized } =
+        await readJsonLines(
+          file.path,
+          (record) => {
+            const parsed = claudeEventFromRecord(
+              record,
+              fallbackSessionId,
+              homeDirectory,
+            );
+            if (parsed != null) {
+              claudeEvents.push({ messageId: parsed.id, event: parsed.event });
+              for (const toolUseId of collectClaudeToolUseIds(record.message)) {
+                toolUseEventById.set(toolUseId, parsed.event);
+              }
             }
-          }
-          for (const result of collectClaudeToolResults(record.message)) {
-            const event = toolUseEventById.get(result.toolUseId);
-            if (event == null) continue;
-            const previous = event.context?.toolOutputs;
-            event.context = {
-              ...event.context,
-              toolOutputs: {
-                characters:
-                  (previous?.characters ?? 0) + result.summary.characters,
-                lines: (previous?.lines ?? 0) + result.summary.lines,
-                completed:
-                  (previous?.completed ?? true) && result.summary.completed,
-                calls: (previous?.calls ?? 0) + result.summary.calls,
-              },
-            };
-          }
-        },
-        signal,
-      );
+            for (const result of collectClaudeToolResults(record.message)) {
+              const event = toolUseEventById.get(result.toolUseId);
+              if (event == null) continue;
+              const previous = event.context?.toolOutputs;
+              event.context = {
+                ...event.context,
+                toolOutputs: {
+                  characters:
+                    (previous?.characters ?? 0) + result.summary.characters,
+                  lines: (previous?.lines ?? 0) + result.summary.lines,
+                  completed:
+                    (previous?.completed ?? true) && result.summary.completed,
+                  calls: (previous?.calls ?? 0) + result.summary.calls,
+                },
+              };
+            }
+          },
+          signal,
+        );
       signal?.throwIfAborted();
+      if (oversized) {
+        claudeDiagnostics.push({
+          source: "claude-code",
+          code: "file-too-large",
+          path: file.path,
+          count: 1,
+          message: `日志超过 ${MAX_JSONL_FILE_BYTES} 字节读取上限，已跳过。`,
+        });
+      }
       entry = {
         source: "claude-code",
         path: file.path,
@@ -916,7 +967,7 @@ async function scanClaude(
       filesParsed,
       malformedLines,
       events: events.length,
-      diagnostics: [],
+      diagnostics: claudeDiagnostics,
     },
     cacheEntries,
   };
@@ -1024,8 +1075,14 @@ function codexEventFromRecord(
     tokenValue(usage.cache_write_input_tokens);
   const outputTokens = tokenValue(usage.output_tokens);
   const reasoningOutputTokens = tokenValue(usage.reasoning_output_tokens);
+  // P1-8: totalTokens includes every consumed component — reasoning is parsed
+  // separately from output and must not be dropped from the grand total.
   const totalTokens =
-    inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
+    inputTokens +
+    cachedInputTokens +
+    cacheCreationInputTokens +
+    outputTokens +
+    reasoningOutputTokens;
 
   if (totalTokens === 0) {
     return undefined;
@@ -1068,6 +1125,7 @@ async function scanCodex(
   let filesReused = 0;
   let filesParsed = 0;
   let malformedLines = 0;
+  const codexDiagnostics: LocalUsageDiagnostic[] = [];
   const cacheEntries: PersistentCodexFileEntry[] = [];
 
   for (const file of selected.files) {
@@ -1092,49 +1150,59 @@ async function scanCodex(
       const fileEvents: LocalUsageEvent[] = [];
       let pendingContext = createCodexPendingContext();
       let previousTotalUsage: JsonObject | undefined;
-      const fileMalformedLines = await readJsonLines(
-        file.path,
-        (record) => {
-          context.sessionId =
-            codexSessionIdFromRecord(record) ?? context.sessionId;
-          const nextContext = codexContextFromRecord(record);
-          if (nextContext != null) {
-            context.model = nextContext.model ?? context.model;
-            context.project =
-              nextContext.project == null
-                ? context.project
-                : normalizeProjectPath(nextContext.project, homeDirectory);
-            return;
-          }
+      const { malformedLines: fileMalformedLines, oversized } =
+        await readJsonLines(
+          file.path,
+          (record) => {
+            context.sessionId =
+              codexSessionIdFromRecord(record) ?? context.sessionId;
+            const nextContext = codexContextFromRecord(record);
+            if (nextContext != null) {
+              context.model = nextContext.model ?? context.model;
+              context.project =
+                nextContext.project == null
+                  ? context.project
+                  : normalizeProjectPath(nextContext.project, homeDirectory);
+              return;
+            }
 
-          const event = codexEventFromRecord(
-            record,
-            context,
-            consumeCodexPendingContext(pendingContext),
-            previousTotalUsage,
-          );
-          const payload = asObject(record.payload);
-          const nestedMessage = asObject(payload?.msg);
-          const tokenPayload =
-            stringValue(payload?.type) === "token_count"
-              ? payload
-              : stringValue(nestedMessage?.type) === "token_count"
-                ? nestedMessage
-                : undefined;
-          const totalUsage = asObject(
-            asObject(tokenPayload?.info)?.total_token_usage,
-          );
-          if (totalUsage != null) previousTotalUsage = totalUsage;
-          if (event != null) {
-            fileEvents.push(event);
-            pendingContext = createCodexPendingContext();
-            return;
-          }
-          collectCodexContextRecord(pendingContext, record);
-        },
-        signal,
-      );
+            const event = codexEventFromRecord(
+              record,
+              context,
+              consumeCodexPendingContext(pendingContext),
+              previousTotalUsage,
+            );
+            const payload = asObject(record.payload);
+            const nestedMessage = asObject(payload?.msg);
+            const tokenPayload =
+              stringValue(payload?.type) === "token_count"
+                ? payload
+                : stringValue(nestedMessage?.type) === "token_count"
+                  ? nestedMessage
+                  : undefined;
+            const totalUsage = asObject(
+              asObject(tokenPayload?.info)?.total_token_usage,
+            );
+            if (totalUsage != null) previousTotalUsage = totalUsage;
+            if (event != null) {
+              fileEvents.push(event);
+              pendingContext = createCodexPendingContext();
+              return;
+            }
+            collectCodexContextRecord(pendingContext, record);
+          },
+          signal,
+        );
       signal?.throwIfAborted();
+      if (oversized) {
+        codexDiagnostics.push({
+          source: "codex",
+          code: "file-too-large",
+          path: file.path,
+          count: 1,
+          message: `日志超过 ${MAX_JSONL_FILE_BYTES} 字节读取上限，已跳过。`,
+        });
+      }
       entry = {
         source: "codex",
         path: file.path,
@@ -1168,7 +1236,7 @@ async function scanCodex(
       filesParsed,
       malformedLines,
       events: events.length,
-      diagnostics: [],
+      diagnostics: codexDiagnostics,
     },
     cacheEntries,
   };
@@ -1258,7 +1326,6 @@ async function scanWorkbuddy(
     (name) => name.endsWith(".jsonl"),
     signal,
   );
-  const events: LocalUsageEvent[] = [];
   const cacheEntries: PersistentGenericFileEntry[] = [];
   const diagnostics: LocalUsageDiagnostic[] = [];
   const seenResponseIds = new Set<string>();
@@ -1276,33 +1343,48 @@ async function scanWorkbuddy(
       filesReused += 1;
     } else {
       const fileEvents: LocalUsageEvent[] = [];
+      const fileIdentities: string[] = [];
       const fallbackSessionId = sessionIdFromRelativeFile(
         "workbuddy",
         relative(projectsRoot, file.path),
       );
-      const fileMalformedLines = await readJsonLines(
-        file.path,
-        (record) => {
-          const providerData = asObject(record.providerData);
-          if (asObject(providerData?.rawUsage) == null) return;
-          const responseId =
-            stringValue(record.id) ??
-            stringValue(providerData?.messageId) ??
-            `${stringValue(record.sessionId) ?? relative(projectsRoot, file.path)}:${String(record.timestamp)}`;
-          if (seenResponseIds.has(responseId)) return;
-          const event = workbuddyEventFromRecord(
-            record,
-            fallbackSessionId,
-            homeDirectory,
-          );
-          if (event != null) {
-            seenResponseIds.add(responseId);
-            fileEvents.push(event);
-          }
-        },
-        signal,
-      );
+      const { malformedLines: fileMalformedLines, oversized } =
+        await readJsonLines(
+          file.path,
+          (record) => {
+            const providerData = asObject(record.providerData);
+            if (asObject(providerData?.rawUsage) == null) return;
+            const responseId =
+              stringValue(record.id) ??
+              stringValue(providerData?.messageId) ??
+              `${stringValue(record.sessionId) ?? relative(projectsRoot, file.path)}:${String(record.timestamp)}`;
+            if (seenResponseIds.has(responseId)) return;
+            const event = workbuddyEventFromRecord(
+              record,
+              fallbackSessionId,
+              homeDirectory,
+            );
+            if (event != null) {
+              seenResponseIds.add(responseId);
+              fileEvents.push(event);
+              // P2-17: persist the response identity so a later scan can dedupe
+              // this file's events against a rotated copy even when the file
+              // itself is cache-reused (identity survives the cache path).
+              fileIdentities.push(privacyFingerprint("workbuddy", responseId));
+            }
+          },
+          signal,
+        );
       signal?.throwIfAborted();
+      if (oversized) {
+        diagnostics.push({
+          source: "workbuddy",
+          code: "file-too-large",
+          path: file.path,
+          count: 1,
+          message: `日志超过 ${MAX_JSONL_FILE_BYTES} 字节读取上限，已跳过。`,
+        });
+      }
       entry = {
         source: "workbuddy",
         path: file.path,
@@ -1310,6 +1392,7 @@ async function scanWorkbuddy(
         size: file.size,
         malformedLines: fileMalformedLines,
         events: fileEvents,
+        identities: fileIdentities,
         diagnostics: [],
       };
       filesParsed += 1;
@@ -1317,12 +1400,34 @@ async function scanWorkbuddy(
     cacheEntries.push(entry);
     filesRead += 1;
     malformedLines += entry.malformedLines;
-    events.push(
-      ...entry.events.filter((event) =>
-        isTimestampInRange(new Date(event.timestamp), cutoffTime, nowTime),
-      ),
-    );
   }
+
+  // P2-17: dedup across every file — freshly parsed and cache-reused alike —
+  // so a response present in both a newly parsed file and a reused rotated
+  // copy is counted once. Cached entries carry per-event identities; legacy
+  // entries without stored identities fall back to an event fingerprint.
+  const events: LocalUsageEvent[] = [];
+  const byIdentity = new Map<string, LocalUsageEvent>();
+  for (const entry of cacheEntries) {
+    const identities = entry.identities;
+    for (let index = 0; index < entry.events.length; index += 1) {
+      const event = entry.events[index];
+      if (!isTimestampInRange(new Date(event.timestamp), cutoffTime, nowTime)) {
+        continue;
+      }
+      const identity =
+        identities?.[index] ??
+        privacyFingerprint("workbuddy", [
+          event.sessionId ?? null,
+          event.timestamp,
+          event.totalTokens,
+          "workbuddy",
+        ]);
+      if (byIdentity.has(identity)) continue;
+      byIdentity.set(identity, event);
+    }
+  }
+  events.push(...byIdentity.values());
 
   let databaseDetected = false;
   // WorkBuddy can retain only cumulative session usage in SQLite. Use that as
@@ -1591,7 +1696,7 @@ async function parseGrokUsageFile(
   diagnostics: LocalUsageDiagnostic[];
 }> {
   const identifiedEvents: CachedIdentifiedEvent[] = [];
-  const malformedLines = await readJsonLines(
+  const { malformedLines, oversized } = await readJsonLines(
     file.path,
     (record) => {
       const params = asObject(record.params);
@@ -1613,7 +1718,7 @@ async function parseGrokUsageFile(
         const identityMaterial =
           eventId == null
             ? [timestamp.toISOString(), sessionId, model, counts]
-            : [eventId, model];
+            : [eventId, sessionId, model];
         identifiedEvents.push({
           identity: privacyFingerprint("grok", identityMaterial),
           event: {
@@ -1629,7 +1734,21 @@ async function parseGrokUsageFile(
     },
     signal,
   );
-  return { identifiedEvents, malformedLines, diagnostics: [] };
+  return {
+    identifiedEvents,
+    malformedLines,
+    diagnostics: oversized
+      ? [
+          {
+            source: "grok",
+            code: "file-too-large",
+            path: file.path,
+            count: 1,
+            message: `日志超过 ${MAX_JSONL_FILE_BYTES} 字节读取上限，已跳过。`,
+          },
+        ]
+      : [],
+  };
 }
 
 function openclawUsage(value: unknown): JsonObject | undefined {
@@ -1659,7 +1778,7 @@ async function parseOpenclawUsageFile(
   diagnostics: LocalUsageDiagnostic[];
 }> {
   const identifiedEvents: CachedIdentifiedEvent[] = [];
-  const malformedLines = await readJsonLines(
+  const { malformedLines, oversized } = await readJsonLines(
     file.path,
     (record) => {
       if (record.type !== "message") return;
@@ -1716,7 +1835,21 @@ async function parseOpenclawUsageFile(
     },
     signal,
   );
-  return { identifiedEvents, malformedLines, diagnostics: [] };
+  return {
+    identifiedEvents,
+    malformedLines,
+    diagnostics: oversized
+      ? [
+          {
+            source: "openclaw",
+            code: "file-too-large",
+            path: file.path,
+            count: 1,
+            message: `日志超过 ${MAX_JSONL_FILE_BYTES} 字节读取上限，已跳过。`,
+          },
+        ]
+      : [],
+  };
 }
 
 /** Legacy-compatible local estimate: CJK chars count one each, other text one per four chars. */
@@ -1793,7 +1926,7 @@ async function parseAntigravityUsageFile(
   let contextTokens = 0;
   let previousContextTokens = 0;
   let index = 0;
-  const malformedLines = await readJsonLines(
+  const { malformedLines, oversized } = await readJsonLines(
     file.path,
     (record) => {
       index += 1;
@@ -1844,7 +1977,21 @@ async function parseAntigravityUsageFile(
     },
     signal,
   );
-  return { identifiedEvents, malformedLines, diagnostics: [] };
+  return {
+    identifiedEvents,
+    malformedLines,
+    diagnostics: oversized
+      ? [
+          {
+            source: "antigravity",
+            code: "file-too-large",
+            path: file.path,
+            count: 1,
+            message: `日志超过 ${MAX_JSONL_FILE_BYTES} 字节读取上限，已跳过。`,
+          },
+        ]
+      : [],
+  };
 }
 
 /**
@@ -2217,7 +2364,7 @@ async function parseGenericFile(
     }
   }
   if (file.format === "jsonl") {
-    const malformedLines = await readJsonLines(
+    const { malformedLines, oversized } = await readJsonLines(
       file.path,
       (record) => {
         const event = eventFromMappedRecord(record, adapter, fallbackSessionId);
@@ -2227,6 +2374,16 @@ async function parseGenericFile(
       signal,
     );
     const diagnostics: LocalUsageDiagnostic[] = [];
+    if (oversized) {
+      diagnostics.push(
+        diagnostic(
+          adapter,
+          "file-too-large",
+          file.path,
+          `日志超过 ${MAX_JSONL_FILE_BYTES} 字节读取上限，已跳过。`,
+        ),
+      );
+    }
     if (malformedLines > 0) {
       diagnostics.push(
         diagnostic(
@@ -2341,7 +2498,6 @@ async function scanGenericAdapter(
     maxFiles,
     signal,
   );
-  const events: LocalUsageEvent[] = [];
   const cacheEntries: PersistentGenericFileEntry[] = [];
   const diagnostics: LocalUsageDiagnostic[] = [];
   let filesRead = 0;
@@ -2385,12 +2541,33 @@ async function scanGenericAdapter(
     cacheEntries.push(entry);
     filesRead += 1;
     malformedLines += entry.malformedLines;
-    events.push(
-      ...entry.events.filter((event) =>
-        isTimestampInRange(new Date(event.timestamp), cutoffTime, nowTime),
-      ),
-    );
   }
+
+  // P2-17: dedupe identical records across every file — freshly parsed and
+  // cache-reused alike — so rotated copies of the same log never accumulate.
+  // Only a structured session id participates in the identity; the file-derived
+  // fallback session id is excluded so identical session-less records in
+  // rotated copies collapse to one instead of double-counting.
+  const byIdentity = new Map<string, LocalUsageEvent>();
+  for (const entry of cacheEntries) {
+    const fileFallbackSessionId = sessionIdFromRelativeFile(
+      adapter.source,
+      relative(homeDirectory, entry.path),
+    );
+    for (const event of entry.events) {
+      if (!isTimestampInRange(new Date(event.timestamp), cutoffTime, nowTime)) {
+        continue;
+      }
+      const identity = genericEventIdentity(
+        adapter,
+        event,
+        fileFallbackSessionId,
+      );
+      if (byIdentity.has(identity)) continue;
+      byIdentity.set(identity, event);
+    }
+  }
+  const events = [...byIdentity.values()];
 
   return {
     events,
@@ -2411,6 +2588,29 @@ async function scanGenericAdapter(
     },
     cacheEntries,
   };
+}
+
+/**
+ * P2-17: dedup identity for a generic-adapter event. The event's session id
+ * participates only when it is a structured one; the file-derived fallback
+ * differs between rotated copies and would defeat cross-file dedup, so
+ * session-less records identify by (timestamp, totalTokens, source) alone.
+ */
+function genericEventIdentity(
+  adapter: UsageAdapterContract,
+  event: LocalUsageEvent,
+  fileFallbackSessionId: string,
+): string {
+  const sessionId =
+    event.sessionId != null && event.sessionId !== fileFallbackSessionId
+      ? event.sessionId
+      : null;
+  return privacyFingerprint(adapter.source, [
+    sessionId,
+    event.timestamp,
+    event.totalTokens,
+    adapter.source,
+  ]);
 }
 
 function sourceFailure(

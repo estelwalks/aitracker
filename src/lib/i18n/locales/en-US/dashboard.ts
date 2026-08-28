@@ -223,7 +223,7 @@ export const dashboard = {
     todayUsage: "Today's usage",
     viewUsage: "View usage",
     viewTools: "Agent view",
-    viewScan: "Scan now",
+    viewScan: "Check now",
     viewAssets: "View assets",
     viewTokens: "Usage details",
     eventShort: "Usage events",

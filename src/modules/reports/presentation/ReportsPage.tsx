@@ -50,8 +50,6 @@ const PeriodCalendar = lazy(() =>
   })),
 );
 
-const WEEKDAY_SUFFIX = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-
 const KINDS: {
   k: PeriodGranularity;
   labelKey: "reports.kind.day" | "reports.kind.week" | "reports.kind.month";
@@ -106,6 +104,7 @@ function periodModel(
   granularity: PeriodGranularity,
   key: string,
   t: ReturnType<typeof useI18n>["t"],
+  format: ReturnType<typeof useI18n>["format"],
 ): PeriodModel {
   const start = periodStartDate(granularity, key);
   const safeStart = start ?? new Date();
@@ -119,7 +118,8 @@ function periodModel(
       key,
       from: key,
       to: key,
-      label: `${year}年${month}月${day}日 · ${WEEKDAY_SUFFIX[safeStart.getDay()]}`,
+      // Locale-aware date + weekday (zh: 2026/02/11周三, en: 02/11/2026 Wed).
+      label: format.formatDate(safeStart, { weekday: "short" }),
       short: `${month}/${day}`,
     };
   }
@@ -138,8 +138,8 @@ function periodModel(
       key,
       from,
       to,
-      label: `${year}年 ${month}/${day} – ${sunday.getMonth() + 1}/${sunday.getDate()} ${suffix}`,
-      short: `${month}/${day}周`,
+      label: `${format.formatDate(monday)} – ${format.formatDate(sunday)} ${suffix}`,
+      short: `${month}/${day}`,
     };
   }
   const lastDay = new Date(year, month, 0).getDate();
@@ -148,7 +148,11 @@ function periodModel(
     key,
     from: `${key}-01`,
     to: `${key}-${pad(lastDay)}`,
-    label: `${year} 年 ${month} 月`,
+    label: format.formatDate(lastDay, {
+      year: "numeric",
+      month: "long",
+      day: undefined,
+    }),
     short: `${year}-${pad(month)}`,
   };
 }
@@ -218,13 +222,13 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
     const out: PeriodModel[] = [];
     for (let index = 0; index < span; index += 1) {
       const key = addPeriods(kind, anchor, -index);
-      out.push(periodModel(kind, key, t));
+      out.push(periodModel(kind, key, t, format));
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, now]);
+  }, [kind, now, format]);
 
-  const period = periodModel(kind, selectedKey, t);
+  const period = periodModel(kind, selectedKey, t, format);
   const periodMetric = useMemo(
     () => sumPeriodDensity(feed.density, kind, selectedKey),
     [feed.density, kind, selectedKey],
@@ -330,7 +334,13 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
       dirtyRef.current = false;
       void removePreference(mdKey(selectedKey));
       flush();
-      toast.success(t("reports.body.save"));
+      if (result.truncated) {
+        // P1-10: the durable storage boundary (60,000 chars) truncated the
+        // body; warn explicitly instead of the save appearing lossless.
+        toast.warning(t("reports.body.truncated"));
+      } else {
+        toast.success(t("reports.body.save"));
+      }
     } catch {
       toast.error(t("common.failed"));
     }
@@ -451,7 +461,9 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                     kind === "day"
                       ? `${Number(f.slice(5, 7))}/${Number(f.slice(8, 10))}`
                       : kind === "month"
-                        ? `${Number(f.slice(5, 7))}月`
+                        ? t("reports.period.monthShort", {
+                            month: Number(f.slice(5, 7)),
+                          })
                         : `${Number(f.slice(5, 7))}/${Number(f.slice(8, 10))}–${Number(item.to.slice(5, 7))}/${Number(item.to.slice(8, 10))}`;
                   return (
                     <button

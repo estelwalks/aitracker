@@ -62,6 +62,17 @@ export const market = {
   },
   installed: "已安装",
   domainAll: "全部",
+  domain: {
+    ai: "AI与自动化",
+    dev: "开发",
+    data: "数据与分析",
+    ops: "运维",
+    security: "安全与测试",
+    productivity: "生产力",
+    docs: "文档",
+    cloud: "云与性能",
+    design: "设计与前端",
+  },
   card: {
     detail: "详情",
     publisher: "发布者",

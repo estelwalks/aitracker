@@ -56,21 +56,67 @@ import { compactNumber, formatSizeBytes } from "../../skill-catalog/index.ts";
 import { AgentInstallBar } from "./AgentInstallBar.tsx";
 
 /** Fixed market category taxonomy → upstream `tags` slugs. */
-const MARKET_DOMAINS = [
-  { label: "AI与自动化", icon: Bot, tags: ["ai", "automation", "ml"] },
-  { label: "开发", icon: Code2, tags: ["backend", "frontend", "api"] },
-  { label: "数据与分析", icon: BarChart3, tags: ["data", "analytics"] },
-  { label: "运维", icon: Server, tags: ["devops", "cli", "scripting"] },
+const MARKET_DOMAINS: ReadonlyArray<{
+  value: string;
+  labelKey: MessageKey;
+  icon: typeof Bot;
+  tags: readonly string[];
+}> = [
   {
-    label: "安全与测试",
+    value: "ai",
+    labelKey: "market.domain.ai",
+    icon: Bot,
+    tags: ["ai", "automation", "ml"],
+  },
+  {
+    value: "dev",
+    labelKey: "market.domain.dev",
+    icon: Code2,
+    tags: ["backend", "frontend", "api"],
+  },
+  {
+    value: "data",
+    labelKey: "market.domain.data",
+    icon: BarChart3,
+    tags: ["data", "analytics"],
+  },
+  {
+    value: "ops",
+    labelKey: "market.domain.ops",
+    icon: Server,
+    tags: ["devops", "cli", "scripting"],
+  },
+  {
+    value: "security",
+    labelKey: "market.domain.security",
     icon: ShieldCheck,
     tags: ["security", "testing", "debugging"],
   },
-  { label: "生产力", icon: Zap, tags: ["productivity"] },
-  { label: "文档", icon: FileText, tags: ["docs", "code-review"] },
-  { label: "云与性能", icon: Cloud, tags: ["cloud", "performance"] },
-  { label: "设计与前端", icon: Palette, tags: ["design", "frontend"] },
-] as const;
+  {
+    value: "productivity",
+    labelKey: "market.domain.productivity",
+    icon: Zap,
+    tags: ["productivity"],
+  },
+  {
+    value: "docs",
+    labelKey: "market.domain.docs",
+    icon: FileText,
+    tags: ["docs", "code-review"],
+  },
+  {
+    value: "cloud",
+    labelKey: "market.domain.cloud",
+    icon: Cloud,
+    tags: ["cloud", "performance"],
+  },
+  {
+    value: "design",
+    labelKey: "market.domain.design",
+    icon: Palette,
+    tags: ["design", "frontend"],
+  },
+];
 
 type TFunction = <K extends MessageKey>(
   key: K,
@@ -92,12 +138,12 @@ function securityOf(skill: MarketSkill, t: TFunction): SecurityState {
  * 真实 tags → 领域分类标签（原型行内领域徽章）。没有匹配到领域时返回
  * null，调用方不渲染徽章——避免在列表名称与安全状态之间出现占位的 "-"。
  */
-function domainOf(skill: MarketSkill): string | null {
+function domainOf(skill: MarketSkill, t: TFunction): string | null {
   const tags = new Set(skill.tags ?? []);
   const matched = MARKET_DOMAINS.find((item) =>
     item.tags.some((tag) => tags.has(tag)),
   );
-  return matched?.label ?? skill.tags?.[0] ?? null;
+  return matched ? t(matched.labelKey) : (skill.tags?.[0] ?? null);
 }
 
 const SORT_OPTIONS: { value: MarketSort; labelKey: MessageKey }[] = [
@@ -161,7 +207,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
           if (cancelled) return;
           setDomainCounts((prev) => ({
             ...prev,
-            [item.label]: next.pagination?.total ?? 0,
+            [item.value]: next.pagination?.total ?? 0,
           }));
         })
         .catch(() => undefined);
@@ -178,7 +224,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
       domain === "all"
         ? undefined
         : [
-            ...(MARKET_DOMAINS.find((item) => item.label === domain)?.tags ??
+            ...(MARKET_DOMAINS.find((item) => item.value === domain)?.tags ??
               []),
           ];
     const forceRefresh = forceRefreshRef.current;
@@ -421,13 +467,13 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
             </span>
           </button>
           {MARKET_DOMAINS.map((item) => {
-            const on = domain === item.label;
+            const on = domain === item.value;
             return (
               <button
-                key={item.label}
+                key={item.value}
                 type="button"
                 onClick={() => {
-                  setDomain(item.label);
+                  setDomain(item.value);
                   setPage(1);
                 }}
                 className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] transition-colors ${
@@ -437,9 +483,9 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                 }`}
               >
                 <item.icon className="size-4 shrink-0" strokeWidth={1.8} />
-                {item.label}
+                {t(item.labelKey)}
                 <span className="ml-0.5 text-[10px] opacity-60">
-                  {domainCounts[item.label] ?? 0}
+                  {domainCounts[item.value] ?? 0}
                 </span>
               </button>
             );
@@ -470,6 +516,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
             <ul className="overflow-hidden rounded-xl border border-border bg-card">
               {result.skills.map((skill, index) => {
                 const security = securityOf(skill, t);
+                const domain = domainOf(skill, t);
                 const installed =
                   installedBySkill.byName.get(skill.name) ??
                   installedBySkill.byMarket.get(
@@ -512,9 +559,9 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                           >
                             {skill.name}
                           </button>
-                          {domainOf(skill) != null && (
+                          {domain != null && (
                             <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-px text-[11px] text-muted-foreground">
-                              {domainOf(skill)}
+                              {domain}
                             </span>
                           )}
                           <span
@@ -740,7 +787,7 @@ function MarketDetailModal({
             className="aitracker-num truncate font-mono text-[11.5px] text-muted-foreground"
             title={repoSlug}
           >
-            源路径：{repoSlug}
+            {t("market.detail.sourcePath")}：{repoSlug}
           </div>
           <p className="text-[12.5px] leading-relaxed text-muted-foreground">
             {skill.description ??

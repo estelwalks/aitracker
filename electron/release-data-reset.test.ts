@@ -14,6 +14,7 @@ import test from "node:test";
 
 import {
   completeReleaseDataResetAfterWarmup,
+  markReleaseDataResetComplete,
   prepareReleaseDataReset,
   readReleaseDataResetMarker,
   type ReleaseDataResetOptions,
@@ -218,6 +219,53 @@ test("packaged desktop reset rejects an invalid or dangerously broad home", asyn
       }),
       /outside the reset target/,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a declined reset writes the completion marker without deleting data", async () => {
+  const { root, options } = await fixture();
+  try {
+    const target = join(options.homeDirectory, ".aitracker");
+    await mkdir(join(target, "data"), { recursive: true });
+    await writeFile(join(target, "data", "aitracker.v1.db"), "keep-me");
+
+    // Cancel path: persist completion only, never touch the data.
+    await markReleaseDataResetComplete(options);
+    assert.equal(
+      await readFile(join(target, "data", "aitracker.v1.db"), "utf8"),
+      "keep-me",
+    );
+    const marker = JSON.parse(
+      (await readReleaseDataResetMarker(options)) ?? "null",
+    ) as Record<string, unknown>;
+    assert.equal(marker.appVersion, "3.0.1");
+    assert.equal(marker.resetCode, "initial-schema-v1");
+
+    // The marker now suppresses any further destructive attempt on next launch.
+    const next = await prepareReleaseDataReset(options);
+    assert.equal(next.status, "already-completed");
+    assert.equal(
+      await readFile(join(target, "data", "aitracker.v1.db"), "utf8"),
+      "keep-me",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("declined-reset completion marker is a no-op off darwin/win32 or unpackaged", async () => {
+  const { root, options } = await fixture();
+  try {
+    const target = join(options.homeDirectory, ".aitracker");
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, "retained.txt"), "safe");
+
+    await markReleaseDataResetComplete({ ...options, isPackaged: false });
+    await markReleaseDataResetComplete({ ...options, platform: "linux" });
+    assert.equal(await readReleaseDataResetMarker(options), null);
+    assert.equal(await readFile(join(target, "retained.txt"), "utf8"), "safe");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -117,8 +117,16 @@ export function eventFromMappedRecord(
     adapter.mapping.reasoningOutputTokens,
   );
   const mappedTotalTokens = tokenValue(record, adapter.mapping.totalTokens);
+  // P1-8: the component total covers every consumed token class. Reasoning is
+  // parsed separately from output (mapping.reasoningOutputTokens) and must be
+  // included; a mapping-provided `totalTokens` wins only when no components
+  // were observed at all.
   const componentTotal =
-    inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
+    inputTokens +
+    cachedInputTokens +
+    cacheCreationInputTokens +
+    outputTokens +
+    reasoningOutputTokens;
   const totalTokens = componentTotal > 0 ? componentTotal : mappedTotalTokens;
   if (totalTokens === 0) {
     return undefined;

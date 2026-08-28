@@ -90,3 +90,39 @@ test("Doubao tiered pricing is resolved offline from rule packs (parity at USD@7
     applyPricingSnapshot(null);
   }
 });
+
+test("DSH reasoning tokens are billed via declared tokenSemantics (reasoningIncludedInOutput=false)", async () => {
+  const { estimateEventCost } = await import("./index.ts");
+  const { applyPricingSnapshot } = await import("./index.ts");
+  try {
+    applyPricingSnapshot(null);
+    const base = {
+      source: "dsh" as const,
+      timestamp: "2026-07-28T10:00:00.000Z",
+      model: "deepseek-v4-pro",
+      project: "test",
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 0,
+    };
+    const withoutReasoning = estimateEventCost({ ...base });
+    const withReasoning = estimateEventCost({
+      ...base,
+      reasoningOutputTokens: 1_000_000,
+      totalTokens: 1_000_000,
+    });
+    assert.equal(withoutReasoning.estimatedUsd, 0);
+    // 1M reasoning tokens on deepseek-v4-pro must be billed at the reasoning
+    // rate (0.87 USD/M); before the tool JSON declared tokenSemantics this was
+    // silently priced at 0.
+    assert.ok(
+      Math.abs(withReasoning.estimatedUsd - 0.87) < 1e-6,
+      `expected reasoning billing, got ${withReasoning.estimatedUsd}`,
+    );
+  } finally {
+    applyPricingSnapshot(null);
+  }
+});
