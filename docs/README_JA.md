@@ -189,6 +189,12 @@ Issueや、新しいAIツールへの対応に関する提案を歓迎します�
 
 ---
 
+## ライセンス
+
+AITrackerはGNU General Public License version 3以降（GPL-3.0-or-later）の下でライセンスされています。詳しくは[LICENSE](../LICENSE)をご覧ください。
+
+---
+
 ## Star
 
 AITrackerがお役に立ったら、ぜひプロジェクトにStarをお願いします。ありがとうございます。
