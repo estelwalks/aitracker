@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -185,15 +184,6 @@ export function ReportSchedule({
                 onSave={(next) => void saveSchedule(kind, next)}
               />
             ))}
-            <div className="flex justify-end pt-3">
-              <Link
-                to="/settings"
-                search={{ section: "reports" }}
-                className="font-mono text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-              >
-                {t("reports.schedule.openSettings")}
-              </Link>
-            </div>
           </div>
         )}
       </section>

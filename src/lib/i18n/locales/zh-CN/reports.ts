@@ -54,7 +54,6 @@ export const reports = {
     allDisabled: "日报、周报、月报均未开启",
     disabledKinds: "{kinds}未开启",
     kindSeparator: "、",
-    openSettings: "前往设置查看完整配置",
     enable: "开启自动定时生成",
     recommend: "推荐节奏：每日 18:00",
     configure: "设置",

@@ -55,7 +55,6 @@ export const reports = {
     allDisabled: "일일·주간·월간 일정이 모두 꺼져 있습니다",
     disabledKinds: "{kinds} 꺼짐",
     kindSeparator: "·",
-    openSettings: "전체 일정 설정 열기",
     enable: "자동 정기 생성 활성화",
     recommend: "권장 주기: 매일 18:00",
     configure: "설정",

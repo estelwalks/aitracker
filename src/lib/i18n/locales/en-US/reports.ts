@@ -58,7 +58,6 @@ export const reports = {
     allDisabled: "Daily, weekly, and monthly schedules are off",
     disabledKinds: "Off: {kinds}",
     kindSeparator: ", ",
-    openSettings: "Open full schedule settings",
     enable: "Enable automatic generation",
     recommend: "Recommended cadence: daily at 18:00",
     configure: "Configure",

@@ -52,7 +52,6 @@ export const reports = {
     allDisabled: "日報・週報・月報の予定はすべて無効です",
     disabledKinds: "{kinds}は無効です",
     kindSeparator: "・",
-    openSettings: "完全なスケジュール設定を開く",
     enable: "自動定期生成を有効にする",
     recommend: "推奨リズム：毎日 18:00",
     configure: "設定",
