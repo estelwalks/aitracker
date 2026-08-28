@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useI18n } from "../../../lib/i18n/context";
@@ -7,7 +7,11 @@ import {
   readCachedWidgetReadModel,
   writeCachedWidgetReadModel,
 } from "../read-model-cache";
-import { useNativeTrayTitleSync } from "./native-tray-title-sync";
+import {
+  startNativeTrayInsightRotation,
+  useNativeTrayTitleSync,
+} from "./native-tray-title-sync";
+import { buildMenuBarInsights } from "./menu-bar-display";
 import { useWidgetPrefs } from "./widget-prefs";
 
 const TRAY_SUMMARY_INTERVAL_MS = 60_000;
@@ -19,6 +23,7 @@ const TRAY_SUMMARY_INTERVAL_MS = 60_000;
 export function NativeTrayTitleSync() {
   const { locale, t, format } = useI18n();
   const { prefs, hydrated } = useWidgetPrefs();
+  const [insightIndex, setInsightIndex] = useState(0);
   const queryClient = useQueryClient();
   const desktopAvailable =
     typeof window !== "undefined" && window.desktopApi != null;
@@ -71,6 +76,36 @@ export function NativeTrayTitleSync() {
       : t("widget.cacheRate", {
           percent: Math.round(today.cacheRate),
         });
+  const hasData = summaryQuery.data?.hasData === true;
+  const insights = useMemo(() => {
+    if (!hasData) return buildMenuBarInsights([t("widget.noData")]);
+    return buildMenuBarInsights([
+      top?.name,
+      detail,
+      today?.sessions == null
+        ? null
+        : t("widget.jarvisSessionsConcise", { count: today.sessions }),
+    ]);
+  }, [detail, hasData, t, today?.sessions, top]);
+
+  useEffect(() => {
+    setInsightIndex(0);
+  }, [insights]);
+
+  useEffect(() => {
+    if (!prefs.menuBarEnabled || insights.length <= 1) return undefined;
+    return startNativeTrayInsightRotation(
+      prefs.rotate,
+      insights.length,
+      () =>
+        setInsightIndex(
+          (current) => (current + 1) % Math.max(insights.length, 1),
+        ),
+      window,
+    );
+  }, [insights.length, prefs.menuBarEnabled, prefs.rotate]);
+
+  const insight = insights[insightIndex % Math.max(insights.length, 1)];
 
   useNativeTrayTitleSync(
     {
@@ -78,6 +113,7 @@ export function NativeTrayTitleSync() {
       tokens: format.formatTokens(today?.tokens ?? 0),
       tool: top?.name ?? t("widget.noData"),
       detail,
+      insight,
     },
     desktopAvailable && hydrated && today != null,
   );
