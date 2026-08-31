@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { APP_NAME } from "../lib/app-config";
 import { useI18n } from "../lib/i18n/context";
 
-/** 自绘标题栏高度（px），与 styles.css 中 .aitracker-window-chrome 的 height 保持一致。 */
+/** The height of the self-drawn title bar (px) is consistent with the height of .aitracker-window-chrome in styles.css. */
 export const WINDOW_CHROME_HEIGHT = 36;
 
-/** macOS 红绿灯按钮位于标题栏左侧，需要预留空间（hiddenInset 下约 78px）。 */
+/** The macOS traffic light button is located on the left side of the title bar and requires space (about 78px under hiddenInset). */
 const MAC_TRAFFIC_LIGHT_INSET = 78;
 
 type DesktopApi = NonNullable<Window["desktopApi"]>;
@@ -35,9 +35,9 @@ function resolveWindowChromeEnvironment(
 }
 
 /**
- * 打包桌面端的自绘标题栏：整条可拖拽（-webkit-app-region: drag），右侧提供
- * 最小化 / 最大化 / 关闭按钮（Windows/Linux；macOS 保留原生红绿灯按钮）。
- * 浏览器预览或浮窗（/widget?mode=float）中不渲染。
+ * Package the self-drawn title bar on the desktop: the entire bar can be dragged (-webkit-app-region: drag), provided on the right
+ * Minimize/Maximize/Close buttons (Windows/Linux; macOS retains native traffic light buttons).
+ * Not rendered in browser preview or floating window (/widget?mode=float).
  */
 export function WindowChrome() {
   const { t } = useI18n();

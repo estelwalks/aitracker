@@ -61,7 +61,7 @@ function parseSkill(value: unknown): MarketSkill {
       ? value.tags.filter((tag): tag is string => typeof tag === "string")
       : [],
     updatedAt: optionalString(value.updated_at),
-    // 外接 API 不返回安装数等不准统计字段，体积由调用方按需 HEAD 预取后回填。
+    // The external API does not return inaccurate statistical fields such as the number of installations, and the volume is backfilled by the caller after prefetching it from HEAD on demand.
     size: optionalNumber(value.size ?? value.compressed_bytes),
     version: null,
     rating: null,

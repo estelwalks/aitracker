@@ -122,7 +122,7 @@ export interface DistillationRequest {
    */
   readonly providerId?: string;
   /**
-   * Output kind the run should produce (prototype 出产物: skill/workflow/prompt
+   * Output kind the run should produce (prototype output: skill/workflow/prompt
    * into the capability group, profile/task into memory). Absent → "memory".
    */
   readonly kind?: CandidateOutput["kind"];
@@ -161,8 +161,8 @@ export interface CandidateOutput {
   readonly selectedSessionRefs: readonly SessionRef[];
   readonly generatedAt: string;
   /**
-   * 批准后对应的知识资产 id（记忆资产 → 记忆库条目）。批准时写入并持久化，
-   * 用于从候选卡跳回记忆库。能力资产（brief/skill/prompt）不落知识库则为空。
+   * The corresponding knowledge asset id after approval (memory asset → memory database entry). Written and persisted on approval,
+   * Used to jump back to the memory bank from a candidate card. If the capability asset (brief/skill/prompt) is not in the knowledge base, it will be empty.
    */
   readonly knowledgeAssetId?: string;
   readonly execution: AIExecutionSummary;
@@ -261,9 +261,9 @@ export interface DistillationApplication {
 }
 
 export interface DistillationAssetCounts {
-  /** 能力资产：skill 类蒸馏产物（知识库 kind 非 memory）。 */
+  /** Capability assets: skill distillation products (knowledge base kind, not memory). */
   readonly capability: number | null;
-  /** 记忆资产：知识库 kind = memory。 */
+  /** Memory asset: knowledge base kind = memory. */
   readonly memory: number | null;
 }
 

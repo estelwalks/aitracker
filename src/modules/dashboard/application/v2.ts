@@ -22,7 +22,7 @@ import type { MonitoringStatus } from "../../monitoring/index.ts";
 
 // Window definitions for the dashboard presentation ("recent/live" and
 // "heartbeat" buckets). These are view semantics, NOT freshness policies —
-// per the runtime-policy governance rule (§3.4 规则 7) view parameters stay
+// per the runtime-policy governance rule (§3.4 Rule 7) view parameters stay
 // in their module; snapshot freshness lives in
 // `runtime-policy.source.json` -> snapshotPolicies.usage.
 const liveWindowMs = 15 * 60 * 1000;
@@ -548,7 +548,7 @@ function selectedSessions(
   return sessionCountBetween(snapshot, range.fromDate, range.toDate);
 }
 
-/** 统计 [fromDate, toDate] 内的会话数（用于当前区间与上一区间对比）。 */
+/** Count the number of sessions within [fromDate, toDate] (used to compare the current interval with the previous interval). */
 function sessionCountBetween(
   snapshot: DashboardV2Snapshot,
   fromDate: Date | null,
@@ -833,7 +833,7 @@ export function createDashboardV2View(
         previousRange.toDate,
       )
     : null;
-  // 上一周期为 0 或不可比时不展示任何具体数值（百分比无定义，仅保留基准文案）。
+  // When the previous period is 0 or incomparable, no specific value is displayed (the percentage is not defined, only the benchmark text is retained).
   const sessionsComparison: DashboardV2MetricDelta =
     currentSessions != null && previousSessions != null
       ? {

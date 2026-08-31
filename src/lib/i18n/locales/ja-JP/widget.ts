@@ -45,13 +45,13 @@ export const widget = {
   noData: "データなし",
   noDataDesc:
     "ローカル AI ツールの使用量がまだ観測されていません。スキャン後にリアルタイム指標が表示されます",
-  // フローティングパネルヘッダー
+// Floating-panel header
   updatedAt: "{time} 更新",
   refresh: "更新",
   widgetSettings: "ウィジェット設定",
   backToPanel: "パネルに戻る",
   nextLine: "次へ",
-  // セキュリティタブ
+// Security tab
   securityTitle: "セキュリティスキャン",
   scannedSkills: "{count} 個の Skill",
   safeCount: "{count} 安全",
@@ -62,7 +62,7 @@ export const widget = {
   lastScan: "前回スキャン {time}",
   scanNow: "今すぐ検査",
   goScan: "スキャンへ",
-  // 使用量タブ
+  // Usage amount
   usageTitle: "トークン消費",
   totalTokens: "合計",
   estimatedCost: "推定コスト",
@@ -75,14 +75,14 @@ export const widget = {
   enabled: "オン",
   disabled: "オフ",
   trendPoint: "{date} {tokens}",
-  // 今日タブ
+  // Today's day
   todaySummary: "今日のサマリー",
   toolCount: "ツール",
   sessionCount: "セッション",
   tokenCount: "トークン",
   last7d: "直近 7 日",
   todayByTool: "今日のツール別",
-  // メニューバー
+// Menu bar
   barStyle: "表示スタイル",
   barStyleHint:
     "数字＝リアルタイムのトークン消費、状態ドット＝セキュリティ緑/黄/赤",
@@ -94,7 +94,7 @@ export const widget = {
   barClickMain: "メインウィンドウを開く",
   safe: "安全",
   riskCount: "{count} リスク",
-  // 設定パネル
+  // Setting up the program
   configBar: "メニューバー",
   configPanel: "フローティングパネル",
   configDesktop: "デスクトップウィジェット",
@@ -124,7 +124,7 @@ export const widget = {
   themeDark: "ダーク",
   themeSystem: "システムに従う",
   resetDefaults: "既定に戻す",
-  // ジャービスアナウンス（口語調 / 簡潔はトーンで切替）
+// Jarvis announcements (spoken and concise variants are selected by tone).
   jarvisIdle: "すべてアイドル、見守っています。",
   jarvisIdleConcise: "アクティビティなし",
   jarvisDanger:
@@ -143,7 +143,7 @@ export const widget = {
   jarvisSessionsConcise: "今日のセッション {count}",
   jarvisTotal: "今日は合計 {tokens} トークンを消費しました。",
   jarvisTotalConcise: "今日 {tokens}",
-  // デスクトップウィジェット
+// Desktop widgets
   dwTools: "TOOLS",
   dwActive: "{count} アクティブ",
   dwSecurity: "SECURITY",
@@ -164,11 +164,11 @@ export const widget = {
   dwIdle: "アイドル",
   dwToolTop: "今日の消費 Top {count}",
   dwCost: "推定コスト {cost}",
-  // パネルフッター
+// Panel footer
   openDashboard: "開く",
   generateReport: "レポート生成",
   openSettings: "設定",
-  // トレイ
+// Tray
   trayToday: "今日",
   trayWeek: "7 日",
   trayMonth: "30 日",

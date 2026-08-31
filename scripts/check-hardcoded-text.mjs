@@ -10,7 +10,7 @@
  *   - comments (`//`, `/* * /`, `/** * /`) are stripped before scanning;
  *   - backtick template literals (generated artifacts/document templates) are
  *     treated as data — UI copy must use t("…") or JSX text;
- *   - whitelisted files (data-bearing modules with 不翻译 values) are skipped;
+ *   - whitelisted files (data-bearing modules with untranslated values) are skipped;
  *   - whitelisted patterns (tool names, product names, tech terms) pass;
  *   - Chinese inside an existing `t("…")` call is fine (it's the zh-CN
  *     dictionary source — but dictionaries live in src/lib/i18n/locales,
@@ -30,10 +30,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const reportOnly = process.argv.includes("--report");
 
 // Files whose Chinese values are data (rule names/kinds, statuses) per the
-// "不翻译"原则 — display labels map through the dictionaries instead.
+// "No translation" principle — display labels map through the dictionaries instead.
 const WHITELISTED_FILES = new Set([
-  // security 规则名/kind 保持中文(扫描规则标识不翻译)
-  "src/routes/security.tsx", // 保留:rules 数据直显;其余文案应迁移
+  // Security rule name/kind remains in Chinese (scanning rule identifiers are not translated)
+  "src/routes/security.tsx", // Retain: rules data is displayed directly; the rest of the copy should be migrated
 ]);
 
 // Pass-through phrases (tool names, tech terms, punctuation). The app's own
@@ -60,9 +60,9 @@ const WHITELIST_PATTERNS = [
 ];
 
 /**
- * 「中文即数据」值——按文档原则(原值不变,展示层经 label 映射翻译),
- * 这些字符串作为数据值/比较键保留中文,不做 UI 迁移。
- * 新增此类数据值时须在此登记并配 label 映射。
+ * "Chinese is data" value - according to the document principle (the original value remains unchanged, the display layer is translated through label mapping),
+ * These strings are retained in Chinese as data values/comparison keys and will not be migrated to the UI.
+ * When adding such data values, they must be registered here and equipped with label mapping.
  */
 const DATA_VALUES = [
   "通用",
@@ -86,7 +86,7 @@ const DATA_VALUES = [
   "低危",
   "内置规则",
   "用户规则",
-  // 蒸馏产物包生成模板的兜底来源标签（生成的 Skill 文件内容,非 UI 文案）
+  // The source tag of the distillation product package generation template (generated Skill file content, not UI copywriting)
   "近期素材",
 ];
 
@@ -102,11 +102,11 @@ function stripComments(source) {
     .replace(/\/\/.*$/gm, "");
 }
 
-/** label 映射行:中文值作对象 key,值为字典 key(如 高危: "security.severity.high") */
+/** label mapping line: Chinese value is used as object key, value is dictionary key (such as high risk: "security.severity.high") */
 const LABEL_MAP_LINE_RE =
   /^\s*["'“”]?[一-鿿぀-ヿ가-힯]+["'“”]?\s*:\s*["'][a-z][\w.]*["'],?\s*$/;
 
-/** 数据值比较/赋值/联合类型声明行(如 category === "通用"、type X = "安全" | ...) */
+/** Data value comparison/assignment/union type declaration line (such as category === "general", type X = "safe" | ...) */
 function isDataValueLine(line) {
   const quoted = [
     ...line.matchAll(/["']([^"']*[一-鿿぀-ヿ가-힯][^"']*)["']/g),
@@ -169,7 +169,7 @@ for (const file of listFiles()) {
     }
     if (lineStartsInsideTemplate || lineOpensTemplate) return;
     if (!CJK_RE.test(line)) return;
-    // 已迁移行:t("…") 或 t( 跨行调用、字典 key 引用不算违规。
+    // Migrated rows: t("...") or t( cross-row calls and dictionary key references are not violations.
     if (/\bt\(\s*["']/.test(line)) return;
     if (LABEL_MAP_LINE_RE.test(line)) return;
     if (isDataValueLine(line)) return;

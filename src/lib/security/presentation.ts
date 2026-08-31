@@ -8,7 +8,7 @@ export interface SecurityStats {
   averageDurationMs: number;
 }
 
-/** 统计只根据已保留的近 30 天本地历史计算，不引入远端或模拟数据。 */
+/** Statistics are calculated only based on the local history that has been retained for the past 30 days, and no remote or simulated data is introduced. */
 export function getSecurityStats(history: SecurityReport[]): SecurityStats {
   const stats: SecurityStats = {
     scanned: history.length,

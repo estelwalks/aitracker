@@ -22,10 +22,10 @@ export interface SkillCardSecurity {
 }
 
 /**
- * 原型对齐的单行 Skill 条目（列表行而非卡片）：安全徽章 + 名称行（蒸馏
- * Brain 标识、来源、Token/体积、已装 Agent 安装条）+ 一行描述 + 详情箭头。
- * 行内安装条即原型 AgentInstallBar：图标钮点亮=已装、灰态=可装，点击安装/
- * 卸载，Plus 钮全选/全不选——交互接到真实后端（SkillsPage 提供回调）。
+ * Archetype aligned single line skill entry (list line not card): security badge + name line (distilled
+ * Brain logo, source, Token/volume, installed Agent installation bar) + one-line description + detail arrow.
+ * The inline installation bar is the prototype AgentInstallBar: the icon button is lit = installed, gray = can be installed, click to install/
+ * Uninstall, Plus button select all/unselect all - interactively connected to the real backend (SkillsPage provides callback).
  */
 export function SkillListRow({
   skill,
@@ -44,11 +44,11 @@ export function SkillListRow({
   security?: SkillCardSecurity;
   blacklisted: boolean;
   index: number;
-  /** 本地已探测到客户端的可安装 Agent（原型 availableAgents）。 */
+  /** The client's installable Agents (prototype availableAgents) have been detected locally. */
   availableAgents: readonly SkillAgent[];
-  /** 安装/卸载进行中的 Agent（该 Agent 显示 loading 并禁用）。 */
+  /** Installation/uninstallation of an agent in progress (the agent shows loading and is disabled). */
   pendingAgents?: ReadonlySet<string> | null;
-  /** 点击单个 Agent 安装/卸载。agent 按 string 传递，与 AgentInstallBar 一致。 */
+  /** Click a single Agent to install/uninstall. The agent is passed as a string, consistent with AgentInstallBar. */
   onToggleAgent: (agent: string, next: boolean) => void;
   onSelect: () => void;
   onOpen: () => void;

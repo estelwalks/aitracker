@@ -52,7 +52,7 @@ const DASHBOARD_INSIGHT_PROMPT = {
 
 // Interaction-level cache for the dashboard AI insight card (POST-only
 // refresh path). Not a snapshot freshness/refresh cycle — per the
-// runtime-policy governance rule (§3.4 规则 7) local interaction parameters
+// runtime-policy governance rule (§3.4 Rule 7) local interaction parameters
 // stay in their module; Usage freshness lives in
 // `runtime-policy.source.json` -> snapshotPolicies.usage.
 const INSIGHT_TTL_MS = 5 * 60 * 1000;

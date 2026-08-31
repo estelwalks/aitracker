@@ -76,7 +76,7 @@ test("汇率: refresh 成功 → live 并写缓存; 随后页面读取走 cache 
         headers: { "content-type": "application/json" },
       });
     };
-    // 后台/手动刷新路径显式请求网络。
+    // Background/manual refresh path explicitly requests network.
     const first = await buildPricingSnapshot([], {
       homeDirectory: home,
       cache,
@@ -89,7 +89,7 @@ test("汇率: refresh 成功 → live 并写缓存; 随后页面读取走 cache 
     assert.equal(first.exchangeRates.KRW, 1360);
     assert.equal(fetches, 1);
 
-    // 页面读取路径 cache-only:缓存新鲜 → cache,不再请求
+    // Page read path cache-only: cache fresh → cache, no longer requested
     const second = await buildPricingSnapshot([], {
       homeDirectory: home,
       cache,
@@ -117,8 +117,8 @@ test("汇率: 缓存过期后页面读取直接 stale-cache 保留旧值", async
     });
     assert.equal(fresh.exchangeRateSource, "live");
 
-    // 策略 freshForMinutes=1440(1 天),两天后缓存过期;页面读取 cache-only
-    // → stale-cache(绝不因页面读取发起网络)
+    // Strategy freshForMinutes=1440 (1 day), cache expires after two days; page read cache-only
+    // → stale-cache (never initiate network due to page reading)
     let fetches = 0;
     const countingFetcher: typeof fetch = async () => {
       fetches += 1;

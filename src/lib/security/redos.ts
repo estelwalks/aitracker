@@ -1,37 +1,37 @@
 /**
- * 自研 ReDoS（灾难性回溯）安全正则检测器（偏差问题清单 P1 / F4-T1）。
+ * Self-developed ReDoS (catastrophic backtracking) secure regularity detector (deviation issue list P1/F4-T1).
  *
- * 为什么独立成模块：`security-rules.schema.ts` 需要在模块顶层使用
- * `rules.ts` 导出的 `SECURITY_RULE_KINDS`（构建期 Zod schema 校验）；而
- * `rules.ts` 的 `validateSecurityRulePattern` 也要复用同一个检测器。若把检测器
- * 放进 schema.ts，会形成 rules.ts → schema.ts → rules.ts 的循环依赖，ESM 下
- * schema.ts 顶层访问 `SECURITY_RULE_KINDS` 会命中 TDZ。因此检测器放在
- * 零依赖模块中，schema.ts（内建规则 gate）与 rules.ts（用户规则校验）共同引用，
- * 保证「用户规则与内建规则复用同一安全 gate」。
+ * Why is it an independent module: `security-rules.schema.ts` needs to be used at the top level of the module
+ * `SECURITY_RULE_KINDS` exported by `rules.ts` (zod schema verification during build); and
+ * The `validateSecurityRulePattern` of `rules.ts` also needs to reuse the same detector. If the detector
+ * Putting it into schema.ts will form a circular dependency of rules.ts → schema.ts → rules.ts, under ESM
+ * Top-level access to `SECURITY_RULE_KINDS` in schema.ts will hit TDZ. Therefore the detector is placed
+ * In the zero-dependency module, schema.ts (built-in rule gate) and rules.ts (user rule verification) are referenced together.
+ * Ensure that "user rules and built-in rules reuse the same security gate".
  *
- * 检测模型（单遍线性扫描，不依赖任何第三方 regex 分析库）：
+ * Detection model (single-pass linear scan, does not rely on any third-party regex analysis library):
  *
- * 只审查「被量词修饰的分组」（下称量化分组）。顶层量词（`a+`、`[^\n]*`）是
- * 线性安全的，不审查。量化分组的危险形态：
+ * Only "groups modified by quantifiers" (hereinafter referred to as quantified groups) are reviewed. The top-level quantifiers (`a+`, `[^\n]*`) are
+ * Linear safe, uncensored. Quantify grouped risk patterns:
  *
- * 1. 嵌套/重叠量词（R1）：分组内部（任意深度）存在非定数量词，且
- *    - 分组量词无上界（`*`/`+`/`{n,}`）且内部存在任意非定数量词，或
- *    - 分组量词有上界（如 `{2}`）且内部存在无上界量词（`*`/`+`/`{n,}`）。
- *    即「无界×无界」与「无界×有界」两种组合都会产生歧义回溯。
- *    定数量词（`{n}`，min===max）不引入歧义，放行（如 `(a{2})+`、
- *    内建 builtin-24 的 `(?:\d{1,3}\.){3}`——有界×有界，歧义为常量）。
- *    单次出现（`?`，max 1）也不产生重复歧义，放行（如 `(?:sudo\s+)?`）。
- * 2. 多重交替加量词（R2）：量化分组（max ≥ 2）内部存在交替，且分支并非
- *    「两两不相交的单个字符」（如 `(a|b)+` 线性安全，放行）。`(a|aa)+`、
- *    `(ab|bc|cd)*`、`(\d|\w)+` 均拒绝。
- * 3. 反向引用（R3）：`\1`-`\9`、`\k<name>`。V8 回溯引擎对反向引用是
- *    最坏指数级，安全扫描规则用不到，一律拒绝。
- * 4. 量词紧跟量词（R4）：`a*+` 等。JS 下这类写法大多编译不过
- *    （`a++` 是 SyntaxError），此规则作为编译前兜底。
+ * 1. Nested/overlapping quantifiers (R1): There are non-definite quantifiers inside the group (at any depth), and
+ *    - The grouping quantifier has no upper bound (`*`/`+`/`{n,}`) and there are any non-definite quantifiers inside, or
+ *    - The grouping quantifier has an upper bound (such as `{2}`) and there is an internal unbounded quantifier (`*`/`+`/`{n,}`).
+ *    That is, both combinations of "unbounded × unbounded" and "unbounded × bounded" will produce ambiguous backtracking.
+ *    Definite quantifiers (`{n}`, min===max) do not introduce ambiguity and are allowed (such as `(a{2})+`,
+ *    Builtin-24's `(?:\d{1,3}\.){3}` - bounded × bounded, ambiguity is constant).
+ *    A single occurrence (`?`, max 1) will not cause repeated ambiguity and will be allowed (such as `(?:sudo\s+)?`).
+ * 2. Multiple alternation plus quantifier (R2): There is alternation within the quantified group (max ≥ 2), and the branch is not
+ *    "Pairwise disjoint single characters" (such as `(a|b)+` linear safety, allowed). `(a|aa)+`,
+ *    `(ab|bc|cd)*`, `(\d|\w)+` are rejected.
+ * 3. Backreference (R3): `\1`-`\9`, `\k<name>`. The V8 backtracking engine is
+ *    The worst-case index is that the security scanning rules are not used and will be rejected.
+ * 4. The quantifier follows the quantifier (R4): `a*+` etc. Most of these writing methods cannot be compiled under JS.
+ *    (`a++` is a SyntaxError), this rule serves as a safety net before compiling.
  *
- * 检测器只在 `new RegExp(pattern, "i")` 编译通过后调用才有意义
- * （`isSafeSecurityPattern` / `validateSecurityRulePattern` 均先编译）；
- * 对畸形输入（未闭合分组、非法转义）不抛错、返回 null，合法性由编译检查负责。
+ * The detector only makes sense when called after `new RegExp(pattern, "i")` has been compiled.
+ * (`isSafeSecurityPattern` / `validateSecurityRulePattern` are both compiled first);
+ * For malformed input (unclosed grouping, illegal escape), errors will not be thrown and null will be returned. Compilation check is responsible for legality.
  */
 
 export type ReDoSDiagnostic = string;
@@ -45,16 +45,16 @@ const R4_MESSAGE = "正则存在量词紧跟量词（如 a*+），可能导致�
 
 const UNBOUNDED = Number.POSITIVE_INFINITY;
 
-/** 单字符匹配集合；null 表示未知/多字符/零宽（保守按歧义处理）。 */
+/** Single character matching set; null means unknown/multiple characters/zero width (conservatively treated as ambiguity). */
 type CharSet = ReadonlySet<string> | null;
 
-/** `\d`/`\w`/`\s` 的近似字符集（用于分支不相交性分析）。 */
+/** Approximate character set of `\d`/`\w`/`\s` (used for branch disjointness analysis). */
 const ESCAPE_CHAR_SETS: Record<string, ReadonlySet<string>> = {
   "\\d": new Set("0123456789".split("")),
   "\\w": new Set(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".split(""),
   ),
-  // \s 的 Unicode 空白字符集（\t \n \v \f \r + 各类 Unicode 空白）
+  // Unicode whitespace character set for \s (\t \n \v \f \r + various Unicode whitespace characters)
   //
   "\\s": new Set([
     "\t",
@@ -85,7 +85,7 @@ const ESCAPE_CHAR_SETS: Record<string, ReadonlySet<string>> = {
   ]),
 };
 
-/** 正则中代表特殊字符的转义字面量（`\b` 在字符类内是退格，类外是零宽断言）。 */
+/** Escape literals representing special characters in regular expressions (`\b` is backspace inside a character class, and zero-width assertion outside the class). */
 const SIMPLE_ESCAPES: Record<string, string> = {
   n: "\n",
   r: "\r",
@@ -96,13 +96,13 @@ const SIMPLE_ESCAPES: Record<string, string> = {
 };
 
 interface Quantifier {
-  /** 最多出现次数；UNBOUNDED 表示 `*`/`+`/`{n,}`。 */
+  /** Maximum number of occurrences; UNBOUNDED means `*`/`+`/`{n,}`. */
   max: number;
-  /** 是否无上界（`*`/`+`/`{n,}`）。 */
+  /** Whether it is unbounded (`*`/`+`/`{n,}`). */
   unbounded: boolean;
-  /** 是否定数（`{n}`，min===max，n ≥ 1）——不引入回溯歧义。 */
+  /** Is a negative number (`{n}`, min===max, n ≥ 1) - does not introduce backtracking ambiguity. */
   fixed: boolean;
-  /** 已消费的字符数（含惰性 `?` 修饰符）。 */
+  /** Number of characters consumed (including lazy `?` modifier). */
   len: number;
 }
 
@@ -111,15 +111,15 @@ function isQuantifierStart(ch: string | undefined): boolean {
 }
 
 /**
- * 解析原子后面的量词后缀；`{` 不是合法量词时返回 null（此时它是字面量，
- * 与 JS 语义一致：`a{` 合法、`{` 单独出现是字面量）。
+ * Parse the quantifier suffix after the atom; return null if `{` is not a legal quantifier (in this case it is a literal,
+ * Consistent with JS semantics: `a{` is legal, `{` appears alone and is a literal).
  */
 function parseQuantifier(pattern: string, i: number): Quantifier | null {
   const ch = pattern[i];
   if (ch === "*" || ch === "+" || ch === "?") {
     let len = 1;
-    if (pattern[i + 1] === "?") len = 2; // 惰性修饰符，如 a*?
-    // `?` 是单次出现（max 1），不产生重复歧义；`*`/`+` 无上界
+    if (pattern[i + 1] === "?") len = 2; // Lazy modifiers like a*?
+    // `?` is a single occurrence (max 1) and does not cause repeated ambiguity; `*`/`+` has no upper bound
     const unbounded = ch !== "?";
     return { max: unbounded ? UNBOUNDED : 1, unbounded, fixed: false, len };
   }
@@ -146,15 +146,15 @@ function parseQuantifier(pattern: string, i: number): Quantifier | null {
   } else {
     return null;
   }
-  if (pattern[absEnd] === "?") absEnd += 1; // 惰性修饰符，如 a{2,3}?
+  if (pattern[absEnd] === "?") absEnd += 1; // Lazy modifiers like a{2,3}?
   const unbounded = m === UNBOUNDED;
-  // len 是相对量词起点的偏移，供调用方直接叠加
+  // len is the offset from the starting point of the relative quantifier, which can be directly superimposed by the caller.
   return { max: m, unbounded, fixed: !unbounded && n === m, len: absEnd - i };
 }
 
 /**
- * 解码单字符转义（`\xHH`/`\uHHHH`/`\u{...}`/`\cX`/`\0`/`\n` 等特殊转义/普通
- * 转义字面量），供字符类与分支集合分析使用；无法解码时返回 null。
+ * Decode single character escapes (`\xHH`/`\uHHHH`/`\u{...}`/`\cX`/`\0`/`\n` and other special escapes/normal
+ * Escape literal), used for character class and branch collection analysis; returns null if it cannot be decoded.
  */
 function decodeCharEscape(
   pattern: string,
@@ -200,13 +200,13 @@ function decodeCharEscape(
   }
   const simple = SIMPLE_ESCAPES[e];
   if (simple !== undefined) return { char: simple, next: i + 2 };
-  // 其余未知转义在 JS 非 unicode 模式下是「身份转义」，匹配字面字符本身
+  // The remaining unknown escapes are "identity escapes" in JS non-unicode mode, matching the literal characters themselves
   return { char: e, next: i + 2 };
 }
 
 /**
- * 解析字符类 `[...]`；`^` 取反、补集类（`\D`/`\W`/`\S`）、复杂范围端点等
- * 无法精确表示时返回 null（保守按未知处理）。`next` 指向 `]` 之后。
+ * Parse character classes `[...]`; `^` negation, complement classes (`\D`/`\W`/`\S`), complex range endpoints, etc.
+ * Returns null if exact representation is not possible (conservatively treated as unknown). `next` points after `]`.
  */
 function parseCharClass(
   pattern: string,
@@ -237,7 +237,7 @@ function parseCharClass(
       j + 1 < pattern.length &&
       pattern[j + 1] !== "]"
     ) {
-      // 范围 a-z；终点为转义或反向范围时按未知处理
+      // Range a-z; when the end point is an escape or reverse range, it is treated as unknown
       const nextCh = pattern[j + 1];
       if (nextCh === "\\") {
         unknown = true;
@@ -268,7 +268,7 @@ function parseCharClass(
         continue;
       }
       if (e === "D" || e === "W" || e === "S") {
-        unknown = true; // 补集 → 未知
+        unknown = true; // complement → unknown
         break;
       }
       const decoded = decodeCharEscape(pattern, j);
@@ -292,20 +292,20 @@ function parseCharClass(
 }
 
 interface Atom {
-  /** 单字符匹配集合；null = 未知/多字符/零宽/带量词。 */
+  /** Single character match set; null = unknown/multiple characters/zero width/with quantifier. */
   set: CharSet;
-  /** 该原子（或其内部）是否含非定数量词。 */
+  /** Whether the atom (or its interior) contains an indefinite quantifier. */
   nonFixedQuant: boolean;
-  /** 该原子（或其内部）是否含无上界量词（`*`/`+`/`{n,}`）。 */
+  /** Whether the atom (or its interior) contains an unbounded quantifier (`*`/`+`/`{n,}`). */
   unboundedQuant: boolean;
-  /** 该原子（或其内部）的交替是否危险（仅分组原子可能为 true）。 */
+  /** Whether alternation of this atom (or within it) is dangerous (only grouped atoms may be true). */
   altDanger: boolean;
-  /** 非 null 表示检测到必须拒绝的危险形态。 */
+  /** Non-null indicates that a dangerous pattern has been detected that must be rejected. */
   danger: string | null;
   next: number;
 }
 
-/** 给原子挂量词后缀；量词紧跟量词（R4）在此兜底。 */
+/** Add a quantifier suffix to the atom; the quantifier follows the quantifier (R4) here. */
 function finishAtom(pattern: string, next: number, set: CharSet): Atom {
   const q = parseQuantifier(pattern, next);
   if (!q) {
@@ -339,7 +339,7 @@ function finishAtom(pattern: string, next: number, set: CharSet): Atom {
   };
 }
 
-/** 解析转义原子（含反向引用 R3 检测）。 */
+/** Parse escaped atoms (with backreference R3 detection). */
 function parseEscapedAtom(pattern: string, i: number): Atom {
   const e = pattern[i + 1];
   if (e === undefined) {
@@ -352,7 +352,7 @@ function parseEscapedAtom(pattern: string, i: number): Atom {
       next: i + 1,
     };
   }
-  // 反向引用 \1-\9
+  // Backreference \1-\9
   if (e >= "1" && e <= "9") {
     return {
       set: null,
@@ -363,7 +363,7 @@ function parseEscapedAtom(pattern: string, i: number): Atom {
       next: i + 2,
     };
   }
-  // 命名反向引用 \k<name>（`\k` 单独出现是字面量 k）
+  // Named backreference \k<name> (`\k` alone is the literal k)
   if (e === "k" && pattern[i + 2] === "<") {
     if (pattern.indexOf(">", i + 3) !== -1) {
       return {
@@ -388,7 +388,7 @@ function parseEscapedAtom(pattern: string, i: number): Atom {
     return finishAtom(pattern, i + 2, ESCAPE_CHAR_SETS[`\\${e}`]!);
   }
   if (e === "D" || e === "W" || e === "S" || e === "b" || e === "B") {
-    // 补集或零宽断言 → 未知
+    // complement or zero-width assertion → unknown
     return finishAtom(pattern, i + 2, null);
   }
   const decoded = decodeCharEscape(pattern, i);
@@ -398,7 +398,7 @@ function parseEscapedAtom(pattern: string, i: number): Atom {
   return finishAtom(pattern, i + 2, null);
 }
 
-/** 分支两两不相交（大小写折叠，匹配 `i` 标志下的语义）。 */
+/** Branches are pairwise disjoint (case folded, matching semantics under the `i` flag). */
 function foldCase(set: ReadonlySet<string> | null): ReadonlySet<string> | null {
   if (!set) return null;
   const folded = new Set<string>();
@@ -427,18 +427,18 @@ function directAltDanger(branches: (ReadonlySet<string> | null)[]): boolean {
 
 interface ContentResult {
   danger: string | null;
-  /** 内容中（任意深度）是否存在非定数量词。 */
+  /** Whether there are non-definite quantifiers in the content (at any depth). */
   nonFixed: boolean;
-  /** 内容中（任意深度）是否存在无上界量词。 */
+  /** Whether there is an unbounded quantifier in the content (at any depth). */
   unbounded: boolean;
-  /** 直接层级或嵌套的交替是否危险。 */
+  /** Is direct hierarchical or nested alternation dangerous. */
   altDanger: boolean;
   next: number;
 }
 
 /**
- * 解析一段正则内容（直到 `)` 或串尾），返回合并后的风险标志。
- * `branchSets` 收集直接层级各交替分支的字符集（null = 未知）。
+ * Parse a regular content (until `)` or the end of the string) and return the combined risk flag.
+ * `branchSets` collects the character sets for each alternating branch of the immediate hierarchy (null = unknown).
  */
 function parseContent(pattern: string, start: number): ContentResult {
   let i = start;
@@ -473,7 +473,7 @@ function parseContent(pattern: string, start: number): ContentResult {
       continue;
     }
     if (ch === "*" || ch === "+" || ch === "?") {
-      // 量词出现在原子位置 → JS 编译不过（Nothing to repeat），跳过即可
+      // Quantifier appears at atomic position → JS cannot be compiled (Nothing to repeat), just skip it
       i++;
       continue;
     }
@@ -505,7 +505,7 @@ function parseContent(pattern: string, start: number): ContentResult {
   };
 }
 
-/** 解析单个原子（字符/转义/字符类/分组）+ 可选量词后缀。 */
+/** Parse a single atom (character/escape/character class/group) + optional quantifier suffix. */
 function parseAtom(pattern: string, i: number): Atom {
   const ch = pattern[i];
   if (ch === "\\") return parseEscapedAtom(pattern, i);
@@ -521,7 +521,7 @@ function parseAtom(pattern: string, i: number): Atom {
   return finishAtom(pattern, i + 1, new Set([ch]));
 }
 
-/** 解析分组原子（含前缀 `(?:`/`(?=`/`(?!`/`(?<=`/`(?<!`/`(?<name>`）。 */
+/** Parse group atoms (including prefix `(?:`/`(?=`/`(?!`/`(?<=`/`(?<!`/`(?<name>`)). */
 function parseGroupAtom(pattern: string, i: number): Atom {
   let after = i + 1;
   if (pattern[after] === "?") {
@@ -539,7 +539,7 @@ function parseGroupAtom(pattern: string, i: number): Atom {
         after = pattern.length;
       }
     } else {
-      // (?i 等 JS 不支持的修饰符 → 编译不过，按内容继续
+      // (?i and other modifiers not supported by JS → Compilation fails, continue according to content
       after += 1;
     }
   }
@@ -557,7 +557,7 @@ function parseGroupAtom(pattern: string, i: number): Atom {
   }
   let next = inner.next;
   if (pattern[next] !== ")")
-    next = pattern.length; // 未闭合 → 编译不过
+    next = pattern.length; // Unclosed → failed to compile
   else next += 1;
 
   const q = parseQuantifier(pattern, next);
@@ -573,10 +573,10 @@ function parseGroupAtom(pattern: string, i: number): Atom {
         next: end,
       };
     }
-    // R1：嵌套/重叠量词（max ≥ 2 且「无界外量词 × 内部非定数」或「有界外量词 × 内部无界」）
+    // R1: Nested/overlapping quantifiers (max ≥ 2 and "unbounded outer quantifier × internal unbounded number" or "bounded outer quantifier × internal unbounded")
     const nestedQuantDanger =
       q.max >= 2 && (q.unbounded ? inner.nonFixed : inner.unbounded);
-    // R2：多重交替加量词
+    // R2: multiple alternating quantifiers
     const alternationDanger = q.max >= 2 && inner.altDanger;
     const danger = nestedQuantDanger
       ? R1_MESSAGE
@@ -592,7 +592,7 @@ function parseGroupAtom(pattern: string, i: number): Atom {
       next: end,
     };
   }
-  // 未量化的分组：作为多字符原子合并内部标志
+  // Unquantized grouping: merge internal flags as multi-character atoms
   return {
     set: null,
     nonFixedQuant: inner.nonFixed,
@@ -604,9 +604,9 @@ function parseGroupAtom(pattern: string, i: number): Atom {
 }
 
 /**
- * 检测危险回溯形态。返回危险描述；安全时返回 null。
+ * Detect dangerous retracement patterns. Returns a danger description; returns null if safe.
  *
- * 只在 `new RegExp(pattern, "i")` 编译通过后调用（畸形输入的诊断由编译检查负责）。
+ * Only called after `new RegExp(pattern, "i")` is compiled (diagnosis of malformed input is handled by compilation check).
  */
 export function detectReDoS(pattern: string): string | null {
   return parseContent(pattern, 0).danger;

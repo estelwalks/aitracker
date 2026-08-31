@@ -65,16 +65,16 @@ test("formatDateTime: 秒可选, 非法输入显示占位符", () => {
 });
 
 test("formatMoney: 币种不随语言变, 金额分位规则保留", () => {
-  // CNY 在英文 UI 仍是 CN¥, 不换算为 USD(zh-CN 本地货币符号为 ¥)
+  // CNY is still CN¥ in the English UI, and is not converted to USD (zh-CN local currency symbol is ¥)
   assert.equal(formatMoney("zh-CN", 12.34, "CNY"), "¥12.34");
   assert.equal(formatMoney("en-US", 12.34, "CNY"), "CN¥12.34");
-  assert.equal(formatMoney("ja-JP", 12.34, "CNY"), "元 12.34"); // ICU 窄空格
+  assert.equal(formatMoney("ja-JP", 12.34, "CNY"), "元 12.34"); // ICU narrow space
   assert.equal(formatMoney("ko-KR", 12.34, "CNY"), "CN¥12.34");
-  // 金额 >= 100 时省略小数(与旧 formatMoney 一致)
+  // Omit decimals when amount >= 100 (consistent with old formatMoney)
   assert.equal(formatMoney("zh-CN", 123, "USD"), "US$123");
   assert.equal(formatMoney("zh-CN", 0, "USD"), "US$0.00");
   assert.equal(formatMoney("zh-CN", Number.NaN, "USD"), "—");
-  // 显式小数位覆盖
+  // Explicit decimal override
   assert.equal(
     formatMoney("en-US", 123, "USD", {
       minimumFractionDigits: 2,
@@ -92,7 +92,7 @@ test("formatTokens: K/M/B 缩写与语言无关", () => {
   assert.equal(formatTokens("zh-CN", 780_000_000), "780M");
   assert.equal(formatTokens("en-US", 1_200_000_000), "1.2B");
   assert.equal(formatTokens("en-US", 2_000_000_000), "2B");
-  assert.equal(formatTokens("zh-CN", 12_345), "12.3K"); // 与旧 trimFixed 行为一致
+  assert.equal(formatTokens("zh-CN", 12_345), "12.3K"); // Consistent with old trimFixed behavior
   assert.equal(formatTokens("zh-CN", Number.NaN), "—");
 });
 
@@ -123,7 +123,7 @@ test("formatMoney: JPY/KRW 固定 0 小数位, CNY/USD 保留幅度规则", () =
   assert.equal(formatMoney("zh-CN", 12.34, "CNY"), "¥12.34");
   assert.equal(formatMoney("zh-CN", 12.34, "USD"), "US$12.34");
   assert.equal(formatMoney("en-US", 12.34, "USD"), "$12.34");
-  assert.equal(formatMoney("en-US", 123, "USD"), "$123"); // 幅度规则:>=100 无小数
-  assert.equal(formatMoney("zh-CN", 41.2911, "CNY"), "¥41.29"); // 展示最多保留 2 位
-  assert.equal(formatMoney("zh-CN", 1.2, "JPY"), "JP¥1"); // 不做截断性误差,四舍五入
+  assert.equal(formatMoney("en-US", 123, "USD"), "$123"); // Amplitude rules:>=100 no decimals
+  assert.equal(formatMoney("zh-CN", 41.2911, "CNY"), "¥41.29"); // Displays are reserved for a maximum of 2 digits
+  assert.equal(formatMoney("zh-CN", 1.2, "JPY"), "JP¥1"); // No truncation error, rounding
 });

@@ -33,37 +33,37 @@ export interface SecurityRisk {
 
 export interface SecurityReport {
   scannedAt: string;
-  /** 用户选择的 SKILL.md 或其所属目录名；不持久化源码。 */
+  /** SKILL.md selected by the user or the directory name to which it belongs; the source code is not persisted. */
   targetName: string;
   filesScanned: number;
   risks: SecurityRisk[];
   verdict: "安全" | "可疑" | "危险";
-  /** 0–100 数值风险评分：高危 25/中危 8/低危 2 分累加后封顶。 */
+  /** Numerical risk score 0–100: High risk 25/Medium risk 8/Low risk 2 points are accumulated and capped. */
   riskScore: number;
-  /** 仅包含本地 File API 读取和静态规则执行的耗时。 */
+  /** Only the time taken for local File API reading and static rule execution is included. */
   durationMs: number;
-  /** 命中规则库的版本号，便于审计与回溯 */
+  /** Hit the version number of the rule base to facilitate auditing and backtracking */
   rulesVersion: string;
   /**
-   * 扫描因正则执行预算超限而提前中止（存在未完整扫描的维度）。
-   * 触发条件见 `scanDimension` 的预算说明；不持久化标志的旧报告无此字段。
+   * The scan was terminated early due to the regular execution budget being exceeded (there were incompletely scanned dimensions).
+   * See the budget description of `scanDimension` for trigger conditions; old reports without persistence flag do not have this field.
    */
   truncated?: boolean;
 }
 
 /**
- * 正则执行预算（偏差清单 P1 / F4-T3）：内建与用户规则均已通过构建期/保存期
- * ReDoS gate（redos.ts），理论上不存在指数级回溯；预算是对「大文件 × 多规则」
- * 场景的兜底，防止合法但超大的输入（单文件上限 100MB）长时间阻塞 UI 线程。
+ * Regular execution budget (deviation list P1/F4-T3): both built-in and user rules have passed the construction period/storage period
+ * ReDoS gate (redos.ts), theoretically there is no exponential backtracking; the budget is for "large files × multiple rules"
+ * The scene is covered to prevent legal but very large input (single file upper limit of 100MB) from blocking the UI thread for a long time.
  *
- * 实现：以「字符步进」估算每次 `test()` 的成本（无锚点扫描对每行至少访问
- * 每个字符一次，`line.length` 是线性下界）。预算按维度独立累计：
- * - `MAX_REGEX_STEPS_PER_RULE_LINE`：单条规则对单行——行超过该预算即中止
- *   当前维度（单行超长时无法用调用计数兜底，必须提前退出）；
- * - `MAX_REGEX_STEPS_TOTAL`：维度内所有规则×行累计超过该预算即中止当前维度。
- * 中止的维度在报告中以 `truncated: true` 标记，UI/历史不做其他假设。
+ * Implementation: Estimate the cost of each `test()` in "character step" (no anchor point scan visits at least
+ * Once per character, `line.length` is a linear lower bound). Budgets are accumulated independently by dimension:
+ * - `MAX_REGEX_STEPS_PER_RULE_LINE`: a single rule for a single line - if the line exceeds the budget, it will be aborted
+ *   Current dimension (when a single line is too long, you cannot use the call count to find out, and you must exit early);
+ * - `MAX_REGEX_STEPS_TOTAL`: If the cumulative number of all rules × rows in the dimension exceeds the budget, the current dimension will be terminated.
+ * Aborted dimensions are marked with `truncated: true` in reports, the UI/History makes no other assumptions.
  *
- * 均为纯整数计数（无计时），在浏览器与 Node 下行为一致且可确定性测试。
+ * They are all pure integer counts (no timing), behave consistently in browsers and Node, and can be tested deterministically.
  */
 export const MAX_REGEX_STEPS_PER_RULE_LINE = 200_000;
 export const MAX_REGEX_STEPS_TOTAL = 5_000_000;
@@ -72,14 +72,14 @@ export const MAX_REGEX_STEPS_TOTAL = 5_000_000;
 type BuiltInRule = CompiledBuiltinRule;
 
 /**
- * 内置静态正则规则集合，覆盖 PRD §11 全部 11 个安全维度。
- * 规则数据来自 security-rules.json（scripts/generate-security-rules.mjs 构建期校验 +
- * 安全 gate），pattern 在此处编译为 RegExp（仅 `i` 标志，避免 lastIndex 状态）。
+ * Built-in static regular rule set, covering all 11 security dimensions of PRD §11.
+ * Rule data comes from security-rules.json (scripts/generate-security-rules.mjs build period verification +
+ * security gate), pattern is compiled here to RegExp (`i` flag only, avoids lastIndex state).
  */
 const RULES: BuiltInRule[] = SECURITY_RULES_DATA.rules.map(compileBuiltinRule);
 
 /**
- * 在保留命中上下文的同时，对疑似凭据做脱敏，避免在报告或日志中泄露明文。
+ * While retaining the hit context, desensitize suspected credentials to avoid leaking clear text in reports or logs.
  */
 function maskedExcerpt(line: string): string {
   const compact = line.trim().slice(0, 180);
@@ -94,9 +94,9 @@ function maskedExcerpt(line: string): string {
 }
 
 /**
- * 用户自定义规则在各维度上的默认严重等级。
- * 破坏性操作、密钥泄露、权限提升、远程命令执行、持久化默认高危；
- * 其余维度默认中危。
+ * The default severity level of user-defined rules in each dimension.
+ * Destructive operations, key leakage, privilege escalation, remote command execution, and persistence are high-risk by default;
+ * The remaining dimensions default to medium risk.
  */
 const USER_RULE_SEVERITY: Record<SecurityRiskKind, SecuritySeverity> = {
   远程命令执行: "高危",
@@ -143,9 +143,9 @@ function compileUserRules(rules: UserSecurityRule[]): CompiledUserRule[] {
 }
 
 /**
- * 数值风险评分（0–100）。按严重度加权累加后封顶：
- * 高危 25 / 中危 8 / 低危 2 分每条。无命中时为 0。
- * 评分独立于 verdict 文本判定，用于安全报告的可视化风险条。
+ * Numerical risk score (0–100). Capped after weighted accumulation according to severity:
+ * High risk 25 / medium risk 8 / low risk 2 points each. It is 0 when there is no hit.
+ * Scores are independent of verdict text and used for visual risk bars in safety reports.
  */
 export function computeRiskScore(risks: SecurityRisk[]): number {
   let score = 0;
@@ -158,15 +158,15 @@ export function computeRiskScore(risks: SecurityRisk[]): number {
 }
 
 interface ScanBudgetState {
-  /** 是否至少有一个维度因预算超限被中止（写入报告 `truncated`）。 */
+  /** Whether at least one dimension was truncated due to budget overrun (written to report `truncated`). */
   truncated: boolean;
 }
 
 /**
- * 对单个维度执行一次规则扫描。预算说明见 `MAX_REGEX_STEPS_*` 注释：
- * 超长单行（> 200k 字符）与累计步进超限（> 5M）都会立即中止该维度。
- * `file.content.split(/\r?\n/)` 本身是 O(n) 线性切分（V8 对 `\r?\n` 无回溯
- * 风险），100MB 上限下的开销为毫秒级；预算约束的是其后逐行×逐规则的匹配工作。
+ * Perform a rule scan on a single dimension. See `MAX_REGEX_STEPS_*` for budget description. Note:
+ * Overlong single lines (> 200k characters) and cumulative step overruns (> 5M) will immediately abort the dimension.
+ * `file.content.split(/\r?\n/)` itself is an O(n) linear split (V8 has no backtracking for `\r?\n`
+ * Risk), the overhead under the 100MB upper limit is millisecond level; the budget constraint is the subsequent line-by-line × rule-by-rule matching work.
  */
 function scanDimension(
   files: SecurityInputFile[],
@@ -180,7 +180,7 @@ function scanDimension(
     const lines = file.content.split(/\r?\n/);
     for (let index = 0; index < lines.length; index++) {
       const line = lines[index]!;
-      // 单条规则对单行预算：超长单行无法用调用计数兜底，直接中止该维度
+      // Budget for a single rule for a single row: For an extremely long single row, the call count cannot be used to cover the problem, so the dimension will be terminated directly.
       if (line.length > MAX_REGEX_STEPS_PER_RULE_LINE) {
         budget.truncated = true;
         return;
@@ -253,8 +253,8 @@ function buildReport(
 }
 
 /**
- * 同步本地扫描接口，适合测试和不需要展示过程的调用方。
- * 不读取网络、不发送文件，且只运行内置/本地用户规则。
+ * Synchronous local scanning interface, suitable for testing and callers that do not need to display the process.
+ * Does not read the network, does not send files, and only runs built-in/local user rules.
  */
 export function scanSecurityFiles(
   files: SecurityInputFile[],
@@ -283,8 +283,8 @@ export interface LocalScanProgress {
 }
 
 /**
- * 与同步扫描使用完全相同的静态规则，但在每个真实完成的检测维度后让出 UI。
- * 这样页面进度只反映已在本机执行的规则，不使用定时器伪造扫描过程。
+ * Uses the exact same static rules as synchronous scanning, but gives way to the UI after each truly completed detection dimension.
+ * In this way, the page progress only reflects the rules that have been executed on the local machine, and no timer is used to fake the scanning process.
  */
 export async function scanSecurityFilesWithProgress(
   files: SecurityInputFile[],
@@ -310,7 +310,7 @@ export async function scanSecurityFilesWithProgress(
       totalDimensions,
       kind,
     });
-    // 让 React 有机会绘制刚刚完成的真实规则维度。
+    // Give React a chance to draw the real rule dimensions you just finished.
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 

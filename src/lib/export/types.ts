@@ -29,7 +29,7 @@ export interface ExportRow {
   reasoningOutputTokens: number;
   /** Optional cost for this row (any currency); omitted when pricing is unknown. */
   cost?: number;
-  /** Cost converted to the display currency (docs/plan v1.2 导出). */
+  /** Cost converted to the display currency (docs/plan v1.2 export). */
   costDisplay?: number;
   /** Display currency code (machine-readable stable value). */
   currency?: string;

@@ -14,50 +14,50 @@ import {
 } from "./scanner.ts";
 
 /**
- * ReDoS 防护 gate（偏差问题清单 P1 / F4-T1..T4）。
+ * ReDoS protection gate (deviation issue list P1/F4-T1..T4).
  *
- * 覆盖：危险形态负向测试、内建 26 规则全过 gate、用户规则保存/解析校验、
- * 扫描预算截断、builtin-15 改写等价性。
+ * Coverage: Dangerous form negative testing, built-in 26 rules all pass the gate, user rule saving/parsing verification,
+ * Scan budget truncation, builtin-15 rewrite equivalence.
  */
 
 // ---------------------------------------------------------------------------
-// F4-T1：detectReDoS / isSafeSecurityPattern 负向与正向测试
+// F4-T1: detectReDoS / isSafeSecurityPattern negative and positive tests
 // ---------------------------------------------------------------------------
 
 const DANGEROUS_PATTERNS: string[] = [
-  "(a+)+", // 嵌套量词：无界 × 无界
+  "(a+)+", // Nested quantifier: unbounded × unbounded
   "(a*)*",
   "(a+)*",
   "(a*)+",
-  "(a|aa)+", // 多重交替加量词：分支长度不同 → 歧义
+  "(a|aa)+", // Multiple alternating quantifiers: different branch lengths → ambiguity
   "([a-z]+)*",
-  "(a?)+", // 嵌套可选加量词
+  "(a?)+", // Nested optional quantifiers
   "(ab?)+",
-  "(ab|bc|cd)*", // 多重交替加量词（任务要求覆盖形态）
+  "(ab|bc|cd)*", // Multiple alternations plus quantifiers (task requirements cover morphology)
   "([^\n]+)*",
-  "((a+)+)", // 深层嵌套
-  "(a{1,3})+", // 无界外量词 × 有界内量词
+  "((a+)+)", // Deep nesting
+  "(a{1,3})+", // Unbounded outer quantifier × bounded inner quantifier
   "(a{0,100})+",
-  "(a+){2}", // 有界外量词 × 无界内量词
+  "(a+){2}", // Bounded outer quantifier × Unbounded inner quantifier
   "(a*){3}",
-  "(\\d|\\w)+", // 交替分支字符集相交
+  "(\\d|\\w)+", // Alternate branch character set intersection
   "(a|a)+",
-  "(a)\\1+", // 反向引用
+  "(a)\\1+", // backreference
   "(?<x>a)\\k<x>+",
-  "((?:the\\s+)?)+", // 可选分组被外层重复
+  "((?:the\\s+)?)+", // Optional grouping is repeated by outer layer
 ];
 
 const SAFE_PATTERNS: string[] = [
-  "(a|b)+", // 单字符不相交交替 + 量词：线性安全
+  "(a|b)+", // Single character disjoint alternation + quantifier: linear safety
   "(a|b|c){1,2}",
   "(a|b|c){2,}",
-  "(a{2})+", // 定数量词：确定性分块
-  "(a|b)?", // 单次出现
+  "(a{2})+", // Definite quantifiers: deterministic chunking
+  "(a|b)?", // single occurrence
   "(a*)?",
-  "(?:the\\s+)?", // 单次出现的可选分组
+  "(?:the\\s+)?", // Optional grouping of single occurrences
   "(?:sudo\\s+)?",
   "(?:\\.\\w+)?",
-  "(?:\\d{1,3}\\.){3}\\d{1,3}\\b", // 有界 × 有界（内建 builtin-24 形态）
+  "(?:\\d{1,3}\\.){3}\\d{1,3}\\b", // Bounded × Bounded (built-in builtin-24 form)
   "a+",
   "https?://",
   "\\b(?:curl|wget)\\b",
@@ -83,14 +83,14 @@ test("detectReDoS rejects dangerous catastrophic-backtracking shapes", () => {
 });
 
 test("detectReDoS rejects adjacent quantifiers and backreferences", () => {
-  // 量词紧跟量词（这些在 JS 下多为编译错误，检测器作编译前兜底）
+  // The quantifier follows the quantifier (these are mostly compilation errors under JS, the detector will check before compiling)
   assert.ok(detectReDoS("a*+") !== null);
   assert.ok(detectReDoS("a++") !== null);
   assert.ok(detectReDoS("a{2}*") !== null);
-  // 反向引用
+  // backreference
   assert.ok(detectReDoS("(a)\\1+") !== null);
   assert.ok(detectReDoS("\\k<name>") !== null);
-  // 惰性修饰符合法且不触发
+  // Lazy modification is legal and does not trigger
   assert.equal(detectReDoS("a*?b"), null);
   assert.equal(detectReDoS("a+?"), null);
 });
@@ -117,11 +117,11 @@ test("isSafeSecurityPattern keeps hard checks (empty/over-long/non-compiling)", 
   assert.equal(isSafeSecurityPattern(""), false);
   assert.equal(isSafeSecurityPattern("a".repeat(501)), false);
   assert.equal(isSafeSecurityPattern("("), false);
-  assert.equal(isSafeSecurityPattern("a++"), false); // 编译不过
+  assert.equal(isSafeSecurityPattern("a++"), false); // Can't compile
 });
 
 // ---------------------------------------------------------------------------
-// F4-T2：用户规则校验与持久化解析复用同一 gate
+// F4-T2: User rule verification and persistence analysis reuse the same gate
 // ---------------------------------------------------------------------------
 
 test("validateSecurityRulePattern rejects dangerous patterns with reason", () => {
@@ -189,7 +189,7 @@ test("scanSecurityFiles ignores dangerous persisted user rules without hanging",
 });
 
 // ---------------------------------------------------------------------------
-// F4-T3：扫描预算截断
+// F4-T3: Scan budget truncation
 // ---------------------------------------------------------------------------
 
 test("scan aborts the dimension on an over-long single line and marks truncated", () => {
@@ -200,7 +200,7 @@ test("scan aborts the dimension on an over-long single line and marks truncated"
 });
 
 test("scan aborts the dimension when cumulative regex steps exceed the total budget", () => {
-  // 100 行 × 100k 字符：单行未超每行预算，但累计估算步进远超总预算
+  // 100 lines × 100k characters: A single line does not exceed the per-line budget, but the cumulative estimated step far exceeds the total budget
   assert.ok(100_000 < MAX_REGEX_STEPS_PER_RULE_LINE);
   const lines = Array.from({ length: 100 }, () => "a".repeat(100_000)).join(
     "\n",
@@ -225,12 +225,12 @@ test("budget constants are exported for tuning", () => {
 });
 
 // ---------------------------------------------------------------------------
-// builtin-15 改写等价性（F4-T1 说明：旧规则含 `\s*` 在量化分组内，被 gate
-// 判定为嵌套量词；新规则去掉组内量词并把分组重复改为有界 `{4,32}`——后者
-// 消除均匀输入上的二次回溯（`\x65` 长行曾使单次 test() 达分钟级），且对
-// test() 布尔语义等价：无锚点扫描会在任意窗口找到「4-32 组 + 尾随执行调用」，
-// 超长链仍命中。语义在「相邻十六进制链 + 尾随空白/换行 + 60 字符内执行
-// 调用」上与旧规则一致）。
+// builtin-15 rewrite equivalence (F4-T1 Explanation: The old rule contains `\s*` in the quantization group, gated
+// Determined to be a nested quantifier; the new rule removes the intra-group quantifier and changes the group repetition to bounded `{4,32}` - the latter
+// Eliminates double backtracking on uniform input (`\x65` long lines used to take a single test() to minutes), and
+// Boolean semantic equivalence of test(): Anchorless scan will find "group 4-32 + trailing execution call" in any window,
+// Extra long chain still hits. Semantics enforced within "adjacent hex chain + trailing whitespace/newline + 60 characters
+// Calling is consistent with the old rules).
 // ---------------------------------------------------------------------------
 
 const OLD_BUILTIN_15 =
@@ -239,8 +239,8 @@ const NEW_BUILTIN_15 =
   "(?:\\\\x[0-9a-f]{2}){4,32}\\s*[^\\n]{0,60}?(?:eval|exec|Function\\s*\\()";
 
 test("builtin-15 rewrite keeps the original intent on sample inputs", () => {
-  assert.equal(detectReDoS(OLD_BUILTIN_15) !== null, true); // 旧规则确实被拒
-  assert.equal(detectReDoS(NEW_BUILTIN_15), null); // 新规则通过 gate
+  assert.equal(detectReDoS(OLD_BUILTIN_15) !== null, true); // The old rules were indeed rejected
+  assert.equal(detectReDoS(NEW_BUILTIN_15), null); // New rules pass gate
 
   const samples: Array<{ input: string; note: string }> = [
     { input: '\\x65\\x76\\x61\\x6c eval("x")', note: "相邻十六进制链 + 执行" },
@@ -268,8 +268,8 @@ test("builtin-15 rewrite keeps the original intent on sample inputs", () => {
     );
   }
 
-  // 文档化的行为差异：十六进制组之间带空白时旧规则命中、新规则不命中
-  // （空白间隔的十六进制链极少见；连续链是实际混淆代码的主流形态）
+  // Documented behavior difference: old rule hits, new rule misses when there are spaces between hex groups
+  // (White spaced hexadecimal chains are rare; continuous chains are the mainstream form of actual obfuscated code)
   const spaced = '\\x65 \\x76 \\x61 \\x6c eval("x")';
   assert.equal(oldRe.test(spaced), true);
   assert.equal(newRe.test(spaced), false);

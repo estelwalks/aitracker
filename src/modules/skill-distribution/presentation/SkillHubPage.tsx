@@ -26,9 +26,9 @@ export interface SkillHubData {
 }
 
 /**
- * Skill 管理（prototype `/skills`）：hero Jarvis insight card over the local
+ * Skill management (prototype `/skills`): hero Jarvis insight card over the local
  * skill workspace (card grid + distribution). The market catalog lives on its
- * own `/market` route (安全市场) since the V3.0 split. All insight/KPI figures
+ * own `/market` route (security market) since the feature split. All insight/KPI figures
  * are derived from real loader data and a real client-side security-history
  * read — nothing is mocked.
  */

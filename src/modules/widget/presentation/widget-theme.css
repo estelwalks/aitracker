@@ -1,10 +1,10 @@
 /*
- * 小组件预览的强制暗色作用域。
+ * Force dark scope for widget preview.
  *
- * 应用默认主题为暗色（:root 上定义的变量），亮色主题通过 <html> 上的
- * `.theme-light` 覆盖变量。这里把同款暗色变量复制到 `.aitracker-widget-dark`
- * 类上，让「小组件主题=暗色」的预览在应用处于亮色主题时仍能局部渲染为暗色
- * （CSS 自定义属性沿子树继承，作用域内的卡片/文字全部随变量变化）。
+ * The default theme of the application is dark (variable defined on :root), and the light theme is passed on <html>
+ * `.theme-light` override variable. Here, copy the same dark variable to `.aitracker-widget-dark`
+ * Class, so that the preview of "widget theme = dark" can still be partially rendered dark when the application is in a light theme
+ * (CSS custom properties are inherited along the subtree, and all cards/text within the scope change with variables).
  */
 .aitracker-widget-dark {
   --radius: 14px;

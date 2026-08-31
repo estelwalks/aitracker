@@ -660,7 +660,7 @@ export function SkillDetailModal({
     skill.installations.find((i) => i.version)?.version ?? null;
   const displayName = formatSkillDisplayName(skill, listing?.root);
 
-  // 安装目标多选（与安全市场 AgentInstallBar 一致）：逐个勾选 + 全选，统一安装。
+  // Multiple selection of installation targets (consistent with the security market AgentInstallBar): check one by one + select all for unified installation.
   const installedMap = Object.fromEntries(
     skill.installations.map((installation) => [installation.agent, true]),
   );
@@ -691,7 +691,7 @@ export function SkillDetailModal({
       (agent) => selectedAgents.has(agent) && !installedSet.has(agent),
     );
     if (!sourceRef || targets.length === 0) {
-      // 兜底：没有可安装目标时给出明确提示，而不是静默无反应。
+      // Back to the bottom: Give a clear prompt when there is no installable target, instead of being silent and unresponsive.
       toast.error(t("skills.toast.selectTarget"));
       return;
     }

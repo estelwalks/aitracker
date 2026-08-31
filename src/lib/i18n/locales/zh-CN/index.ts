@@ -21,8 +21,8 @@ import { tracker } from "./tracker";
 import { widget } from "./widget";
 
 /**
- * 简体中文主字典 —— 消息 key、参数名与形状的单一事实来源。
- * 其余语言必须 `satisfies Translations`(缺失/多余 key 编译期报错)。
+ * Simplified Chinese Master Dictionary - Single source of truth for message keys, parameter names and shapes.
+ * Other languages must use `satisfies Translations` (missing/extra key compile-time errors).
  */
 export const zh = {
   common,

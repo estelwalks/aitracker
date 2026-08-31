@@ -1,5 +1,5 @@
 /**
- * /reports (Briefings & Memory) V3.0 prototype copy. Every figure comes from
+ * /reports (Briefings & Memory) reference copy. Every figure comes from
  * real loader data (report count, generation runs, session density) — never an
  * LLM or hard-coded number — including the honest "model not configured" hint.
  */

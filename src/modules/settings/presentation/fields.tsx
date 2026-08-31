@@ -7,7 +7,7 @@ export {
   ScheduleToggle as Toggle,
 } from "../../../shared/ui/schedule-config";
 
-/** 数据读取失败的内联提示（带重试），供安全相关设置分组复用。 */
+/** Inline prompt for data read failure (with retry) for group reuse of security-related settings. */
 export function SecurityLoadError({
   message,
   onRetry,
@@ -34,7 +34,7 @@ export function SecurityLoadError({
   );
 }
 
-/** 安全检测服务不可用的诚实提示，供安全相关设置分组复用。 */
+/** An honest reminder that the security detection service is unavailable for group reuse of security-related settings. */
 export function SecurityUnavailable({ onRetry }: { onRetry: () => void }) {
   const { t } = useI18n();
   return (

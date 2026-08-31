@@ -33,7 +33,7 @@ async function fixture(): Promise<{
     options: {
       platform: "darwin",
       isPackaged: true,
-      appVersion: "3.0.1",
+      appVersion: "test-version",
       homeDirectory,
       userDataDirectory,
     },
@@ -56,7 +56,7 @@ test("first packaged macOS launch clears ~/.aitracker and marks only on explicit
     const marker = JSON.parse(
       (await readReleaseDataResetMarker(options)) ?? "null",
     ) as Record<string, unknown>;
-    assert.equal(marker.appVersion, "3.0.1");
+    assert.equal(marker.appVersion, "test-version");
     assert.equal(marker.resetCode, "initial-schema-v1");
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -240,7 +240,7 @@ test("a declined reset writes the completion marker without deleting data", asyn
     const marker = JSON.parse(
       (await readReleaseDataResetMarker(options)) ?? "null",
     ) as Record<string, unknown>;
-    assert.equal(marker.appVersion, "3.0.1");
+    assert.equal(marker.appVersion, "test-version");
     assert.equal(marker.resetCode, "initial-schema-v1");
 
     // The marker now suppresses any further destructive attempt on next launch.

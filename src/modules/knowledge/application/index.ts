@@ -39,7 +39,7 @@ const safeHash = (value: string): KnowledgeVersion["contentHash"] => {
 };
 // Only reject summaries carrying an actual credential VALUE (OpenAI-style key,
 // a long bearer token, or an assigned secret). Plain technical prose — "npm
-// run build", "node_modules", "curl /api/v1", "JWT token 过期" — is allowed so
+// run build", "node_modules", "curl /api/v1", "JWT token expired" — is allowed so
 // real distilled memories can be approved.
 const SECRET_VALUE_RE =
   /(?:sk-[A-Za-z0-9_-]{10,}|bearer\s+[A-Za-z0-9._~-]{12,}|(?:api[_-]?key|token|password|secret)\s*[:=]\s*\S{8,})/i;

@@ -26,7 +26,7 @@ export interface AiTool {
   /**
    * HOME-relative probe paths (macOS first, Windows variant where known) used
    * to detect whether the tool is installed. Empty array when no path is
-   * known - the tool then renders as "未安装".
+   * known - the tool then renders as "not installed".
    */
   detectRoots: readonly string[];
   /** Registry-owned product surface label for browser-safe source cards. */

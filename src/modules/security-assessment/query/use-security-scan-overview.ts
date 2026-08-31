@@ -101,7 +101,7 @@ export function useSecurityScanOverview(): SecurityScanOverview {
         // latest run skipping unchanged skills never drops their totals.
         const totals = summarizeReports(currentHistory);
         const latest = latestHistory(currentHistory);
-        // 检测次数 = the number of scan RUNS (distinct scanIds), not history
+        // Number of detections = the number of scan RUNS (distinct scanIds), not history
         // entries: one full scan covering 16 skills counts as 1, not 16.
         setRunCount(new Set(history.map((entry) => entry.scanId)).size);
         // Use the same current-state projection as the security page: a

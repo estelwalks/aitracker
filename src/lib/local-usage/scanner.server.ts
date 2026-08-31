@@ -795,7 +795,7 @@ function claudeEventFromRecord(
     return undefined;
   }
 
-  // 采集上下文（tools/skills/commands），仅结构元数据，clean-room 合规。
+  // Collection context (tools/skills/commands), structural metadata only, clean-room compliant.
   const context = collectClaudeContext(message);
 
   return {

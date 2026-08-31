@@ -1,6 +1,18 @@
 # AITracker
 
-[English](../README.md) | [简体中文](README_CN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
+<p align="center">
+  <img src="../public/favicon-dark.svg" alt="AITracker Logo" width="180" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/l3m0nc9/aitracker/stargazers"><img src="https://img.shields.io/github/stars/l3m0nc9/aitracker?style=flat-square&cacheSeconds=3600" alt="GitHub Stars" /></a>
+  <a href="https://github.com/l3m0nc9/aitracker/blob/main/LICENSE"><img src="https://img.shields.io/github/license/l3m0nc9/aitracker?style=flat-square&cacheSeconds=3600" alt="许可证" /></a>
+  <a href="https://github.com/l3m0nc9/aitracker/releases/latest"><img src="https://img.shields.io/github/v/release/l3m0nc9/aitracker?style=flat-square&cacheSeconds=3600" alt="最新 Release" /></a>
+</p>
+
+<p align="center">
+  <a href="../README.md">English</a> | <a href="README_CN.md">简体中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_KO.md">한국어</a>
+</p>
 
 > **你用了多少 Token，花了多少钱，哪些Agent工具最好用，一眼看清。**
 
@@ -31,6 +43,39 @@ Claude Code、Codex、Cursor、Cline、Gemini CLI、OpenCode……
 **AITracker 把这些事情集中到一个地方。**
 
 从看清 AI 使用，到管理 AI 能力，再到蒸馏 Skills、沉淀知识与长期记忆，让 AI 不再只是一次性使用的工具。
+
+---
+
+## 🚀 快速开始
+
+AITracker 是基于 Electron、TanStack Start、React 和 TypeScript 构建的桌面应用。仓库已包含所需的 `skill-scanner` 包，克隆后即可安装和开发。
+
+### 环境要求
+
+- Node.js 24 或更高版本
+- npm 10 或更高版本
+- macOS 或 Windows（完整桌面体验）
+
+```bash
+git clone https://github.com/l3m0nc9/aitracker.git
+cd aitracker
+npm ci
+npm run dev:desktop
+```
+
+仅启动浏览器开发服务器时，运行 `npm run dev`。
+
+### 构建与测试
+
+```bash
+npm run build:desktop       # Web 应用与 Electron 主进程 / preload 构建
+npm run typecheck           # 应用与内置 scanner 类型检查
+npm run lint                # 应用与内置 scanner 代码检查
+npm run test:all            # 单元、工具、数据库与 scanner 测试
+npm run check:opensource-hygiene
+```
+
+可以使用 `npm run dist:mac` 或 `npm run dist:win:x64` 构建平台安装包。完整命令、生成文件约定和仓库结构请参阅[开发指南](DEVELOPMENT.md)。
 
 ---
 
@@ -131,7 +176,7 @@ AITracker 将这些有价值的信息逐步沉淀为**知识库与长期记忆**
 
 ---
 
-## 支持更多 AI Coding Tools
+## 支持更多 AI 编程工具
 
 AITracker 面向多 AI 工具设计，逐步适配主流 AI Coding Tools，包括：
 
@@ -141,7 +186,7 @@ AITracker 面向多 AI 工具设计，逐步适配主流 AI Coding Tools，包�
 
 ---
 
-## Local First
+## 本地优先
 
 AITracker 默认运行在本地。
 
@@ -173,7 +218,7 @@ AI 工具越来越强，也越来越多。
 
 ---
 
-## Contributing
+## 如何贡献
 
 AITracker is open source.
 
@@ -189,6 +234,6 @@ AITracker 采用 MIT 许可证。详见 [LICENSE](../LICENSE)。
 
 ---
 
-## Star
+## 支持项目
 
 如果 AITracker 对你有帮助，欢迎给项目一个 Star，感谢。

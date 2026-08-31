@@ -56,9 +56,9 @@ body.aitracker-widget-float-document {
 @custom-variant dark (&:is(.dark *));
 
 /*
- * 设计系统 (v3)
- * 终端美学：暗色为主、低饱和分隔线、等宽数字、小圆角、克制阴影。
- * 主题：默认暗色 / .theme-light / .theme-contrast / .theme-warm
+ * Current design system
+ * Terminal aesthetics: mainly dark colors, low saturation dividers, constant-width numbers, small rounded corners, and restrained shadows.
+ * Theme: Default dark / .theme-light / .theme-contrast / .theme-warm
  */
 
 @theme inline {
@@ -121,7 +121,7 @@ body.aitracker-widget-float-document {
 :root {
   --radius: 14px;
 
-  /* Apple 风：柔和分层暗底，无线框，靠明度与投影分层 */
+  /* Apple style: soft layered dark background, no frame, layered by brightness and projection */
   --background: oklch(0.16 0.004 265);
   --foreground: oklch(0.98 0 0);
   --surface: oklch(0.225 0.005 265);
@@ -157,7 +157,7 @@ body.aitracker-widget-float-document {
   --doze: oklch(0.78 0.16 62);
   --danger: oklch(0.68 0.2 22);
 
-  /* AI 动作：统一中性白灰 */
+  /* AI Action: Uniform Neutral White Gray */
   --ai: oklch(0.92 0 0);
   --ai-2: oklch(0.72 0 0);
 
@@ -179,14 +179,14 @@ body.aitracker-widget-float-document {
   --scan-line: oklch(0.72 0.12 162 / 0.26);
   --scan-line-soft: oklch(0.72 0.12 162 / 0.14);
 
-  /* 透明白玻璃卡片：暗色下低透明度白，亮色下半透明白 */
+  /* Transparent white glass card: low transparency white under dark colors, translucent white under bright colors */
   --glass: oklch(1 0 0 / 0.055);
   --glass-strong: oklch(1 0 0 / 0.1);
   --glass-border: oklch(1 0 0 / 0.045);
   --glass-highlight: oklch(1 0 0 / 0.08);
 }
 
-/* 亮色主题：白天 / 会议展示 */
+/* Bright theme: daytime/meeting display */
 .theme-light {
   --background: oklch(0.965 0.004 250);
   --foreground: oklch(0.24 0.02 258);
@@ -234,7 +234,7 @@ body.aitracker-widget-float-document {
   --glass-highlight: oklch(1 0 0 / 0.7);
 }
 
-/* 高对比度：投影 / 大屏 / 视力辅助 */
+/* High Contrast: Projection/Large Screen/Vision Assistance */
 .theme-contrast {
   --background: oklch(0 0 0);
   --foreground: oklch(1 0 0);
@@ -271,7 +271,7 @@ body.aitracker-widget-float-document {
   --glass-highlight: oklch(1 0 0 / 0.1);
 }
 
-/* 暖色：夜间低蓝光 */
+/* Warm colors: low blue light at night */
 .theme-warm {
   --background: oklch(0.198 0.019 68);
   --foreground: oklch(0.925 0.028 82);
@@ -338,7 +338,7 @@ body.aitracker-widget-float-document {
     color: var(--color-foreground);
   }
 
-  /* 中文优先排版：数字等宽对齐 */
+  /* Chinese priority typesetting: numbers are aligned with equal width */
   table,
   .tnum {
     font-variant-numeric: tabular-nums;
@@ -554,7 +554,7 @@ body:not(.aitracker-widget-float-document)
   color: color-mix(in oklab, var(--color-foreground) 75%, transparent);
 }
 
-/* 全站统一的筛选/标签胶囊：同一字号、同一高度、同一间距（V3.0 原型 aitracker-chip） */
+/* Shared filter/tag pill: consistent type, height, and spacing. */
 @utility aitracker-chip {
   display: inline-flex;
   align-items: center;
@@ -592,7 +592,7 @@ body:not(.aitracker-widget-float-document)
   font-weight: 500;
 }
 
-/* 小标签（只读徽标），比 aitracker-chip 更轻 */
+/* Small label (read only logo), lighter than aitracker-chip */
 @utility aitracker-tag {
   display: inline-flex;
   align-items: center;
@@ -612,7 +612,7 @@ body:not(.aitracker-widget-float-document)
   );
 }
 
-/* 统一的下拉筛选控件：与 aitracker-chip 同高、同字号 */
+/* Unified drop-down filter control: same height and font size as aitracker-chip */
 @utility aitracker-select {
   min-height: var(--aitracker-control-height);
   padding-block: 0.375rem;
@@ -650,12 +650,12 @@ body:not(.aitracker-widget-float-document)
   }
 }
 
-/* 全站统一遮罩层（V3.0 原型 aitracker-overlay）：自包含，各主题通用 */
+/* Shared self-contained overlay used by every theme. */
 @utility aitracker-overlay {
   background-color: oklch(0 0 0 / 0.62);
 }
 
-/* 透明毛玻璃分段控件（V3.0 原型 aitracker-seg）：整体一枚磨砂胶囊，激活项为内嵌亮玻璃丸 */
+/* Translucent glass segmented control with an inset active pill. */
 @utility aitracker-seg {
   display: inline-flex;
   align-items: center;
@@ -718,7 +718,7 @@ body:not(.aitracker-widget-float-document)
       color-mix(in oklab, var(--color-foreground) 55%, transparent);
 }
 
-/* Markdown 排版：报告 / 蒸馏预览等富文本渲染复用 */
+/* Markdown typesetting: report/distillation preview and other rich text rendering reuse */
 @utility aitracker-md {
   line-height: 28px;
   font-size: var(--aitracker-font-body);
@@ -821,7 +821,7 @@ body:not(.aitracker-widget-float-document)
   }
 }
 
-/* 紧凑 Markdown（卡片正文预览）：字号/行高/标题更小，避免撑爆卡片 */
+/* Compact Markdown (card text preview): smaller font size/line height/title to avoid bursting the card */
 @utility aitracker-md-sm {
   line-height: 20px;
   font-size: var(--aitracker-font-body);
@@ -909,7 +909,7 @@ body:not(.aitracker-widget-float-document)
   scrollbar-color: var(--color-border-strong) transparent;
 }
 
-/* 桌面端缩放：横向滚动容器（表格、热力图等宽内容） */
+/* Desktop scaling: horizontal scrolling of containers (wide content such as tables, heat maps, etc.) */
 @utility aitracker-xscroll {
   overflow-x: auto;
   scrollbar-width: thin;
@@ -919,7 +919,7 @@ body:not(.aitracker-widget-float-document)
   scrollbar-gutter: stable both-edges;
 }
 
-/* 内容主区：随视口宽度平滑缩放的内边距与最大宽度 */
+/* Content main area: padding and maximum width that scale smoothly with viewport width */
 @utility aitracker-container {
   width: 100%;
   margin-inline: auto;
@@ -979,7 +979,7 @@ body:not(.aitracker-widget-float-document)
     transition: background-color 0.16s ease;
   }
 
-  /* 安全页等场景：表头不用灰色底条，改用细分隔线，与卡片底色一致。 */
+  /* Scenarios such as security pages: Instead of using a gray bottom strip in the table header, use subdivided dividers that are consistent with the background color of the card. */
   &.aitracker-table--clean-head thead {
     background: transparent;
   }
@@ -994,7 +994,7 @@ body:not(.aitracker-widget-float-document)
   }
 }
 
-/* 科技感：网格底纹 / 边角标记 / 扫描线 */
+/* Technological sense: grid shading/corner marks/scan lines */
 @utility aitracker-grid-bg {
   background-image:
     linear-gradient(
@@ -1072,7 +1072,7 @@ body:not(.aitracker-widget-float-document)
   }
 }
 
-/* 自绘标题栏（无边框主窗口顶部）：整条可拖拽，右侧为窗口控制按钮。 */
+/* Self-drawn title bar (top of borderless main window): The entire bar can be dragged, with window control buttons on the right. */
 .aitracker-window-chrome {
   position: fixed;
   inset-inline: 0;
@@ -1187,8 +1187,8 @@ body:not(.aitracker-widget-float-document)
   );
 }
 
-/* Dashboard V3 mirrors the reference hierarchy while remaining data agnostic. */
-.dashboard-v3 {
+/* Dashboard mirrors the reference hierarchy while remaining data agnostic. */
+.dashboard-page {
   max-width: 1720px;
 }
 
@@ -1207,7 +1207,7 @@ body:not(.aitracker-widget-float-document)
   gap: var(--aitracker-space-4);
 }
 
-/* Agent 概览的横向切换条：与原型保持同一套覆盖式滚动控件。 */
+/* Horizontal toggle bar for Agent overview: Keeps the same set of overlay scroll controls as the prototype. */
 .aitracker-agentbar {
   position: sticky;
   display: block;
@@ -1640,8 +1640,8 @@ body:not(.aitracker-widget-float-document)
   line-height: var(--aitracker-line-control);
 }
 
-/* 亮色主题下 --foreground 变成深色，直接沿用会让首页动作按钮变成
-   “黑底绿字”。与原型一致：亮色主题保持浅色底 + 绿色文字的胶囊钮。 */
+/* Under the light theme, --foreground becomes dark. If used directly, the action button on the homepage will become
+   "Green text on black background". Consistent with the prototype: the bright color theme maintains a light base + capsule buttons with green text. */
 .theme-light .dashboard-spotlight-card > a,
 .theme-light .dashboard-spotlight-card > button {
   background: var(--color-card);
@@ -1718,8 +1718,8 @@ body:not(.aitracker-widget-float-document)
 }
 .dashboard-metric-card {
   padding: var(--aitracker-space-3) var(--aitracker-space-4);
-  /* 保持与 shared 规则一致的圆角（之前被覆盖成 0，卡片变直角）；
-     Agent 活跃等首页指标卡应为圆角卡片。 */
+  /* Maintain rounded corners consistent with shared rules (previously overridden to 0, the card became square);
+     The home page indicator cards such as Agent activity should have rounded corners. */
   border-radius: var(--aitracker-radius-card);
   box-shadow: none;
   transition: background-color 0.16s ease;
@@ -1950,13 +1950,13 @@ body:not(.aitracker-widget-float-document)
 }
 
 .dashboard-calendar-cell-level-0 {
-  /* 面板底色也是 --surface，纯 surface 填充会让无活跃的格子完全隐形；
-     改成 card 填充 + 细描边，保证空日历也有可见的网格骨架。 */
+  /* The background color of the panel is also --surface, and pure surface filling will make inactive grids completely invisible;
+     Change to card fill + thin stroke to ensure that the empty calendar also has a visible grid skeleton. */
   background: var(--color-card);
   box-shadow: inset 0 0 0 1px
     color-mix(in oklab, var(--color-foreground) 8%, transparent);
 }
-/* 少 → 多 均为绿色（--chart-1），随等级加深（与原型 levelBg 一致） */
+/* Less → More are all green (--chart-1), deepening with level (consistent with the prototype levelBg) */
 .dashboard-calendar-cell-level-1 {
   background: color-mix(in oklab, var(--chart-1) 34%, var(--color-surface));
 }
@@ -2544,7 +2544,7 @@ body:not(.aitracker-widget-float-document)
   }
 }
 
-/* 呼吸动画基础类；今日洞察仅将它挂载到 Logo。 */
+/* The basic class of breathing animation; Today’s Insight only mounts it to Logo. */
 @keyframes aitracker-breathe-kf {
   0%,
   100% {
@@ -2737,7 +2737,7 @@ body:not(.aitracker-widget-float-document)
 
 /* Chart ticks are rendered with inline Recharts styles, so bind them to the
    body token explicitly instead of allowing a third, chart-only size scale. */
-.dashboard-v3 .recharts-cartesian-axis-tick text {
+.dashboard-page .recharts-cartesian-axis-tick text {
   font-size: var(--aitracker-font-caption) !important;
 }
 
