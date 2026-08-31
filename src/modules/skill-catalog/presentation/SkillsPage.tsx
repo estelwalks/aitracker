@@ -66,6 +66,8 @@ export type SkillsPageProps = {
   initial: SkillWorkspaceSnapshot;
   /** Optional route-provided Skill identity used to initialize the filter. */
   initialQuery?: string;
+  /** Optional route-provided Agent identity used to initialize the overview. */
+  initialAgentId?: string;
   /** Compact agent-overview projection; never raw events (P1-T1-06/07). */
   usage?: AgentUsageOverviewReadModel;
   showWorkspace?: boolean;
@@ -95,6 +97,7 @@ type SkillCategoryFilter =
 export function SkillsPage({
   initial,
   initialQuery,
+  initialAgentId,
   usage,
   showWorkspace = true,
   showToolOverview = true,
@@ -677,6 +680,7 @@ export function SkillsPage({
       {showToolOverview && usage ? (
         <ToolOverview
           usage={usage}
+          initialToolId={initialAgentId}
           workspaceSummary={initial.workspace.summary}
           skillSnapshot={snapshot}
           securityVerdicts={securityVerdicts}
