@@ -6,6 +6,10 @@ const page = readFileSync(
   new URL("./DashboardV2Page.tsx", import.meta.url),
   "utf8",
 );
+const sections = readFileSync(
+  new URL("./dashboard-v2-sections.tsx", import.meta.url),
+  "utf8",
+);
 
 test("new workspaces receive visible initialization feedback without route invalidation", () => {
   assert.match(page, /dashboard\.onboarding\.workspaceInitializing/);
@@ -18,4 +22,8 @@ test("new workspaces receive visible initialization feedback without route inval
 
 test("trend lazy chunk keeps a stable fallback", () => {
   assert.match(page, /Suspense fallback=\{<DashboardTrendFallback \/>\}/);
+});
+
+test("agent workflow management keeps the selected tool", () => {
+  assert.match(sections, /search=\{\{ agent: selectedTool \}\}/);
 });

@@ -19,6 +19,7 @@ type LoadState = "loading" | "ready" | "error";
 
 function AgentsRoute() {
   const { locale, ...initial } = Route.useLoaderData();
+  const { agent } = Route.useSearch();
   const [usage, setUsage] = useState<AgentUsageOverviewReadModel | null>(null);
   const [securityVerdicts, setSecurityVerdicts] =
     useState<SecuritySkillVerdictReadModel | null>(null);
@@ -62,6 +63,7 @@ function AgentsRoute() {
   return (
     <SkillsPage
       initial={initial}
+      initialAgentId={agent}
       usage={usage ?? undefined}
       securityVerdicts={securityVerdicts ?? undefined}
       showWorkspace={false}

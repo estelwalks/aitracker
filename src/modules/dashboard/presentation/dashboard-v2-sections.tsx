@@ -1552,6 +1552,7 @@ export function DashboardAgentWorkstreams({
         </div>
         <Link
           to="/agents"
+          search={{ agent: selectedTool }}
           className="font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
         >
           {t("dashboard.v2.manageAll")} →

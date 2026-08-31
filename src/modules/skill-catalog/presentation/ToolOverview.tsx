@@ -1015,11 +1015,13 @@ function ToolModelPanel({
  */
 export function ToolOverview({
   usage,
+  initialToolId,
   workspaceSummary,
   skillSnapshot,
   securityVerdicts,
 }: {
   usage: AgentUsageOverviewReadModel;
+  initialToolId?: string;
   workspaceSummary?: Pick<
     SkillWorkspaceSummary,
     "skillCount" | "availableAgentCount"
@@ -1028,7 +1030,9 @@ export function ToolOverview({
   securityVerdicts?: SecuritySkillVerdictReadModel;
 }) {
   const { t, format } = useI18n();
-  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(
+    () => initialToolId ?? null,
+  );
   const [toolPeriod, setToolPeriod] = useState<UsagePeriod>("30d");
   const [toolFrom, setToolFrom] = useState(daysAgo(29));
   const [toolTo, setToolTo] = useState(daysAgo(0));
@@ -1036,6 +1040,10 @@ export function ToolOverview({
   const [detailFrom, setDetailFrom] = useState(daysAgo(29));
   const [detailTo, setDetailTo] = useState(daysAgo(0));
   const [detailMode, setDetailMode] = useState<"models" | "projects">("models");
+
+  useEffect(() => {
+    setSelectedToolId(initialToolId ?? null);
+  }, [initialToolId]);
 
   const { data: toolQuery } = useQuery({
     queryKey: [
