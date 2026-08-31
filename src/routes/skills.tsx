@@ -12,7 +12,7 @@ import {
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
 import type { SkillHubData } from "../modules/skill-distribution/presentation/SkillHubPage";
 
-/** 兼容拆分前的 `?tab=market` 直达链接：市场已迁至独立 /market 路由。 */
+/** Compatibility for pre-split `?tab=market` deep links (market moved to /market). */
 type SkillsSearchParams = {
   tab?: "market" | "local";
   /** Directory/manifest identity used to pre-filter the local Skill list. */

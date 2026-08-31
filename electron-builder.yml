@@ -42,9 +42,11 @@ mac:
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
-  # 最小权限 entitlements:仅 hardened runtime 必需(Chromium JIT),不含
-  # App Sandbox 与任何 files.* 目录权限 —— 应用只读写 ~/.aitracker 与
-  # Application Support,不请求文稿/桌面/下载等 TCC 目录(见 build/entitlements.mac.plist)。
+  # Least-privilege entitlements: only what hardened runtime requires
+  # (Chromium JIT). No App Sandbox and no files.* directory permissions —
+  # the app only reads/writes ~/.aitracker and Application Support, and never
+  # requests TCC directories such as Documents/Desktop/Downloads
+  # (see build/entitlements.mac.plist).
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
 dmg:

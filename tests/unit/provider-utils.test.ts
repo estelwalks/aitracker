@@ -4,8 +4,8 @@ import test from "node:test";
 import type {
   LocalUsageEvent,
   LocalUsageSource,
-} from "../lib/local-usage/types.ts";
-import { resolveEventProvider } from "../lib/local-usage/provider-utils.ts";
+} from "../../src/lib/local-usage/types.ts";
+import { resolveEventProvider } from "../../src/lib/local-usage/provider-utils.ts";
 
 function event(
   model: string,

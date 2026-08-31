@@ -20,7 +20,7 @@ checkout.
 
 ## Install
 
-Use Node.js 22 or later. The version used by CI is recorded in `.nvmrc`.
+Use Node.js 24 or later. The version used by CI is recorded in `.nvmrc`.
 
 ```bash
 nvm use
@@ -43,17 +43,28 @@ The first-run lab uses an isolated, ignored home directory:
 npm run dev:desktop:first-run
 ```
 
+The lab helpers prepare and seed that throwaway home separately:
+
+```bash
+npm run lab:first-run:prepare   # generate the isolated lab home
+npm run lab:first-run:seed      # seed the isolated lab home
+```
+
 ## Quality checks
 
 | Command | Scope |
 | --- | --- |
-| `npm run typecheck` | App and scanner TypeScript contracts |
+| `npm run typecheck` | App, Electron, and scanner TypeScript contracts |
 | `npm run lint` | App and scanner lint rules |
-| `npm run test:unit` | App and Electron unit tests |
+| `npm run test:unit` | App, Electron, and tests/unit tests |
 | `npm run test:scripts` | Repository validation tooling |
 | `npm run test:database` | SQLite migrations, repositories, recovery, and privacy |
 | `npm run test:scanner` | Bundled skill-scanner package |
-| `npm run test:e2e` | Playwright end-to-end tests |
+| `npm run test:e2e` | Playwright end-to-end tests (default config) |
+| `npm run test:e2e:empty-home` | E2E resilience scenarios with an empty usage home |
+| `npm run test:e2e:stale-home` | E2E resilience scenarios with a seeded stale home |
+| `npm run test:e2e:offline` | E2E offline-exchange-rate resilience scenario |
+| `npm run test:route-performance` | Route open-performance budget spec |
 | `npm run test:all` | All non-E2E automated test suites |
 | `npm run check:opensource-hygiene` | Paths, credentials, and legacy-name scan |
 
