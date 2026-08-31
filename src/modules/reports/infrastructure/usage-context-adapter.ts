@@ -15,9 +15,15 @@ import type {
   EvidenceRef,
   ReportContext,
   ReportContextPort,
+  ReportCacheStats,
   ReportDefinition,
+  ReportModelStats,
   ReportPeriod,
+  ReportPeriodComparison,
+  ReportProjectStats,
+  ReportSessionStats,
   ReportStats,
+  ReportTrendPoint,
 } from "../contracts.ts";
 import type { UsageSnapshotDto } from "../../usage/contracts.ts";
 import { estimateUsageBucketCost } from "./usage-cost.ts";
@@ -30,16 +36,26 @@ import {
 
 /** Minimal session shape the adapter reads (structural, no sessions import). */
 export interface SnapshotSession {
+  readonly sessionId?: string;
   readonly source: string;
   readonly title: string;
   readonly projectKey: string;
+  readonly model?: string | null;
   readonly startedAt: string;
   readonly turns: number;
   readonly editTurns: number;
-  readonly totals: { readonly totalTokens: number };
+  readonly totals: {
+    readonly totalTokens: number;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly reasoningOutputTokens?: number;
+    readonly cachedInputTokens?: number;
+    readonly cacheCreationInputTokens?: number;
+  };
   readonly cost: {
     readonly knownUsd: number;
     readonly estimatedUsd?: number;
+    readonly cacheSavingsUsd?: number;
   };
   readonly durationMs: number;
 }
@@ -111,9 +127,19 @@ function periodRange(
   const to = end ? dayKeyOf(new Date(end.getTime() - 1)) : from;
   const short = (s: string) =>
     `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
-  if (granularity === "month") return { from, to, label: key };
+  if (granularity === "month") {
+    return {
+      from,
+      to,
+      label: `${from.replaceAll("-", "/")} - ${to.replaceAll("-", "/")}`,
+    };
+  }
   if (granularity === "week")
-    return { from, to, label: `${short(from)} – ${short(to)}` };
+    return {
+      from,
+      to,
+      label: `${from.replaceAll("-", "/")} - ${to.replaceAll("-", "/")}`,
+    };
   return { from, to, label: period ? key : `今日 ${key}` };
 }
 
@@ -142,6 +168,23 @@ type EventUsageStats = {
   bySourceCost: Map<string, number>;
   projects: Map<string, number>;
   opaqueEditSources: Set<string>;
+  byModel: Map<string, { calls: number; tokens: number; costUsd: number }>;
+  byProject: Map<
+    string,
+    {
+      kind: "project" | "conversation";
+      tokens: number;
+      costUsd: number;
+      source: string;
+    }
+  >;
+  cache: {
+    totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    cachedTokens: number;
+  };
   hasEvents: boolean;
 };
 
@@ -153,6 +196,15 @@ function emptyEventUsageStats(): EventUsageStats {
     bySourceCost: new Map(),
     projects: new Map(),
     opaqueEditSources: new Set(),
+    byModel: new Map(),
+    byProject: new Map(),
+    cache: {
+      totalTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      cachedTokens: 0,
+    },
     hasEvents: false,
   };
 }
@@ -172,7 +224,7 @@ function usageProjectLabel(
   project: string,
 ): string | null {
   const label = projectLabel?.trim();
-  if (label) return label;
+  if (label) return safeDisplayLabel(label, "");
   const fallback = project.trim();
   // Persisted usage buckets normally have projectLabel. Do not expose a raw
   // absolute path if an older snapshot lacks that safe display field.
@@ -180,6 +232,58 @@ function usageProjectLabel(
     return null;
   }
   return fallback;
+}
+
+function safeDisplayLabel(value: string, fallback: string): string {
+  const label = [...value]
+    .map((character) =>
+      character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127
+        ? " "
+        : character,
+    )
+    .join("")
+    .trim();
+  if (
+    !label ||
+    /(?:\/Users\/|\/home\/|[A-Za-z]:\\|\\\\|\b(?:bearer|sk-|api[_-]?key|password|secret)\b)/iu.test(
+      label,
+    )
+  ) {
+    return fallback;
+  }
+  return label.slice(0, 160);
+}
+
+const REPORT_SESSION_TITLE_MAX_LENGTH = 72;
+const INTERNAL_SESSION_TITLE =
+  /^The following is the Codex agent history whose request action you are assessing\b/iu;
+
+/** Internal review side-chains are usage, but they are not user sessions. */
+function isUserSession(session: SnapshotSession): boolean {
+  const model = session.model?.trim().toLowerCase() ?? "";
+  return (
+    model !== "codex-auto-review" &&
+    !model.startsWith("codex-guardian") &&
+    !INTERNAL_SESSION_TITLE.test(session.title.trim())
+  );
+}
+
+/**
+ * A scanner fallback may be the first user prompt truncated to 120 characters.
+ * Reports must not present that prompt excerpt as if it were a real title.
+ */
+function reportSessionTitle(session: SnapshotSession): string {
+  const title = safeDisplayLabel(session.title, "");
+  if (
+    title &&
+    Array.from(title).length <= REPORT_SESSION_TITLE_MAX_LENGTH &&
+    !/[.…]{1,3}$/u.test(title)
+  ) {
+    return title;
+  }
+  const project = safeDisplayLabel(session.projectKey, "");
+  const source = safeDisplayLabel(session.source, "AI");
+  return project ? `${project} · ${source}` : source;
 }
 
 function collectEventUsage(
@@ -227,12 +331,40 @@ function collectEventUsage(
     }
     result.hasEvents = true;
 
+    const model = safeDisplayLabel(bucket.model, "unknown");
+    const modelRow = result.byModel.get(model) ?? {
+      calls: 0,
+      tokens: 0,
+      costUsd: 0,
+    };
+    modelRow.calls += bucket.events;
+    modelRow.tokens += bucket.totalTokens;
+    modelRow.costUsd += costUsd;
+    result.byModel.set(model, modelRow);
+    result.cache.totalTokens += bucket.totalTokens;
+    result.cache.inputTokens += bucket.inputTokens;
+    result.cache.outputTokens += bucket.outputTokens;
+    result.cache.reasoningTokens += bucket.reasoningOutputTokens;
+    result.cache.cachedTokens += bucket.cachedInputTokens;
+
     const project = usageProjectLabel(bucket.projectLabel, bucket.project);
     if (!project) continue;
     result.projects.set(
       project,
       (result.projects.get(project) ?? 0) + bucket.totalTokens,
     );
+    const projectRow = result.byProject.get(project) ?? {
+      kind:
+        bucket.projectKind === "quick-conversation"
+          ? ("conversation" as const)
+          : ("project" as const),
+      tokens: 0,
+      costUsd: 0,
+      source: bucket.source,
+    };
+    projectRow.tokens += bucket.totalTokens;
+    projectRow.costUsd += costUsd;
+    result.byProject.set(project, projectRow);
   }
   return result;
 }
@@ -249,6 +381,36 @@ function emptyStats(periodLabel: string): ReportStats {
     bySource: [],
     projects: [],
   };
+}
+
+function aggregateSessionMetrics(sessions: readonly SnapshotSession[]) {
+  const sources = new Set<string>();
+  const projects = new Set<string>();
+  return sessions.reduce(
+    (acc, session) => {
+      const source = session.source || "unknown";
+      sources.add(source);
+      if (session.projectKey) projects.add(session.projectKey);
+      acc.tokens += session.totals.totalTokens;
+      acc.costUsd += session.cost.knownUsd + (session.cost.estimatedUsd ?? 0);
+      acc.cacheSavingsUsd += session.cost.cacheSavingsUsd ?? 0;
+      acc.hasCacheSavings ||= session.cost.cacheSavingsUsd !== undefined;
+      acc.turns += session.turns;
+      acc.durationMin += Math.round(session.durationMs / 60_000);
+      return acc;
+    },
+    {
+      sessions: sessions.length,
+      turns: 0,
+      tokens: 0,
+      costUsd: 0,
+      cacheSavingsUsd: 0,
+      hasCacheSavings: false,
+      durationMin: 0,
+      sources,
+      projects,
+    },
+  );
 }
 
 export function createReportContextPort(
@@ -290,21 +452,32 @@ export function createReportContextPort(
     topProject?: string,
   ): string {
     const rows = stats.bySource;
-    const editSummary =
-      stats.editsComplete === false
-        ? `代码改动数据不完整（已识别 ${stats.edits} 处）`
-        : `代码改动 ${stats.edits} 处`;
+    const hasEdits = stats.edits > 0;
+    const editSummary = hasEdits
+      ? stats.editsComplete === false
+        ? `、代码改动数据不完整（已识别 ${stats.edits} 处）`
+        : `、代码改动 ${stats.edits} 处`
+      : "";
     const lines: string[] = [
-      `本时段共 ${stats.sessions} 场 AI 协作会话，覆盖 ${projects.length} 个项目，累计对话 ${stats.turns} 轮、${editSummary}，有效协作时长 ${fmtDuration(stats.durationMin)}。Token 消耗 ${fmtTokens(stats.tokens)}，估算成本 ${fmtCostCny(displayCostCny(stats))}。Token 按事件发生日统计（含内部 Agent 调用）；会话数、轮次和时长按用户会话统计，代码改动仅统计可识别的编辑工具调用。`,
+      `本时段共 ${stats.sessions} 场 AI 协作会话，覆盖 ${projects.length} 个项目，累计对话 ${stats.turns} 轮${editSummary}，有效协作时长 ${fmtDuration(stats.durationMin)}。Token 消耗 ${fmtTokens(stats.tokens)}，估算成本 ${fmtCostCny(displayCostCny(stats))}。Token 按事件发生日统计（含内部 Agent 调用）；会话数、轮次和时长按用户会话统计${hasEdits ? "；代码改动仅统计可识别的编辑工具调用" : ""}。`,
     ];
     if (rows.length > 0) {
       lines.push("", "按 Agent 统计：");
-      lines.push("| Agent | 会话 | Tokens | 成本 | 改动 | 时长 |");
-      lines.push("| --- | --- | --- | --- | --- | --- |");
+      lines.push(
+        hasEdits
+          ? "| Agent | 会话 | Tokens | 成本 | 改动 | 时长 |"
+          : "| Agent | 会话 | Tokens | 成本 | 时长 |",
+      );
+      lines.push(
+        hasEdits
+          ? "| --- | --- | --- | --- | --- | --- |"
+          : "| --- | --- | --- | --- | --- |",
+      );
       for (const row of rows) {
-        const edits = row.editsComplete === false ? "—" : String(row.edits);
         lines.push(
-          `| ${row.source} | ${row.sessions} | ${fmtTokens(row.tokens)} | ${fmtCostCny(displayCostCny(row))} | ${edits} | ${fmtDuration(row.durationMin)} |`,
+          hasEdits
+            ? `| ${row.source} | ${row.sessions} | ${fmtTokens(row.tokens)} | ${fmtCostCny(displayCostCny(row))} | ${row.editsComplete === false ? "—" : String(row.edits)} | ${fmtDuration(row.durationMin)} |`
+            : `| ${row.source} | ${row.sessions} | ${fmtTokens(row.tokens)} | ${fmtCostCny(displayCostCny(row))} | ${fmtDuration(row.durationMin)} |`,
         );
       }
     } else {
@@ -327,10 +500,64 @@ export function createReportContextPort(
       const eventUsage = usageData
         ? collectEventUsage(usageData, range)
         : emptyEventUsageStats();
-      const inRange = sessions.filter((s) => {
-        const day = sessionDayKey(s.startedAt);
-        return day !== null && day >= range.from && day <= range.to;
+      const inRange = sessions.filter((session) => {
+        const day = sessionDayKey(session.startedAt);
+        return (
+          isUserSession(session) &&
+          day !== null &&
+          day >= range.from &&
+          day <= range.to
+        );
       });
+      const comparisonDays =
+        input.definition.kind === "daily"
+          ? 1
+          : input.definition.kind === "weekly" &&
+              (input.period?.granularity ?? "week") === "week"
+            ? 7
+            : undefined;
+      const monthlyComparisonRange =
+        input.definition.kind === "weekly" &&
+        input.period?.granularity === "month"
+          ? (() => {
+              const start = periodStartDate("month", input.period.key);
+              if (!start) return undefined;
+              const previousStart = new Date(start);
+              previousStart.setMonth(previousStart.getMonth() - 1);
+              const previousEnd = new Date(start);
+              previousEnd.setDate(0);
+              return {
+                from: dayKeyOf(previousStart),
+                to: dayKeyOf(previousEnd),
+              };
+            })()
+          : undefined;
+      const yesterdayRange =
+        monthlyComparisonRange ??
+        (comparisonDays === undefined
+          ? undefined
+          : (() => {
+              const fromDate = new Date(`${range.from}T12:00:00`);
+              fromDate.setDate(fromDate.getDate() - comparisonDays);
+              const toDate = new Date(fromDate);
+              toDate.setDate(toDate.getDate() + comparisonDays - 1);
+              return { from: dayKeyOf(fromDate), to: dayKeyOf(toDate) };
+            })());
+      const yesterdaySessions = yesterdayRange
+        ? sessions.filter((session) => {
+            const day = sessionDayKey(session.startedAt);
+            return (
+              isUserSession(session) &&
+              day !== null &&
+              day >= yesterdayRange.from &&
+              day <= yesterdayRange.to
+            );
+          })
+        : [];
+      const yesterdayUsage =
+        yesterdayRange && usageData
+          ? collectEventUsage(usageData, yesterdayRange)
+          : undefined;
 
       const bySourceMap = new Map<string, SourceRow>();
       const sessionCostBySource = new Map<string, number>();
@@ -442,6 +669,172 @@ export function createReportContextPort(
       }));
       const costUsd = bySource.reduce((a, x) => a + x.costUsd, 0);
       const editsComplete = displayRows.every((row) => row.editsComplete);
+      const sessionMetrics = aggregateSessionMetrics(inRange);
+      const yesterdayMetrics = aggregateSessionMetrics(yesterdaySessions);
+      const modelMap = new Map(eventUsage.byModel);
+      if (modelMap.size === 0) {
+        for (const session of inRange) {
+          const model = safeDisplayLabel(session.model ?? "", "");
+          if (!model) continue;
+          const current = modelMap.get(model) ?? {
+            calls: 0,
+            tokens: 0,
+            costUsd: 0,
+          };
+          modelMap.set(model, {
+            calls: current.calls + 1,
+            tokens: current.tokens + session.totals.totalTokens,
+            costUsd:
+              current.costUsd +
+              session.cost.knownUsd +
+              (session.cost.estimatedUsd ?? 0),
+          });
+        }
+      }
+      const modelRows = Array.from(modelMap.entries())
+        .map(([model, row]): ReportModelStats => ({
+          model,
+          calls: row.calls,
+          tokens: row.tokens,
+          costCny: row.costUsd * usdToCny,
+        }))
+        .sort((a, b) => b.tokens - a.tokens)
+        .slice(0, 5);
+      const activeModelCount = modelMap.size;
+      const projectRows = Array.from(eventUsage.byProject.entries())
+        .map(([label, row]): ReportProjectStats => ({
+          label,
+          kind: row.kind,
+          sessions: inRange.filter((session) => session.projectKey === label)
+            .length,
+          tokens: row.tokens,
+          costCny: row.costUsd * usdToCny,
+          source: row.source,
+        }))
+        .sort((a, b) => b.tokens - a.tokens)
+        .slice(0, 5);
+      const sessionProjectRows = new Map<string, ReportProjectStats>();
+      for (const session of inRange) {
+        const label = session.projectKey.trim()
+          ? safeDisplayLabel(session.projectKey, "项目")
+          : reportSessionTitle(session);
+        if (!label) continue;
+        const current = sessionProjectRows.get(label) ?? {
+          label,
+          kind: session.projectKey.trim() ? "project" : "conversation",
+          sessions: 0,
+          tokens: 0,
+        };
+        sessionProjectRows.set(label, {
+          ...current,
+          sessions: current.sessions + 1,
+          tokens: current.tokens + session.totals.totalTokens,
+        });
+      }
+      const projectRowsWithSessions = [
+        ...projectRows.map((row) => ({
+          ...row,
+          sessions: sessionProjectRows.get(row.label)?.sessions ?? row.sessions,
+        })),
+        ...Array.from(sessionProjectRows.values()).filter(
+          (row) =>
+            !projectRows.some((existing) => existing.label === row.label),
+        ),
+      ]
+        .sort((a, b) => b.tokens - a.tokens)
+        .slice(0, 5);
+      const activeProjectCount = new Set([
+        ...eventUsage.projects.keys(),
+        ...sessionProjectRows.keys(),
+      ]).size;
+      const activeAgentCount = allSourceRows.filter(
+        (row) => row.sessions > 0 || row.tokens > 0,
+      ).length;
+      const sessionDetails: ReportSessionStats[] = inRange
+        .map((session) => ({
+          title: reportSessionTitle(session),
+          project: session.projectKey || undefined,
+          source: session.source || "unknown",
+          turns: session.turns,
+          tokens: session.totals.totalTokens,
+          durationMin: Math.round(session.durationMs / 60_000),
+        }))
+        .sort((a, b) => b.tokens - a.tokens || b.turns - a.turns)
+        .slice(0, 5);
+      const cache: ReportCacheStats | undefined = eventUsage.hasEvents
+        ? {
+            totalTokens: eventUsage.cache.totalTokens,
+            inputTokens: eventUsage.cache.inputTokens,
+            outputTokens: eventUsage.cache.outputTokens,
+            reasoningTokens: eventUsage.cache.reasoningTokens,
+            cachedTokens: eventUsage.cache.cachedTokens,
+            cacheHitRate:
+              eventUsage.cache.inputTokens + eventUsage.cache.cachedTokens > 0
+                ? eventUsage.cache.cachedTokens /
+                  (eventUsage.cache.inputTokens + eventUsage.cache.cachedTokens)
+                : undefined,
+            savingsCny: sessionMetrics.hasCacheSavings
+              ? sessionMetrics.cacheSavingsUsd * usdToCny
+              : undefined,
+          }
+        : undefined;
+      const previousTokens = yesterdayUsage
+        ? yesterdayUsage.tokens
+        : yesterdaySessions.length > 0
+          ? yesterdayMetrics.tokens
+          : undefined;
+      const previousCostUsd = yesterdayUsage
+        ? yesterdayUsage.costUsd
+        : yesterdaySessions.length > 0
+          ? yesterdayMetrics.costUsd
+          : undefined;
+      const yesterday: ReportPeriodComparison | undefined =
+        yesterdayRange &&
+        (yesterdaySessions.length > 0 || yesterdayUsage?.hasEvents)
+          ? {
+              tokens: previousTokens,
+              costCny:
+                previousCostUsd === undefined
+                  ? undefined
+                  : previousCostUsd * usdToCny,
+              sessions: yesterdayMetrics.sessions,
+              turns: yesterdayMetrics.turns,
+              durationMin: yesterdayMetrics.durationMin,
+              activeAgents: yesterdayUsage
+                ? yesterdayUsage.bySource.size
+                : yesterdayMetrics.sources.size,
+              activeProjects: yesterdayUsage
+                ? yesterdayUsage.projects.size
+                : yesterdayMetrics.projects.size,
+            }
+          : undefined;
+      const trend: ReportTrendPoint[] = [];
+      if (range.from !== range.to) {
+        const cursor = new Date(`${range.from}T12:00:00`);
+        const end = new Date(`${range.to}T12:00:00`);
+        while (cursor <= end) {
+          const date = dayKeyOf(cursor);
+          const daySessions = inRange.filter(
+            (session) => sessionDayKey(session.startedAt) === date,
+          );
+          const dayUsage = usageData
+            ? collectEventUsage(usageData, { from: date, to: date })
+            : undefined;
+          const dayMetrics = aggregateSessionMetrics(daySessions);
+          const dayTokens = dayUsage ? dayUsage.tokens : dayMetrics.tokens;
+          const dayCostUsd = dayUsage ? dayUsage.costUsd : dayMetrics.costUsd;
+          if (dayTokens > 0 || dayCostUsd > 0 || daySessions.length > 0) {
+            trend.push({
+              date,
+              tokens: dayTokens,
+              costCny: dayCostUsd * usdToCny,
+              sessions: daySessions.length,
+              durationMin: dayMetrics.durationMin,
+            });
+          }
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      }
       const stats: ReportStats = {
         periodLabel: range.label,
         sessions: allSourceRows.reduce((a, x) => a + x.sessions, 0),
@@ -456,6 +849,15 @@ export function createReportContextPort(
         durationMin: allSourceRows.reduce((a, x) => a + x.durationMin, 0),
         bySource: displayRows,
         projects,
+        activeAgentCount,
+        activeProjectCount,
+        activeModelCount,
+        byModel: modelRows.length > 0 ? modelRows : undefined,
+        byProject: projectRowsWithSessions,
+        sessionsDetail: sessionDetails,
+        cache,
+        yesterday,
+        trend,
       };
 
       const summary = buildContextSummary(stats, projects, topProject);

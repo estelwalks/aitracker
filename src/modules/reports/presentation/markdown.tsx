@@ -323,12 +323,33 @@ export function MarkdownView({
       buffer.push(lines[i]);
       i += 1;
     }
+    // A pipe-delimited line without a Markdown separator is not a valid
+    // table. Treat it as plain text and always advance. Previously `buffer`
+    // stayed empty and `i` never changed, causing an infinite render loop and
+    // eventually crashing the Chromium tab with an out-of-memory error.
+    if (buffer.length === 0) {
+      buffer.push(lines[i]);
+      i += 1;
+    }
+    const paragraph: ReactNode[] = [];
+    buffer.forEach((paragraphLine, lineIndex) => {
+      const hardBreak = paragraphLine.endsWith("\\");
+      const line = hardBreak ? paragraphLine.slice(0, -1) : paragraphLine;
+      paragraph.push(...inline(line, `p${i}-${lineIndex}`));
+      if (lineIndex < buffer.length - 1) {
+        if (hardBreak) {
+          paragraph.push(<br key={`p${i}-br${lineIndex}`} />);
+        } else {
+          paragraph.push(" ");
+        }
+      }
+    });
     out.push(
       <p
         key={`p${i}`}
         className="my-2 text-[12.5px] leading-7 text-muted-foreground"
       >
-        {inline(buffer.join(" "), `p${i}`)}
+        {paragraph}
       </p>,
     );
   }

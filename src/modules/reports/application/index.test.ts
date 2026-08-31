@@ -486,6 +486,7 @@ test("generate archives into the selected week/month anchor", async () => {
   assert.equal(first.getFullYear(), 2026);
   assert.equal(first.getMonth(), 2);
   assert.equal(first.getDate(), 1);
+  assert.equal(month.store.documents[0]!.title, "Monthly review");
 });
 
 test("generate forwards the period to the context collector", async () => {

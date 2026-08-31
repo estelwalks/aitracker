@@ -3,6 +3,7 @@ import {
   BUILTIN_REPORT_DEFINITIONS,
   canTransition,
   safeReportText,
+  templateForLocale,
   toDefinitionSummary,
   toReportSummary,
   wasReportTextTruncated,
@@ -21,6 +22,7 @@ import type {
   ReportContextPort,
   ReportContentStore,
   ReportGenerationPort,
+  ReportGenerationResult,
 } from "../contracts.ts";
 import { periodStartDate } from "../period.ts";
 
@@ -179,7 +181,7 @@ export function createReportsApplication(
       status: "draft",
       title: definition.title,
       generatedAt: startedAt,
-      templateVersion: definition.template.version,
+      templateVersion: templateForLocale(definition).version,
       evidence: [],
       assets: [],
     };
@@ -222,12 +224,30 @@ export function createReportsApplication(
       });
       return err("errors.reports.contextFailed");
     }
-    const result = await options.generation.generate({
-      definition,
-      context,
-      budgetUsd: input.budgetUsd,
-      modelId: input.modelId,
-    });
+    const templateKind =
+      input.templateKind ??
+      (input.period?.granularity === "month" ? "monthly" : undefined);
+    let result: ReportGenerationResult;
+    try {
+      result = await options.generation.generate({
+        definition,
+        context,
+        budgetUsd: input.budgetUsd,
+        modelId: input.modelId,
+        locale: input.locale,
+        templateKind,
+      });
+    } catch {
+      await options.store.updateRun({
+        ...run,
+        status: "failed",
+        finishedAt: now().toISOString(),
+        errorCode: "errors.reports.generationFailed",
+        retryable: true,
+        evidence: context.evidence,
+      });
+      return err("errors.reports.generationFailed");
+    }
     const finishedAt = now().toISOString();
     const finalRun: ReportRun = {
       ...run,
@@ -259,9 +279,12 @@ export function createReportsApplication(
       runId: run.runId,
       definitionId: definition.definitionId,
       status: "draft",
-      title: definition.title,
+      // Monthly reports reuse the weekly definition for storage compatibility,
+      // so keep an explicit title marker to distinguish them in the archive.
+      title: templateKind === "monthly" ? "Monthly review" : definition.title,
       generatedAt,
-      templateVersion: definition.template.version,
+      templateVersion: templateForLocale(definition, input.locale, templateKind)
+        .version,
       evidence: context.evidence,
       assets: context.assets ?? [],
     };

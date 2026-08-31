@@ -1,8 +1,10 @@
 import type { Result } from "../../shared/result.ts";
+import type { Locale } from "../../lib/i18n/locale";
 
 export const reportsModuleId = "reports" as const;
 export type ReportsModuleId = typeof reportsModuleId;
 export type ReportKind = "daily" | "weekly";
+export type ReportTemplateKind = ReportKind | "monthly";
 export type ReportStatus = "draft" | "approved" | "archived";
 export type ReportRunStatus =
   "queued" | "running" | "succeeded" | "failed" | "offline" | "budget-exceeded";
@@ -22,11 +24,18 @@ export interface TemplateVersion {
   readonly template: string;
 }
 
+export type ReportTemplateCatalog = Readonly<
+  Record<ReportTemplateKind, TemplateVersion>
+>;
+export type ReportTemplateSet = Readonly<Record<Locale, ReportTemplateCatalog>>;
+
 export interface ReportDefinition {
   readonly definitionId: string;
   readonly kind: ReportKind;
   readonly title: string;
   readonly template: TemplateVersion;
+  /** Versioned prompts keyed by report cadence and supported locale. */
+  readonly templates?: ReportTemplateSet;
   readonly scheduleRef: ScheduleRef;
   readonly enabled: boolean;
 }
@@ -172,6 +181,70 @@ export interface ReportStats {
   }[];
   /** Display-safe project keys present in the period (no paths). */
   readonly projects: readonly string[];
+  readonly activeAgentCount?: number;
+  readonly activeProjectCount?: number;
+  readonly activeModelCount?: number;
+  /** Deterministic daily-report breakdowns. All labels are display-safe. */
+  readonly byModel?: readonly ReportModelStats[];
+  readonly byProject?: readonly ReportProjectStats[];
+  readonly sessionsDetail?: readonly ReportSessionStats[];
+  readonly cache?: ReportCacheStats;
+  readonly yesterday?: ReportPeriodComparison;
+  readonly trend?: readonly ReportTrendPoint[];
+}
+
+export interface ReportTrendPoint {
+  readonly date: string;
+  readonly tokens: number;
+  readonly costCny?: number;
+  readonly sessions: number;
+  readonly durationMin: number;
+}
+
+export interface ReportModelStats {
+  readonly model: string;
+  readonly calls: number;
+  readonly tokens: number;
+  readonly costCny?: number;
+}
+
+export interface ReportProjectStats {
+  readonly label: string;
+  readonly kind?: "project" | "conversation";
+  readonly sessions: number;
+  readonly tokens: number;
+  readonly costCny?: number;
+  readonly source?: string;
+}
+
+export interface ReportSessionStats {
+  readonly title: string;
+  readonly project?: string;
+  readonly source: string;
+  readonly turns: number;
+  readonly tokens: number;
+  readonly durationMin: number;
+  readonly repeated?: boolean;
+}
+
+export interface ReportCacheStats {
+  readonly totalTokens?: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly reasoningTokens?: number;
+  readonly cachedTokens?: number;
+  readonly cacheHitRate?: number;
+  readonly savingsCny?: number;
+}
+
+export interface ReportPeriodComparison {
+  readonly tokens?: number;
+  readonly costCny?: number;
+  readonly sessions?: number;
+  readonly turns?: number;
+  readonly durationMin?: number;
+  readonly activeAgents?: number;
+  readonly activeProjects?: number;
 }
 
 export interface ReportContext {
@@ -217,6 +290,10 @@ export interface ReportGenerationPort {
      * back to its injected `resolveModelId` and then to the default model id.
      */
     readonly modelId?: string;
+    /** Prompt/output language. Defaults to zh-CN for legacy callers. */
+    readonly locale?: Locale;
+    /** Monthly period uses the monthly prompt while retaining the weekly definition. */
+    readonly templateKind?: ReportTemplateKind;
   }): Promise<ReportGenerationResult>;
 }
 
@@ -257,6 +334,10 @@ export interface GenerateReportInput {
   readonly budgetUsd?: number;
   /** Active S-500 model profile id; routes generation to the real model. */
   readonly modelId?: string;
+  /** Prompt/output language. Defaults to zh-CN for scheduled/legacy callers. */
+  readonly locale?: Locale;
+  /** Optional prompt cadence override (used by the existing monthly period flow). */
+  readonly templateKind?: ReportTemplateKind;
   /** Target period for the report. Absent = current period (manual schedule). */
   readonly period?: ReportPeriod;
 }

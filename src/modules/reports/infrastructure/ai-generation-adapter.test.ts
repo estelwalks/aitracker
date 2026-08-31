@@ -12,7 +12,7 @@ import type {
 } from "../../../modules/ai-orchestration/contracts.ts";
 import { BUILTIN_REPORT_DEFINITIONS } from "../domain.ts";
 import { createReportGenerationPort } from "./ai-generation-adapter.ts";
-import type { ReportContext } from "../contracts.ts";
+import type { ReportContext, ReportStats } from "../contracts.ts";
 
 const UNKNOWN_COST: CostState = {
   confidence: "unknown",
@@ -25,6 +25,14 @@ function definition() {
     (item) => item.definitionId === "reports.daily",
   );
   if (!found) throw new Error("test setup: daily definition missing");
+  return found;
+}
+
+function weeklyDefinition() {
+  const found = BUILTIN_REPORT_DEFINITIONS.find(
+    (item) => item.definitionId === "reports.weekly",
+  );
+  if (!found) throw new Error("test setup: weekly definition missing");
   return found;
 }
 
@@ -103,7 +111,192 @@ test("offline preserves the fallback draft body", async () => {
     context: context(),
   });
   assert.equal(result.status, "offline");
-  assert.match(result.body ?? "", /## 今日摘要/);
+  assert.match(result.body ?? "", /## 今日总结/);
+});
+
+test("daily reports ignore model Markdown and use the fixed document renderer", async () => {
+  let called = false;
+  const generation = createReportGenerationPort({
+    ai: {
+      async execute() {
+        called = true;
+        throw new Error("daily report must not call the model");
+      },
+    },
+  });
+  const result = await generation.generate({
+    definition: definition(),
+    context: {
+      evidence: [],
+      summary: "model must not control the document",
+      stats: {
+        periodLabel: "今日 2026-08-31",
+        sessions: 1,
+        turns: 1,
+        tokens: 100,
+        costUsd: 1,
+        bySource: [
+          {
+            source: "Codex",
+            sessions: 1,
+            tokens: 100,
+            costUsd: 1,
+            edits: 0,
+            durationMin: 1,
+          },
+        ],
+        projects: [],
+        edits: 0,
+        durationMin: 1,
+      },
+    },
+  });
+  assert.equal(called, false);
+  assert.equal(result.status, "succeeded");
+  assert.match(result.body ?? "", /^# AITracker 日报/);
+});
+
+test("weekly reports use the fixed localized document renderer", async () => {
+  let called = false;
+  const generation = createReportGenerationPort({
+    ai: {
+      async execute() {
+        called = true;
+        throw new Error("weekly report must not call the model");
+      },
+    },
+  });
+  const result = await generation.generate({
+    definition: weeklyDefinition(),
+    locale: "en-US",
+    context: {
+      evidence: [],
+      summary: "model must not control the document",
+      stats: {
+        periodLabel: "2026/08/24 - 2026/08/30",
+        sessions: 1,
+        turns: 2,
+        tokens: 100,
+        costUsd: 1,
+        bySource: [
+          {
+            source: "Codex",
+            sessions: 1,
+            tokens: 100,
+            costUsd: 1,
+            edits: 0,
+            durationMin: 1,
+          },
+        ],
+        projects: [],
+        edits: 0,
+        durationMin: 1,
+      },
+    },
+  });
+  assert.equal(result.status, "succeeded");
+  assert.equal(called, false);
+  assert.match(result.body ?? "", /^# AITracker Weekly Report/);
+  assert.match(result.body ?? "", /This week's summary/);
+  assert.doesNotMatch(result.body ?? "", /本周|蒸馏|记忆|工作流/);
+});
+
+test("monthly reports use the fixed monthly localized document renderer", async () => {
+  let called = false;
+  const generation = createReportGenerationPort({
+    ai: {
+      async execute() {
+        called = true;
+        throw new Error("monthly report must not call the model");
+      },
+    },
+  });
+  const result = await generation.generate({
+    definition: weeklyDefinition(),
+    templateKind: "monthly",
+    locale: "en-US",
+    context: {
+      evidence: [],
+      summary: "model must not control the document",
+      stats: {
+        periodLabel: "2026/08/01 - 2026/08/31",
+        sessions: 1,
+        turns: 2,
+        tokens: 100,
+        costUsd: 1,
+        bySource: [
+          {
+            source: "Codex",
+            sessions: 1,
+            tokens: 100,
+            costUsd: 1,
+            edits: 0,
+            durationMin: 1,
+          },
+        ],
+        projects: [],
+        edits: 0,
+        durationMin: 1,
+      },
+    },
+  });
+  assert.equal(result.status, "succeeded");
+  assert.equal(called, false);
+  assert.match(result.body ?? "", /^# AITracker Monthly Report/);
+  assert.match(result.body ?? "", /This month's summary/);
+  assert.doesNotMatch(result.body ?? "", /本月|蒸馏|记忆|工作流/);
+});
+
+test("monthly renderer tolerates missing optional breakdown arrays", async () => {
+  const generation = createReportGenerationPort({
+    ai: {
+      async execute() {
+        throw new Error("incomplete statistics must not call the model");
+      },
+    },
+  });
+  const result = await generation.generate({
+    definition: weeklyDefinition(),
+    templateKind: "monthly",
+    locale: "en-US",
+    context: {
+      evidence: [],
+      summary: "incomplete monthly statistics",
+      stats: {
+        periodLabel: "2026/08/01 - 2026/08/31",
+        sessions: 1,
+        turns: 2,
+        tokens: 100,
+        costUsd: 1,
+        edits: 0,
+        durationMin: 1,
+        projects: [],
+      } as unknown as ReportStats,
+    },
+  });
+  assert.equal(result.status, "succeeded");
+  assert.match(result.body ?? "", /^# AITracker Monthly Report/);
+});
+
+test("weekly and monthly generation fail instead of saving an offline placeholder", async () => {
+  for (const templateKind of ["weekly", "monthly"] as const) {
+    const generation = createReportGenerationPort({
+      ai: fake({
+        summary: summary("completed"),
+        response: response("Offline deterministic fallback text."),
+      }),
+    });
+    const result = await generation.generate({
+      definition: weeklyDefinition(),
+      templateKind,
+      context: context(),
+      locale: "en-US",
+    });
+    assert.equal(result.status, "failed");
+    assert.equal(result.errorCode, "errors.reports.generationFailed");
+    assert.equal(result.retryable, true);
+    assert.equal(result.body, undefined);
+  }
 });
 
 test("fallback (provider error path) also maps to offline", async () => {
@@ -190,14 +383,54 @@ test("the AI request carries the definition template and context summary", async
   assert.equal(captured.request?.modelId, "report-generator");
   assert.equal(captured.request?.prompt.id, "reports.daily.default");
   assert.equal(captured.request?.prompt.version, definition().template.version);
-  assert.equal(
-    captured.request?.prompt.template,
-    definition().template.template,
+  assert.ok(
+    captured.request?.prompt.template.startsWith(
+      `${definition().template.template}\n\n`,
+    ),
   );
+  assert.match(captured.request?.prompt.template ?? "", /全文必须使用简体中文/);
   assert.equal(captured.request?.input.text, "Fixed offline summary text.");
   assert.equal(captured.request?.budgetUsd, 0.5);
   assert.equal(captured.request?.timeoutMs, 300_000);
   assert.ok(captured.request?.requestId, "requestId must be populated");
+});
+
+test("the AI request selects the prompt for the requested locale", async () => {
+  const locales = ["en-US", "ja-JP", "ko-KR"] as const;
+  for (const locale of locales) {
+    const captured: { request?: AIRequest } = {};
+    const generation = createReportGenerationPort({
+      ai: fake(
+        { summary: summary("completed"), response: response("ok", "profile") },
+        captured,
+      ),
+    });
+    await generation.generate({
+      definition: definition(),
+      context: context(),
+      locale,
+    });
+    assert.equal(
+      captured.request?.prompt.id,
+      `reports.daily.${locale}.default`,
+    );
+    assert.match(
+      captured.request?.prompt.template ?? "",
+      locale === "en-US"
+        ? /You are AITracker/
+        : locale === "ja-JP"
+          ? /あなたは/
+          : /당신은/,
+    );
+    assert.match(
+      captured.request?.prompt.template ?? "",
+      locale === "en-US"
+        ? /write the entire report in English/i
+        : locale === "ja-JP"
+          ? /レポート全文を日本語/
+          : /보고서 전체를 한국어/,
+    );
+  }
 });
 
 test("resolveModelId routes generation to the profile-backed provider", async () => {

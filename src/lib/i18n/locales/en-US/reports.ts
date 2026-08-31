@@ -150,6 +150,7 @@ export const reports = {
     generationProgressTitle: "Generating report",
     generationProgressDesc:
       "Organizing the sessions in this period and drafting your report. Please wait.",
+    generationElapsed: "Elapsed {seconds}s",
     generationFailureTitle: "Report generation failed",
     generationFailed: "The report could not be generated. Please try again.",
     generationTimedOut: "Generation timed out. Please try again.",
@@ -163,6 +164,7 @@ export const reports = {
     savedAt: "Last saved {time} · local archive",
     unsaved: "Not saved yet · draft autosaves every 30s",
     exportMarkdown: "Export Markdown",
+    exportPdf: "Export PDF",
   },
   notes: {
     title: "Quick notes",

@@ -24,7 +24,7 @@ const STEPS = [
 ] as const;
 
 /**
- * 首次进入引导覆盖层,对齐原型 779-839:absolute 覆盖内容区,chart-1 模糊 blob、
+ * 首次进入引导覆盖层,覆盖当前视口,chart-1 模糊 blob、
  * HelpCircle 图标、两段介绍、2 列步骤网格 + 开始使用 CTA。遮罩可点击关闭;
  * 关闭后写入 SQLite 不再自动弹出,可在标题栏点「?」重看。
  */
@@ -32,7 +32,7 @@ export function DistillGuide({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   return (
     <div
-      className="absolute inset-0 z-40 flex items-start justify-center p-6 pt-16"
+      className="fixed inset-0 z-40 flex items-center justify-center p-6"
       role="dialog"
       aria-modal="true"
       aria-label={t("distill.guideTitle")}

@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { Link } from "@tanstack/react-router";
 import {
   ChevronLeft,
   ChevronRight,
@@ -88,7 +87,8 @@ function generationFailureKey(errorCode?: string): GenerationFailureKey {
   }
 }
 
-const mdKey = (key: string) => `tt.report.${key}.md`;
+const mdKey = (kind: PeriodGranularity, key: string) =>
+  `tt.report.${kind}.${key}.md`;
 
 /** Mirror of the prototype's `Period` shape, derived from a period key. */
 interface PeriodModel {
@@ -103,7 +103,6 @@ interface PeriodModel {
 function periodModel(
   granularity: PeriodGranularity,
   key: string,
-  t: ReturnType<typeof useI18n>["t"],
   format: ReturnType<typeof useI18n>["format"],
 ): PeriodModel {
   const start = periodStartDate(granularity, key);
@@ -118,8 +117,13 @@ function periodModel(
       key,
       from: key,
       to: key,
-      // Locale-aware date + weekday (zh: 2026/02/11周三, en: 02/11/2026 Wed).
-      label: format.formatDate(safeStart, { weekday: "short" }),
+      // Keep a visible separator between the date and weekday in every locale.
+      label: `${format.formatDate(safeStart)} ${format.formatDate(safeStart, {
+        weekday: "short",
+        year: undefined,
+        month: undefined,
+        day: undefined,
+      })}`,
       short: `${month}/${day}`,
     };
   }
@@ -132,23 +136,23 @@ function periodModel(
     );
     const from = dayKeyOf(monday);
     const to = dayKeyOf(sunday);
-    const suffix = t("reports.period.weekSuffix");
     return {
       kind: granularity,
       key,
       from,
       to,
-      label: `${format.formatDate(monday)} – ${format.formatDate(sunday)} ${suffix}`,
+      label: `${format.formatDate(monday)} – ${format.formatDate(sunday)}`,
       short: `${month}/${day}`,
     };
   }
   const lastDay = new Date(year, month, 0).getDate();
+  const lastDate = new Date(year, month - 1, lastDay);
   return {
     kind: granularity,
     key,
     from: `${key}-01`,
     to: `${key}-${pad(lastDay)}`,
-    label: format.formatDate(lastDay, {
+    label: format.formatDate(lastDate, {
       year: "numeric",
       month: "long",
       day: undefined,
@@ -169,8 +173,6 @@ function isFuturePeriod(
 function definitionFor(
   granularity: PeriodGranularity,
 ): "reports.daily" | "reports.weekly" {
-  // Only daily/weekly definitions exist; week/month browsing generates the
-  // weekly review (a monthly definition is a follow-up).
   return granularity === "day" ? "reports.daily" : "reports.weekly";
 }
 
@@ -185,20 +187,19 @@ function definitionFor(
  * All figures come from the server read model: `feed.density` aggregates real
  * sessions by day, report/run counts come from persisted documents/runs, and
  * each archived pill maps to a persisted report. Generation stays real
- * (`generateReportNow`). Without a model profile the generation entry point
- * becomes a setup CTA. Edits are user-authored drafts
+ * (`generateReportNow`). All three cadences use deterministic renderers and do
+ * not require a model profile. Edits are user-authored drafts
  * kept in this browser (`tt.report.<period>.md`, 30s autosave), the
  * server's persisted bodies stay read-only.
  */
 export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
-  const { t, format } = useI18n();
+  const { t, format, locale } = useI18n();
   const router = useRouter();
   const feed = initial.feed;
-  const offline = feed.offline;
-  const generateBlocked = feed.disabled || offline;
 
   const [now] = useState(() => new Date());
   const [kind, setKind] = useState<PeriodGranularity>("day");
+  const generateBlocked = feed.disabled;
   const [selectedKey, setSelectedKey] = useState<string>(() =>
     periodKeyOf("day", new Date()),
   );
@@ -207,6 +208,10 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
   const [body, setBody] = useState("");
   const [askRewrite, setAskRewrite] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(
+    null,
+  );
+  const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
   const [generationFailure, setGenerationFailure] =
     useState<GenerationFailureKey | null>(null);
   const [preferredReport, setPreferredReport] = useState<{
@@ -215,6 +220,17 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
   } | null>(null);
   const dirtyRef = useRef(false);
 
+  useEffect(() => {
+    if (!generating || generationStartedAt === null) return;
+    const update = () =>
+      setGenerationElapsedSeconds(
+        Math.floor((Date.now() - generationStartedAt) / 1000),
+      );
+    update();
+    const timer = window.setInterval(update, 250);
+    return () => window.clearInterval(timer);
+  }, [generating, generationStartedAt]);
+
   /** Timeline of periods ending at "now" (newest → oldest), filling the bar. */
   const periods = useMemo(() => {
     const span = kind === "day" ? 9 : kind === "week" ? 8 : 12;
@@ -222,13 +238,12 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
     const out: PeriodModel[] = [];
     for (let index = 0; index < span; index += 1) {
       const key = addPeriods(kind, anchor, -index);
-      out.push(periodModel(kind, key, t, format));
+      out.push(periodModel(kind, key, format));
     }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, now, format]);
 
-  const period = periodModel(kind, selectedKey, t, format);
+  const period = periodModel(kind, selectedKey, format);
   const periodMetric = useMemo(
     () => sumPeriodDensity(feed.density, kind, selectedKey),
     [feed.density, kind, selectedKey],
@@ -236,16 +251,25 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
 
   /** A report is "archived" in the period containing its generatedAt. */
   const reportInPeriod = (key: string): ReportListItem | undefined => {
-    const preferred = kind === "day" ? "daily" : "weekly";
-    let fallback: ReportListItem | undefined;
-    for (const report of feed.reports) {
-      if (!report.generatedAt) continue;
-      if (periodContains(kind, key, dayKeyOf(new Date(report.generatedAt)))) {
-        if (report.kind === preferred) return report;
-        fallback ??= report;
-      }
+    if (kind === "month") {
+      // Monthly reports currently reuse the weekly definition id. Their
+      // stable title marker keeps a monthly archive from loading a weekly
+      // report that happens to fall inside the same calendar month.
+      return feed.reports.find(
+        (report) =>
+          report.kind === "weekly" &&
+          report.title === "Monthly review" &&
+          report.generatedAt &&
+          periodContains(kind, key, dayKeyOf(new Date(report.generatedAt))),
+      );
     }
-    return fallback;
+    return feed.reports.find(
+      (report) =>
+        report.kind === (kind === "day" ? "daily" : "weekly") &&
+        (kind !== "week" || report.title !== "Monthly review") &&
+        report.generatedAt &&
+        periodContains(kind, key, dayKeyOf(new Date(report.generatedAt))),
+    );
   };
 
   const selection = `${kind}:${selectedKey}`;
@@ -286,7 +310,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
     dirtyRef.current = false;
     const report = activeReport;
     let cancelled = false;
-    void getPreference(mdKey(selectedKey))
+    void getPreference(mdKey(kind, selectedKey))
       .then(async (saved) => {
         if (typeof saved === "string") return saved;
         if (!report?.reportId) return "";
@@ -305,14 +329,22 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, activeReport?.reportId]);
+  }, [kind, selectedKey, activeReport?.reportId]);
 
-  const { exportMd } = useReportActions(
+  const { exportMd, exportPdf } = useReportActions(
     body,
     activeReport?.title ?? period.label,
   );
+  const handleExportPdf = () => {
+    if (mode === "edit") {
+      setMode("preview");
+      window.setTimeout(exportPdf, 0);
+      return;
+    }
+    exportPdf();
+  };
   const { savedAt: autoSavedAt, flush } = useDraftAutosave(
-    mdKey(selectedKey),
+    mdKey(kind, selectedKey),
     body,
     dirtyRef,
   );
@@ -332,7 +364,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
         return;
       }
       dirtyRef.current = false;
-      void removePreference(mdKey(selectedKey));
+      void removePreference(mdKey(kind, selectedKey));
       flush();
       if (result.truncated) {
         // P1-10: the durable storage boundary (60,000 chars) truncated the
@@ -348,6 +380,9 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
 
   const switchKind = (next: PeriodGranularity) => {
     setGenerationFailure(null);
+    // Never show the previous cadence's document while the matching persisted
+    // body is loading.
+    setBody("");
     setKind(next);
     setSelectedKey(periodKeyOf(next, now));
   };
@@ -361,10 +396,20 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
     if (generating) return;
     setGenerationFailure(null);
     setGenerating(true);
+    const startedAt = Date.now();
+    setGenerationStartedAt(startedAt);
+    setGenerationElapsedSeconds(0);
     try {
+      // Let React paint the busy state before entering the server function.
+      // This is especially important for deterministic reports, whose request
+      // can otherwise complete before the browser paints any feedback.
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
       const result = await generateReportNow({
         data: {
           definitionId: definitionFor(kind),
+          locale,
           granularity: kind,
           periodKey: selectedKey,
         },
@@ -388,7 +433,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
 
       // A period-scoped browser edit belongs to the previous report. It must
       // not shadow the freshly generated server draft.
-      await removePreference(mdKey(selectedKey));
+      await removePreference(mdKey(kind, selectedKey));
       setPreferredReport({ selection, reportId: result.reportId });
       setMode("preview");
       dirtyRef.current = false;
@@ -402,7 +447,16 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
       setGenerationFailure(failureKey);
       toast.error(t(failureKey));
     } finally {
+      // Keep the feedback visible long enough to be perceived, without
+      // pretending that a percentage-based progress value is available.
+      const remaining = Math.max(0, 180 - (Date.now() - startedAt));
+      if (remaining > 0) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, remaining);
+        });
+      }
       setGenerating(false);
+      setGenerationStartedAt(null);
     }
   };
 
@@ -589,13 +643,19 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   {t("reports.body.generationProgressDesc")}
                 </p>
+                <p className="mt-1 font-mono text-[10px] text-muted-foreground/80">
+                  {t("reports.body.generationElapsed", {
+                    seconds: generationElapsedSeconds,
+                  })}
+                </p>
                 <div
                   role="progressbar"
                   aria-label={t("reports.body.generationProgressTitle")}
+                  aria-valuetext={t("reports.body.generationProgressDesc")}
                   className="mt-2 h-1.5 overflow-hidden rounded-full bg-border/70"
                 >
                   <div
-                    className="h-full w-full animate-pulse rounded-full"
+                    className="h-full w-1/3 animate-pulse rounded-full"
                     style={{ background: "var(--chart-1)" }}
                   />
                 </div>
@@ -636,37 +696,27 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                 <p className="mt-3 text-[12.5px] text-muted-foreground">
                   {t("reports.body.emptyTitle")}
                 </p>
-                {!generationFailure &&
-                  (offline ? (
-                    <Link
-                      to="/settings"
-                      search={{ section: "model" }}
-                      className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-warn/15 px-4 py-2 text-[12px] font-semibold text-warn transition-colors hover:bg-warn/25"
-                    >
-                      <Sparkles className="size-3.5" />
-                      {t("reports.insight.modelNotConfigured")}
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void doGenerate()}
-                      disabled={generating || generateBlocked}
-                      className="mt-4 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
-                      style={{ background: "var(--chart-1)" }}
-                    >
-                      {generating ? (
-                        <>
-                          <RefreshCw className="size-3.5 animate-spin" />
-                          {t("reports.header.generating")}
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="size-3.5" />
-                          {t("reports.body.draft")}
-                        </>
-                      )}
-                    </button>
-                  ))}
+                {!generationFailure && (
+                  <button
+                    type="button"
+                    onClick={() => void doGenerate()}
+                    disabled={generating || generateBlocked}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
+                    style={{ background: "var(--chart-1)" }}
+                  >
+                    {generating ? (
+                      <>
+                        <RefreshCw className="size-3.5 animate-spin" />
+                        {t("reports.header.generating")}
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="size-3.5" />
+                        {t("reports.body.draft")}
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             ) : (
               <>
@@ -719,7 +769,10 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                     className="aitracker-scroll min-h-[460px] w-full resize-y rounded-xl bg-surface-2 p-4 font-mono text-[12.5px] leading-7 outline-none"
                   />
                 ) : (
-                  <div className="aitracker-scroll min-h-[460px] rounded-xl bg-surface-2/40 px-5 py-4">
+                  <div
+                    id="report-print-area"
+                    className="aitracker-scroll min-h-[460px] rounded-xl bg-surface-2/40 px-5 py-4"
+                  >
                     <MarkdownView source={body} />
                   </div>
                 )}
@@ -737,8 +790,11 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                   )}
                   <button
                     type="button"
-                    onClick={() => setAskRewrite(true)}
-                    disabled={!periodMetric.count || generating}
+                    onClick={() => {
+                      if (dirtyRef.current) setAskRewrite(true);
+                      else void doGenerate();
+                    }}
+                    disabled={generating || generateBlocked}
                     className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[12px] disabled:opacity-40"
                   >
                     <RefreshCw className="size-3.5" />{" "}
@@ -751,6 +807,14 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                   >
                     <Download className="size-3.5" />{" "}
                     {t("reports.body.exportMarkdown")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportPdf}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[12px]"
+                  >
+                    <Download className="size-3.5" />{" "}
+                    {t("reports.body.exportPdf")}
                   </button>
                 </div>
               </>
