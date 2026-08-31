@@ -2,8 +2,8 @@ import { useI18n } from "../../../../lib/i18n/context";
 import { relativeTimeParts } from "../security-view";
 
 /**
- * 「N 分钟前」相对时间标签。一次性渲染（非响应式），与 ScanHistory
- * 内的 `Date.now()` 约定一致。空 iso 不渲染，由调用方决定降级文案。
+ * "N minutes ago" relative time label. One-time rendering (non-responsive), with ScanHistory
+ * The convention inside `Date.now()` is consistent. Empty iso is not rendered and it is up to the caller to downgrade the copy.
  */
 export function RelativeTime({ iso }: { iso: string }) {
   const { t } = useI18n();

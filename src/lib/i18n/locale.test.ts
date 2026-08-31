@@ -36,7 +36,7 @@ test("mapSystemLocale: 主语言子标签映射(含 app.getLocale 与 BCP-47 形
   assert.equal(mapSystemLocale("zh"), "zh-CN");
   assert.equal(mapSystemLocale("zh-CN"), "zh-CN");
   assert.equal(mapSystemLocale("zh-Hans-CN"), "zh-CN");
-  assert.equal(mapSystemLocale("zh_TW"), "zh-CN"); // 繁体也回退简体
+  assert.equal(mapSystemLocale("zh_TW"), "zh-CN"); // Traditional Chinese also falls back to Simplified Chinese
   assert.equal(mapSystemLocale("en"), "en-US");
   assert.equal(mapSystemLocale("en-US"), "en-US");
   assert.equal(mapSystemLocale("en-GB"), "en-US");

@@ -48,10 +48,10 @@ import {
  * Heuristic tokens-per-turn used to estimate the selected material's size.
  * The privacy-safe renderer projection deliberately omits raw token totals,
  * so this estimate is always presented with the "~" prefix and the
- * "本次输入预估" sub-line (E-200) — never as a measured value.
+ * "This input estimate" sub-line (E-200) — never as a measured value.
  */
 const EST_TOKENS_PER_TURN = 900;
-/** 蒸馏历史每页条数（原型 HIST_PAGE = 10）。 */
+/** The number of distillation history entries per page (prototype HIST_PAGE = 10). */
 const HIST_PAGE = 10;
 const DISTILL_TASK_KEY = "aitracker.distillation.active-task";
 
@@ -64,10 +64,10 @@ function toRef(item: { source: string; sessionId: string }): SessionRef {
 }
 
 /**
- * 运行中结果卡（原型 ExpCard running 态 1832-1875）：与 done 态同一张卡结构
- * —— 完整 meta 头（kind chip + 时间 + 模型）+ 素材行 + 进度条。进度来自
- * 服务端任务阶段；服务端没有细粒度遥测时，最高保持在 92%。
- * 原型梯度条与百分比文案。
+ * Running result card (prototype ExpCard running state 1832-1875): the same card structure as the done state
+ * —— Complete meta header (kind chip + time + model) + material row + progress bar. Progress comes from
+ * Server task phase; when the server does not have fine-grained telemetry, the maximum is maintained at 92%.
+ * Prototype gradient bar with percentage copy.
  */
 function RunningExpCard({
   color,
@@ -145,9 +145,9 @@ function RunningExpCard({
 }
 
 /**
- * Distillation workbench aligned with the V3.0 prototype: shared Jarvis
+ * Distillation workbench aligned with the reference design: shared Jarvis
  * insight card, first-run guide overlay, quick/pro config card with a header
- * quota status + history, output-type selection (② 出产物), a metric bar with
+ * quota status + history, output-type selection (② output), a metric bar with
  * the prototype's semantics and a complete experiment history backed by the
  * persisted candidate store. All figures come from real server fns — sessions,
  * model options, persisted candidates and the workbench counters.
@@ -174,17 +174,17 @@ export function DistillationPage({
       : new Set();
   });
   const [busy, setBusy] = useState(false);
-  /** True only while a distillation run is in flight (drives 蒸馏中… states). */
+/** True only while a distillation run is in flight (drives "distilling…" states). */
   const [distilling, setDistilling] = useState(false);
   const [distillProgress, setDistillProgress] = useState(0);
   const [mode, setMode] = useState<"quick" | "pro">("quick");
   const [outType, setOutType] = useState<OutTypeId>("skill");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  /** 工作台视图：配置 / 结果 切换（原型 distill.tsx distillView）。 */
+  /** Workbench view: configuration/results toggle (prototype distill.tsx distillView). */
   const [distillView, setDistillView] = useState<"config" | "result">("config");
   const [histPage, setHistPage] = useState(1);
-  // 默认展开第一条历史（原型 open = viewId ?? exps[0]）。一旦用户点击切换，
-  // 显式用 viewId 控制，允许全部收起。
+  // The first history is expanded by default (prototype open = viewId ?? exps[0]). Once the user clicks on the switch,
+  // Explicitly use viewId control to allow all collapse.
   const [viewId, setViewId] = useState<string | null>(
     () => initial.candidates[0]?.candidateId ?? null,
   );
@@ -194,8 +194,8 @@ export function DistillationPage({
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(
     () => new Set(),
   );
-  // 蒸馏次数（持久化累计 + 本次页面会话增量）。刷新后回到持久化总数，与
-  // `approved` 同口径，避免 runs 归零而 approved 保留总量的矛盾。
+  // Distillation times (persistence accumulation + current page session increment). After refreshing, return to the total number of persistence, and
+  // `approved` has the same caliber to avoid the contradiction between runs being reset to zero and approved retaining the total amount.
   const [runs, setRuns] = useState(initial.stats.runs);
   const [approved, setApproved] = useState(initial.stats.approved);
   const [timeRange, setTimeRange] = useState<DistillationTimeRange>("all");
@@ -330,12 +330,12 @@ export function DistillationPage({
     [selectedItems],
   );
   // E-200: documented heuristic estimate (see EST_TOKENS_PER_TURN) presented
-  // with the "~" prefix and the "本次输入预估" sub-line, never as measured data.
+  // with the "~" prefix and the "this input estimate" sub-line, never as measured data.
   const estTokens = selectedItems.reduce(
     (sum, item) => sum + item.turns * EST_TOKENS_PER_TURN,
     0,
   );
-  /** 蒸馏历史计数与分页（原型 distill.tsx 462-486：本次会话 + 持久历史合并）。 */
+  /** Distillation history counting and paging (prototype distill.tsx 462-486: this session + persistent history merge). */
   const totalRuns = candidates.length;
   const totalSaved = candidates.filter(
     (c) => c.approvalState === "approved",
@@ -361,12 +361,12 @@ export function DistillationPage({
     );
   }
 
-  /** Quick 模式「清空」：清空已选会话（原型选中区的一键清空）。 */
+  /** Quick mode "Clear": Clear the selected session (one-click clearing of the prototype selected area). */
   function clearSelection() {
     setSelected(new Set());
   }
 
-  /** Pro 模式素材盒「清空」：清空已选片段。 */
+  /** Pro mode material box "Clear": clear the selected clips. */
   function clearSegments() {
     setSegments([]);
   }
@@ -494,8 +494,8 @@ export function DistillationPage({
         accepted = task.candidate;
         setApproved((current) => current + 1);
         setCandidates((prev) => [accepted!, ...prev]);
-        // 完成后切到结果视图并展开这条产物，但保持页面停留在顶部视角，
-        // 不自动滚动定位到进度条（用户可自行滚动查看进度）。
+        // When finished, switch to results view and expand this product, but keep the page in the top view.
+        // Does not automatically scroll to locate the progress bar (users can scroll by themselves to view the progress).
         setViewId(accepted!.candidateId);
         setDistillView("result");
         setHistPage(1);
@@ -564,7 +564,7 @@ export function DistillationPage({
   }
 
   function handleSwitchModel() {
-    // 额度横幅的切换目标：第一个自有（非官方、非离线）模型，与原型一致。
+    // The switching target of the credit banner: the first own (unofficial, non-offline) model, consistent with the prototype.
     const firstOwn = initial.modelOptions.find(
       (option) => !option.offline && option.official !== true,
     );

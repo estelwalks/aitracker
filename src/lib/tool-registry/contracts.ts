@@ -243,7 +243,7 @@ export interface ToolDefinition {
    * False only for legacy collection sources (aipy/cline) that must stay
    * compatible with usage scanning but are not part of the product catalog
    * (hidden from the public manifest, detection UI and market). Defaults to
-   * true (docs §6: catalogVisible=false 仅用于遗留来源).
+   * true (docs §6: catalogVisible=false only for legacy sources).
    */
   catalogVisible?: boolean;
   display: ToolDisplay;

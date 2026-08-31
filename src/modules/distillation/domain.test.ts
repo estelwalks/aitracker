@@ -85,7 +85,7 @@ test("candidateText redacts private fragments but keeps surrounding content", ()
 });
 
 test("candidateText strips the prompt-mandated redundant H1 from memory/persona bodies", () => {
-  // The prompts mandate a leading "# 任务记忆" / "# 用户画像" H1 that the card's
+  // The prompts mandate a leading "# Task Memory" / "# User Portrait" H1 that the card's
   // type badge already carries; without the strip, the stored body reads as a
   // duplicated title (title/body look swapped).
   const memory = "# 任务记忆\n\n## 当前目标\n搭建蒸馏工作台。";

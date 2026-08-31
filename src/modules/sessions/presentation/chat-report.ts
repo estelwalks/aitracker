@@ -3,7 +3,7 @@ import type { SessionSummary, SessionTranscriptMessage } from "../contracts.ts";
 
 /**
  * Pure, locale-agnostic report/segment builders (Story S-300). They generate
- * markdown text for the 生成简报 modal and the 蒸馏所选 flow from the selected
+ * markdown text for the generate briefing modal and the distillation selected flow from the selected
  * session's metadata + transcript messages. All user-facing copy is resolved
  * through the injected i18n label resolver — no hardcoded strings here.
  */
@@ -101,8 +101,8 @@ function reasoningSection(
 }
 
 /**
- * Markdown report for one session: 会话数/工具/项目/消息数/token 统计 +
- * 消息要点（+ 提炼结论 / 推理线索）。
+ * Markdown report for one session: Number of sessions/Tools/Projects/Number of messages/token statistics +
+ * Key points of the message (+ distilled conclusion / clues of reasoning).
  */
 export function buildReportText(
   input: ReportInput,
@@ -135,7 +135,7 @@ export function buildReportText(
   ].join("\n");
 }
 
-/** Markdown segment payload for the 蒸馏所选 flow (prototype segmentMarkdown). */
+/** Markdown segment payload for the distilled selected flow (prototype segmentMarkdown). */
 export function buildSegmentMarkdown(
   input: ReportInput & { messages: readonly SessionTranscriptMessage[] },
   label: ReportLabel,

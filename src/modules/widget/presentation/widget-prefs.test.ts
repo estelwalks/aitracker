@@ -14,7 +14,7 @@ import {
 } from "./widget-prefs";
 
 /**
- * widget-prefs 单测：SQLite preference port 读写 / 默认值 / 重置 / 语气改写。
+ * widget-prefs single test: SQLite preference port read and write / default value / reset / tone rewriting.
  */
 
 function createMemoryPersistence() {
@@ -58,7 +58,7 @@ test("setWidgetPref 写入内存并持久化到 SQLite preference port", async (
   assert.equal(readWidgetPrefs().barStyle, "icon");
   assert.equal(readWidgetPrefs().tone, "concise");
   assert.equal(readWidgetPrefs().rotate, 30);
-  // 未修改的字段保持默认
+  // Unmodified fields remain default
   assert.equal(readWidgetPrefs().defaultTab, "today");
 
   const raw = memory.store.get(WIDGET_PREFS_STORAGE_KEY);

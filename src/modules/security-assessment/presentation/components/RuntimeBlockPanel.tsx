@@ -21,13 +21,13 @@ interface CapabilityRow {
 }
 
 /**
- * 运行时防御面板（对齐 V3.0 原型 RuntimeBlockPanel 视觉：ShieldX 标题 +
- * 「监控中」呼吸点 + 列表行）。
+ * Runtime defense panel aligned with the reference RuntimeBlockPanel design:
+ * ShieldX heading, monitoring pulse, and list rows.
  *
- * 当前安全模块是静态扫描 + 模型分析（SecurityRuntimeCapabilityView 固定为
- * detection-only、activeDefense=false），因此本面板**不伪造**任何运行时拦截
- * 记录：列表行全部来自真实能力契约与真实扫描历史，页脚用诚实空态说明当前
- * 没有任何拦截事件。
+ * The current security module is static scanning + model analysis (SecurityRuntimeCapabilityView is fixed to
+ * detection-only, activeDefense=false), so this panel does not fake any runtime interception
+ * Records: All list lines come from real ability contracts and real scan history, and the footer uses an honest empty state to indicate the current
+ * There are no interception events.
  */
 export function RuntimeBlockPanel({
   runtime,

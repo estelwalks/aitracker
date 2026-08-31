@@ -107,7 +107,7 @@ test("resolveDesktopLocale: 用户偏好 > 系统语言 > zh-CN", () => {
   assert.equal(resolveDesktopLocale({}, "en-US"), "en-US");
   assert.equal(resolveDesktopLocale({}, "ja"), "ja-JP");
   assert.equal(resolveDesktopLocale({}, "fr-FR"), "zh-CN");
-  // 非法偏好值忽略,回退系统语言
+  // Illegal preference values are ignored and fallback to system language
   assert.equal(
     resolveDesktopLocale({ [LOCALE_PREF_KEY]: "fr-FR" }, "en-US"),
     "en-US",
@@ -167,7 +167,7 @@ test("createTrayTemplate: 点击回调接线正确", () => {
       onQuit: () => quit++,
     },
   ).forEach((item) => item.click?.());
-  assert.equal(toggled, false); // 从当前 enabled 反转
+  assert.equal(toggled, false); // Reverse from currently enabled
   assert.equal(quit, 1);
 });
 
@@ -188,7 +188,7 @@ test("normalizeDesktopCurrency: 精确匹配与非法值", () => {
 });
 
 test("resolveDesktopPreferences: 语言与货币独立跟随系统/手动/回退", () => {
-  // 无偏好 → 全部跟随系统
+  // No preference → follow the system all
   const system = resolveDesktopPreferences({}, "ja-JP");
   assert.deepEqual(system, {
     locale: "ja-JP",
@@ -196,7 +196,7 @@ test("resolveDesktopPreferences: 语言与货币独立跟随系统/手动/回退
     displayCurrency: "JPY",
     currencySource: "system",
   });
-  // 仅语言手动 → 货币仍跟随系统
+  // Language manual only → currency still follows the system
   const mixed = resolveDesktopPreferences(
     { [LOCALE_MODE_PREF_KEY]: "manual", [LOCALE_PREF_KEY]: "en-US" },
     "ko-KR",
@@ -205,7 +205,7 @@ test("resolveDesktopPreferences: 语言与货币独立跟随系统/手动/回退
   assert.equal(mixed.localeSource, "manual");
   assert.equal(mixed.displayCurrency, "KRW");
   assert.equal(mixed.currencySource, "system");
-  // 货币手动 + 跟随系统语言
+  // Currency manual + follow system language
   const currencyManual = resolveDesktopPreferences(
     { [CURRENCY_MODE_PREF_KEY]: "manual", [CURRENCY_PREF_KEY]: "USD" },
     "zh-CN",
@@ -213,7 +213,7 @@ test("resolveDesktopPreferences: 语言与货币独立跟随系统/手动/回退
   assert.equal(currencyManual.locale, "zh-CN");
   assert.equal(currencyManual.displayCurrency, "USD");
   assert.equal(currencyManual.currencySource, "manual");
-  // 手动值非法 → 回退(不信任任意 prefs 值)
+  // Manual value illegal → fallback (do not trust arbitrary prefs values)
   const invalid = resolveDesktopPreferences(
     { [LOCALE_MODE_PREF_KEY]: "manual", [LOCALE_PREF_KEY]: "fr-FR" },
     "en-US",

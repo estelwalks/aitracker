@@ -1,7 +1,7 @@
 /**
- * /reports（简报与记忆）V3.0 原型对齐的新文案。数字一律来自真实 loader
- * 数据（报告数、生成次数、会话密度），不经 LLM 或写死；未配置模型时的
- * 诚实提示也在此。
+ * New copy for /reports (briefings and memories) reference design. Numbers always come from real loaders
+ * Data (number of reports, generation times, session density) without LLM or hard-coding; when no model is configured
+ * Honesty tips here too.
  */
 export const reports = {
   insight: {

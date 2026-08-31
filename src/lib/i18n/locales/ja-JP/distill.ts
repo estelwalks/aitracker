@@ -1,4 +1,4 @@
-/** 蒸留ワークベンチの文案（V3.0 プロトタイプに合わせる）。 */
+/** Distillation workbench copy aligned with the reference design. */
 export const distill = {
   jarvisTitle: "Jarvis インサイト",
   insightDots: "インサイトカルーセル",

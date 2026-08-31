@@ -116,6 +116,6 @@ test("typicalCommandLatency 取众数分桶；无 context 返回 null", () => {
       ],
     },
   });
-  // 1s-10s 出现 2 次 > under-1s 1 次
+  // 1s-10s appears 2 times > under-1s 1 time
   assert.equal(typicalCommandLatency([withCommands]), "1–10s");
 });

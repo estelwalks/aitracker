@@ -29,7 +29,7 @@ import {
   type DistillationTimeRange,
 } from "./materials.ts";
 
-/** 原型 5 个提示词预设：点击向已有文本去重追加，不替换。 */
+/** Prototype 5 prompt word presets: Click to add duplicates to the existing text without replacement. */
 const PRESETS = [
   { id: "concise", key: "distill.presetConcise" },
   { id: "scripts", key: "distill.presetScripts" },
@@ -50,7 +50,7 @@ export interface DistillConfigModelOption {
   readonly id: string;
   readonly label: string;
   readonly offline?: boolean;
-  /** Vendor group shown in the picker dropdown header (官方 / Anthropic / …). */
+  /** Vendor group shown in the picker dropdown header (Official / Anthropic / …). */
   readonly vendor?: string;
   /** Secondary mono text under the model name (model or endpoint). */
   readonly sub?: string;
@@ -68,7 +68,7 @@ export interface DistillQuotaView {
   readonly remaining: number;
 }
 
-/** 素材列表行左侧标签：与 StepTag 文本对齐（原型 pl-[22px]）。 */
+/** Material list row left label: aligned with StepTag text (prototype pl-[22px]). */
 function RowLabel({
   children,
   className = "",
@@ -86,7 +86,7 @@ function RowLabel({
 }
 
 /**
- * Output-type picker (prototype ② 出产物): two group cards — capability
+ * Output-type picker (prototype ② output): two group cards — capability
  * assets → Skill library, memory assets → memory library — each carrying its
  * type chips. Selection drives the run-button label and the prompt directive.
  */
@@ -346,10 +346,10 @@ export function DistillConfig({
   quota: DistillQuotaView | null;
   promptText: string;
   onPromptText: (value: string) => void;
-  /** Selected output type (prototype ② 出产物). */
+  /** Selected output type (prototype ② product). */
   outType: OutTypeId;
   onOutType: (value: OutTypeId) => void;
-  /** User-picked transcript windows (pro 素材盒 chips + run hint counts). */
+  /** User-picked transcript windows (pro material box chips + run hint counts). */
   segments: readonly SegmentRef[];
   /** Switch the pro-mode model to the first own (non-official) profile. */
   onSwitchModel: () => void;
@@ -359,9 +359,9 @@ export function DistillConfig({
   onToggle: (item: DistillationSessionItem) => void;
   onToggleProject: (items: readonly DistillationSessionItem[]) => void;
   onOpenMaterial: () => void;
-  /** Quick-mode「清空」：清空已选会话。 */
+  /** Quick-mode "Clear": Clear the selected session. */
   onClearSelection: () => void;
-  /** Pro-mode 素材盒「清空」：清空已选片段。 */
+  /** Pro-mode material box "Clear": Clear the selected clips. */
   onClearSegments: () => void;
   onRun: () => void;
   canRun: boolean;
@@ -373,7 +373,7 @@ export function DistillConfig({
     const key = PROMPT_BY_PRESET[id as keyof typeof PROMPT_BY_PRESET];
     if (!key) return;
     const text = t(key);
-    // 原型语义：预设向已有文本去重追加（v.trim() ? v.trim()+"；" : ""）+ p.text。
+    // Prototype semantics: By default, the existing text is deduplicated and appended (v.trim() ? v.trim()+";" : "") + p.text.
     onPromptText(
       promptText.includes(text)
         ? promptText
@@ -387,7 +387,7 @@ export function DistillConfig({
   const quotaExhausted =
     quota != null && quota.remaining <= 0 && selectedOption?.official === true;
   const typeMeta = outTypeMeta(outType);
-  // 额度横幅的切换目标：第一个自有（非官方、非离线）模型，与原型 profiles[0] 一致。
+  // The switching target of the quota banner: the first self-owned (unofficial, non-offline) model, consistent with the prototype profiles[0].
   const switchTarget = modelOptions.find(
     (option) => !option.offline && option.official !== true,
   );
@@ -397,12 +397,12 @@ export function DistillConfig({
       : selectedOption?.ok
         ? t("distill.ownModelConnected")
         : t("distill.ownModelUnconfigured");
-  // 原型 token 为启发式估算（turns × EST_TOKENS_PER_TURN，E-200）。
+  // The prototype token is heuristically estimated (turns × EST_TOKENS_PER_TURN, E-200).
   const estTokens = selectedItems.reduce(
     (sum, item) => sum + item.turns * EST_TOKENS_PER_TURN,
     0,
   );
-  // 素材盒 chips 按会话聚合选段数（原型的「{count} 条」）。
+  // The material box chips aggregates the number of selections by session (the prototype's "{count} items").
   const segsBySession = useMemo(() => {
     const map = new Map<string, number>();
     for (const seg of segments) {
@@ -411,7 +411,7 @@ export function DistillConfig({
     }
     return map;
   }, [segments]);
-  // chips 的会话标题：按 `${source}:${sessionId}` 查当前可选项。
+  // Chips session title: Press `${source}:${sessionId}` to check the current options.
   const titleByKey = useMemo(() => {
     const map = new Map<string, string>();
     for (const item of availableItems) {

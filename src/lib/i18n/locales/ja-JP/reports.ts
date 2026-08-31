@@ -1,4 +1,4 @@
-/** /reports（ブリーフィング＆メモリ）V3.0 プロトタイプの文案。 */
+/** /reports (Briefings & Memory) reference design copy. */
 export const reports = {
   insight: {
     title: "今日のインサイト",

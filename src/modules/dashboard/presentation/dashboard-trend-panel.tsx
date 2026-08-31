@@ -22,7 +22,7 @@ export function DashboardTrendPanel({
   baselineLabel,
 }: {
   view: DashboardV2View;
-  /** 比较基线文案（如「较前 30 天」），随期间变化；无环比时不展示。 */
+  /** Comparative baseline copy (such as "compared to the previous 30 days") changes with the period; it is not displayed when there is no chain comparison. */
   baselineLabel?: string;
 }) {
   const { format, t } = useI18n();

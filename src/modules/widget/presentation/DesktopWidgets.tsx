@@ -34,7 +34,7 @@ function NoData({ text }: { text: string }) {
   );
 }
 
-/** 工具状态行：真实今日消耗 Top（运行中/空闲 无观测信号，仅展示消耗）。 */
+/** Tool status line: Real consumption Top today (running/idle, no observation signal, only consumption displayed). */
 function ToolRows({
   tools,
   limit = 4,
@@ -67,7 +67,7 @@ function ToolRows({
   );
 }
 
-/** 情绪球：颜色随小组件整体状态变化，呼吸动画。 */
+/** Emotion ball: color changes with the overall state of the widget, breathing animation. */
 function MoodOrb() {
   const mood = useWidgetMood();
   const colors: Record<string, string> = {
@@ -88,7 +88,7 @@ function MoodOrb() {
   );
 }
 
-/** 小号 168：情绪球+活跃数 或 安全状态。 */
+/** Trumpet 168: Emotion ball + active number or safe state. */
 export function SmallWidget() {
   const { t, format } = useI18n();
   const { prefs } = useWidgetPrefs();
@@ -162,7 +162,7 @@ export function SmallWidget() {
   );
 }
 
-/** 播报一句话：随语气与真实数据变化；tone=off 返回空串。 */
+/** Broadcast a sentence: changes with the tone and real data; tone=off returns an empty string. */
 function useWidgetHeadline(): string {
   const { t, format } = useI18n();
   const { prefs } = useWidgetPrefs();
@@ -229,7 +229,7 @@ function MiniStat({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** 中号 360×168：播报+沉淀 / 今日产出 / 浪费榜 / 安全。 */
+/** Medium size 360×168: broadcast + precipitation / today’s output / waste list / safety. */
 export function MediumWidget() {
   const { t, format } = useI18n();
   const { prefs } = useWidgetPrefs();
@@ -380,7 +380,7 @@ export function MediumWidget() {
   );
 }
 
-/** 大号 360×360：安全 / 用量 / 今日 三段信号。 */
+/** Large 360×360: Security / Usage / Today Three-segment signal. */
 export function LargeWidget() {
   const { t, format } = useI18n();
   const { today, week, outputs, security, hasData } = useWidgetData();

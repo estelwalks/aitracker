@@ -1116,18 +1116,18 @@ test("rejects installing into a tool that is not actually installed", async () =
   try {
     await writeFile(cursorBin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     process.env.PATH = binDir;
-    // 有可执行文件：视为已安装，校验通过。
+    // There is an executable file: it is considered installed and the verification passes.
     await assertTargetToolInstalled("Cursor");
 
-    // 移除可执行文件后：IDE 工具（Cursor）未安装，必须拒绝并给出明确提示。
+    // After removing the executable file: the IDE tool (Cursor) is not installed and must be rejected with a clear prompt.
     await rm(cursorBin);
     await assert.rejects(
       assertTargetToolInstalled("Cursor"),
       /errors\.skills\.toolNotInstalled/,
     );
 
-    // CLI 工具（Codex）不走可执行文件硬校验，避免误伤已安装但 CLI 不在
-    // PATH 的工具。
+    // The CLI tool (Codex) does not perform hard verification of executable files to avoid accidental damage to files that have been installed but the CLI is not present.
+    // PATH tools.
     await assertTargetToolInstalled("Codex");
   } finally {
     if (previousPath === undefined) delete process.env.PATH;

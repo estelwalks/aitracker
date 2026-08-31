@@ -10,7 +10,7 @@ import type {
 
 // Model prices are offline rule packs (resolve.ts); this module only loads
 // display-currency exchange rates. One request fetches all three non-USD
-// display currencies (docs/plan v1.2 汇率与离线). Freshness, timeout and
+// display currencies (docs/plan v1.2 Exchange Rates and Offline). Freshness, timeout and
 // network permission come exclusively from the public runtime policy source
 // (`src/app/runtime-policy.source.json` -> exchangeRates).
 //

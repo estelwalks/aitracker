@@ -12,7 +12,7 @@ export type RangeValue =
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-/** 时间范围选择：预设 + 自定义区间（原型 RangePicker 的受控移植）。 */
+/** Time range selection: preset + custom intervals (controlled port of prototype RangePicker). */
 export function RangePicker({
   value,
   onChange,

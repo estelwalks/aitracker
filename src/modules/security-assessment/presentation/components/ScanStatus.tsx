@@ -35,7 +35,7 @@ const riskKindKeys: Record<SecurityRiskKind, MessageKey> = {
   prompt_injection: "security.center.risk.prompt_injection",
 };
 
-/** 11 个安全维度的说明文案（与 V3.0 原型 securityDimensions.desc 一致）。 */
+/** Descriptions for the 11 security dimensions from the reference design. */
 const dimensionDescKeys: Record<SecurityRiskKind, MessageKey> = {
   remote_execution: "security.center.dimensionDesc.remote_execution",
   command_injection: "security.center.dimensionDesc.command_injection",
@@ -63,11 +63,11 @@ function agoText(iso: string, t: ReturnType<typeof useI18n>["t"]): string {
 }
 
 /**
- * 全局安全统计：与 V3.0 原型 ScanStatus 对齐的 4 格可点击统计卡。
+ * Global security summary with four clickable statistic cards from the reference design.
  *
- * 已扫描 / 累计扫描 / 安全 / 不安全 四格可点击跳转；底部可展开 11 个
- * 安全维度。当真实运行时能力为「仅检测」时，底部低调展示真实状态徽标，
- * 不渲染任何防御/拦截内容。
+ * Scanned/Cumulative scans/Safe/Unsafe Four spaces can be clicked to jump; 11 can be expanded at the bottom
+ * security dimension. When the real runtime capability is "detection only", the real status logo is displayed in a low-key manner at the bottom.
+ * No defense/blocking content is rendered.
  */
 export function ScanStatus({
   state,

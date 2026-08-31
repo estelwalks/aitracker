@@ -82,7 +82,7 @@ function localDateKey(date: Date): string {
 /**
  * Real local-session list. Filtering and pagination call the
  * server query facade; no prototype fixtures or client-generated records are
- * used here. Layout mirrors the V3.0 prototype: Jarvis hero, three
+ * used here. Layout mirrors the reference design: Jarvis hero, three
  * period-scoped stat cards, a filter rail, and date-grouped session rows.
  */
 export function SessionsPage({ initial }: { initial: SessionPage }) {
@@ -179,8 +179,8 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     }
   };
 
-  // 稳定的源列表：以初始（未过滤）页为准，只增不减——选中某个 agent 后
-  // 其它 agent tab 不会被隐藏（agent 是切换/筛选，不是单选后隐藏其它）。
+  // Stable source list: based on the initial (unfiltered) page, it will only increase but not decrease - after selecting an agent
+  // Other agent tabs will not be hidden (agent is switching/filtering, not hiding others after single selection).
   const [initialSources] = useState(() => [
     ...new Set(
       initial.sources ?? initial.sessions.map((session) => session.source),

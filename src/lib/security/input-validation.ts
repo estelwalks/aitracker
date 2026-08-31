@@ -16,8 +16,8 @@ function isSkillFileName(name: string): boolean {
 }
 
 /**
- * 在读取内容及消耗每日额度之前确认输入范围。
- * 单文件必须为 SKILL.md；目录输入必须包含 SKILL.md，且只返回该文件。
+ * Confirm the input range before reading content and consuming daily credit.
+ * The single file must be SKILL.md; the directory input must contain SKILL.md and only that file is returned.
  */
 export async function readLocalSkillFile(
   supplied: FileList | BrowserFile[],

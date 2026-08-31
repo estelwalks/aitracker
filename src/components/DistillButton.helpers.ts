@@ -7,8 +7,8 @@ import { zh } from "../lib/i18n/locales/zh-CN";
 type DistillT = ReturnType<typeof useI18n>["t"];
 
 /**
- * 蒸馏任务创建后的统一跳转提示：明确告知会离开当前页面、耗时较长。
- * `t` 由调用方传入以按当前语言渲染；未传时回退到 zh-CN。
+ * Unified jump prompt after the distillation task is created: clearly inform that it will leave the current page and take a long time.
+ * `t` Passed in by the caller to render in the current language; fallback to zh-CN if not passed.
  */
 export function notifyDistillStarted(opts: {
   sessions: number;

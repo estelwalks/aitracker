@@ -110,7 +110,7 @@ test("fetchMarketSkills sends pagination, keyword, tags, and sort to the API", a
     {
       ...noScan(),
       fetcher: async (input, init) => {
-        // 仅捕获列表请求（POST）；体积预取的 HEAD 不应覆盖记录的列表请求。
+        // Only list requests (POST) are captured; volume prefetched HEAD should not overwrite recorded list requests.
         if (init?.method === "POST") {
           requestedUrl = String(input);
           requestedBody = JSON.parse(String(init.body)) as Record<
@@ -250,8 +250,8 @@ test("fetchMarketSkills forwards sort_by and omits legacy body fields", async ()
     },
   );
 
-  // 外接 API v1 的 sort_by 枚举透传；mode/status/safety_level/language/deduplicate
-  // 等旧参数不再下发。
+  // The sort_by enumeration of external API v1 is transparently transmitted; mode/status/safety_level/language/deduplicate
+  // Wait until the old parameters are no longer issued.
   assert.equal(requestedBody.sort_by, "security_score");
   assert.equal("mode" in requestedBody, false);
   assert.equal("status" in requestedBody, false);
@@ -263,7 +263,7 @@ test("fetchMarketSkills forwards sort_by and omits legacy body fields", async ()
 });
 
 test("fetchMarketSkills falls back to the query cache when network fails", async () => {
-  // 先以同一查询成功请求一次，写入缓存，使回退断言不依赖外部缓存状态。
+  // First make a successful request with the same query and write it to the cache so that the fallback assertion does not depend on the external cache state.
   await fetchMarketSkills(
     { page: 1, limit: 20, search: "测试", sort: "stars" },
     {

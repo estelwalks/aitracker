@@ -4,8 +4,8 @@
  * a localized hero/inline card with a loading placeholder — no per-route
  * boilerplate.
  *
- * The card is intentionally minimal: title + severity/增强 marks + typed
- * insight line. Page-level cards expose the same "换一条" rotate control by
+ * The card is intentionally minimal: title + severity/enhancement marks + typed
+ * insight line. Page-level cards expose the same "change one" rotate control by
  * default; surfaces can opt out when their own action column is already full.
  */
 import { Link } from "@tanstack/react-router";
@@ -110,7 +110,7 @@ export function InsightCard({
   if (renderedLines.length === 0 && !showEmpty) return null;
 
   const textLines = renderedLines.map((line) => line.text);
-  // Neutral informational lines should not add a distracting “提示” pill;
+// Neutral informational lines should not add a distracting “notice” pill;
   // reserve the badge for actionable attention/risk states.
   const topSeverity =
     showSeverity && renderedLines[0]?.severity !== "info"

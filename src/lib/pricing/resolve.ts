@@ -15,7 +15,7 @@
  * 3. When NO route evidence exists, rate matching is restricted to routes
  *    declared `reference: true` (billing-routes.json) and the resolution is
  *    `estimated` (reason `no-route-evidence`) - a reference price, never an
- *    exact/official bill. Evidence-不足时绝不默认采用「模型官方价」.
+ *    exact/official bill. Evidence-When insufficient, the "official model price" will never be used by default.
  * 4. Keeps the full evidence chain: rawModel / normalizedModel /
  *    canonicalModelId / conversionRuleId / rateRuleId / billingRouteId /
  *    routeSelectionRuleId / packageVersion / confidence / reason / sourceLabel.

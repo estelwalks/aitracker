@@ -19,8 +19,8 @@ function download(filename: string, text: string) {
 
 /**
  * P6-T6-05: the memory editor is loaded on demand (React.lazy) so the shared
- * shell never carries the form. It mirrors the V3.0 prototype EditModal:
- * "是什么" 类型 chips + 一句话标题 + 说明，底部 取消 / 导出 MD / 保存。
+ * shell never carries the form. It mirrors the reference EditModal design:
+ * "What is" type chips + one sentence title + description, bottom Cancel / Export MD / Save.
  */
 export function MemoryForm({
   item,
@@ -36,7 +36,7 @@ export function MemoryForm({
   const { t } = useI18n();
   const [type, setType] = useState<MemoryType>(item?.type ?? "task");
   const [title, setTitle] = useState(item?.title ?? "");
-  // 完整正文（FR-014）：编辑蒸馏记忆时展示完整产物，而非 160 字符摘要片段。
+  // Full text (FR-014): When editing distilled memories, show the full product instead of a 160-character summary snippet.
   const [body, setBody] = useState(item?.body ?? item?.summary ?? "");
   const editingExisting = item != null;
   const ok = title.trim().length > 0 && body.trim().length > 0;
