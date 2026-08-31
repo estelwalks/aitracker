@@ -32,9 +32,9 @@ export const APP_BRAND_ICON_DARK_URL = APP_FAVICON_DARK_URL;
 export const APP_BRAND_ICON_LIGHT_URL = APP_FAVICON_LIGHT_URL;
 
 /** Product version shown in the UI; bump together with package.json `version`. */
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.0.0-beta.1";
 /** Release date shown on the About page. */
-export const APP_RELEASE_DATE = "2026-08-28";
+export const APP_RELEASE_DATE = "2026-08-31";
 /** Source repository link shown on the About page. */
 export const APP_REPO_URL = "https://github.com/l3m0nc9/aitracker";
 

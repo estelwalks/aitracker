@@ -5,6 +5,9 @@ on:
     branches: ["**"]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -60,14 +63,12 @@ jobs:
       - name: Browser/server source boundary
         run: npm run verify:browser-server-boundary
 
-      # These audits remain visible while the inherited migration work is
-      # completed. They are mandatory (without continue-on-error) for a release.
+      # These audits are mandatory release gates now that the persistence and
+      # bundle boundaries are enforced by the build.
       - name: SQLite-only persistence audit (release blocker)
-        continue-on-error: true
         run: npm run verify:sqlite-only
 
       - name: Public bundle privacy audit (release blocker)
-        continue-on-error: true
         run: npm run verify:bundle-no-sqlite
 
       - name: Runtime policy verification

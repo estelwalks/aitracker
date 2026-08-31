@@ -19,10 +19,8 @@ import {
   createCodexPendingContext,
 } from "./codex-context.ts";
 import { readDshSessionLog } from "./dsh-zstd.ts";
-import {
-  canonicalizeProjectPath,
-  normalizeProjectPath,
-} from "./project-path.ts";
+import { canonicalizeProjectPath } from "./project-path.server.ts";
+import { normalizeProjectPath } from "./project-path.ts";
 import {
   collectClaudeContext,
   collectClaudeToolResults,
