@@ -1655,6 +1655,14 @@ export function DashboardAgentWorkstreams({
                     </dd>
                   </div>
                   <div>
+                    <dt>{t("dashboard.v2.cacheLabel")}</dt>
+                    <dd>
+                      {view.cacheRate == null
+                        ? t("dashboard.kpi.unavailable")
+                        : format.formatPercent(Math.round(view.cacheRate))}
+                    </dd>
+                  </div>
+                  <div>
                     <dt>{t("dashboard.v2.distillationOutputsLabel")}</dt>
                     <dd>
                       {view.outputAvailability.distillationOutputs.available
