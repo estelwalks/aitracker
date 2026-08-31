@@ -1,6 +1,18 @@
 # AITracker
 
-[English](../README.md) | [简体中文](README_CN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
+<p align="center">
+  <img src="../public/favicon-dark.svg" alt="AITracker ロゴ" width="180" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/estelwalks/aitracker/stargazers"><img src="https://img.shields.io/github/stars/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="GitHub Stars" /></a>
+  <a href="https://github.com/estelwalks/aitracker/blob/main/LICENSE"><img src="https://img.shields.io/github/license/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="ライセンス" /></a>
+  <a href="https://github.com/estelwalks/aitracker/releases/latest"><img src="https://img.shields.io/github/v/release/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="最新リリース" /></a>
+</p>
+
+<p align="center">
+  <a href="../README.md">English</a> | <a href="README_CN.md">简体中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_KO.md">한국어</a>
+</p>
 
 > **どれだけトークンを使い、いくら費やし、どのAgentツールが最も使いやすいかを、一目で把握。**
 
@@ -33,6 +45,39 @@ Claude Code、Codex、Cursor、Cline、Gemini CLI、OpenCode……
 **AITrackerは、これらを一つの場所に集約します。**
 
 AIの利用状況を把握し、AIの能力を管理し、Skillsを蒸留し、知識と長期記憶を蓄積する。AITrackerは、AIを一度きりの道具で終わらせません。
+
+---
+
+## 🚀 クイックスタート
+
+AITrackerはElectron、TanStack Start、React、TypeScriptで構築されたデスクトップアプリです。必要な`skill-scanner`パッケージもリポジトリに含まれているため、クローン後すぐにインストールして開発できます。
+
+### 必要環境
+
+- Node.js 24 以降
+- npm 10 以降
+- macOS または Windows（完全なデスクトップ体験）
+
+```bash
+git clone https://github.com/estelwalks/aitracker.git
+cd aitracker
+npm ci
+npm run dev:desktop
+```
+
+ブラウザ開発サーバーだけを起動する場合は、`npm run dev`を実行します。
+
+### ビルドとテスト
+
+```bash
+npm run build:desktop       # WebアプリとElectronのmain / preloadをビルド
+npm run typecheck           # アプリと内蔵scannerの型チェック
+npm run lint                # アプリと内蔵scannerのLint
+npm run test:all            # ユニット、ツール、データベース、scannerのテスト
+npm run check:opensource-hygiene
+```
+
+プラットフォーム用インストーラーは`npm run dist:mac`または`npm run dist:win:x64`で作成できます。コマンド一覧、生成ファイルの方針、リポジトリ構成については[開発ガイド](DEVELOPMENT.md)をご覧ください。
 
 ---
 
@@ -143,7 +188,7 @@ AITrackerは、複数のAIツールで使うことを前提に設計されてい
 
 ---
 
-## Local First
+## ローカル優先
 
 AITrackerは、デフォルトでローカル環境上で動作します。
 
@@ -177,7 +222,6 @@ AIツールは、ますます強力になり、ますます増えています。
 
 > **AIを把握する → 能力を管理する → 経験を蒸留する → 継続的に蓄積する。**
 
----
 
 ## コントリビューション
 
@@ -195,6 +239,6 @@ AITrackerはMIT Licenseの下でライセンスされています。詳しくは
 
 ---
 
-## Star
+## プロジェクトを応援
 
 AITrackerがお役に立ったら、ぜひプロジェクトにStarをお願いします。ありがとうございます。

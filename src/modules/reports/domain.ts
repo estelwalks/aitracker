@@ -116,7 +116,7 @@ export function safeReportText(value: string, max = REPORT_BODY_MAX): string {
 /**
  * Explicit truncation signal (P1-10): true when `value` exceeds the storage
  * boundary and a persistence path would slice it. Callers surface this to the
- * user ("正文超过 60,000 字符将被截断") instead of truncating silently.
+ * user ("Text longer than 60,000 characters will be truncated") instead of truncating silently.
  */
 export function wasReportTextTruncated(
   value: string,

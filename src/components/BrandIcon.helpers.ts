@@ -19,7 +19,7 @@ export function displayOf(name: string): PublicToolDisplay | undefined {
   return toolDisplayById.get(name) ?? toolDisplayByName.get(name) ?? undefined;
 }
 
-/** 各产品品牌原色（顺序优先：第一个命中的规则胜出）。 */
+/** Primary color of each product brand (order priority: the first hit rule wins). */
 const productColor: { test: (name: string) => boolean; color: string }[] = [
   {
     test: (name) =>

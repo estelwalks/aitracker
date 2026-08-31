@@ -1,7 +1,7 @@
 /**
- * Jarvis 今日洞察共享卡片的模板文案。数字一律来自真实 server fn 返回的
- * 结构化洞察描述（见 src/lib/page-insights/），展示层经 `t()` 拼装，
- * 不依赖任何 LLM 或写死数字。
+ * Template copy for Jarvis Today’s Insight Sharing Card. The numbers are always returned by the real server fn
+ * Structured insights description (see src/lib/page-insights/), the presentation layer is assembled by `t()`,
+ * Don’t rely on any LLM or hard-coded numbers.
  */
 export const insights = {
   title: "今日洞察",

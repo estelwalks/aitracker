@@ -10,7 +10,7 @@
  *
  * Manual entries store their display metadata in provenance `sourceRef`s:
  * - `manual:<source>`  — the user-typed source tool name
- * - `type:<profile|task>` — the memory type (画像 / 任务记忆)
+ * - `type:<profile|task>` — the memory type (profile/task memory)
  * - `project:<name>`   — optional project, when provided
  * Distilled entries keep `sourceType: "session"` provenance and are projected
  * with `source: "distill"` / `origin: "distill"`.

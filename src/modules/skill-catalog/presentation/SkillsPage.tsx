@@ -66,6 +66,8 @@ export type SkillsPageProps = {
   initial: SkillWorkspaceSnapshot;
   /** Optional route-provided Skill identity used to initialize the filter. */
   initialQuery?: string;
+  /** Optional route-provided Agent identity used to initialize the overview. */
+  initialAgentId?: string;
   /** Compact agent-overview projection; never raw events (P1-T1-06/07). */
   usage?: AgentUsageOverviewReadModel;
   showWorkspace?: boolean;
@@ -95,6 +97,7 @@ type SkillCategoryFilter =
 export function SkillsPage({
   initial,
   initialQuery,
+  initialAgentId,
   usage,
   showWorkspace = true,
   showToolOverview = true,
@@ -114,10 +117,10 @@ export function SkillsPage({
   const [form, setForm] = useState<"all" | SkillForm>("all");
   const [sourceLabel, setSourceLabel] = useState("all");
   const [page, setPage] = useState(1);
-  /** Agent 筛选行分页游标（原型第2行，一屏 9 个 + 全部）。 */
+  /** Agent filter row paging cursor (prototype row 2, 9 + all on one screen). */
   const [agentPage, setAgentPage] = useState(0);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
-  /** 行内 Agent 安装/卸载进行中集合（keyed by skill.id，与安全市场一致）。 */
+  /** In-line Agent installation/uninstallation in progress collection (keyed by skill.id, consistent with the security market). */
   const [pendingAgents, setPendingAgents] = useState<
     Record<string, Set<string>>
   >({});
@@ -155,7 +158,7 @@ export function SkillsPage({
   );
 
   const refresh = useCallback(async (message?: string) => {
-    // 安装/卸载/同步后强制重新扫描，避免读到操作前的快照缓存。
+    // Force rescan after installation/uninstallation/synchronization to avoid reading the snapshot cache before the operation.
     const next = await refreshSkillSnapshot();
     snapshotRef.current = next;
     setSnapshot(next);
@@ -185,8 +188,8 @@ export function SkillsPage({
     setBusy(true);
     busyRef.current = true;
     try {
-      // 「重新扫描」必须强制重扫磁盘（而不是读快照缓存），否则新字段/新
-      // 安装不会反映到页面。
+      // "Rescan" must force a disk rescan (instead of reading the snapshot cache), otherwise the new field/new
+      // The installation will not be reflected on the page.
       const next = await refreshSkillSnapshot();
       snapshotRef.current = next;
       setSnapshot(next);
@@ -240,9 +243,9 @@ export function SkillsPage({
     [workspace.coverage],
   );
 
-  // 原型第2行 Agent 筛选：仅展示本地已探测到客户端的 Agent，一屏 9 个 +
-  // 「全部Agent」，超出用左右浮动圆钮翻页。各 Agent 计数来自工作台预投影的
-  // facets.agents（该 skill 已安装到对应 Agent 的安装副本数）。
+  // Prototype line 2 Agent filtering: only display the local Agents that have detected the client, 9 + on one screen
+  // "All Agents", beyond that, use the left and right floating buttons to turn pages. Each Agent count comes from the workbench pre-projection
+  // facets.agents (the number of installed copies of the skill that have been installed on the corresponding Agent).
   const AGENT_PAGE_SIZE = 9;
   const agentCounts = useMemo(
     () =>
@@ -263,9 +266,9 @@ export function SkillsPage({
 
   const summary = workspace.summary;
 
-  // 原型对齐：origin 分段 tab 计数（全部/蒸馏/外部/其他）。
-  // 没有 source 的安装只代表“来源未声明”（常见于用户手动安装），不能
-  // 推断为蒸馏产物；只有保存流程写入的显式 provenance 才计入蒸馏。
+  // Prototype alignment: origin segmented tab count (all/distilled/external/other).
+  // Installation without source only means "the source is not declared" (common in manual installation by users) and cannot
+  // Inferred as a product of distillation; only explicit provenance written by the saving process counts towards distillation.
   const originCounts = useMemo(() => {
     const external = workspace.items.filter((item) =>
       item.sourceKinds.includes("market"),
@@ -283,7 +286,7 @@ export function SkillsPage({
     };
   }, [workspace]);
 
-  // 原型对齐：形态（form）分段 tab 计数（全部形态/完整包/工作流/Prompt）。
+  // Prototype alignment: form segmented tab count (all forms/complete package/workflow/Prompt).
   const formCounts = useMemo(() => {
     const map = new Map(
       workspace.facets.forms.map((facet) => [facet.value, facet.count]),
@@ -370,7 +373,7 @@ export function SkillsPage({
       .sort((a, b) => b.count - a.count);
   }, [snapshot.skills]);
 
-  // All skills (unfiltered) for the "补齐 N" quick-sync pill.
+  // All skills (unfiltered) for the "complete N" quick-sync pill.
   const allAssets = useMemo(
     () =>
       querySkillAssets(snapshot, {
@@ -603,9 +606,9 @@ export function SkillsPage({
     }
   };
 
-  // --- 行内安装条（原型 AgentInstallBar）交互 ---
+  // --- Inline installation bar (prototype AgentInstallBar) interaction ---
 
-  /** 点击单个 Agent：装一个 / 卸一个（sourceRef 取首个安装副本，同 SyncTargetModal）。 */
+  /** Click on a single Agent: install one/uninstall one (sourceRef takes the first installation copy, the same as SyncTargetModal). */
   const toggleInstall = async (
     skill: SkillAssetView,
     agent: string,
@@ -677,6 +680,7 @@ export function SkillsPage({
       {showToolOverview && usage ? (
         <ToolOverview
           usage={usage}
+          initialToolId={initialAgentId}
           workspaceSummary={initial.workspace.summary}
           skillSnapshot={snapshot}
           securityVerdicts={securityVerdicts}

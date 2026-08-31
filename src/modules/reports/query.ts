@@ -9,7 +9,7 @@
  * async loader would run in the browser and leak `node:fs` into the client.
  *
  * `generateReportNow` / `getReportBody` (in `./server-fns.ts`) are the
- * mutation/read server fns the page uses for "立即生成" and inline body preview.
+ * mutation/read server fns the page uses for "immediate generation" and inline body preview.
  */
 import { createServerFn } from "@tanstack/react-start";
 

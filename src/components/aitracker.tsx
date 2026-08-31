@@ -230,7 +230,7 @@ export function Stat({
 }
 
 /**
- * Shared pager (V3.0 prototype style): a top divider, a localized range on the
+ * Shared pager (reference design): a top divider, a localized range on the
  * left and prev/numbered/next buttons anchored at the bottom-right. Numbered
  * buttons grow with their content, and the compact window keeps huge catalogs
  * inside the card without losing first/last/current context.
@@ -338,7 +338,7 @@ export function StatusBadge({
   );
 }
 
-/** 页面级指标项（与原型首页总览一致的排版）。 */
+/** Page-level indicator items (layout consistent with the prototype homepage overview). */
 export type Metric = {
   icon?: ComponentType<{ className?: string; strokeWidth?: number }>;
   label: string;
@@ -349,7 +349,7 @@ export type Metric = {
   right?: ReactNode;
 };
 
-/** 页面吸顶标题条：左侧标题 + 概要数字，右侧操作区。 */
+/** Title bar at the top of the page: title + summary number on the left, operation area on the right. */
 export function PageBar({
   title,
   summary,
@@ -376,7 +376,7 @@ export function PageBar({
   );
 }
 
-/** 原型首页同款指标网格。 */
+/** The same indicator grid on the prototype homepage. */
 export function MetricGrid({
   items,
   className = "",
@@ -420,7 +420,7 @@ export function MetricGrid({
   );
 }
 
-/** 原型首页同款 pill 切换器（可带图标与品牌色）。 */
+/** The same pill switcher on the prototype homepage (can have icons and brand colors). */
 export function ChipTabs<T extends string>({
   value,
   onChange,
@@ -472,7 +472,7 @@ export function ChipTabs<T extends string>({
   );
 }
 
-/** 原型首页同款内容卡片（无线框、圆角、卡片底色）。 */
+/** The same content card on the prototype homepage (no frame, rounded corners, card background color). */
 export function Card({
   title,
   desc,

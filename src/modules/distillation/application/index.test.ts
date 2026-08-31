@@ -242,8 +242,8 @@ test("filters missing and duplicate selections before model invocation", async (
 });
 
 test("a real-model run that degrades fails honestly instead of fabricating a result", async () => {
-  // 用户要求:真实模型调用失败必须诚实报错(aiFailed),绝不能像旧版那样
-  // 静默产出一条"蒸馏完成"的假结果。只有显式选择离线模式才走确定性回退。
+  // User requirements: Failure to call the real model must be reported honestly (aiFailed), never like the old version
+  // Silently produces a false "distillation completed" result. Deterministic fallback is only possible if offline mode is explicitly selected.
   for (const status of ["offline", "fallback", "budget-exceeded"] as const) {
     const { app } = setup(execution(status));
     const result = await app.start(request());
@@ -718,6 +718,6 @@ test("生成兜底：多次不合格强制输出最后一次，不阻塞", async
   });
   const result = await app.start(request({ kind: "skill" }));
   assert.ok(result.ok, "多次失败仍强制输出，不报错");
-  assert.equal(call, 3); // 首次 + 2 次重试
+  assert.equal(call, 3); // First time + 2 retries
   assert.equal(result.value.status, "waiting-approval");
 });

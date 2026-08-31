@@ -17,7 +17,7 @@ import {
   type SourceMigrationInput,
 } from "./migration.server.ts";
 
-/** 任一非 Skill 工具的 id（如 aipy/workbuddy 等），用于「无 Skill 根」用例。 */
+/** The id of any non-Skill tool (such as aipy/workbuddy, etc.), used for "no Skill root" use cases. */
 const NON_SKILL_TOOL_ID = AI_TOOLS.find(
   (tool) => !SKILL_AGENTS.includes(tool.nameZh),
 )!.id;
@@ -151,13 +151,13 @@ test("migrateSourceSkills copies a tool's skills to target agents", async () => 
     assert.equal(result.skipped.length, 0);
     assert.equal(result.failed.length, 0);
 
-    // 文件真实复制到了 Codex 的 skill 根。
+    // The file is actually copied to the skill root of the Codex.
     const content = await readFile(
       join(root, SKILL_ROOT_SUFFIXES["Codex"], name, "SKILL.md"),
       "utf8",
     );
     assert.match(content, new RegExp(`# ${name}`));
-    // 源目录保持原样。
+    // The source directory remains intact.
     await readFile(join(sourceDir, "SKILL.md"), "utf8");
   });
 });
@@ -198,7 +198,7 @@ test("migrateSourceSkills skips existing targets when onConflict is skip", async
     ]);
     assert.equal(result.failed.length, 0);
 
-    // 目标内容未被覆盖。
+    // The target content was not covered.
     const content = await readFile(
       join(root, SKILL_ROOT_SUFFIXES["Codex"], name, "SKILL.md"),
       "utf8",
@@ -250,7 +250,7 @@ test("migrateSourceSkills returns empty result when the tool has no Skill root",
 
 test("migrateSourceSkills returns empty result when the Skill root has no Skills", async () => {
   await withTempHome(async (root, dataDirectory) => {
-    // 目录存在但没有 marker 文件 → 无 Skill。
+    // Directory exists but no marker file → No Skill.
     await mkdir(join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "empty"), {
       recursive: true,
     });

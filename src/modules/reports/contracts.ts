@@ -156,7 +156,7 @@ export interface ReportContentStore {
  * — every field here is an aggregate safe to persist and to render.
  */
 export interface ReportStats {
-  /** Display label for the covered period, e.g. "今日 2026-08-19". */
+  /** Display label for the covered period, e.g. "Today 2026-08-19". */
   readonly periodLabel: string;
   readonly sessions: number;
   readonly turns: number;

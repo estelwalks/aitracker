@@ -42,7 +42,7 @@ function sourceNames(candidate: CandidateOutput): string {
     .trim();
 }
 
-/** 原型 Act 胶囊按钮（rounded-full bg-surface-2）。 */
+/** Prototype Act capsule button (rounded-full bg-surface-2). */
 function Act({
   icon: Icon,
   label,
@@ -67,7 +67,7 @@ function Act({
   );
 }
 
-/** 原型式轻量 Modal（固定层 + 遮罩,渲染在页面树内而非 portal）。 */
+/** Prototype lightweight Modal (fixed layer + mask, rendered in the page tree instead of portal). */
 function Modal({
   title,
   children,
@@ -236,7 +236,7 @@ function buildSkillFiles(
   ];
 }
 
-/** 原型 PkgBrowser：产物包文件树 + markdown 渲染 + 逐文件编辑（原型 146-218）。 */
+/** Prototype PkgBrowser: product package file tree + markdown rendering + file-by-file editing (prototype 146-218). */
 function PkgBrowser({
   files,
   root,
@@ -327,7 +327,7 @@ function PkgBrowser({
   );
 }
 
-/** 保存弹窗：名称 + 安装目标（等价原型 ToolTargetPicker）+ primary 确认键。 */
+/** Save pop-up window: name + installation target (equivalent to prototype ToolTargetPicker) + primary confirmation key. */
 function SaveModal({
   candidate,
   draft,
@@ -344,7 +344,7 @@ function SaveModal({
   const [targets, setTargets] = useState<string[]>(() => [...SKILL_AGENTS]);
   const [saving, setSaving] = useState(false);
   const kindLabel = capabilityLabel(candidate, t);
-  // 生成后自动质检：保存前实时展示产物是否合格与原因。
+  // Automatic quality inspection after generation: real-time display of whether the product is qualified and why before saving.
   const qualification = useMemo<SkillQualification | null>(() => {
     if (
       candidate.kind !== "skill" &&
@@ -564,13 +564,13 @@ function SaveModal({
 }
 
 /**
- * 持久化结果卡,对齐原型 ExpCard(1807-1957):kind 色 mono 头部 + 素材行、
- * 记忆类/能力类两种 body、原型 Act 动作、保存弹窗。候选完成即
- * 可用(阶段 A2 自动通过),无 waiting/取消态。运行中进度卡由页面渲染
- * (RunningExpCard),本卡只承载已完成的候选。
+ * Persistent result card, align prototype ExpCard (1807-1957): kind color mono header + material row,
+ * Two types of memory/ability bodies, prototype Act actions, and save pop-up windows. The candidate is completed
+ * Available (phase A2 passes automatically), no waiting/cancellation state. The running progress card is rendered by the page
+ * (RunningExpCard), this card only carries completed candidates.
  *
- * 已知缺口:原型头部「· Xs · tokens」需要时长/token 遥测,当前执行摘要不记录,
- * 故省略该段;错误态同理(服务端同步运行失败直接 toast,不持久化 error 候选)。
+ * Known gaps: The prototype header "· Xs · tokens" requires duration/token telemetry, and the current execution summary is not recorded.
+ * Therefore, this paragraph is omitted; the error state is the same (if the server synchronization fails, it will be directly toasted, and the error candidate will not be persisted).
  */
 export function ExpCard({
   candidate,
@@ -583,13 +583,13 @@ export function ExpCard({
 }: {
   candidate: CandidateOutput;
   sessions: readonly DistillationSessionItem[];
-  /** 模型选项(profile id → 可读名称)，用于把 m-xxx 转成模型名。 */
+  /** Model option (profile id → readable name), used to convert m-xxx into model name. */
   modelOptions: readonly DistillConfigModelOption[];
   busy: boolean;
   onRegenerate: () => void;
-  /** 保存完成后回调（页面切到结果视图并展开该产物，原型 saveExp）。 */
+  /** Callback after completion of saving (the page switches to the results view and expands the product, prototype saveExp). */
   onSaved?: () => void;
-  /** 嵌在历史手风琴里：去掉重复的卡片外壳、光晕与元信息行。 */
+  /** Embedded in a historical accordion: Remove duplicate card shells, halos, and meta information lines. */
   bare?: boolean;
 }) {
   const { t, format } = useI18n();
@@ -602,7 +602,7 @@ export function ExpCard({
       ? candidate.execution.modelId
       : candidate.mode);
   const kindLabel = t(badge.labelKey);
-  // 阶段 A2 后完成即审批,记忆类自动入库 —— saved chip 恒按审批态显示。
+  // Once stage A2 is completed, it will be approved, and the memory type will be automatically put into storage - the saved chip will always be displayed in the approval status.
   const saved = candidate.approvalState === "approved";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(candidate.summary);
@@ -801,7 +801,7 @@ export function ExpCard({
   );
 }
 
-/** 并排对比弹窗（原型 CompareModal 2034-2049）：Modal wide + markdown 渲染。 */
+/** Side-by-side comparison popup (prototype CompareModal 2034-2049): Modal wide + markdown rendering. */
 export function CandidateCompareDialog({
   candidates,
   modelOptions,

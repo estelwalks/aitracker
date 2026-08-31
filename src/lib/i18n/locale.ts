@@ -40,8 +40,8 @@ export function normalizeCurrency(raw: unknown): Currency | null {
 }
 
 /**
- * Map a system locale's region to a display currency (v1.2: 货币跟随系统以
- * locale 地区为权威映射). Unmapped regions safely fall back to USD.
+ * Map a system locale's region to a display currency (v1.2: currency follows the system to
+ * locale regions are authoritatively mapped). Unmapped regions safely fall back to USD.
  */
 export function mapSystemCurrency(raw: string | null | undefined): Currency {
   if (raw == null) return "USD";

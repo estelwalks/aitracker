@@ -39,7 +39,7 @@ export interface DistillationViewModel {
     id: string;
     label: string;
     offline?: boolean;
-    /** Vendor group shown in the picker dropdown header (官方 / Anthropic / …). */
+    /** Vendor group shown in the picker dropdown header (Official / Anthropic / …). */
     vendor?: string;
     /** Secondary mono text under the model name (model or endpoint). */
     sub?: string;
@@ -89,7 +89,7 @@ export interface DistillationStartInput {
   readonly modelId?: string;
   /** Optional custom prompt template; defaults to the built-in summary prompt. */
   readonly promptText?: string;
-  /** Output kind this run should produce (prototype 出产物). Absent → memory. */
+  /** Output kind this run should produce (prototype produce). Absent → memory. */
   readonly kind?: "memory" | "brief" | "prompt" | "persona" | "skill";
 }
 
@@ -131,7 +131,7 @@ export interface DistillationSaveSkillResponse {
   readonly agent?: string;
   /** Resolved SKILL.md path on success (already normalized). */
   readonly path?: string;
-  /** 保存时对产物做的自动质检结果。 */
+  /** Automatic quality inspection results of products during storage. */
   readonly qualification?: import("../qualify.ts").SkillQualification;
 }
 

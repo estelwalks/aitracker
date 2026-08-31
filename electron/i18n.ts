@@ -400,7 +400,7 @@ export function normalizeDesktopCurrency(raw: unknown): DesktopCurrency | null {
 
 /**
  * Map an OS locale's region to a display currency (docs/plan v1.2:
- * 货币跟随系统以 locale 地区为权威映射;unmapped regions fall back to USD).
+ * Currency following systems map authoritatively to locale regions; unmapped regions fall back to USD).
  */
 export function mapSystemCurrency(
   raw: string | null | undefined,
@@ -497,7 +497,7 @@ export interface MacWidgetTrayTemplateCallbacks {
   onQuit(): void;
 }
 
-/** macOS 菜单栏小组件右键菜单：仅保留页面入口和退出。 */
+/** macOS menu bar widget right-click menu: only page entry and exit are retained. */
 export function createMacWidgetTrayTemplate(
   locale: DesktopLocale,
   callbacks: MacWidgetTrayTemplateCallbacks,

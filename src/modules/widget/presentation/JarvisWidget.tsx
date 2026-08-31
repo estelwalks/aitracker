@@ -20,7 +20,7 @@ import { useWidgetData, useWidgetMood } from "./widget-data";
 
 type Mood = "idle" | "live" | "warn" | "danger";
 
-/** 中性状态标记：盾牌图标 + 状态点（呼吸动画由 orbAnim 关闭）。 */
+/** Neutral status markers: shield icon + status point (breathing animation is turned off by orbAnim). */
 function SoulPulse({ mood, anim }: { mood: Mood; anim: boolean }) {
   const active = mood !== "idle";
   return (
@@ -38,7 +38,7 @@ function SoulPulse({ mood, anim }: { mood: Mood; anim: boolean }) {
   );
 }
 
-/** 打字机逐字轮播；rotate=0 时手动切换。 */
+/** Typewriter rotates word by word; manual switch when rotate=0. */
 function JarvisText({ lines, rotate }: { lines: string[]; rotate: number }) {
   const { t } = useI18n();
   const [idx, setIdx] = useState(0);
@@ -148,7 +148,7 @@ function Row({
   );
 }
 
-/** 安全 Tab：真实安全扫描概览。 */
+/** Security Tab: Overview of real security scans. */
 function SafetyCards() {
   const { t, format } = useI18n();
   const { security } = useWidgetData();
@@ -212,7 +212,7 @@ function SafetyCards() {
   );
 }
 
-/** 用量 Tab：今日 Token / 成本 / 会话 + 工具使用。 */
+/** Usage Tab: Today’s Token / Cost / Session + Tool Usage. */
 function UsageCards() {
   const { t, format } = useI18n();
   const { today, total } = useWidgetData();
@@ -274,7 +274,7 @@ function UsageCards() {
   );
 }
 
-/** 今日 Tab：工具/会话/Token 摘要 + 7 日趋势 + 今日工具分布。 */
+/** Today's Tab: Tool/Session/Token Summary + 7-Day Trend + Today's Tool Distribution. */
 function TodayCards() {
   const { t, format } = useI18n();
   const { today, week } = useWidgetData();
@@ -349,7 +349,7 @@ function TodayCards() {
   );
 }
 
-/** 播报文案：随当前 Tab 与语气（casual/concise）变化；off 时返回空数组。 */
+/** Broadcast copy: changes with the current Tab and tone (casual/concise); returns an empty array when off. */
 function useJarvisLines(tab: WidgetTab): string[] {
   const { t, format } = useI18n();
   const { prefs } = useWidgetPrefs();
@@ -410,7 +410,7 @@ function useJarvisLines(tab: WidgetTab): string[] {
   return lines;
 }
 
-/** 浮窗 420px：贾维斯播报 + 安全/用量/今日 三 Tab + 底部常驻。 */
+/** Floating window 420px: Jarvis broadcast + security/usage/today three tabs + permanent at the bottom. */
 export function JarvisWidget({
   className = "",
   onOpenSettings,

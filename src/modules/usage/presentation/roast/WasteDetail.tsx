@@ -92,8 +92,8 @@ export function WasteDetail({
   onClose: () => void;
 }) {
   const { t, format } = useI18n();
-  // 无效消耗与浪费指数同源：tokens × waste/100（见 wasteIndex 公式），
-  // 全部来自真实缓存/输出字段，不额外估算。
+  // Invalid consumption and waste index have the same origin: tokens × waste/100 (see wasteIndex formula),
+  // All from real cache/output fields, no additional estimation.
   const wastedTokens = Math.round((row.tokens * row.waste) / 100);
   const tone = wasteTone(row.waste);
   const cacheRate =

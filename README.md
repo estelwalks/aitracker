@@ -1,6 +1,18 @@
 # AITracker
 
-[English](README.md) | [简体中文](docs/README_CN.md) | [日本語](docs/README_JA.md) | [한국어](docs/README_KO.md)
+<p align="center">
+  <img src="public/favicon-dark.svg" alt="AITracker logo" width="180" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/estelwalks/aitracker/stargazers"><img src="https://img.shields.io/github/stars/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="GitHub stars" /></a>
+  <a href="https://github.com/estelwalks/aitracker/blob/main/LICENSE"><img src="https://img.shields.io/github/license/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="License" /></a>
+  <a href="https://github.com/estelwalks/aitracker/releases/latest"><img src="https://img.shields.io/github/v/release/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="Latest release" /></a>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> | <a href="docs/README_CN.md">简体中文</a> | <a href="docs/README_JA.md">日本語</a> | <a href="docs/README_KO.md">한국어</a>
+</p>
 
 > **See at a glance how many tokens you use, how much you spend, and which agent tools work best for you.**
 
@@ -11,6 +23,28 @@ It automatically tracks tokens, costs, and usage trends across AI tools such as 
 **Open Source · Local · No Account Required**
 
 > Note: The diagrams are preserved from the source document. Chinese text embedded inside the image files remains unchanged; all Markdown copy in this document is translated into English.
+
+---
+
+## Why AITracker?
+
+The number of AI tools keeps growing.
+
+Claude Code, Codex, Cursor, Cline, Gemini CLI, OpenCode…
+
+As the number of tools increases, so do the questions:
+
+- How much AI am I actually using?
+- Where are my tokens and money going?
+- Which tool or model is the best fit for me?
+- Where are all my Skills and other configurations scattered?
+- Do I have to configure everything again whenever I switch AI tools?
+- Can I reuse a method that worked today the next time I need it?
+- Can AI remember my projects and long-term working experience?
+
+**AITracker brings all of this together in one place.**
+
+From understanding your AI usage, to managing AI capabilities, to distilling Skills and building lasting knowledge and memory, AITracker turns AI from a one-off tool into an evolving system of reusable capabilities.
 
 ---
 
@@ -51,28 +85,6 @@ this repository.
 
 See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
 generated-file policy, and repository layout.
-
----
-
-## Why AITracker?
-
-The number of AI tools keeps growing.
-
-Claude Code, Codex, Cursor, Cline, Gemini CLI, OpenCode…
-
-As the number of tools increases, so do the questions:
-
-- How much AI am I actually using?
-- Where are my tokens and money going?
-- Which tool or model is the best fit for me?
-- Where are all my Skills and other configurations scattered?
-- Do I have to configure everything again whenever I switch AI tools?
-- Can I reuse a method that worked today the next time I need it?
-- Can AI remember my projects and long-term working experience?
-
-**AITracker brings all of this together in one place.**
-
-From understanding your AI usage, to managing AI capabilities, to distilling Skills and building lasting knowledge and memory, AITracker turns AI from a one-off tool into an evolving system of reusable capabilities.
 
 ---
 

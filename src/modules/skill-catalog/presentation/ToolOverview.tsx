@@ -127,7 +127,7 @@ function securityStatusForAgent(
   return { safe: safe + Math.max(legacySafe, 0), total: installed.length };
 }
 
-/** 原型 AgentMetricCards：只展示当前真实 read-model 能证明的汇总值。 */
+/** Prototype AgentMetricCards: Only displays summary values that can be proven by the current real read-model. */
 function AgentMetricCards({
   selected,
   cards,
@@ -244,7 +244,7 @@ function daysAgo(days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** 工牌墙：紧凑横向滚动条 + 渐隐箭头（对齐原型 AgentBadgeWall）。 */
+/** Agent Badge Wall: Compact horizontal scroll bar + fade arrow (aligned to the prototype AgentBadgeWall). */
 function ToolBadgeWall({
   cards,
   selectedId,
@@ -410,7 +410,7 @@ function ToolBadgeWall({
   );
 }
 
-/** 消耗趋势：柱状 + 趋势线，支持时间筛选（对齐原型 AgentTrendPanel）。 */
+/** Consumption trend: bar + trend line, supports time filtering (aligned prototype AgentTrendPanel). */
 function TrendPanel({
   name,
   brandColor,
@@ -423,9 +423,9 @@ function TrendPanel({
   onRangeChange,
 }: {
   name: string;
-  /** 注册表 display.color（可空，回退名称启发式）。 */
+  /** Registry display.color (nullable, fallback on name heuristics). */
   brandColor?: string;
-  /** 注册表显示名（可空，回退名称匹配；用于品牌 logo 查询）。 */
+  /** Registry display name (can be empty, fallback name matching; used for brand logo query). */
   brandIcon?: string;
   trend: readonly { date: string; tokens: number }[];
   totalTokens: number;
@@ -623,7 +623,7 @@ function ContextRow({
   );
 }
 
-/** 上下文构成：缓存条 + 可展开树（对齐原型 ContextTree）。 */
+/** Context composition: cache bar + expandable tree (aligned prototype ContextTree). */
 function ContextTreePanel({
   name,
   brandColor,
@@ -638,7 +638,7 @@ function ContextTreePanel({
   const { t, format } = useI18n();
   const color = brandColor ?? brandColorOf(name);
 
-  /** 工具调用类别中文映射（对齐原型 ContextTree 的 CN 映射语义）。 */
+  /** Tool calls category Chinese mapping (aligning the CN mapping semantics of the prototype ContextTree). */
   const categoryLabel = (category: LocalUsageToolCategory): string => {
     switch (category) {
       case "messages":
@@ -856,7 +856,7 @@ function ContextTreePanel({
   );
 }
 
-/** 消耗明细：模型 / 项目 维度 tab 切换 + 时间筛选（对齐原型 ToolModelPanel）。 */
+/** Consumption details: model/project dimension tab switching + time filtering (aligned prototype ToolModelPanel). */
 function ToolModelPanel({
   name,
   brandColor,
@@ -1009,17 +1009,19 @@ function ToolModelPanel({
 }
 
 /**
- * Agent概览（原型对齐）。`/agents` 只渲染这段；Skill 工作区由 `SkillsPage`
- * 在 `showWorkspace` 时追加渲染。服务端预构建紧凑视图（P1-T1-06），交互
- * （工具/周期切换）通过同一 server fn 获取新投影；renderer 不接收原始事件。
+ * Agent overview (prototype alignment). `/agents` only renders this section; the Skill workspace is represented by `SkillsPage`
+ * Append rendering during `showWorkspace`. Server-side pre-built compact view (P1-T1-06), interactive
+ * (tool/cycle switch) Get new projection via same server fn; renderer does not receive raw events.
  */
 export function ToolOverview({
   usage,
+  initialToolId,
   workspaceSummary,
   skillSnapshot,
   securityVerdicts,
 }: {
   usage: AgentUsageOverviewReadModel;
+  initialToolId?: string;
   workspaceSummary?: Pick<
     SkillWorkspaceSummary,
     "skillCount" | "availableAgentCount"
@@ -1028,7 +1030,9 @@ export function ToolOverview({
   securityVerdicts?: SecuritySkillVerdictReadModel;
 }) {
   const { t, format } = useI18n();
-  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(
+    () => initialToolId ?? null,
+  );
   const [toolPeriod, setToolPeriod] = useState<UsagePeriod>("30d");
   const [toolFrom, setToolFrom] = useState(daysAgo(29));
   const [toolTo, setToolTo] = useState(daysAgo(0));
@@ -1036,6 +1040,10 @@ export function ToolOverview({
   const [detailFrom, setDetailFrom] = useState(daysAgo(29));
   const [detailTo, setDetailTo] = useState(daysAgo(0));
   const [detailMode, setDetailMode] = useState<"models" | "projects">("models");
+
+  useEffect(() => {
+    setSelectedToolId(initialToolId ?? null);
+  }, [initialToolId]);
 
   const { data: toolQuery } = useQuery({
     queryKey: [

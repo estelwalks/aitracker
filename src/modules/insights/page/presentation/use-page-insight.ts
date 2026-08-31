@@ -1,5 +1,5 @@
 /**
- * `usePageInsight` — the renderer hook for the 「今日洞察双模式」 page insight.
+ * `usePageInsight` — the renderer hook for the "Today's Insight Dual Mode" page insight.
  *
  * First render fetches the surface envelope via `getPageInsight` (with cancel
  * protection), then refreshes the mounted page on the configured period.

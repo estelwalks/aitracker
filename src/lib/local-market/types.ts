@@ -15,7 +15,7 @@ export interface MarketSkill {
   name: string;
   slug: string;
   description: string | null;
-  /** 简短描述（外接 API `short_description`）。 */
+  /** Short description (External API `short_description`). */
   shortDescription: string | null;
   repoOwner: string;
   repoName: string;
@@ -25,7 +25,7 @@ export interface MarketSkill {
   stars: number | null;
   tags: string[];
   updatedAt: string | null;
-  /** 压缩包体积（字节）；市场接口不返回，按需 HEAD 预取，缺失为 null。 */
+  /** Compressed package size (bytes); the market interface does not return it, HEAD is prefetched on demand, and if it is missing, it is null. */
   size: number | null;
   version: null;
   rating: null;

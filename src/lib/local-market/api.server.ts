@@ -19,7 +19,7 @@ export {
   type MarketInstalledSkillShape,
 } from "./installed-count.ts";
 
-/** 外接 Skill API v1 列表根路径（文档：/api/external-api/v1/skills）。 */
+/** External Skill API v1 list root path (documentation: /api/external-api/v1/skills). */
 const MARKET_API = `${MARKET_API_BASE}/external-api/v1/skills`;
 const REQUEST_TIMEOUT_MS = 8_000;
 export const MARKET_QUERY_CACHE_TTL_MS = 30 * 60 * 1_000;
@@ -181,8 +181,8 @@ export async function fetchMarketSkills(
         limit: query.limit,
         page: query.page,
         tags,
-        // 外接 API v1 的 sort_by 枚举：security_score/stars/created_at/name_asc/name_desc。
-        // 搜索默认去重由后端开关控制，调用方无需传 deduplicate。
+        // Sort_by enum for add-in API v1: security_score/stars/created_at/name_asc/name_desc.
+        // Search deduplication is controlled by the backend switch by default, and the caller does not need to pass deduplicate.
         sort_by: sort,
       }),
       signal: controller.signal,
@@ -192,7 +192,7 @@ export async function fetchMarketSkills(
 
     const parsed = parseMarketApiResponse(await response.json());
     const sortedSkills = sortSkills(parsed.skills, sort);
-    // 市场接口不在列表返回体积；并发受限地 HEAD 预取 Content-Length 回填 size。
+    // Market interface does not return volumes in lists; concurrency-limited HEAD prefetch Content-Length backfill size.
     await prefetchSkillSizes(sortedSkills, options.fetcher).catch(
       () => undefined,
     );
@@ -240,9 +240,9 @@ const SIZE_HEAD_CONCURRENCY = 4;
 const SIZE_HEAD_TIMEOUT_MS = 3_000;
 
 /**
- * 并发受限地对每个 Skill 的下载地址发起 HEAD，读取 Content-Length 回填 size。
- * 市场接口不在列表项返回体积；体积仅用于展示，失败/缺失保持 null。
- * 永不抛错——网络异常时静默跳过，不影响列表加载。
+ * Initiate HEAD to the download address of each Skill with limited concurrency, and read the Content-Length backfill size.
+ * The market interface does not return volume for list items; volume is for display only and remains null on failure/missing.
+ * Never throw an error - silently skip when network exception occurs, does not affect list loading.
  */
 export async function prefetchSkillSizes(
   skills: MarketSkill[],

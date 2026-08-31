@@ -5,15 +5,15 @@ import { BrandIcon } from "../../../components/BrandIcon";
 import { useI18n } from "../../../lib/i18n/context";
 
 /**
- * Agent 安装条（V3.0 原型样式）：直接在列表行/卡片内展示全部可安装 Agent。
- * 视觉与原型完全一致——点击单个 Agent 立即安装 / 卸载（开关由父级接到真实
- * 后端），「全选 / 全不选」（Plus）用于批量。inline 变体：紧跟在 Skill 名称
- * 之后，一排紧凑图标钮，无计数话术；溢出时折叠成「展开更多」。
+ * Agent install bar using the reference design: show every installable Agent directly
+ * The visual is completely consistent with the prototype - click a single Agent to install/uninstall immediately (the switch is connected from the parent to the real
+ * Backend), "Select All/Deselect None" (Plus) for batch. inline variant: immediately followed by the Skill name
+ * After that, there is a row of compact icon buttons with no counting skills; they fold into "expand more" when overflowed.
  *
- * 两种交互模式：
- * - 开关模式（onToggle）：点击 Agent 立即安装/卸载，安装中显示 spinner。
- * - 选择模式（onSelect）：勾选安装目标；selected 传数组时支持多选，
- *   onSetAll + allSelected 提供全选/全不选。
+ * Two interaction modes:
+ * - Switch mode (onToggle): Click Agent to install/uninstall immediately, and the spinner is displayed during installation.
+ * - Selection mode (onSelect): Check the installation target; selected supports multiple selections when passing an array.
+ *   onSetAll + allSelected provides all selection/no selection.
  */
 export function AgentInstallBar({
   agents,
@@ -32,19 +32,19 @@ export function AgentInstallBar({
 }: {
   agents: readonly string[];
   installed: Readonly<Record<string, boolean>>;
-  /** 点击单个 Agent：next=true 安装、false 卸载（父级接真实安装流）。 */
+  /** Click a single Agent: next=true to install, false to uninstall (the parent is connected to the real installation flow). */
   onToggle?: (agent: string, next: boolean) => void;
-  /** 全选 / 全不选（inline 显示为 Plus 圆角钮，网格显示为右上角链接）。 */
+  /** Select all/Deselect all (inline is displayed as a Plus rounded button, grid is displayed as a link in the upper right corner). */
   onSetAll?: (next: boolean) => void;
-  /** 选择安装目标模式：单个高亮（string）或多选勾选（数组）。 */
+  /** Select the installation target mode: single highlight (string) or multiple selections (array). */
   selected?: string | readonly string[] | null;
-  /** 选择安装目标模式：点击 Agent 时切换选中（多选由父级维护集合）。 */
+  /** Select the installation target mode: toggle selection when clicking Agent (multiple selections are maintained by the parent collection). */
   onSelect?: (agent: string) => void;
-  /** 安装/卸载进行中的 Agent（该 Agent 显示 loading 并禁用）。 */
+  /** Installation/uninstallation of an agent in progress (the agent shows loading and is disabled). */
   pendingAgents?: ReadonlySet<string> | null;
-  /** 多选模式下全选状态（未提供时按 installed 推导 allOn）。 */
+  /** Select all status in multi-select mode (press installed to deduce allOn when not provided). */
   allSelected?: boolean | null;
-  /** 安装进行中禁用整个条。 */
+  /** The entire bar is disabled while the installation is in progress. */
   disabled?: boolean;
   cols?: number;
   rows?: number;

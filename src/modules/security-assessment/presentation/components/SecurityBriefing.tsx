@@ -12,7 +12,7 @@ import { detectedRiskCount, type SecurityTotals } from "../security-view";
 
 /**
  * Security-page insight hero. The card frame, insight lifecycle, AI label and
- * rotation behavior all come from the shared 今日洞察 component. Security
+ * rotation behavior all come from the shared Insight Today component. Security
  * supplies the evidence-derived copy/actions plus the adjacent status bar.
  */
 export function SecurityBriefing({

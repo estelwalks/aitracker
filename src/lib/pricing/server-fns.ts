@@ -28,7 +28,7 @@ export interface RatesSnapshot {
  * Exchange-rate snapshot for the display-currency UI. `refresh` forces a
  * network attempt; otherwise the cached/built-in rates are returned. The
  * renderer uses one snapshot everywhere so every amount shares the same
- * rate/date/source (docs/plan v1.2 同一汇率快照).
+ * rate/date/source (docs/plan v1.2 same rate snapshot).
  */
 // 30s in-memory TTL so route loaders don't re-read the rates file on every
 // navigation; `refresh: true` always bypasses it.

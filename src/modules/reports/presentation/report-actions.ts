@@ -66,7 +66,7 @@ export function useReportActions(
  * user draft stored under the given preference
  * key. `dirtyRef` is set by the caller on every keystroke; every 30s the hook
  * persists the latest body (read via a ref so the interval closure never goes
- * stale), `flush` persists immediately (the "保存" button), and the cleanup
+ * stale), `flush` persists immediately (the "Save" button), and the cleanup
  * persists once more on unmount.
  */
 export function useDraftAutosave(

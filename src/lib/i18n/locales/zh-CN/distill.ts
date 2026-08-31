@@ -1,4 +1,4 @@
-/** 蒸馏工作台文案（V3.0 原型对齐；新页面文案统一放这里）。 */
+/** Distillation workbench copy; new page copy is centralized here. */
 export const distill = {
   jarvisTitle: "Jarvis 洞察",
   insightDots: "洞察轮播",

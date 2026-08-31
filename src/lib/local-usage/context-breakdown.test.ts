@@ -32,16 +32,16 @@ test("多个工具按 calls 权重分摊完整事件 token（模型 A）", () =>
     }),
   ]);
 
-  // 模型 A：工具分摊完整事件 token（input+cache+output），两工具合计 = total
+  // Model A: The tool allocates the complete event token (input+cache+output), the total of the two tools = total
   const toolSum = result.tools.reduce((sum, row) => sum + row.totalTokens, 0);
   assert.equal(toolSum, 101);
   assert.equal(
     result.categories.reduce((sum, row) => sum + row.totalTokens, 0),
     101,
   );
-  // calls 权重 2:1 → exec_command ≈ 67, web_search ≈ 34
+  // calls weight 2:1 → exec_command ≈ 67, web_search ≈ 34
   assert.ok(result.tools[0]?.totalTokens >= 60);
-  // 工具含 input（模型 A：完整 token 归因）
+  // Tool contains input (Model A: full token attribution)
   assert.ok(result.tools[0]!.inputTokens > 0);
 });
 
@@ -50,7 +50,7 @@ test("纯文本响应：完整 token 归 messages text_response", () => {
   const textRow = result.messages.find((r) => r.key === "text_response");
   assert.ok(textRow);
   assert.equal(textRow?.totalTokens, 101);
-  // messageRoles 仍按角色分 input（独立视图）
+  // messageRoles are still divided into inputs according to roles (independent view)
   const userInput = result.messageRoles.find((r) => r.key === "user_input");
   assert.equal(userInput?.totalTokens, 50);
 });
@@ -79,8 +79,8 @@ test("Skill 与命令统计是工具归因的受限视图", () => {
     }),
   ]);
 
-  // 模型 A：exec_command 与 tool_search 各分 ~50（calls 1:1），skill 从
-  // tool_search 归因，command 从 exec_command 归因
+  // Model A: exec_command and tool_search each score ~50 (calls 1:1), skill from
+  // tool_search attribution, command attribution from exec_command
   assert.equal(result.skills[0]?.key, "release-check");
   assert.ok(result.skills[0]?.totalTokens >= 49);
   assert.equal(result.commands[0]?.key, "npm · npm run");

@@ -166,13 +166,13 @@ export function createDistillationApplication(
     ports.persistence?.save(candidate).catch(() => undefined) ??
     Promise.resolve();
 
-  /** 生成兜底：能力类产物（skill/brief/prompt）最多重试次数（首次 + 2 次修正）。 */
+  /** Generate the bottom line: the maximum number of retries for ability products (skill/brief/prompt) (first time + 2 corrections). */
   const MAX_QUALITY_RETRIES = 2;
 
   /**
-   * 生成侧兜底：真实模型跑出结果后做一次自动质检，不合格就带上失败原因
-   * 追加到提示词重跑；多次仍不合格则强制输出最后一次结果（不再阻塞用户）。
-   * 非能力类（记忆/画像）或离线模式不做此循环。
+   * Generate a side pocket: After the real model runs out the results, an automatic quality inspection is performed. If it fails, the reason for the failure will be reported.
+   * Append to the prompt word and rerun; if the result is still unqualified multiple times, the last result will be forced to be output (the user will no longer be blocked).
+   * Non-ability types (memory/portrait) or offline mode do not do this cycle.
    */
   async function runWithQualityFallback(
     ai: NonNullable<DistillationPorts["ai"]>,
@@ -186,7 +186,7 @@ export function createDistillationApplication(
     const lastQualification: SkillQualification | null = null;
     for (let attempt = 0; attempt <= MAX_QUALITY_RETRIES; attempt += 1) {
       const execution = await ai.execute(request);
-      // 质检是兜底增强：构建/质检任何异常都直接返回结果，不让质检炸掉生成。
+      // Quality inspection is a comprehensive enhancement: any exceptions in the build/quality inspection will directly return the results, preventing the quality inspection from blowing up the generation.
       let qualification: SkillQualification | null = null;
       try {
         const summary = execution.response?.text?.trim() ?? "";
@@ -200,7 +200,7 @@ export function createDistillationApplication(
         return execution;
       }
       if (qualification.pass) return execution;
-      // 最后一次仍不合格 → 强制输出（兜底），不再重试。
+      // Still unqualified for the last time → Forced output (withdrawal) without retrying.
       if (attempt >= MAX_QUALITY_RETRIES) return execution;
       const failures = qualification.checks
         .filter((check) => !check.pass)
@@ -217,7 +217,7 @@ export function createDistillationApplication(
         },
       };
     }
-    // 理论不可达；保底返回最后一次结果。
+    // The theory is unreachable; the last result is guaranteed to be returned.
     return ai.execute(request);
   }
 
@@ -301,7 +301,7 @@ export function createDistillationApplication(
       };
       let execution: AIExecutionResult;
       try {
-        // 生成兜底：真实模型 + 能力类产物带质检重试，多次不合格强制输出。
+        // Generate the bottom line: real models + capability products with quality inspection and retry, and forced output if multiple failures occur.
         execution = isRealModelRequest(request)
           ? await runWithQualityFallback(
               ports.ai,
@@ -356,10 +356,10 @@ export function createDistillationApplication(
         return err("errors.distillation.notWaiting");
       if (!ports.knowledge)
         return err("errors.distillation.knowledgeUnavailable");
-      // FR-026 修正：蒸馏记忆在记忆库正确分类——persona→画像(type:profile)、
-      // memory→任务记忆(type:task)，复用 knowledge/api.server.ts 的 `type:` 前缀
-      // 约定，让 toMemoryEntry 投影出正确类型。能力类产物（brief/skill/prompt）
-      // 不打 type 前缀，记忆库不展示它们。
+      // FR-026 Correction: Distilled memory is correctly classified in the memory bank - persona→portrait (type:profile),
+      // memory→task memory (type:task), reuse the `type:` prefix of knowledge/api.server.ts
+      // Convention, let toMemoryEntry project the correct type. Ability products (brief/skill/prompt)
+      // Without the type prefix, the memory does not display them.
       const typeRef =
         current.kind === "persona"
           ? "type:profile"
@@ -374,7 +374,7 @@ export function createDistillationApplication(
               ? "brief"
               : "snippet",
         title: current.title,
-        // Persist the distilled body (PRD FR-014 标题+正文): the memory hub
+        // Persist the distilled body (PRD FR-014 title + text): the memory hub
         // card and Markdown export show the full generated memory, not a
         // 160-char provenance fragment. Content is the safety-filtered
         // candidate summary — raw conversation is never stored.
@@ -385,8 +385,8 @@ export function createDistillationApplication(
             sourceRef: `session:${ref.source}:${ref.sessionId}` as never,
             sourceType: "session" as const,
             capturedAt: current.generatedAt,
-            // 候选摘要已由 domain 做过安全过滤（路径→~/、凭据值→[REDACTED]），
-            // 直接作为 provenance 摘要，让记忆库卡片展示真实内容而非占位文案。
+            // The candidate summary has been security filtered by domain (path → ~/, credential value → [REDACTED]),
+            // Directly as a provenance summary, let the memory card show the real content rather than placeholder copy.
             summary: current.summary.slice(0, 200),
           })),
           ...(typeRef
@@ -411,7 +411,7 @@ export function createDistillationApplication(
       const updated: CandidateOutput = {
         ...current,
         approvalState: "approved",
-        // 批准即落知识库，记录资产链接（记忆资产 → 记忆库条目），随候选持久化。
+        // Once approved, it will be dropped into the knowledge base, and the asset link (memory asset → memory base entry) will be recorded and persisted along with the candidate.
         knowledgeAssetId: approved.value.assetId,
       };
       candidates.set(candidateId, updated);

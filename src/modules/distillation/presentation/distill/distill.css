@@ -1,18 +1,18 @@
 /*
- * 蒸馏工作台局部样式基座 —— 与 V3.0 原型(styles.css @layer base)对齐。
+ * Local distillation workbench style foundation aligned with styles.css @layer base.
  *
- * 所有规则都作用在根类 .distill-workbench 上,绝不回写全局 src/styles.css:
- * 其它模块(设置、会话页、Skill 管理等)不受影响。
+ * All rules act on the root class .distill-workbench and never write back to the global src/styles.css:
+ * Other modules (settings, session pages, Skill management, etc.) are not affected.
  *
- * 原型的核心设计语言:
- *   - 卡片:`border-radius: var(--radius)`,不带阴影(工作台扁平风格)。
- *     尖角(rounded-none/sm/md)统一收成 calc(var(--radius) - 4px)。
- *   - 分隔线:不做描边,用 inset 顶线分层(--rowline)。
- *   - aitracker-toolbar:原型是裸 flex(无边框盒);aitracker-overlay 透明度 0.68(当前全局是 0.62)。
+ * The core design language of the prototype:
+ *   - Card: `border-radius: var(--radius)`, without shadow (workbench flat style).
+ *     Sharp corners (rounded-none/sm/md) uniform harvest calc(var(--radius) - 4px).
+ *   - Separator line: No stroke, use inset top line layering (--rowline).
+ *   - aitracker-toolbar: The prototype is bare flex (borderless box); aitracker-overlay transparency is 0.68 (currently global is 0.62).
  */
 .distill-workbench {
-  /* 原型 token:当前全局 --elev-1/--hairline 已与之一致,这里自包含一份; */
-  /* --rowline / --overlay 为当前项目缺失或分歧值。 */
+  /* Prototype token: The current global --elev-1/--hairline is consistent with it, and a self-contained copy is included here; */
+  /* --rowline / --overlay for missing or divergent values for the current item. */
   --elev-1:
     0 1px 1px oklch(0 0 0 / 0.5), 0 10px 26px -18px oklch(0 0 0 / 0.9);
   --elev-2:
@@ -22,7 +22,7 @@
   --overlay: oklch(0 0 0 / 0.68);
 }
 
-/* ── 卡片:连续圆角,去投影(卡片不再带阴影,保持与工作台扁平一致) ────── */
+/* ── Card: continuous rounded corners, remove shadow (card no longer has shadow, keep flat and consistent with the workbench) ────── */
 .distill-workbench .bg-card,
 .distill-workbench .aitracker-panel,
 .distill-workbench .aitracker-glass,
@@ -39,12 +39,12 @@
   box-shadow: none;
 }
 
-/* 当前项目的 .aitracker-panel > header 加了渐隐底,原型 Panel 没有——作用域内复位。 */
+/* The current project's .aitracker-panel > header has a fade-out bottom, but the prototype Panel does not have a scope-reset. */
 .distill-workbench .aitracker-panel > header {
   background: none;
 }
 
-/* 尖角一律改成苹果式连续圆角 */
+/* All sharp corners will be changed to Apple-style continuous rounded corners. */
 .distill-workbench .rounded-none,
 .distill-workbench .rounded-sm,
 .distill-workbench .rounded,
@@ -57,14 +57,14 @@
   border-radius: var(--radius);
 }
 
-/* 分隔线改为极淡的背景分层,而非描边 */
+/* The dividing line is changed to a very light background layer instead of a stroke */
 .distill-workbench .divide-y > * + * {
   border-top-width: 0 !important;
   box-shadow: inset 0 1px 0 var(--rowline);
 }
 
-/* ── 共享工具类覆盖(作用域内,只影响工作台) ─────────────────────── */
-/* 原型模式 chip 组是裸 flex;当前全局 aitracker-toolbar 是带边框渐变盒 */
+/* ── Shared tool class coverage (within scope, only affects the workbench) ─────────────────────── */
+/* The prototype mode chip group is bare flex; the current global aitracker-toolbar is a bordered gradient box */
 .distill-workbench .aitracker-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -78,7 +78,7 @@
   box-shadow: none;
 }
 
-/* 原型遮罩透明度 0.68(全局 @utility aitracker-overlay 是 0.62) */
+/* Prototype mask transparency 0.68 (global @utility aitracker-overlay is 0.62) */
 .distill-workbench .aitracker-overlay {
   background-color: var(--overlay);
 }
@@ -117,10 +117,10 @@
   }
 }
 
-/* ── 入场动画 ─────────────────────────────────────────────────── */
-/* 原型(styles.css @theme inline)用 animate-fade-in / animate-scale-in;
-   drawer 等通过 portal 挂到 body,脱离 .distill-workbench 作用域,故独立定义。
-   当前项目未引入 tw-animate-css 对应命名,这里补上,只被蒸馏组件使用。 */
+/* ── Entrance animation ─────────────────────────────────────────────── */
+/* Prototype (styles.css @theme inline) uses animate-fade-in / animate-scale-in;
+   The drawer, etc. are hung to the body through the portal and are out of the scope of .distill-workbench, so they are defined independently.
+   The current project does not introduce the corresponding naming of tw-animate-css. It is added here and is only used by the distillation component. */
 @keyframes aitracker-fade-in-kf {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -142,7 +142,7 @@
   }
 }
 
-/* ── 运行中进度条:服务端同步完成、无真实进度,用不定向扫描条(原型梯度 + 扫动) ── */
+/* ── Progress bar during operation: server synchronization is completed, no real progress, use non-directional scanning bar (prototype gradient + sweep) ── */
 @keyframes aitracker-progress-kf {
   0% { width: 14%; }
   60% { width: 74%; }

@@ -1,14 +1,14 @@
 /**
- * 工具品牌图标。内置品牌为内联 SVG（跟随 currentColor / 品牌色，避免外链
- * 依赖）：claude / codex 使用 simple-icons（CC0）提供的官方 logo path，其余
- * 为自绘简化图形。新增内置品牌：扩 match() + brandColor + 对应 SVG 分支即可。
+ * Tool brand icon. The built-in brand is inline SVG (follow currentColor / brand color to avoid external links
+ * Dependencies): claude/codex uses the official logo path provided by simple-icons (CC0), and the rest
+ * Simplify graphics for self-drawing. Add a new built-in brand: expand match() + brandColor + corresponding SVG branch.
  *
- * 图标与配色优先取工具注册表配置（definitions/*.tool.json 的
- * display.icon / display.color，浏览器安全投影），按工具 id 或展示名
- * 匹配；未配置时回退到名称启发式。因此全站同一工具始终使用同一配色。
+ * For icons and colors, the tool registry configuration (definitions/*.tool.json) is preferred.
+ * display.icon / display.color, browser safe projection), by tool id or display name
+ * Match; falls back to name heuristics when not configured. Therefore, the same tool throughout the site always uses the same color scheme.
  *
- * display.icon 只允许使用内置 kind 键；品牌图形统一来自本项目的
- * public/brand-logos/ 离线资源或组件内联 SVG。
+ * display.icon only allows the use of the built-in kind key; brand graphics are unified from this project's
+ * public/brand-logos/ Offline resource or component inline SVG.
  */
 
 import { displayOf } from "./BrandIcon.helpers.ts";
@@ -59,9 +59,9 @@ const brandColor: Record<string, string> = {
 };
 
 /**
- * 官方品牌 logo 静态资源（public/brand-logos/，构建时从注册表中的官方
- * 图标地址下载并随应用发布）：优先于内置自绘 SVG 使用，让图标显示真实品牌
- * 图形。点亮/未点亮由调用方控制（未安装置灰 grayscale），logo 本身保留品牌原色。
+ * Official brand logo static resource (public/brand-logos/, built from the official
+ * Download the icon address and publish it with the application): take priority over the built-in self-drawn SVG to allow the icon to display the real brand
+ * graphics. Lighting/unlighting is controlled by the caller (grayscale is not installed), and the logo itself retains the original color of the brand.
  */
 const BRAND_LOGO_BY_NAME: Record<string, string> = {
   antigravity: "/brand-logos/antigravity.svg",
@@ -121,7 +121,7 @@ const BRAND_LOGO_BY_NAME: Record<string, string> = {
 };
 
 function brandLogoSrc(name: string): string | undefined {
-  // 同时接受展示名（"Claude Code"）、工具 id（"claude-code"）与 kind 键。
+  // Also accepts a display name ("Claude Code"), a tool id ("claude-code"), and a kind key.
   const normalized = name
     .trim()
     .toLowerCase()
@@ -186,9 +186,9 @@ export function BrandIcon({ name, className = "size-3.5", color }: Props) {
     );
 
   if (kind === "codex")
-    // OpenAI 官方 logo（chatgpt.com favicon）--Codex / ChatGPT 同属 OpenAI。
-    // 按需求使用官方黑白配色：fill=currentColor 跟随容器文字色
-    // （浅色主题近黑、深色主题近白），不跟随 display.color 配置。
+    // OpenAI official logo (chatgpt.com favicon)--Codex / ChatGPT both belong to OpenAI.
+    // Use the official black and white color matching as needed: fill=currentColor follows the container text color
+    // (Light theme is nearly black, dark theme is nearly white), does not follow the display.color configuration.
     return (
       <svg
         className={common.className}

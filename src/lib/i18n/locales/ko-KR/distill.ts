@@ -1,4 +1,4 @@
-/** 증류 워크벤치 문구(V3.0 프로토타입 정렬). */
+/** Distillation workbench copy aligned with the reference design. */
 export const distill = {
   jarvisTitle: "Jarvis 인사이트",
   insightDots: "인사이트 캐러셀",
