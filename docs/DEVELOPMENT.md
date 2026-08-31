@@ -67,6 +67,7 @@ npm run lab:first-run:seed      # seed the isolated lab home
 | `npm run test:route-performance` | Route open-performance budget spec |
 | `npm run test:all` | All non-E2E automated test suites |
 | `npm run check:opensource-hygiene` | Paths, credentials, and legacy-name scan |
+| `npm run generate:third-party-notices` | Refresh dependency license inventory |
 
 Run focused checks while developing, then run `npm run test:all`,
 `npm run typecheck`, `npm run lint`, and `npm run build:desktop` before opening
@@ -103,16 +104,19 @@ maintainer's platform signing, notarization, checksum, and manual smoke-test
 process. Never commit signing certificates, API keys, local databases, or user
 session data.
 
-## Known release blockers
+## Release gates
 
-The inherited codebase currently has two release audits that are visible but
-non-blocking in pull-request CI:
+The SQLite-only persistence and public-bundle privacy audits are blocking in
+CI and must pass before publishing an installer:
 
-- `npm run verify:sqlite-only` reports browser `localStorage` persistence that
-  still needs migration to the SQLite-backed application ports.
-- `npm run verify:bundle-no-sqlite` reports server implementation chunks in the
-  client-public build directory.
+```bash
+npm run build
+npm run verify:sqlite-only
+npm run verify:bundle-no-sqlite
+```
 
-Both commands must pass before publishing an installer. Do not weaken or
-remove these audits to make a release green; move the state and server code to
-their intended boundaries instead.
+The build prunes unreachable server implementation chunks from
+`.output/public`; do not weaken or remove that step or either audit.
+
+For the complete human release procedure, including signing, notarization,
+checksums, and smoke tests, see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).

@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { ENV } from "../app-config";
 import { readDshSessionLog } from "../local-usage/dsh-zstd.ts";
-import { canonicalizeProjectIdentity } from "../local-usage/project-path.ts";
+import { canonicalizeProjectIdentity } from "../local-usage/project-path.server.ts";
 import {
   findNearestGitRepositoryRoot,
   serverPathImplForPlatform,

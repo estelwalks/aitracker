@@ -6,6 +6,7 @@ import {
   readCachedVersionResult,
   VERSION_CHECK_TTL_MS,
 } from "./version-check.ts";
+import { compareVersions } from "./version-check.server.ts";
 
 const key = (suffix: string) => `${STORAGE_KEY_PREFIX}update.${suffix}`;
 const checkedAt = "2026-08-19T00:00:00.000Z";
@@ -76,4 +77,14 @@ test("rehydrates an unknown result so offline mounts honor the TTL", () => {
     releaseUrl: null,
     checkedAt,
   });
+});
+
+test("compareVersions sorts prereleases before stable releases", () => {
+  assert.ok(compareVersions("1.0.0", "1.0.0-beta.1") > 0);
+  assert.ok(compareVersions("1.0.0-beta.2", "1.0.0-beta.1") > 0);
+  assert.ok(compareVersions("1.0.0-beta.1", "1.0.0") < 0);
+});
+
+test("compareVersions ignores build metadata", () => {
+  assert.equal(compareVersions("v1.0.0+build.1", "1.0.0+build.2"), 0);
 });

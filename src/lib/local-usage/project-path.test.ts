@@ -4,10 +4,8 @@ import { tmpdir } from "node:os";
 import { join, posix, win32 } from "node:path";
 import test from "node:test";
 
-import {
-  canonicalizeProjectPathFor,
-  normalizeProjectPathFor,
-} from "./project-path.ts";
+import { canonicalizeProjectPathFor } from "./project-path.server.ts";
+import { normalizeProjectPathFor } from "./project-path.ts";
 
 test("win32: home itself becomes ~", () => {
   assert.equal(
