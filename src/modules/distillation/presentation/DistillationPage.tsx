@@ -19,6 +19,7 @@ import type { MessageKey } from "../../../lib/i18n/messages";
 import type { SegmentRefCodec } from "../../../lib/distill-segment";
 import {
   getPreference,
+  removePreference,
   setPreference,
 } from "../../../lib/preferences/client.ts";
 import type { CandidateOutput, SegmentRef, SessionRef } from "../contracts";
@@ -174,7 +175,7 @@ export function DistillationPage({
       : new Set();
   });
   const [busy, setBusy] = useState(false);
-/** True only while a distillation run is in flight (drives "distilling…" states). */
+  /** True only while a distillation run is in flight (drives "distilling…" states). */
   const [distilling, setDistilling] = useState(false);
   const [distillProgress, setDistillProgress] = useState(0);
   const [mode, setMode] = useState<"quick" | "pro">("quick");
@@ -227,42 +228,53 @@ export function DistillationPage({
   // second run or losing the running card.
   useEffect(() => {
     let disposed = false;
-    const storedTaskId = window.localStorage.getItem(DISTILL_TASK_KEY);
-    if (!storedTaskId) return;
-    setDistilling(true);
-    setBusy(true);
-    setDistillView("result");
-    const poll = async () => {
+    let timer: number | undefined;
+    const resume = async () => {
+      let storedTaskId: Awaited<ReturnType<typeof getPreference>>;
       try {
-        const task = await getDistillationTask({
-          data: { taskId: storedTaskId },
-        });
-        if (disposed) return;
-        if (!task) {
-          window.localStorage.removeItem(DISTILL_TASK_KEY);
-          setDistilling(false);
-          setBusy(false);
-          return;
-        }
-        setDistillProgress(
-          task.phase === "completed" ? 1 : Math.min(0.92, task.percent / 100),
-        );
-        if (["completed", "failed", "cancelled"].includes(task.phase)) {
-          window.localStorage.removeItem(DISTILL_TASK_KEY);
-          setDistilling(false);
-          setBusy(false);
-          if (task.phase === "completed") void router.invalidate();
-        }
+        storedTaskId = await getPreference(DISTILL_TASK_KEY);
       } catch {
-        // Keep the task id for the next page entry; a transient IPC failure
-        // must not make the running task disappear.
+        // A preference read failure must not prevent the workbench from
+        // rendering; the task can still be resumed by a later page entry.
+        return;
       }
+      if (disposed || typeof storedTaskId !== "string" || !storedTaskId) return;
+      setDistilling(true);
+      setBusy(true);
+      setDistillView("result");
+      const poll = async () => {
+        try {
+          const task = await getDistillationTask({
+            data: { taskId: storedTaskId },
+          });
+          if (disposed) return;
+          if (!task) {
+            void removePreference(DISTILL_TASK_KEY).catch(() => undefined);
+            setDistilling(false);
+            setBusy(false);
+            return;
+          }
+          setDistillProgress(
+            task.phase === "completed" ? 1 : Math.min(0.92, task.percent / 100),
+          );
+          if (["completed", "failed", "cancelled"].includes(task.phase)) {
+            void removePreference(DISTILL_TASK_KEY).catch(() => undefined);
+            setDistilling(false);
+            setBusy(false);
+            if (task.phase === "completed") void router.invalidate();
+          }
+        } catch {
+          // Keep the task id for the next page entry; a transient IPC failure
+          // must not make the running task disappear.
+        }
+      };
+      void poll();
+      timer = window.setInterval(() => void poll(), 600);
     };
-    void poll();
-    const timer = window.setInterval(() => void poll(), 600);
+    void resume();
     return () => {
       disposed = true;
-      window.clearInterval(timer);
+      if (timer !== undefined) window.clearInterval(timer);
     };
   }, [router]);
 
@@ -464,7 +476,7 @@ export function DistillationPage({
       // Task protocol: when the server runs asynchronously, wait for the
       // terminal state before exposing the result or refreshing read models.
       let task = result.task;
-      if (task) window.localStorage.setItem(DISTILL_TASK_KEY, task.taskId);
+      if (task) await setPreference(DISTILL_TASK_KEY, task.taskId);
       while (
         task &&
         !["completed", "failed", "cancelled"].includes(task.phase)
@@ -476,7 +488,7 @@ export function DistillationPage({
         if (task) setDistillProgress(Math.min(0.92, task.percent / 100));
       }
       if (task?.phase !== "completed") {
-        window.localStorage.removeItem(DISTILL_TASK_KEY);
+        await removePreference(DISTILL_TASK_KEY);
         toast.error(
           task?.errorCode
             ? t(task.errorCode as MessageKey)
@@ -485,7 +497,7 @@ export function DistillationPage({
         return;
       }
       setDistillProgress(1);
-      window.localStorage.removeItem(DISTILL_TASK_KEY);
+      await removePreference(DISTILL_TASK_KEY);
       if (task.candidate) {
         // Prototype parity: a run completes straight into a usable result — no
         // waiting/approve step. The candidate is approved on completion so

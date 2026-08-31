@@ -6,7 +6,9 @@ import {
   writeCachedWidgetReadModel,
 } from "./read-model-cache";
 
-test("widget compact cache is safe in SSR without window", () => {
-  assert.equal(readCachedWidgetReadModel("zh-CN"), undefined);
-  assert.doesNotThrow(() => writeCachedWidgetReadModel("zh-CN", {} as never));
+test("widget compact cache is safe in SSR without window", async () => {
+  assert.equal(await readCachedWidgetReadModel("zh-CN"), undefined);
+  await assert.doesNotReject(() =>
+    writeCachedWidgetReadModel("zh-CN", {} as never),
+  );
 });

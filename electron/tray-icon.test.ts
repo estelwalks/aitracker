@@ -38,6 +38,10 @@ test("packaging generates and preserves both native icon appearances", () => {
   ]) {
     assert.match(generator, new RegExp(filename.replace(".", "\\."), "u"));
   }
+  assert.match(generator, /TRAY_ARTWORK_VIEW_BOX = "52 52 920 920"/u);
+  assert.match(generator, /join\(trayIconSet, "16x16\.png"\)/u);
+  assert.match(generator, /join\(trayIconSet, "32x32\.png"\)/u);
+  assert.match(generator, /join\(appIconSet, "512x512\.png"\)/u);
 });
 
 test("development paths select light and dark generated icons", () => {
