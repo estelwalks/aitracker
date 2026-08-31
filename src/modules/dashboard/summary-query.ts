@@ -10,6 +10,15 @@ import {
   type DashboardSnapshotRefreshStatus,
 } from "./snapshot-status.ts";
 
+export type DashboardStandardWindowKey =
+  keyof DashboardSummaryReadModel["windows"];
+
+export interface DashboardToolWindowQueryInput {
+  readonly locale: Locale;
+  readonly period: DashboardStandardWindowKey;
+  readonly tool: string;
+}
+
 /**
  * Browser-safe RPC for the compact dashboard summary read model (P1-T1-04).
  * The renderer receives only the pre-aggregated projection — never raw events.
@@ -38,6 +47,41 @@ export const getDashboardCustomWindow = createServerFn({ method: "GET" })
     const { loadDashboardCustomWindow } =
       await import("./summary-api.server.ts");
     return loadDashboardCustomWindow(data);
+  });
+
+/**
+ * Standard period projection scoped to one tool. Keeping this on the same
+ * server-composed read model preserves `all` semantics and avoids sending the
+ * all-time sentinel through the bounded custom-range endpoint.
+ */
+export const getDashboardToolWindow = createServerFn({ method: "GET" })
+  .validator((value: DashboardToolWindowQueryInput) => {
+    if (typeof value?.locale !== "string")
+      throw new TypeError("locale required");
+    if (
+      value.period !== "today" &&
+      value.period !== "7d" &&
+      value.period !== "30d" &&
+      value.period !== "all"
+    ) {
+      throw new TypeError("standard dashboard period required");
+    }
+    if (typeof value.tool !== "string" || value.tool.length === 0)
+      throw new TypeError("tool required");
+    return value;
+  })
+  .handler(async ({ data }): Promise<DashboardCustomWindowResult> => {
+    const { loadDashboardSummaryReadModel } =
+      await import("./summary-api.server.ts");
+    const summary = await loadDashboardSummaryReadModel(
+      data.locale,
+      undefined,
+      data.tool,
+    );
+    return {
+      meta: summary.meta,
+      window: summary.windows[data.period],
+    };
   });
 
 /** Light status probe for the first-scan/stale state (≤ a few hundred bytes). */

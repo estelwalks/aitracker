@@ -60,6 +60,7 @@ function activeInsightCount(snapshot: {
 export async function loadDashboardSummaryReadModel(
   locale: Locale,
   monitoringOverride?: MonitoringStatus | null,
+  toolId?: string | null,
 ): Promise<DashboardSummaryReadModel> {
   const { v2, monitoring, error } = await buildDashboardV2Snapshot(locale);
   // P0-T0-09: record projection duration + DTO bytes into the metrics sink.
@@ -69,6 +70,7 @@ export async function loadDashboardSummaryReadModel(
       projector.build({
         snapshot: v2,
         locale,
+        toolId,
         status: error == null ? "fresh" : "failed",
       }),
     { metrics: await getMetricSink(), metricPrefix: "read-model" },
