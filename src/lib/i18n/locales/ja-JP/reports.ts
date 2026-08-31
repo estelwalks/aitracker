@@ -144,6 +144,7 @@ export const reports = {
     generationProgressTitle: "レポートを生成中",
     generationProgressDesc:
       "この期間のセッションを整理してレポートを作成しています。しばらくお待ちください。",
+    generationElapsed: "経過時間 {seconds} 秒",
     generationFailureTitle: "レポートの生成に失敗しました",
     generationFailed:
       "レポートを生成できませんでした。もう一度お試しください。",
@@ -158,6 +159,7 @@ export const reports = {
     savedAt: "最終保存 {time} · ローカルアーカイブ",
     unsaved: "未保存 · 草稿は30秒ごとに自動保存",
     exportMarkdown: "Markdown を書き出す",
+    exportPdf: "PDF を書き出す",
   },
   notes: {
     title: "クイックメモ",

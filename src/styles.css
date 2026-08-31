@@ -55,6 +55,33 @@ body.aitracker-widget-float-document {
 
 @custom-variant dark (&:is(.dark *));
 
+/* Reports use the browser/Electron native print pipeline for PDF export. */
+@media print {
+  body.report-pdf-printing * {
+    visibility: hidden !important;
+  }
+
+  body.report-pdf-printing #report-print-area,
+  body.report-pdf-printing #report-print-area * {
+    visibility: visible !important;
+  }
+
+  body.report-pdf-printing #report-print-area {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 24px !important;
+    background: white !important;
+    color: #111 !important;
+  }
+
+  #report-print-area table {
+    break-inside: avoid;
+  }
+}
+
 /*
  * 设计系统 (v3)
  * 终端美学：暗色为主、低饱和分隔线、等宽数字、小圆角、克制阴影。

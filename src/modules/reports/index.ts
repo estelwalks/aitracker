@@ -13,6 +13,9 @@ export type {
   ReportStore,
   ReportSummary,
   ReportTrigger,
+  ReportTemplateCatalog,
+  ReportTemplateKind,
+  ReportTemplateSet,
   ReportsApplication,
   ReportsModuleContract,
   ReportsModuleId,
@@ -26,7 +29,8 @@ export type {
   SessionDayMetric,
   SessionDensity,
 } from "./period.ts";
-export { BUILTIN_REPORT_DEFINITIONS } from "./domain.ts";
+export { BUILTIN_REPORT_DEFINITIONS, templateForLocale } from "./domain.ts";
+export { REPORT_TEMPLATES, templateFor, templateSetFor } from "./templates.ts";
 export { createReportsApplication } from "./application/index.ts";
 export type { ReportsApplicationOptions } from "./application/index.ts";
 export {

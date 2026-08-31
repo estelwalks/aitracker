@@ -96,12 +96,12 @@ async function latestRunStatus(
   return runs.value[0]?.status;
 }
 
-test("without an active profile generation still runs as a deterministic offline draft", async () => {
+test("daily generation uses the fixed renderer without an active profile", async () => {
   await withIsolatedRoot(async (root) => {
     const result = await generateReport("reports.daily");
     assert.equal(result.triggered, true);
     assert.match(result.reportId ?? "", /^report:/);
-    assert.equal(await latestRunStatus(root), "offline");
+    assert.equal(await latestRunStatus(root), "succeeded");
     const view = await loadReports("zh-CN");
     assert.equal(view.viewModel.feed.offline, true);
     const body = await getReportBody(result.reportId!);
@@ -119,13 +119,13 @@ test("without an active profile generation still runs as a deterministic offline
   });
 });
 
-test("an env-configured LLM no longer opens the gate without an active profile", async () => {
+test("an env-configured LLM does not replace the active-profile requirement", async () => {
   await withLlmEnv(() =>
     withIsolatedRoot(async (root) => {
       const result = await generateReport("reports.daily");
       assert.equal(result.triggered, true);
       assert.match(result.reportId ?? "", /^report:/);
-      assert.equal(await latestRunStatus(root), "offline");
+      assert.equal(await latestRunStatus(root), "succeeded");
       const view = await loadReports("zh-CN");
       assert.equal(view.viewModel.feed.offline, true);
     }),
@@ -145,7 +145,7 @@ test("an active profile triggers a real generation against the profile endpoint"
         res.writeHead(200, { "content-type": "application/json" });
         res.end(
           JSON.stringify({
-            choices: [{ message: { content: "The daily brief content." } }],
+            choices: [{ message: { content: "The weekly report content." } }],
           }),
         );
       });
@@ -166,7 +166,11 @@ test("an active profile triggers a real generation against the profile endpoint"
       assert.ok(profile.id);
       assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
 
-      const result = await generateReport("reports.daily");
+      const result = await generateReport(
+        "reports.weekly",
+        { granularity: "week", key: "2026-08-24" },
+        "en-US",
+      );
       assert.equal(result.triggered, true);
 
       // The real call must have used the profile's endpoint + model, which
@@ -177,7 +181,14 @@ test("an active profile triggers a real generation against the profile endpoint"
       };
       assert.equal(payload.model, "profile-test-model");
       assert.equal(payload.messages?.[0]?.role, "system");
-      assert.match(payload.messages?.[0]?.content ?? "", /日报生成助手/);
+      assert.match(
+        payload.messages?.[0]?.content ?? "",
+        /English Markdown weekly report/,
+      );
+      assert.match(
+        payload.messages?.[0]?.content ?? "",
+        /write the entire report in English/i,
+      );
       assert.equal(payload.messages?.[1]?.role, "user");
       assert.match(payload.messages?.[1]?.content ?? "", /本时段共/);
       assert.doesNotMatch(payload.messages?.[1]?.content ?? "", /日报生成助手/);
@@ -190,7 +201,7 @@ test("an active profile triggers a real generation against the profile endpoint"
   });
 });
 
-test("an active profile with an unreachable endpoint degrades to an offline draft, never a 500", async () => {
+test("weekly generation with an unreachable endpoint fails without replacing the report", async () => {
   await withIsolatedRoot(async (root) => {
     const profile = await root.modelProfiles.upsert({
       name: "dead-profile",
@@ -201,10 +212,15 @@ test("an active profile with an unreachable endpoint degrades to an offline draf
       apiKey: "sk-dead-123456",
     });
     assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
-    const result = await generateReport("reports.daily");
-    assert.equal(result.triggered, true);
-    assert.equal(result.errorCode, undefined);
-    assert.equal(await latestRunStatus(root), "offline");
+    const result = await generateReport(
+      "reports.weekly",
+      { granularity: "week", key: "2026-08-24" },
+      "en-US",
+    );
+    assert.equal(result.triggered, false);
+    assert.equal(result.reportId, undefined);
+    assert.equal(result.errorCode, "errors.reports.generationFailed");
+    assert.equal(await latestRunStatus(root), "failed");
   });
 });
 
@@ -240,14 +256,19 @@ test("a failed regeneration returns its error while the previous report remains 
       });
       assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
 
-      const previous = await generateReport("reports.daily");
+      const period = {
+        granularity: "week" as const,
+        key: "2026-08-24",
+      };
+      const previous = await generateReport("reports.weekly", period, "en-US");
       assert.equal(previous.triggered, true);
       assert.ok(previous.reportId);
 
-      const failed = await generateReport("reports.daily");
-      assert.equal(failed.triggered, true);
-      assert.ok(failed.reportId);
-      assert.equal(await latestRunStatus(root), "offline");
+      const failed = await generateReport("reports.weekly", period, "en-US");
+      assert.equal(failed.triggered, false);
+      assert.equal(failed.reportId, undefined);
+      assert.equal(failed.errorCode, "errors.reports.generationFailed");
+      assert.equal(await latestRunStatus(root), "failed");
       assert.equal(
         (await getReportBody(previous.reportId!))?.body,
         "Existing report.",

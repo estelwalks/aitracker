@@ -14,6 +14,7 @@ export function useReportActions(
 ): {
   copy: () => Promise<void>;
   exportMd: () => void;
+  exportPdf: () => void;
 } {
   const { t } = useI18n();
 
@@ -43,7 +44,21 @@ export function useReportActions(
     toast.success(t("common.reports.editor.exportMd"));
   }, [body, fallbackTitle, t]);
 
-  return { copy, exportMd };
+  const exportPdf = useCallback(() => {
+    if (!body.trim()) {
+      toast.error(t("common.failed"));
+      return;
+    }
+    // The report page has a print-only area and global print CSS that hides
+    // the application chrome. Electron and the browser both expose the
+    // native "Save as PDF" destination through this standard print flow.
+    document.body.classList.add("report-pdf-printing");
+    const cleanup = () => document.body.classList.remove("report-pdf-printing");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+  }, [body, t]);
+
+  return { copy, exportMd, exportPdf };
 }
 
 /**

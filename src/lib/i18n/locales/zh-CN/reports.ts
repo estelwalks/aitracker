@@ -143,6 +143,7 @@ export const reports = {
     rewriteConfirm: "重新生成",
     generationProgressTitle: "正在生成报告",
     generationProgressDesc: "正在整理该周期的会话并生成报告，请稍候。",
+    generationElapsed: "已用时 {seconds} 秒",
     generationFailureTitle: "报告生成失败",
     generationFailed: "暂时无法生成报告，请稍后重试。",
     generationTimedOut: "生成等待超时，请重试。",
@@ -155,6 +156,7 @@ export const reports = {
     savedAt: "上次保存 {time} · 本地归档",
     unsaved: "尚未保存 · 每 30 秒自动保存草稿",
     exportMarkdown: "导出 Markdown",
+    exportPdf: "导出 PDF",
   },
   notes: {
     title: "快捷批注",

@@ -146,6 +146,7 @@ export const reports = {
     generationProgressTitle: "보고서 생성 중",
     generationProgressDesc:
       "이 기간의 세션을 정리하고 보고서를 작성하고 있습니다. 잠시 기다려 주세요.",
+    generationElapsed: "경과 시간 {seconds}초",
     generationFailureTitle: "보고서 생성 실패",
     generationFailed: "보고서를 생성하지 못했습니다. 다시 시도해 주세요.",
     generationTimedOut: "생성 시간이 초과되었습니다. 다시 시도해 주세요.",
@@ -159,6 +160,7 @@ export const reports = {
     savedAt: "마지막 저장 {time} · 로컬 아카이브",
     unsaved: "아직 저장 안 됨 · 초안은 30초마다 자동 저장",
     exportMarkdown: "Markdown 내보내기",
+    exportPdf: "PDF 내보내기",
   },
   notes: {
     title: "빠른 메모",

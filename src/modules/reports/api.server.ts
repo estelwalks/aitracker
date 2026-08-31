@@ -215,39 +215,46 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
 }
 
 /**
- * Trigger a draft report generation. Generation always runs: when an active
- * S-500 model profile exists its id is passed so the profile-backed provider
- * performs a real model call; without one the generation adapter produces a
- * deterministic Chinese draft from the real collected session context
- * (status `offline`), which is still a usable, editable report. The UI reads
- * `feed.offline` to show the honest "未配置模型" banner, but never blocks
- * generation on it.
+ * Trigger a draft report generation. All report cadences are assembled from
+ * fixed data templates and do not require a model profile.
  */
 export async function generateReport(
   definitionId: string,
   period?: ReportPeriod,
+  locale: Locale = "zh-CN",
 ): Promise<{
   triggered: boolean;
   reportId?: string;
   errorCode?: string;
 }> {
-  const { getCompositionRoot } =
-    await import("../../app/composition.server.ts");
-  const root = await getCompositionRoot();
-  const activeView = await root.modelProfiles.getActiveView();
-  const activeProfile = activeView
-    ? await root.modelProfiles.getProfileForExecution(activeView.id)
-    : null;
-  const result = await root.reports.generate({
-    definitionId,
-    trigger: "manual",
-    modelId: activeProfile?.id,
-    period,
-  });
-  if (!result.ok) {
-    return { triggered: false, errorCode: result.error.code };
+  try {
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    const root = await getCompositionRoot();
+    const activeView = await root.modelProfiles.getActiveView();
+    const activeProfile = activeView
+      ? await root.modelProfiles.getProfileForExecution(activeView.id)
+      : null;
+    const result = await root.reports.generate({
+      definitionId,
+      trigger: "manual",
+      modelId: activeProfile?.id,
+      period,
+      locale,
+    });
+    if (!result.ok) {
+      return { triggered: false, errorCode: result.error.code };
+    }
+    return { triggered: true, reportId: result.value.reportId };
+  } catch {
+    // Bootstrap/database failures are reported to the UI as a normal
+    // generation failure instead of escaping the server function and
+    // unmounting the reports page.
+    return {
+      triggered: false,
+      errorCode: "errors.reports.generationFailed",
+    };
   }
-  return { triggered: true, reportId: result.value.reportId };
 }
 
 /**

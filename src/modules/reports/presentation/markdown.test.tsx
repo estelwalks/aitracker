@@ -84,6 +84,15 @@ test("MarkdownView keeps uneven table rows aligned to the header columns", () =>
   );
 });
 
+test("MarkdownView safely renders pipe rows without a table separator", () => {
+  const markup = render(
+    "| Total tokens | 81.25M |\n| Cached tokens | 78.03M |",
+  );
+  assert.match(markup, /Total tokens/);
+  assert.match(markup, /Cached tokens/);
+  assert.doesNotMatch(markup, /<table/);
+});
+
 test("MarkdownView hides Agent rows with zero Tokens", () => {
   const markup = render(
     "| Agent | 会话 | Tokens |\n| --- | --- | --- |\n| codex | 6 | 159M |\n| unused-agent | 0 | 0 |",
@@ -98,6 +107,12 @@ test("MarkdownView renders blockquotes with prototype border color", () => {
     markup,
     /<blockquote class="my-3 rounded-lg bg-surface-2\/60 px-3 py-2 text-\[12px\] leading-relaxed text-muted-foreground" style="border-left:2px solid var\(--chart-1\)">引用第一行 引用第二行<\/blockquote>/,
   );
+});
+
+test("MarkdownView preserves explicit Markdown hard line breaks", () => {
+  const markup = render("**第一项**\\\n第二项");
+  assert.match(markup, /第一项<\/strong><br\/>第二项/);
+  assert.doesNotMatch(markup, /\\/);
 });
 
 test("MarkdownView renders fenced code blocks preserving newlines", () => {

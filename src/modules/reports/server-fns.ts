@@ -8,6 +8,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { normalizeLocale, type Locale } from "../../lib/i18n/locale";
 
 import type { ReportContent, ReportPeriod } from "./contracts.ts";
 import {
@@ -52,10 +53,9 @@ export interface GenerateReportNowResult {
 
 /**
  * Trigger a manual report generation for a builtin definition. Honest gate:
- * when no LLM is configured the transport returns `{ triggered: false }` and
- * the UI keeps the button disabled with a hint — generation is never faked.
- * Unknown definition ids degrade to `{ triggered: false }` (the page only ever
- * sends `reports.daily`/`reports.weekly`).
+ * Report bodies are deterministic renderings of collected aggregates, so they
+ * can be generated without an LLM. Unknown definition ids degrade to
+ * `{ triggered: false }` (the page only ever sends `reports.daily`/`reports.weekly`).
  */
 export const generateReportNow = createServerFn({ method: "POST" })
   .validator(
@@ -63,12 +63,14 @@ export const generateReportNow = createServerFn({ method: "POST" })
       input: unknown,
     ): {
       definitionId?: string;
+      locale?: Locale;
       granularity?: "day" | "week" | "month";
       periodKey?: string;
     } => {
       if (input != null && typeof input === "object") {
         const candidate = input as {
           definitionId?: unknown;
+          locale?: unknown;
           granularity?: unknown;
           periodKey?: unknown;
         };
@@ -82,6 +84,17 @@ export const generateReportNow = createServerFn({ method: "POST" })
           ...(typeof candidate.definitionId === "string"
             ? { definitionId: candidate.definitionId }
             : {}),
+          ...(normalizeLocale(
+            typeof candidate.locale === "string" ? candidate.locale : null,
+          )
+            ? {
+                locale: normalizeLocale(
+                  typeof candidate.locale === "string"
+                    ? candidate.locale
+                    : null,
+                )!,
+              }
+            : {}),
           ...(granularity ? { granularity } : {}),
           ...(typeof candidate.periodKey === "string"
             ? { periodKey: candidate.periodKey }
@@ -92,15 +105,36 @@ export const generateReportNow = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ data }): Promise<GenerateReportNowResult> => {
-    if (
-      data.definitionId !== "reports.daily" &&
-      data.definitionId !== "reports.weekly"
-    ) {
-      return { triggered: false };
+    try {
+      if (
+        data.definitionId !== "reports.daily" &&
+        data.definitionId !== "reports.weekly" &&
+        data.definitionId !== "reports.monthly"
+      ) {
+        return { triggered: false };
+      }
+      const period = buildReportPeriod(data.granularity, data.periodKey);
+      const { generateReport } = await import("./api.server.ts");
+      // Monthly reports reuse the weekly definition in persisted storage, but
+      // accept the explicit id too so stale clients cannot reject the request.
+      return await generateReport(
+        data.definitionId === "reports.monthly"
+          ? "reports.weekly"
+          : data.definitionId,
+        data.definitionId === "reports.monthly" &&
+          period?.granularity !== "month"
+          ? { granularity: "month", key: data.periodKey ?? "" }
+          : period,
+        data.locale,
+      );
+    } catch {
+      // Keep the server-function contract stable even if module loading or a
+      // framework boundary fails before the API adapter can handle it.
+      return {
+        triggered: false,
+        errorCode: "errors.reports.generationFailed",
+      };
     }
-    const period = buildReportPeriod(data.granularity, data.periodKey);
-    const { generateReport } = await import("./api.server.ts");
-    return generateReport(data.definitionId, period);
   });
 
 /**

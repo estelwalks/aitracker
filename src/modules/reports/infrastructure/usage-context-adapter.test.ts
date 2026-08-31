@@ -80,6 +80,43 @@ test("day period aggregates only that local day", async () => {
   );
 });
 
+test("reports exclude internal review sessions and hide prompt-derived long titles", async () => {
+  const rawPromptTitle =
+    "后面用这个项目进行开发，然后现在把日报周报的模板，单独抽出来，作为尤其是模板，而且还要分4种语言，就是生成日报或周报或…";
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 15), {
+        source: "codex",
+        title: rawPromptTitle,
+        projectKey: "aitracker",
+        model: "gpt-5.6-sol",
+      }),
+      session(localIso(2026, 8, 15), {
+        source: "codex",
+        title:
+          "The following is the Codex agent history whose request action you are assessing.",
+        projectKey: "aitracker",
+        model: "codex-auto-review",
+        turns: 12,
+      }),
+    ]),
+  });
+
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.equal(ctx.stats?.sessions, 1);
+  assert.equal(ctx.stats?.turns, 5);
+  assert.equal(ctx.stats?.sessionsDetail?.length, 1);
+  assert.equal(ctx.stats?.sessionsDetail?.[0]?.title, "aitracker · codex");
+  assert.doesNotMatch(
+    ctx.stats?.sessionsDetail?.[0]?.title ?? "",
+    /后面用这个/,
+  );
+});
+
 test("week period covers its Monday–Sunday range", async () => {
   const port = createReportContextPort({ snapshot: snapshotWith(AUG_SAMPLE) });
   const ctx = await port.collect({
@@ -240,6 +277,63 @@ test("uses event-day usage for tokens while keeping session metrics", async () =
   assert.match(ctx.summary, /\| codex \| 1 \| 2\.5K \| [^|]+ \| — \|/);
   assert.doesNotMatch(ctx.summary, /unused-agent/);
   assert.match(ctx.summary, /含内部 Agent 调用/);
+});
+
+test("omits edit metrics when no edits are identified", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 15), {
+        editTurns: 0,
+        totals: { totalTokens: 1000 },
+      }),
+    ]),
+    usage: usageSnapshotWith({
+      daily: [
+        {
+          date: "2026-08-15",
+          ...tokenCounts(1000),
+          events: 1,
+          bySource: { codex: tokenCounts(1000) },
+        } as UsageSnapshotDto["daily"][number],
+      ],
+      aggregateBuckets: [
+        {
+          date: "2026-08-15",
+          latestTimestamp: localIso(2026, 8, 15),
+          source: "codex",
+          model: "test-model",
+          project: "test-project",
+          projectLabel: "test-project",
+          ...tokenCounts(1000),
+          measurement: "observed",
+          events: 1,
+          context: {
+            textResponses: 0,
+            toolCalls: 1,
+            tools: [{ name: "exec", category: "execution", calls: 1 }],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+          evidence: {
+            textResponses: false,
+            toolCalls: false,
+            skillCalls: false,
+            toolOutputCalls: false,
+            reasoningTokens: false,
+            systemPromptTokens: false,
+          },
+        },
+      ] as NonNullable<UsageSnapshotDto["aggregateBuckets"]>,
+    }),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.equal(ctx.stats?.edits, 0);
+  assert.doesNotMatch(ctx.summary, /代码改动/);
+  assert.match(ctx.summary, /\| Agent \| 会话 \| Tokens \| 成本 \| 时长 \|/);
 });
 
 test("prices in-memory aggregate buckets even when project labels are not hydrated", async () => {
