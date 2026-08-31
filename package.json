@@ -1,6 +1,6 @@
 {
   "name": "aitracker-desktop",
-  "version": "1.0.0",
+  "version": "1.0.0-beta.1",
   "description": "AITracker local AI development asset dashboard",
   "private": true,
   "workspaces": [
@@ -35,7 +35,7 @@
     "dev:desktop:first-run": "node scripts/first-run-lab.mjs",
     "lab:first-run:prepare": "node scripts/first-run-lab.mjs --prepare-only",
     "lab:first-run:seed": "node scripts/first-run-lab.mjs --seed-only",
-    "build": "vite build",
+    "build": "vite build && node scripts/prune-public-server-chunks.mjs",
     "build:skill-scanner": "npm --prefix packages/skill-scanner run build",
     "prebuild:electron": "npm run build:skill-scanner && npm run generate:native-icons",
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/bundle-preload.mjs",
@@ -73,6 +73,7 @@
     "generate:security-rules": "node scripts/generate-security-rules.mjs",
     "generate:runtime-policy": "node scripts/generate-runtime-policy.mjs",
     "generate:module-catalog": "node scripts/generate-module-catalog.mjs",
+    "generate:third-party-notices": "node scripts/generate-third-party-notices.mjs",
     "generate:native-icons": "node scripts/generate-native-icons.mjs",
     "prebuild": "npm run generate:tool-imports && npm run generate:manifest && npm run generate:pricing-imports && npm run generate:security-rules && npm run generate:runtime-policy && npm run generate:module-catalog && npm run generate:native-icons",
     "verify:tool-registry": "node scripts/verify-tool-registry.mjs",
@@ -169,6 +170,14 @@
   },
   "engines": {
     "node": ">=24"
+  },
+  "overrides": {
+    "tsup": {
+      "esbuild": "0.28.2"
+    },
+    "test-exclude": {
+      "glob": "10.5.0"
+    }
   },
   "packageManager": "npm@10.9.2"
 }

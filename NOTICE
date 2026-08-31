@@ -5,8 +5,9 @@ The AITracker project is licensed under the MIT License. See LICENSE for the
 full license text.
 
 This distribution includes third-party packages. Their licenses and notices
-remain the property of their respective copyright holders and are available
-from the package metadata and lockfile in this repository.
+remain the property of their respective copyright holders. The source-tree
+inventory is recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); a
+binary distribution must preserve the corresponding package license files.
 
 The bundled packages/skill-scanner component is licensed under the MIT
 License. See packages/skill-scanner/LICENSE and packages/skill-scanner/NOTICE.
