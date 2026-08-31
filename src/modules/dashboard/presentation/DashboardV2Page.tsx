@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
@@ -10,7 +10,10 @@ import type {
   DashboardWindowSummary,
 } from "../summary-contracts.ts";
 import { windowToView } from "../summary-contracts.ts";
-import { getDashboardCustomWindow } from "../summary-query.ts";
+import {
+  getDashboardCustomWindow,
+  getDashboardToolWindow,
+} from "../summary-query.ts";
 import type { DashboardSnapshotStatus } from "../summary-query.ts";
 import { useSecurityScanOverview } from "../../security-assessment/index.ts";
 import {
@@ -23,7 +26,10 @@ import {
   DashboardToolSwitcher,
   DashboardTrustHero,
 } from "./dashboard-v2-sections.tsx";
-import { resolveDashboardToolRailTools } from "./tool-rail-order.ts";
+import {
+  resolveDashboardSelectedTool,
+  resolveDashboardToolRailTools,
+} from "./tool-rail-order.ts";
 import { resolveWorkspaceInitializationState } from "./workspace-initialization-state.ts";
 
 // P6-T6-05: Recharts trend panel is loaded on demand (not in the initial
@@ -76,12 +82,15 @@ export function DashboardV2Page({
   const { format, t } = useI18n();
   const securityScan = useSecurityScanOverview();
   const [period, setPeriod] = useState<UsagePeriod>("30d");
+  const initialStandardWindow = data.windows["30d"];
   // Date-only range inputs must use the same local calendar convention as
   // resolveUsageRange. Serialising with toISOString() would move the default
   // day around UTC midnight and make the visible range disagree with the
   // server-composed read model.
-  const [from, setFrom] = useState(localDateDaysAgo(29));
-  const [to, setTo] = useState(localDateDaysAgo(0));
+  const [from, setFrom] = useState(
+    initialStandardWindow.from ?? localDateDaysAgo(29),
+  );
+  const [to, setTo] = useState(initialStandardWindow.to ?? localDateDaysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
   const isCustom = period === "custom";
   const standardKey: "today" | "7d" | "30d" | "all" =
@@ -91,29 +100,52 @@ export function DashboardV2Page({
     period === "all"
       ? period
       : "30d";
+  const standardWindow = data.windows[standardKey];
+  const standardSelectedTool = resolveDashboardSelectedTool(
+    selectedTool,
+    standardWindow.tools,
+  );
+  const querySelectedTool = isCustom ? selectedTool : standardSelectedTool;
+  const queryFrom = isCustom ? from : (standardWindow.from ?? "");
+  const queryTo = isCustom ? to : (standardWindow.to ?? "");
 
-  // Custom ranges (and tool-scoped standard windows) are projected on demand;
-  // standard windows come from the loader projection.
+  // Custom ranges and tool-scoped standard windows are projected on demand;
+  // unscoped standard windows come from the loader projection. The standard
+  // query is separate so `all` retains its server-side all-time semantics and
+  // is not sent through the bounded custom-range endpoint.
   const { data: custom } = useQuery({
     queryKey: [
-      "dashboard-custom-window",
+      "dashboard-selected-window",
       data.locale,
-      isCustom ? "custom" : standardKey,
-      isCustom ? from : "",
-      isCustom ? to : "",
-      selectedTool,
+      data.revision,
+      isCustom ? "custom" : "standard",
+      standardKey,
+      queryFrom,
+      queryTo,
+      querySelectedTool,
     ],
-    queryFn: ({ signal }) =>
-      getDashboardCustomWindow({
+    queryFn: ({ signal }) => {
+      if (isCustom) {
+        return getDashboardCustomWindow({
+          data: {
+            locale: data.locale,
+            from: queryFrom,
+            to: queryTo,
+            tool: querySelectedTool === "all" ? null : querySelectedTool,
+          },
+          signal,
+        });
+      }
+      return getDashboardToolWindow({
         data: {
           locale: data.locale,
-          from,
-          to,
-          tool: selectedTool === "all" ? null : selectedTool,
+          period: standardKey,
+          tool: querySelectedTool,
         },
         signal,
-      }),
-    enabled: isCustom || selectedTool !== "all",
+      });
+    },
+    enabled: isCustom || querySelectedTool !== "all",
     staleTime: 30_000,
   });
 
@@ -125,9 +157,10 @@ export function DashboardV2Page({
     queryKey: [
       "dashboard-custom-window",
       data.locale,
+      data.revision,
       "custom",
-      isCustom ? from : "",
-      isCustom ? to : "",
+      from,
+      to,
       "all",
     ],
     queryFn: ({ signal }) =>
@@ -144,19 +177,39 @@ export function DashboardV2Page({
     staleTime: 30_000,
   });
 
-  const windowView: DashboardWindowSummary =
-    isCustom || selectedTool !== "all"
-      ? (custom?.window ?? data.windows[standardKey])
-      : data.windows[standardKey];
+  // For a custom selected-tool view, wait for the unscoped custom projection
+  // before deciding whether the selection is still valid. This prevents a
+  // loading response from being mistaken for a zero-usage period.
+  const unscopedTools = isCustom
+    ? (customAll?.window.tools ??
+      (selectedTool === "all" ? (custom?.window.tools ?? []) : []))
+    : standardWindow.tools;
+  const selectionWindowReady =
+    !isCustom || customAll != null || selectedTool === "all";
+  const effectiveSelectedTool = selectionWindowReady
+    ? resolveDashboardSelectedTool(selectedTool, unscopedTools)
+    : selectedTool;
+
+  useEffect(() => {
+    if (selectionWindowReady && effectiveSelectedTool !== selectedTool) {
+      setSelectedTool(effectiveSelectedTool);
+    }
+  }, [effectiveSelectedTool, selectedTool, selectionWindowReady]);
+
+  const windowView: DashboardWindowSummary = isCustom
+    ? effectiveSelectedTool === "all"
+      ? (customAll?.window ?? custom?.window ?? standardWindow)
+      : (custom?.window ?? standardWindow)
+    : effectiveSelectedTool === "all"
+      ? standardWindow
+      : (custom?.window ?? standardWindow);
 
   // The rail order is based on the unscoped window. Its content query may be
   // scoped after a click, but its button positions remain stable.
   const toolRailTools = resolveDashboardToolRailTools(
-    selectedTool,
+    effectiveSelectedTool,
     windowView.tools,
-    isCustom
-      ? (customAll?.window.tools ?? data.tools)
-      : data.windows[standardKey].tools,
+    unscopedTools,
   );
 
   const view = useMemo(
@@ -275,8 +328,25 @@ export function DashboardV2Page({
           to={to}
           onChange={(next) => {
             setPeriod(next.period);
-            if (next.from) setFrom(next.from);
-            if (next.to) setTo(next.to);
+            if (next.period === "custom") {
+              if (next.from) setFrom(next.from);
+              if (next.to) setTo(next.to);
+              return;
+            }
+            if (
+              next.period !== "today" &&
+              next.period !== "7d" &&
+              next.period !== "30d" &&
+              next.period !== "all"
+            ) {
+              return;
+            }
+            const nextWindow = data.windows[next.period];
+            if (nextWindow.from) setFrom(nextWindow.from);
+            if (nextWindow.to) setTo(nextWindow.to);
+            setSelectedTool((current) =>
+              resolveDashboardSelectedTool(current, nextWindow.tools),
+            );
           }}
         />
       </div>
@@ -289,7 +359,7 @@ export function DashboardV2Page({
       />
       <DashboardToolSwitcher
         tools={toolRailTools}
-        selected={selectedTool}
+        selected={effectiveSelectedTool}
         onChange={setSelectedTool}
       />
       {/* P6-T6-05: on-demand Recharts panel; the boundary keeps the page
@@ -309,8 +379,11 @@ export function DashboardV2Page({
       />
       {/* The workstream panel appears only for a picked tool (reference:
           `agent !== "全部"`), not for the all-tools overview. */}
-      {selectedTool !== "all" ? (
-        <DashboardAgentWorkstreams view={view} selectedTool={selectedTool} />
+      {effectiveSelectedTool !== "all" ? (
+        <DashboardAgentWorkstreams
+          view={view}
+          selectedTool={effectiveSelectedTool}
+        />
       ) : null}
     </div>
   );
