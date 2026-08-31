@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const route = readFileSync(new URL("./skills.tsx", import.meta.url), "utf8");
+const route = readFileSync(
+  new URL("../../../src/routes/skills.tsx", import.meta.url),
+  "utf8",
+);
 const page = readFileSync(
   new URL(
-    "../modules/skill-distribution/presentation/SkillHubPage.tsx",
+    "../../../src/modules/skill-distribution/presentation/SkillHubPage.tsx",
     import.meta.url,
   ),
   "utf8",

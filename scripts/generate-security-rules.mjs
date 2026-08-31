@@ -68,9 +68,7 @@ export const SECURITY_RULES_VERSION: string = ${JSON.stringify(version)};
 await writeFile(outPath, banner + body, "utf8");
 
 console.log("generate-security-rules");
-console.log(
-  "鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
-);
+console.log("─────────────────────────────────────────");
 console.log(`rules:   ${parsed.data.rules.length}`);
 console.log(`version: ${version}`);
 console.log(`wrote ${join("src/lib/security", "security-rules.generated.ts")}`);

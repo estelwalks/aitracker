@@ -22,7 +22,7 @@ on, so a fresh clone can be installed and built without a sibling repository.
 
 ### Requirements
 
-- Node.js 22 or later
+- Node.js 24 or later
 - npm 10 or later
 - macOS or Windows for the complete desktop experience
 

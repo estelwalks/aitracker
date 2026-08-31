@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
 interface WidgetSearchParams {
-  /** Electron 浮窗加载本页时传入；该路由不再提供应用内预览页面。 */
+  /** Passed by the Electron floating panel; this route has no in-app preview. */
   readonly mode?: "float" | null;
 }
 

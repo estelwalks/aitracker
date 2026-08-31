@@ -220,9 +220,7 @@ const profiles = packs.reduce(
   0,
 );
 console.log("generate-pricing-imports");
-console.log(
-  "鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
-);
+console.log("─────────────────────────────────────────");
 console.log(`packs:              ${packs.length}`);
 console.log(`  conversion rules: ${rules}`);
 console.log(`  rates:            ${rates}`);

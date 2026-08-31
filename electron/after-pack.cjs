@@ -18,8 +18,8 @@ const { join } = require("node:path");
  *     set (Chromium JIT only, no App Sandbox, no files.* directory grants).
  *
  * The app never requests TCC-protected directories; macOS only asks the user
- * at the moment they pick/drop a file inside 文稿/桌面/下载, which is the
- * OS-mandated behavior for any non-sandboxed app.
+ * at the moment they pick/drop a file inside Documents/Desktop/Downloads,
+ * which is the OS-mandated behavior for any non-sandboxed app.
  */
 function hasDeveloperIdIdentity() {
   try {
@@ -33,9 +33,10 @@ function hasDeveloperIdIdentity() {
     return false;
   }
 }
-// Electron 默认模板 Info.plist 自带、但本应用完全不使用的 TCC usage
-// descriptions —— 删除,确保"仅声明必要权限"(应用不使用摄像头/麦克风/
-// 蓝牙,也不请求任何目录权限)。
+// TCC usage descriptions shipped by the default Electron Info.plist template
+// that this app never uses — strip them so the bundle declares only the
+// permissions it actually needs (no camera/microphone/bluetooth, no directory
+// access).
 const UNUSED_USAGE_DESCRIPTIONS = [
   "NSBluetoothAlwaysUsageDescription",
   "NSBluetoothPeripheralUsageDescription",

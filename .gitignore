@@ -12,7 +12,6 @@ out/
 test-results/
 tests/fixtures/performance/fixture-10x.events.json
 .aitracker-lab/
-.tt-lab/
 .env
 .env.local
 .env.*.local
@@ -26,4 +25,3 @@ tests/fixtures/performance/fixture-10x.events.json
 docs/V3.0_*/project-sparkle-hub-*
 
 # Local agent skills directory (personal workflow tooling, not repo code)
-.skills/

@@ -1,5 +1,5 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { createReadStream, promises as fs } from "node:fs";
+import { createReadStream, existsSync, promises as fs } from "node:fs";
 import {
   createServer,
   type IncomingMessage,
@@ -284,7 +284,17 @@ export async function startLocalWebServer(
   webRoot: string,
   options: LocalWebServerOptions = {},
 ): Promise<LocalWebServer> {
-  const serverEntry = join(webRoot, "server", "index.mjs");
+  // Current Vite/TanStack builds emit `.output/server/server.js` (plus a
+  // `package.json` marking the directory as ESM); the legacy Nitro layout
+  // emitted `index.mjs`. Accept both so older .output layouts keep working.
+  const serverEntry = ["server.js", "index.mjs"]
+    .map((name) => join(webRoot, "server", name))
+    .find((candidate) => existsSync(candidate));
+  if (!serverEntry) {
+    throw new Error(
+      "Server build not found under webRoot/server (expected server.js or index.mjs)",
+    );
+  }
   const publicDirectory = join(webRoot, "public");
   const capabilityToken = randomUUID();
   const browserBootstrapTokens = new Map<string, number>();

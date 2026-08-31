@@ -19,3 +19,10 @@ is `src/routes/__root.tsx`.
 | `__root.tsx`             | app shell — wraps every page; preserve `<Outlet />`     |
 
 `routeTree.gen.ts` is auto-generated. Don't edit it by hand.
+
+## Tests
+
+Route-level unit tests (loader split budgets, structural assertions over route
+source files) live under `tests/unit/routes/`, never inside `src/routes/`:
+every `.ts`/`.tsx` file here becomes a route, so test files placed in this
+directory would either be routed or require a `-` prefix workaround.

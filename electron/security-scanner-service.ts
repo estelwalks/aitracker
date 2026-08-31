@@ -294,8 +294,9 @@ const SKIP_REASON_CODES = new Set<
 ]);
 
 /**
- * skill-scanner 从报告必填 tokenUsage 起，旧历史 DTO 不含计费数据；
- * 回退注入后 strict schema 才能继续校验旧条目。
+ * skill-scanner reports require a `tokenUsage`; legacy history DTOs predate
+ * billing data, so inject this fallback before the strict schema validates
+ * old entries.
  */
 const EMPTY_TOKEN_USAGE = {
   status: "not_applicable" as const,
