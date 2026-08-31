@@ -126,7 +126,7 @@ type TFunction = <K extends MessageKey>(
 type SecurityState = "safe" | "attention" | "unknown";
 
 function securityOf(skill: MarketSkill, t: TFunction): SecurityState {
-  // 外接 API v1 不再返回 verdict，安全判定以安全分为准（≥80 视为安全）。
+  // External API v1 no longer returns verdict, and the safety judgment is based on the safety score (≥80 is considered safe).
   const safe = skill.securityScore != null && skill.securityScore >= 80;
   const hasEvidence =
     skill.securityScore != null || skill.securityLevel != null;
@@ -135,8 +135,8 @@ function securityOf(skill: MarketSkill, t: TFunction): SecurityState {
 }
 
 /**
- * 真实 tags → 领域分类标签（原型行内领域徽章）。没有匹配到领域时返回
- * null，调用方不渲染徽章——避免在列表名称与安全状态之间出现占位的 "-"。
+ * real tags → domain classification tags (prototype inline domain badges). Returned when no field is matched
+ * null, the caller does not render the badge - avoid a placeholder "-" between the list name and the security state.
  */
 function domainOf(skill: MarketSkill, t: TFunction): string | null {
   const tags = new Set(skill.tags ?? []);
@@ -155,8 +155,8 @@ const SORT_OPTIONS: { value: MarketSort; labelKey: MessageKey }[] = [
 ];
 
 /**
- * 安全市场（V3.0 原型 MarketPanel）：KPI 统计条 + 搜索/排序 + 领域胶囊 +
- * 列表行（安全徽章 + Agent 安装条）+ 分页 + 详情/安装弹窗，全部接真实数据。
+ * Security market (reference MarketPanel): KPI strip + search/sort + domain pills +
+ * List row (security badge + Agent installation bar) + paging + details/installation pop-up window, all connected to real data.
  */
 export function MarketPanel({ initial }: { initial: MarketListResult }) {
   const { t, format } = useI18n();
@@ -171,7 +171,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
   const [refreshRequest, setRefreshRequest] = useState(0);
   const forceRefreshRef = useRef(false);
   const [detail, setDetail] = useState<MarketSkill | null>(null);
-  /** 行内 Agent 安装/卸载进行中集合（keyed by skill.id）。 */
+  /** In-line Agent installation/uninstallation in progress collection (keyed by skill.id). */
   const [pendingAgents, setPendingAgents] = useState<
     Record<number, Set<string>>
   >({});
@@ -254,9 +254,9 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
   }, [query, sort, page, domain, refreshRequest, t]);
 
   const installedBySkill = useMemo(() => {
-    // 本地 Skill 名取自 SKILL.md frontmatter，可能与市场名不同；市场安装的
-    // source.label 固定为 "${repoOwner}/${repoName}"，用它做第二索引，保证
-    // 安装后图标正确点亮（避免误判未安装导致重复安装报错）。
+    // The local Skill name is taken from SKILL.md frontmatter and may be different from the market name; the market-installed
+    // source.label is fixed to "${repoOwner}/${repoName}", use it as the second index to ensure
+    // After installation, the icon lights up correctly (to avoid misjudgment that it is not installed and causing repeated installation errors).
     const byName = new Map<string, Record<string, boolean>>();
     const byMarket = new Map<string, Record<string, boolean>>();
     for (const skill of localSnapshot?.skills ?? []) {
@@ -297,8 +297,8 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
   );
 
   /**
-   * 行内 Agent 点击：未安装 → 直接安装；已安装 → 直接卸载。
-   * 安装/卸载期间该 Agent 按钮显示 spinner 并禁用，结束后刷新本地快照。
+   * In-line Agent click: Not installed → Install directly; Installed → Uninstall directly.
+   * The Agent button displays the spinner and is disabled during installation/uninstallation, and refreshes the local snapshot after completion.
    */
   async function toggleRowAgent(
     skill: MarketSkill,
@@ -340,7 +340,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
         nextSet.delete(target);
         return { ...prev, [skill.id]: nextSet };
       });
-      // 安装/卸载后强制重新扫描，避免读到操作前的快照缓存导致图标不点亮。
+      // Force a rescan after installation/uninstallation to avoid reading the snapshot cache before the operation and causing the icon to not light up.
       void refreshSkillSnapshot()
         .then(setLocalSnapshot)
         .catch(() => undefined);
@@ -388,7 +388,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
         </p>
       </div>
 
-      {/* KPI 统计条（原型 3 格） */}
+      {/* KPI statistics bar (prototype 3 grids) */}
       <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border bg-card">
         {kpis.map((kpi, index) => (
           <div
@@ -696,7 +696,7 @@ function MarketDetailModal({
   const { t, format } = useI18n();
   const security = securityOf(skill, t);
   const repoSlug = `${skill.repoOwner}/${skill.repoName}/${skill.slug}`;
-  // 多选安装目标：逐个勾选，支持全选/全不选，最后统一安装。
+  // Multi-select installation targets: check one by one, support selecting all/unselecting all, and finally install them in a unified manner.
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
   const [installing, setInstalling] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);

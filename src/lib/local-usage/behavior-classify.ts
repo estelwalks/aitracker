@@ -9,19 +9,19 @@ import {
 } from "./context-breakdown.ts";
 
 /**
- * 模型级行为意图分布（用于「模型详情」抽屉的行为条）。
+ * Model-level behavioral intent distribution (behavior bar for the Model Details drawer).
  *
- * Clean-room 合规：输入仅为已脱敏的 tool/skill/command 聚合 + token 计数，
- * 不读取任何对话正文。分类纯启发式，基于 buildContextBreakdown 的 categories
- * 行占比与 commands 签名前缀。
+ * Clean-room compliance: The input is only the desensitized tool/skill/command aggregation + token count,
+ * No conversation text is read. Classification is purely heuristic, based on categories of buildContextBreakdown
+ * Line proportion and commands signature prefix.
  */
 
 export interface ModelBehavior {
-  /** 行为标签（中文）。 */
+  /** Behavior labels (Chinese). */
   label: string;
-  /** 该行为在事件总量中的 Token 占比（0–1）。 */
+  /** The Token proportion of this behavior in the total number of events (0–1). */
   tokenShare: number;
-  /** 该行为在事件数量中的占比（0–1）。 */
+  /** The proportion of this behavior in the number of events (0–1). */
   eventShare: number;
 }
 
@@ -41,11 +41,11 @@ function isDebugCommand(row: LocalUsageContextBreakdownRow): boolean {
 }
 
 /**
- * 把一个模型的若干事件归类为行为分布。
+ * Classify several events of a model into behavioral distributions.
  *
- * 优先级判定（按事件逐条）：调试命令 > execution 代码改动 > browser/研究 >
- * agent 子智能体 > planning 规划 > 纯文本问答。每个事件只计入一个主行为，
- * tokenShare/eventShare 按事件权重与 token 量归一化。
+ * Priority determination (by event one by one): debugging command > execution code changes > browser/research >
+ * agent sub-agent > planning planning > plain text question and answer. Each event only counts towards one main action,
+ * tokenShare/eventShare is normalized by event weight and token amount.
  */
 export function classifyModelBehaviors(
   events: LocalUsageEvent[],
@@ -94,11 +94,11 @@ export function classifyModelBehaviors(
 }
 
 /**
- * 从已采集的命令耗时分桶推算「典型命令耗时」标签。
+ * Calculate the "Typical command time" label from the collected command time into buckets.
  *
- * 数据来源是 Codex 的 context.commands[].duration 分桶（under-1s / 1s-10s /
- * 10s-60s / over-60s / unknown）。无 context 的来源返回 null，前端显示「—」。
- * 不引入新的日志解析；仅复用已脱敏聚合。
+ * The data source is Codex's context.commands[].duration bucketing (under-1s / 1s-10s /
+ * 10s-60s/over-60s/unknown). Sources without context return null, and the front end displays "—".
+ * No new log parsing is introduced; only desensitized aggregations are reused.
  */
 export function typicalCommandLatency(
   events: LocalUsageEvent[],

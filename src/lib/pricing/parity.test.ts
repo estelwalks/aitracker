@@ -35,8 +35,8 @@ function inputOnly(model: string, input = 1_000_000n): PricingLookupInput {
  * billing evidence, so the 12 frozen baseline prices now reproduce with
  * `estimated` confidence (reference-route price, reason `no-route-evidence`)
  * instead of `exact`. The amounts are unchanged and fully recalculable; the
- * confidence downgrade is exactly what the audit requires ("证据不足时不得默认
- * 采用「模型官方价」").
+ * confidence downgrade is exactly what the audit requires ("There shall be no default when there is insufficient evidence.
+ * Use "model official price").
  */
 test("baseline MODEL_PRICES: all 12 reproduce their input amounts (estimated, no evidence)", () => {
   for (const bp of BASELINE_MODEL_PRICES) {

@@ -8,9 +8,9 @@ import { useWidgetData } from "./widget-data";
 type Cell = { label: string; value: string; sub: string };
 
 /**
- * 托盘迷你形态（macOS 菜单栏弹窗 420px）：
- * 今日 / 7 天 / 30 天 / 总计 四个 Token 指标 + 今日工具 Top + 底部操作。
- * 全部来自真实数据源，无 mock 回退。
+ * Tray mini form (macOS menu bar pop-up 420px):
+ * Today / 7 days / 30 days / Total Four Token indicators + Today’s tool Top + Bottom operation.
+ * All from real data sources, no mock fallback.
  */
 export function TrayWidget({ className = "" }: { className?: string }) {
   const { t, format } = useI18n();

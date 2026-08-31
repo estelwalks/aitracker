@@ -25,10 +25,10 @@ import {
 import { RelativeTime } from "./RelativeTime";
 
 /**
- * 扫描任务详情弹窗：与 V3.0 原型 ScanTaskDetail 对齐。
+ * Scan task detail modal aligned with the reference design.
  *
- * 一次「任务」= 同一 scanId 的一组真实历史条目（aggregateScanTask），
- * 展示汇总统计 + 风险明细；每项可跳转到对应 Skill 的真实报告弹窗。
+ * A "task" = a set of real history entries (aggregateScanTask) with the same scanId,
+ * Display summary statistics + risk details; each item can jump to the actual report pop-up window of the corresponding skill.
  */
 export function ScanTaskDetail({
   task,

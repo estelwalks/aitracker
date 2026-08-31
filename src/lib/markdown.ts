@@ -1,7 +1,7 @@
 /**
- * 轻量 Markdown 渲染（标题 / 列表 / 表格 / 代码块 / 引用 / 粗体）。
- * 共享渲染器：蒸馏产物卡、对比弹窗、记忆卡片等复用，保证渲染结果一致。
- * 输出直接喂给 `aitracker-md` / `aitracker-md-sm`（全局 utility，见 styles.css）。
+ * Lightweight Markdown rendering (titles/lists/tables/code blocks/quotes/bold).
+ * Shared renderer: Distillation product cards, comparison pop-ups, memory cards, etc. are reused to ensure consistent rendering results.
+ * Output is fed directly to `aitracker-md` / `aitracker-md-sm` (global utility, see styles.css).
  */
 
 export function md(text: string) {

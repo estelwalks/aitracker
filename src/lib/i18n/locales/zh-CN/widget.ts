@@ -39,13 +39,13 @@ export const widget = {
   loadFailed: "小组件数据加载失败，请稍后重试",
   noData: "暂无数据",
   noDataDesc: "尚未观测到本地 AI 工具用量，扫描后此处会展示实时指标",
-  // 浮窗头部
+  // floating window head
   updatedAt: "更新于 {time}",
   refresh: "刷新",
   widgetSettings: "小组件设置",
   backToPanel: "返回浮窗",
   nextLine: "下一条",
-  // 安全 Tab
+  // Security Tab
   securityTitle: "安全检测",
   scannedSkills: "{count} 个 Skill",
   safeCount: "{count} 安全",
@@ -56,7 +56,7 @@ export const widget = {
   lastScan: "上次扫描 {time}",
   scanNow: "立即检测",
   goScan: "去检测",
-  // 用量 Tab
+  // Dosage Tab
   usageTitle: "Token 消耗",
   totalTokens: "总消耗",
   estimatedCost: "估算成本",
@@ -69,14 +69,14 @@ export const widget = {
   enabled: "开启",
   disabled: "关闭",
   trendPoint: "{date} {tokens}",
-  // 今日 Tab
+  // Today Tab
   todaySummary: "今日摘要",
   toolCount: "工具",
   sessionCount: "会话",
   tokenCount: "Token",
   last7d: "近 7 日",
   todayByTool: "今日工具分布",
-  // 菜单栏
+  // menu bar
   barStyle: "显示样式",
   barStyleHint: "数字=实时 Token 消耗，状态点=安全绿/黄/红",
   barIcon: "纯图标",
@@ -87,7 +87,7 @@ export const widget = {
   barClickMain: "打开主窗口",
   safe: "安全",
   riskCount: "{count} 风险",
-  // 配置面板
+  // Configuration panel
   configBar: "菜单栏",
   configPanel: "浮窗",
   configDesktop: "桌面小组件",
@@ -117,7 +117,7 @@ export const widget = {
   themeDark: "暗色",
   themeSystem: "跟随系统",
   resetDefaults: "恢复默认",
-  // 贾维斯播报（casual / concise 由语气切换）
+  // Jarvis broadcast (casual/concise switched by tone)
   jarvisIdle: "全部空闲，我在盯着。",
   jarvisIdleConcise: "无活动",
   jarvisDanger: "老板，发现 {count} 处高风险，先别急着跑任务。",
@@ -132,7 +132,7 @@ export const widget = {
   jarvisSessionsConcise: "今日会话 {count} 场",
   jarvisTotal: "今天一共烧掉 {tokens} tokens。",
   jarvisTotalConcise: "今日 {tokens}",
-  // 桌面小组件
+  // desktop widget
   dwTools: "TOOLS",
   dwActive: "{count} 活跃",
   dwSecurity: "SECURITY",
@@ -153,11 +153,11 @@ export const widget = {
   dwIdle: "空闲",
   dwToolTop: "今日消耗 Top {count}",
   dwCost: "估算成本 {cost}",
-  // 浮窗底部
+  // floating window bottom
   openDashboard: "打开",
   generateReport: "生成简报",
   openSettings: "设置",
-  // 托盘
+  // pallet
   trayToday: "今日",
   trayWeek: "7 天",
   trayMonth: "30 天",

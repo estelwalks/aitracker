@@ -127,7 +127,7 @@ test("getMessage: {var} 插值(合成带参消息)", async () => {
 
 test("getMessage: 当前语言缺失回退 zh-CN, zh 也缺失返回 key 路径", async () => {
   await loadAllCatalogs();
-  // en-US 删掉 nav.home → 回退 zh
+  // en-US delete nav.home → fallback zh
   const stripped = JSON.parse(JSON.stringify(catalogs["en-US"])) as Record<
     string,
     unknown
@@ -139,7 +139,7 @@ test("getMessage: 当前语言缺失回退 zh-CN, zh 也缺失返回 key 路径"
     "首页总览",
   );
 
-  // zh 也没有 → 返回 key 路径
+  // There is no zh → return key path
   assert.equal(
     getMessage(catalogs["zh-CN"] as Translations, "no.such.key"),
     "no.such.key",
@@ -149,7 +149,7 @@ test("getMessage: 当前语言缺失回退 zh-CN, zh 也缺失返回 key 路径"
 test("getMessage: 复数 {one, other} 按 count 选择(en-US)", async () => {
   await loadAllCatalogs();
   const en = catalogs["en-US"] as Translations;
-  // 直接构造一个复数叶子消息验证选择逻辑
+  // Directly construct a plural leaf message to verify the selection logic
   const withPlural = {
     ...en,
     common: {

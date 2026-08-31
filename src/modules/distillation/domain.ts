@@ -19,7 +19,7 @@ import type {
 const OPAQUE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 /**
  * Redaction (not wholesale rejection) for distilled text. Everyday technical
- * prose — "npm run", "git 工作流", "API key 的安全管理" — is retained; only
+ * prose — "npm run", "git workflow", "API key security management" — is retained; only
  * genuine private fragments are removed so the distilled persona / task memory
  * keeps its content (Bug: the previous all-or-nothing regex collapsed any
  * node/npm/git mention into a useless placeholder). Mirror of the knowledge
@@ -42,7 +42,7 @@ function sanitizeDistilledText(value: string): string {
 }
 
 // The memory/persona prompts mandate a top-level H1 that duplicates the asset
-// type ("# 任务记忆" / "# 用户画像"), which the card's type badge already
+// type ("# Task Memory" / "# User Portrait"), which the card's type badge already
 // carries. Stripping it keeps the stored body a clean document (the memory
 // title comes from the entry's `title`), so the card never reads as the
 // heading rendered twice. Mirrors the prototype's memory bodies, which have
@@ -198,7 +198,7 @@ export function candidateText(
   // Keep the distilled prose; redact only private fragments (paths → ~/,
   // credential values → [REDACTED]). A realistic developer persona that
   // mentions node/npm/git must flow through to the memory module intact.
-  // A prompt-mandated redundant H1 ("# 任务记忆" / "# 用户画像") is dropped —
+  // A prompt-mandated redundant H1 ("# Task Memory" / "# User Portrait") is dropped —
   // the memory card's type badge already labels it, and without the strip the
   // stored body's first line reads as a second title (title/body look swapped).
   const sanitized = stripRedundantHeading(

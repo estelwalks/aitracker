@@ -43,13 +43,13 @@ type NavItem = {
     | "/chats";
   label: MessageKey;
   icon: typeof LayoutDashboard;
-  /** 高亮强调项（对齐 V3.0 原型：蒸馏工作台） */
+  /** Whether this item receives the reference design's highlighted treatment. */
   hero?: boolean;
 };
 
-/** 侧边导航（扁平单层，按原型顺序）：首页总览 / Agent概览 / 蒸馏工作台 /
- * 记忆 / 日报周报 / 会话管理 / Skill 管理 / 安全检测 / 安全市场 / 燃烧榜。
- * 数据来源与设置固定在底部。 */
+/** Side navigation (flat single layer, in prototype order): Home Overview / Agent Overview / Distillation Workbench /
+ * Memory / Daily and weekly reports / Session management / Skill management / Security detection / Security market / Burning list.
+ * Data sources and settings are pinned at the bottom. */
 const navItems: readonly NavItem[] = [
   { to: "/", label: "nav.home", icon: LayoutDashboard },
   { to: "/agents", label: "nav.agents", icon: IdCard },
@@ -75,8 +75,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(184);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const searchStr = useRouterState({ select: (s) => s.location.searchStr });
-  // 浮窗小组件（/widget?mode=float）复用本壳层，但不属于主窗口：不渲染自绘标题栏，
-  // 顶部也不留标题栏占位。
+  // The floating window widget (/widget?mode=float) reuses this shell, but does not belong to the main window: the self-drawn title bar is not rendered.
+  // There is no title bar space at the top either.
   const isWidgetFloat = searchStr.includes("mode=float");
   const chromeOffset = isWidgetFloat ? 0 : WINDOW_CHROME_HEIGHT;
 
@@ -237,9 +237,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </main>
         </div>
 
-        {/* 全局隐私承诺条：常驻底部（参照 V3.0 原型 PrivacyStrip）。从侧边栏
-          右侧开始铺开（left = railWidth），不覆盖侧边栏底部的「收起」按钮，
-          否则收起后无法再点开侧边栏。 */}
+        {/* Persistent privacy strip starts at the rail's right edge (left = railWidth),
+          avoids the sidebar's bottom collapse button, and keeps the sidebar usable. */}
         <div
           className="aitracker-privacy-dock fixed right-0 bottom-0 z-40 transition-[left] duration-200"
           style={{ left: railWidth }}

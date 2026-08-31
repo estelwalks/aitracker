@@ -9,30 +9,30 @@ import {
 import { STORAGE_KEY_PREFIX } from "../../../lib/app-config";
 
 /**
- * 小组件配置偏好（SQLite app_preferences 独立 key）。
+ * Widget configuration preferences (SQLite app_preferences independent key).
  *
- * 移植自原型 `src/lib/widget-prefs.ts` 的结构与 API：
- * `useWidgetPrefs` / `setWidgetPref` / `resetWidgetPrefs`；与原型不同，
- * 本项目的 Tab 为 安全/用量/今日，且不依赖原型 mock 库。
+ * Ported from the structure and API of the prototype `src/lib/widget-prefs.ts`:
+ * `useWidgetPrefs` / `setWidgetPref` / `resetWidgetPrefs`; unlike prototype,
+ * The tab of this project is Security/Usage/Today, and it does not rely on the prototype mock library.
  */
 
-/** 菜单栏图标样式 */
+/** Menu bar icon style */
 export type MenuBarStyle = "icon" | "icon-num" | "icon-dot";
-/** 点击菜单栏图标的行为 */
+/** Behavior of clicking menu bar icon */
 export type MenuBarClick = "panel" | "main";
-/** 浮窗三 Tab：安全 / 用量 / 今日 */
+/** Floating window three Tab: Security / Usage / Today */
 export type WidgetTab = "safety" | "usage" | "today";
-/** 打开浮窗时的默认 Tab；"last" 表示恢复上次关闭的 */
+/** The default Tab when opening a floating window; "last" means restoring the last closed tab */
 export type DefaultTab = WidgetTab | "last";
-/** 贾维斯语气：口语化 / 简洁 / 关闭（不显示文案） */
+/** Jarvis Tone: Colloquial / Concise / Closed (do not display copy) */
 export type Tone = "casual" | "concise" | "off";
-/** 轮播间隔（秒）；0 = 手动切换 */
+/** Carousel interval (seconds); 0 = manual switching */
 export type Rotate = 5 | 10 | 30 | 0;
-/** 小号桌面小组件内容 */
+/** Small desktop widget content */
 export type SmallContent = "orb" | "safety";
-/** 中号桌面小组件内容 */
+/** Medium desktop widget content */
 export type MediumContent = "brief" | "today" | "waste" | "safety";
-/** 小组件颜色主题 */
+/** Widget color theme */
 export type WidgetTheme = "dark" | "system";
 export interface WidgetPrefs {
   menuBarEnabled: boolean;
@@ -90,7 +90,7 @@ function parseStored(value: unknown): WidgetPrefs {
     return DEFAULT_WIDGET_PREFS;
   }
   const parsed = value as Partial<WidgetPrefs>;
-  // 只取已知字段，避免脏数据污染；未知字段被丢弃。
+  // Only known fields are taken to avoid dirty data pollution; unknown fields are discarded.
   return {
     ...DEFAULT_WIDGET_PREFS,
     ...(typeof parsed.menuBarEnabled === "boolean"
@@ -143,7 +143,7 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-/** 读取当前内存中的偏好；React 订阅建立后从 SQLite 水合。 */
+/** Reads the current in-memory preference; React hydrates it from SQLite after the subscription is established. */
 export function readWidgetPrefs(): WidgetPrefs {
   return state;
 }
@@ -173,8 +173,8 @@ export async function resetWidgetPrefs(): Promise<void> {
 }
 
 /**
- * 仅测试使用：清空模块内存态并强制下次读取重新水合，
- * 使持久化水合用例可独立验证。
+ * Only for test use: clear the module memory state and force rehydration for the next read.
+ * Make persistence hydration use cases independently verifiable.
  */
 export function __resetWidgetPrefsModuleForTest(): void {
   state = DEFAULT_WIDGET_PREFS;
@@ -194,7 +194,7 @@ export async function __hydrateWidgetPrefsForTest(): Promise<void> {
   await ensureHydrated();
 }
 
-/** 响应式读取小组件偏好（服务端渲染返回默认值）。 */
+/** Responsive reading of widget preferences (server-side rendering returns default values). */
 export function useWidgetPrefs(): {
   prefs: WidgetPrefs;
   hydrated: boolean;
@@ -219,7 +219,7 @@ export function useWidgetPrefs(): {
   return { prefs, hydrated, set };
 }
 
-/** 语气改写：口语化 / 简洁 / 关闭（返回空串表示不显示）。 */
+/** Tone rewriting: colloquial / concise / closed (returning an empty string means not displaying). */
 export function toneLine(tone: Tone, casual: string, concise: string): string {
   if (tone === "off") return "";
   return tone === "concise" ? concise : casual;

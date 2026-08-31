@@ -6,11 +6,11 @@ import type {
 } from "./migration.server.ts";
 
 /**
- * Sources 一键迁移（Story B-300）——server fn 边界。
+ * Sources one-click migration (Story B-300) - server fn boundary.
  *
- * validator 与 handler 都动态 import `*.server.ts`（校验与扫描逻辑只在
- * 服务端执行；TanStack Start 的 validator 仅在 `env === "server"` 时运行），
- * 浏览器 bundle 只保留 RPC 客户端引用，路径与扫描实现不进入前端。
+ * Both validator and handler dynamically import `*.server.ts` (the verification and scanning logic is only in
+ * Server-side execution; TanStack Start's validator only runs when `env === "server"`),
+ * The browser bundle only retains the RPC client reference, the path and scan implementation does not go into the front end.
  */
 export const migrateSourceSkills = createServerFn({ method: "POST" })
   .validator(

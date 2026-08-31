@@ -40,7 +40,7 @@ const TREND_KEY: Record<NonNullable<RoastRow["trend"]>, MessageKey> = {
   flat: "tracker.row.trendFlat",
 };
 
-/** 浪费指数徽标配色：越高越危险（与原型阈值一致）。 */
+/** Waste Index Logo Color: The higher, the more dangerous (consistent with the prototype threshold). */
 function wasteBadge(waste: number): string {
   if (waste >= 45) return "bg-danger/15 text-danger";
   if (waste >= 28) return "bg-warn/15 text-warn";
@@ -94,7 +94,7 @@ export function RoastBoard({
     value,
     label: t(DIMENSION_KEY[value]),
   }));
-  // 用 reduce 代替 Math.max(...) 展开：会话榜行数可能很大，避免栈溢出。
+  // Use reduce instead of Math.max(...) expansion: the number of session lists may be large, avoid stack overflow.
   const maxTok = rows.reduce((max, row) => Math.max(max, row.tokens), 1);
 
   return (

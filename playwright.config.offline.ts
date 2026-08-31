@@ -13,7 +13,7 @@ import { defineConfig, devices } from "playwright/test";
  * requests to 127.0.0.1 — verified in this repo's harness — so the initial
  * navigation cannot happen while offline), then drops the network and asserts
  * the app keeps rendering: exchange rates come from the cache/built-in fallback
- * ("内置基准" source, never a network round-trip on the page path) and no
+ * ("built-in benchmark" source, never a network round-trip on the page path) and no
  * white screen / load-failed boundary appears.
  *
  * The server reuses a seeded throwaway stale home as `AITRACKER_USAGE_HOME`

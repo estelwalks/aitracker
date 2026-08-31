@@ -1,17 +1,17 @@
 /**
- * Claude Code 上下文采集器。
+ * Claude Code context collector.
  *
- * 从 Claude Code 会话 JSONL 的 `message.content` block 数组里提取已脱敏的
- * 工具调用 / Skill 调用 / 命令统计，构建 `LocalUsageContext`。
+ * Extract desensitized content from the `message.content` block array of Claude Code session JSONL
+ * Tool calls/Skill calls/command statistics, build `LocalUsageContext`.
  *
- * Clean-room 合规（docs/compliance/CLEAN_ROOM.md §隐私口径）：
- * - 只读 content block 的结构元数据：`type`（thinking/text/tool_use）、
- *   `name`（工具名）、`input` 的字段名（skill/command）。
- * - 工具参数正文不采集、不持久化；命令经 safeSignature 脱敏为
- *   `executable + 子命令` 签名（与 codex-context 同口径）。
- * - Skill 名、工具名、MCP server/tool 名属统计字段，允许采集。
+ * Clean-room compliance (docs/compliance/CLEAN_ROOM.md § Privacy Policy):
+ * - Read-only structural metadata of content block: `type` (thinking/text/tool_use),
+ *   `name` (tool name), field name of `input` (skill/command).
+ * - The tool parameter text is not collected or persisted; the command is desensitized by safeSignature.
+ *   `executable + subcommand` signature (same caliber as codex-context).
+ * - Skill name, tool name, MCP server/tool name are statistical fields and are allowed to be collected.
  *
- * 按 content block 的 type/name 分类，并使用应用自有类型与分类口径。
+ * Classify according to the type/name of the content block, and use the application's own type and classification caliber.
  */
 
 import type {
@@ -27,7 +27,7 @@ interface JsonObject {
   [key: string]: unknown;
 }
 
-/** Claude Code 工具名 -> 应用工具分类。 */
+/** Claude Code tool name -> application tool category. */
 function claudeToolCategory(name: string): LocalUsageToolCategory {
   if (name === "Bash" || name === "exec_command") return "execution";
   if (name === "Edit" || name === "Write" || name === "apply_patch")
@@ -46,7 +46,7 @@ function claudeToolCategory(name: string): LocalUsageToolCategory {
   return "other";
 }
 
-/** 规范化 MCP 工具名 mcp__server__tool -> mcp_server_tool。 */
+/** Normalize MCP tool names mcp__server__tool -> mcp_server_tool. */
 function normalizeMcpName(raw: string): string {
   const parts = raw.split("__");
   if (parts.length >= 3) {
@@ -57,7 +57,7 @@ function normalizeMcpName(raw: string): string {
   return "mcp_unknown";
 }
 
-/** 规范化工具名（保留可读标识，限制长度与字符集）。 */
+/** Normalize tool names (preserve human-readable identifiers, limit length and character set). */
 function normalizeToolName(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.length === 0 || trimmed.length > 80) return "unknown_tool";
@@ -65,7 +65,7 @@ function normalizeToolName(raw: string): string {
   return trimmed.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80) || "unknown_tool";
 }
 
-/** 从命令字符串提取脱敏签名（executable + 首个子命令），与 codex 口径一致。 */
+/** Extract the desensitized signature (executable + first subcommand) from the command string, consistent with the codex caliber. */
 function safeSignature(command: string): {
   executable: string;
   safeSignature: string;
@@ -137,10 +137,10 @@ export function collectClaudeToolResults(message: unknown): ClaudeToolResult[] {
 }
 
 /**
- * 从一条 Claude Code 记录的 message.content 提取上下文聚合。
+ * Extract contextual aggregation from the message.content of a Claude Code record.
  *
- * 不做 output token 分摊（由 buildContextBreakdown 统一归因）；只采集
- * tools/skills/commands 的结构与调用次数。
+ * No output token allocation (unified attribution by buildContextBreakdown); only collection
+ * The structure and number of calls of tools/skills/commands.
  */
 export function collectClaudeContext(
   message: unknown,
@@ -148,7 +148,7 @@ export function collectClaudeContext(
   const msg = isObject(message) ? message : undefined;
   const content = msg?.content;
   if (!Array.isArray(content)) {
-    // 部分记录 content 为字符串（纯文本助手回复）
+    // Partial record content is a string (plain text assistant reply)
     if (typeof content === "string" && content.length > 0) {
       return { textResponse: true };
     }
@@ -177,7 +177,7 @@ export function collectClaudeContext(
       if (existing) existing.calls += 1;
       else toolsMap.set(`${category}:${name}`, { name, category, calls: 1 });
 
-      // Skill 调用：name === "Skill"，input.skill 是 skill 名
+      // Skill call: name === "Skill", input.skill is the skill name
       if (rawName === "Skill") {
         const input = isObject(block.input) ? block.input : {};
         const skillName = asString(input.skill);
@@ -187,7 +187,7 @@ export function collectClaudeContext(
         }
       }
 
-      // 命令执行：Bash / exec_command，提取脱敏签名
+      // Command execution: Bash/exec_command, extract desensitized signature
       if (rawName === "Bash" || rawName === "exec_command") {
         const input = isObject(block.input) ? block.input : {};
         const command = asString(input.command) ?? asString(input.cmd) ?? "";
@@ -216,7 +216,7 @@ export function collectClaudeContext(
     .map(([name, calls]) => ({ name, calls }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // 合并相同签名的命令
+  // Merge commands with the same signature
   const mergedCommands = mergeCommands(commands);
 
   const context: LocalUsageContext = {
@@ -229,7 +229,7 @@ export function collectClaudeContext(
   return Object.keys(context).length === 0 ? undefined : context;
 }
 
-/** 合并相同 executable+signature 的命令统计，累加 calls。 */
+/** Combine command statistics with the same executable+signature and accumulate calls. */
 function mergeCommands(
   commands: LocalUsageCommandStat[],
 ): LocalUsageCommandStat[] {

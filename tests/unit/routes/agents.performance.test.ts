@@ -12,16 +12,32 @@ const page = readFileSync(
 );
 
 test("Agent overview loader waits only for its workspace snapshot", () => {
+  assert.match(route, /validateSearch/);
+  assert.match(route, /safeAgentSearch/);
   assert.match(route, /const data = await getSkillWorkspace\(\)/);
   assert.doesNotMatch(route, /getAgentUsageOverview/);
   assert.doesNotMatch(route, /getSecuritySkillVerdicts/);
 });
 
 test("Agent analytics and security status load after first route paint", () => {
+  assert.match(page, /const \{ agent \} = Route\.useSearch\(\)/);
+  assert.match(page, /initialAgentId=\{agent\}/);
   assert.match(page, /void Promise\.all/);
   assert.match(page, /getAgentUsageOverview/);
   assert.match(page, /getSecuritySkillVerdicts/);
   // P2-16: a failed fetch renders a retryable error panel, never a skeleton.
   assert.match(page, /status === "loading"\) return <RoutePending/);
   assert.match(page, /LoadErrorPanel/);
+});
+
+test("Agent overview uses the deep-linked Agent as its initial selection", () => {
+  const overview = readFileSync(
+    new URL(
+      "../../../src/modules/skill-catalog/presentation/ToolOverview.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(overview, /initialToolId\?: string/);
+  assert.match(overview, /useState<string \| null>\(\s*\(\) => initialToolId/);
 });

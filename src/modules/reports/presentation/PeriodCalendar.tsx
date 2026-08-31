@@ -35,9 +35,10 @@ const densityOpacity = (n: number) =>
   n === 0 ? 0 : n <= 2 ? 0.35 : n <= 5 ? 0.6 : n <= 9 ? 0.8 : 1;
 
 /**
- * 桌面端日历选择器（V3.0 原型对齐）：日 / 周 / 月三种粒度，带会话密度点。
- * 自包含：按钮（CalendarDays + 短标签）展开下拉，点选后回调 `onSelect`。
- * 密度全部来自 loader 的 `SessionDensity`（真实会话，绝不做假数据）。
+ * Desktop calendar picker aligned with the reference design: day, week, and month
+ * granularities with session-density indicators.
+ * Self-contained: Button (CalendarDays + short label) expands the drop-down, and calls back `onSelect` after clicking.
+ * Density all comes from loader's `SessionDensity` (real session, never fake data).
  */
 export function PeriodCalendar({
   granularity,

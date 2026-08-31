@@ -4,7 +4,7 @@ import type { ExportRow } from "./types.ts";
  * Fixed CSV column header, in on-disk order. The Chinese labels are the
  * user-facing field names and are reused verbatim as JSON object keys (see
  * json.ts). The four trailing columns are machine-readable stable values
- * (docs/plan v1.2 导出: raw USD cost, display amount, currency, rate, rate
+ * (docs/plan v1.2 export: raw USD cost, display amount, currency, rate, rate
  * date) and are intentionally language-neutral.
  */
 export const CSV_HEADER = [
@@ -85,7 +85,7 @@ function resolveSourceLabel(
  * (e.g. `CSV_HEADER.map((_, i) => t(`export.column.${...}`))`). When omitted,
  * the zh-CN `CSV_HEADER` is used — so zh-CN output stays byte-identical and
  * the JSON export keeps its Chinese machine keys regardless of UI language
- * (数据导出键保持兼容, see json.ts).
+ * (Data export keys remain compatible, see json.ts).
  *
  * @param rows          Usage rows to export, in the order they should appear.
  * @param sourceLabels  Optional `sourceId → displayLabel` map.

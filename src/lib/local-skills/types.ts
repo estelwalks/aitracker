@@ -29,14 +29,14 @@ export interface SkillInstallation {
   updateReason: string;
 }
 
-/** SKILL.md frontmatter `form` 形态：完整包 / 工作流 / Prompt。 */
+/** SKILL.md frontmatter `form` form: complete package / workflow / Prompt. */
 export type SkillForm = "package" | "workflow" | "prompt";
 
 export interface LocalSkill {
   id: string;
   name: string;
   description: string | null;
-  /** 形态（frontmatter.form 归一化；缺失视为完整包 package）。 */
+  /** Form (frontmatter.form normalized; missing as complete package). */
   form: SkillForm | null;
   lastUsedAt: string | null;
   /** Total bytes of all files under the skill directory (browser-safe). */

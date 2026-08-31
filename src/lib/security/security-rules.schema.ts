@@ -18,7 +18,7 @@ export const SecuritySeveritySchema = z.enum(["高危", "中危", "低危"]);
 export type SecuritySeverity = z.infer<typeof SecuritySeveritySchema>;
 
 export const BuiltinSecurityRuleSchema = z.object({
-  /** Stable lowercase-kebab id; never reused (docs: 唯一规则 ID). */
+  /** Stable lowercase-kebab id; never reused (docs: unique rule ID). */
   id: z
     .string()
     .min(1)
@@ -40,7 +40,7 @@ export const SecurityRulesFileSchema = z.object({
 export type SecurityRulesFile = z.infer<typeof SecurityRulesFileSchema>;
 
 /**
- * Build-time pattern safety gate (docs: 构建期安全正则校验). Hard checks:
+ * Build-time pattern safety gate (docs: Build-time pattern safety gate). Hard checks:
  * non-empty, ≤500 chars, compiles with the `i` flag (the runtime compiler never
  * applies `g`, avoiding lastIndex state), and no dangerous catastrophic-
  * backtracking shapes (nested/overlapping quantifiers, ambiguous multi-branch

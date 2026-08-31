@@ -44,7 +44,7 @@ test("stale 快照时首页立即渲染，不阻塞且无错误", async ({ page 
   const loadMs = Date.now() - startedAt;
 
   expect(response?.status() ?? 0).toBeLessThan(400);
-  // stale 快照走 O(1) 读取路径直接返回：首屏不应因数据过期而阻塞或重扫。
+  // The stale snapshot takes O(1) read path and returns directly: the first screen should not be blocked or rescanned due to data expiration.
   expect(loadMs, "stale 快照首屏应在预算内返回").toBeLessThan(10_000);
   await expect(page.getByText("页面加载失败")).toHaveCount(0);
   await expect(page.locator("main")).toBeVisible();
@@ -70,7 +70,7 @@ test("离线时页面仍正常渲染，汇率快照可用且无网络白屏", as
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
-  // 在线加载首屏并导航到设置页（loader 需要本地 RPC，必须先在线完成）。
+  // Load the home screen online and navigate to the settings page (the loader requires local RPC and must be completed online first).
   const response = await page.goto("/", { waitUntil: "domcontentloaded" });
   expect(response?.status() ?? 0).toBeLessThan(400);
   await expect(page.getByText("页面加载失败")).toHaveCount(0);
@@ -80,8 +80,8 @@ test("离线时页面仍正常渲染，汇率快照可用且无网络白屏", as
     page.getByRole("heading", { name: "设置", exact: true }),
   ).toBeVisible();
 
-  // 断网后：已渲染的页面保持可用，汇率区继续使用已有快照（缓存、内置
-  // 基准或此前的实时快照），读路径从不因断网而发起新的网络请求。
+  // After disconnection: The rendered page remains available, and the exchange rate area continues to use existing snapshots (cache, built-in
+  // baseline or previous real-time snapshot), the read path never initiates new network requests due to network outages.
   await context.setOffline(true);
   await expect(page.getByText(/1 USD = /).first()).toBeVisible();
   await expect(page.getByText(/实时|缓存|内置基准/).first()).toBeVisible();
@@ -96,7 +96,7 @@ test("离线时页面仍正常渲染，汇率快照可用且无网络白屏", as
 test("多窗口 Widget 浮窗均正常渲染且无错误", async ({ page, context }) => {
   test.skip(!hasStaleHome, "需要 playwright.config.stale-home.ts");
 
-  // 第一个窗口。
+  // The first window.
   const pageErrors1: string[] = [];
   page.on("pageerror", (error) => pageErrors1.push(error.message));
   const response1 = await page.goto("/widget?mode=float", {
@@ -108,7 +108,7 @@ test("多窗口 Widget 浮窗均正常渲染且无错误", async ({ page, contex
   // assert the shell landmark without triggering strict-mode ambiguity.
   await expect(page.locator("main").first()).toBeVisible();
 
-  // 第二个窗口（同一浏览器上下文，独立 renderer；init 脚本需单独挂载）。
+  // The second window (same browser context, independent renderer; init script needs to be mounted separately).
   const page2 = await context.newPage();
   await installStableLocaleInit(page2);
   const pageErrors2: string[] = [];

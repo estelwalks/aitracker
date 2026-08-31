@@ -4,8 +4,8 @@ import { X } from "lucide-react";
 import { useI18n } from "../../../lib/i18n/context";
 
 /**
- * 记忆模块统一弹层（V3.0 原型 Modal 骨架）：标题栏 + 滚动体 + 底部操作区。
- * MemoryForm 与删除确认共用，保证两处弹层视觉一致。
+ * Shared memory modal skeleton: title bar, scrollable body, and action footer.
+ * MemoryForm is shared with delete confirmation to ensure that the two elastic layers are visually consistent.
  */
 export function MemoryModal({
   title,

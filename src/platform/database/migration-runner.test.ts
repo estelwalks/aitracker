@@ -26,7 +26,7 @@ interface TestScope {
   after(fn: () => void): void;
 }
 
-const APP_VERSION = "3.0.0-test";
+const APP_VERSION = "test-version";
 
 const INITIAL_SCHEMA_TABLES = [
   ...INITIAL_SCHEMA_SQL.matchAll(/CREATE TABLE (\w+)/g),

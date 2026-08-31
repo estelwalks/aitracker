@@ -63,7 +63,7 @@ test("toExportCsv: 可传入本地化表头, 缺省时保持中文 CSV_HEADER", 
     out.split("\r\n")[0],
     "Date,Tool,Model,Project,Input Tokens,Output Tokens,Cache Read,Cache Write,Reasoning Tokens,Cost,costDisplay,currency,rate,rateDate",
   );
-  // 缺省表头与 zh-CN 输出逐字一致(数据键兼容)
+  // The default header is word-for-word consistent with zh-CN output (data key compatible)
   assert.equal(toExportCsv([]), toExportCsv([], undefined, [...CSV_HEADER]));
 });
 

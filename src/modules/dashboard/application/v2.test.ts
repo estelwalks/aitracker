@@ -490,7 +490,7 @@ test("Dashboard V2 derives safe previous-window, model and project aggregates", 
   assert.equal(view.comparison.events.previous, 4);
   assert.equal(view.comparison.sessions.previous, 2);
   assert.equal(view.comparison.sessions.deltaPercent, 50);
-  // 费用环比同样只暴露百分比（pricingAvailable 且无 unknownEvents）。
+  // The cost ratio also only exposes the percentage (pricingAvailable and no unknownEvents).
   assert.equal(view.comparison.cost.previous != null, true);
   assert.equal(view.comparison.cost.deltaPercent != null, true);
   assert.equal(view.comparison.cacheRate.deltaPoints, -6.666666666666666);
@@ -590,7 +590,7 @@ test("cache rate comparison reports percentage points against the previous windo
     "2026-08-11",
   );
 
-  // 上一窗口缓存率 50%，当前 25% → 相对环比 -50%。
+  // The cache rate of the previous window is 50%, and the current cache rate is 25% → -50% relative to the previous window.
   assert.equal(view.comparison.cacheRate.previous, 50);
   assert.equal(view.comparison.cacheRate.deltaPoints, -25);
   assert.equal(view.comparison.cacheRate.deltaPercent, -50);

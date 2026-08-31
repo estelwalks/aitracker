@@ -138,7 +138,7 @@ export function validateStartDistillationInput(
     (input as { promptText: string }).promptText.trim().length > 0
       ? (input as { promptText: string }).promptText.trim().slice(0, 4_000)
       : undefined;
-  // Output kind (prototype 出产物): skill/workflow/prompt/profile/task. Unknown
+// Output kind (prototype output): skill/workflow/prompt/profile/task. Unknown
   // values are dropped so the server keeps its memory default.
   const rawKind = (input as { kind?: unknown })?.kind;
   const kind =

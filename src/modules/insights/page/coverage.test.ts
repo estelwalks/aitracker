@@ -48,19 +48,11 @@ test("registered route files match the non-lazy route set exactly", () => {
       (name) =>
         name.endsWith(".tsx") &&
         !name.endsWith(".lazy.tsx") &&
-        name !== "__root.tsx" &&
-        name !== "sitemap[.]xml.ts",
+        name !== "__root.tsx",
     )
     .sort();
   const registered = Object.values(SURFACE_ROUTE_FILES).slice().sort();
   assert.deepEqual(files, registered);
-});
-
-test("the sitemap file is explicitly excluded from the surface registry", () => {
-  const files = readdirSync(ROUTES_DIR);
-  assert.ok(files.includes("sitemap[.]xml.ts"), "sitemap file should exist");
-  const registered = new Set(Object.values(SURFACE_ROUTE_FILES));
-  assert.equal(registered.has("sitemap[.]xml.ts"), false);
 });
 
 test("settings page keeps only the insight settings toggle", () => {
