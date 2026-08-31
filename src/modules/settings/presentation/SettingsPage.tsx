@@ -135,9 +135,9 @@ export interface SettingsLoaderData {
   readonly storageUsage: StorageUsage | null;
   readonly storageError: string | null;
   /**
-   * Deep-link target: `?section=scan` opens 扫描与安全,
-   * `?section=reports` opens 日报与周报, `?section=model` opens 模型与 AI；旧的 `?section=menu-bar-app`
-   * 仍然映射到应用偏好。
+   * Deep-link target: `?section=scan` opens scanning and security,
+   * `?section=reports` opens daily and weekly reports, `?section=model` opens models and AI; old `?section=menu-bar-app`
+   * Still mapped to app preferences.
    */
   readonly section?: SettingsSection;
 }

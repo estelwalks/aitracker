@@ -40,7 +40,7 @@ interface TestScope {
   after(fn: () => void): void;
 }
 
-const APP_VERSION = "3.0.0-test";
+const APP_VERSION = "test-version";
 const SQLITE_VERSION = "99.0.0";
 
 function versionsProvider(): RuntimeVersionsProvider {

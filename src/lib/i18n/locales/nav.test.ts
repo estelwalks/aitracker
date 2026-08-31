@@ -5,7 +5,7 @@ import { nav as zh } from "./zh-CN/nav.ts";
 import { nav as ja } from "./ja-JP/nav.ts";
 import { nav as ko } from "./ko-KR/nav.ts";
 
-const requiredV3Navigation = [
+const requiredNavigation = [
   "home",
   "agents",
   "distill",
@@ -24,12 +24,12 @@ const requiredV3Navigation = [
   "agentActive",
 ] as const;
 
-test("all locales expose the shared V3 navigation contract", () => {
+test("all locales expose the shared navigation contract", () => {
   for (const locale of [en, zh, ja, ko]) {
     assert.deepEqual(
       Object.keys(locale).sort(),
-      [...requiredV3Navigation].sort(),
+      [...requiredNavigation].sort(),
     );
-    for (const key of requiredV3Navigation) assert.notEqual(locale[key], "");
+    for (const key of requiredNavigation) assert.notEqual(locale[key], "");
   }
 });

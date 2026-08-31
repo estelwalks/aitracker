@@ -2,7 +2,7 @@ import type { LocalUsageEvent } from "../../../lib/local-usage/types.ts";
 import type { UsageTrackerBucket } from "../contracts.ts";
 
 /**
- * Token burn leaderboard ("燃烧榜") pure logic. All inputs are real, sanitized
+ * Token burn leaderboard ("burn list") pure logic. All inputs are real, sanitized
  * usage events; every figure (tokens, cache rate, waste index, trend) is
  * derived from observed token counts. There is deliberately no fabricated
  * ranking or mock hash trend — the MoM trend compares a real trailing window

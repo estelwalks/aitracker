@@ -1,20 +1,20 @@
 /**
- * 生成后自动质检（"质量检测器"）：对蒸馏产物（Skill 文件夹 / Prompt 包 /
- * 工作流文档）按 SKILL_PROMPT 的规则做程序化校验，不再只靠模型自检。
- * 纯函数、无副作用，方便单测与前后端共用。
+ * Automatic quality check ("Quality Checker") after generation: on the distillation product (Skill folder / Prompt package /
+ * Workflow document) performs programmatic verification according to the rules of SKILL_PROMPT, instead of relying solely on model self-checking.
+ * Pure function, no side effects, convenient for single testing and front-end and back-end sharing.
  *
- * 分级口径：
- * - error：硬性问题（缺 frontmatter、超大、SKILL.md 含未完成标记、空文件），
- *   任一不通过即整体「不合格」。
- * - warn：软性建议（描述长度/关键词/泛化词、scripts/ 决策、脚本容错等），
- *   只提示、不判不合格，避免合理产物被一票否决。
+ * Grading caliber:
+ * - error: hard problem (missing frontmatter, oversized, SKILL.md contains unfinished mark, empty file),
+ *   Failure to pass any one of them means the entire test is "failed".
+ * - warn: soft suggestions (description length/keywords/general words, scripts/decision-making, script fault tolerance, etc.),
+ *   Only prompts and does not judge failure to prevent legitimate products from being rejected by one vote.
  */
 export interface SkillQualificationCheck {
   readonly id: string;
   readonly label: string;
   readonly pass: boolean;
   readonly severity: "error" | "warn";
-  /** 不通过时的具体原因（给用户看）。 */
+  /** The specific reason for failure (shown to the user). */
   readonly detail?: string;
 }
 
@@ -23,7 +23,7 @@ export interface SkillQualification {
   readonly checks: readonly SkillQualificationCheck[];
 }
 
-/** 执行/操作类 description 关键词（命中 ≥2 → 需要 scripts/）。 */
+/** Execution/operation class description keyword (hits ≥2 → scripts/ required). */
 const EXECUTION_KEYWORDS = [
   "自动化",
   "脚本",
@@ -64,7 +64,7 @@ const EXECUTION_KEYWORDS = [
   "compile",
 ];
 
-/** description 应避免的泛化词（建议级）。 */
+/** description General words to avoid (recommendation level). */
 const FORBIDDEN_GENERIC = [
   "所有",
   "任何",
@@ -75,7 +75,7 @@ const FORBIDDEN_GENERIC = [
   "whatever",
 ];
 
-/** 未完成标记。 */
+/** Incomplete mark. */
 const UNFINISHED_MARKERS = ["TODO", "FIXME", "HACK", "XXX"];
 
 const MAX_SKILL_BYTES = 8 * 1024;
@@ -115,9 +115,9 @@ export interface DistilledSkillFile {
 }
 
 /**
- * 生成侧兜底质检用的文件构建：把模型原始输出转成"文件集"以便 `qualifySkillFiles`
- * 检查。与 UI 的 buildSkillFiles 保持同一口径（skill 解析 `<file>` 标签；
- * prompt/brief 把摘要作为 PROMPT/WORKFLOW 正文）。
+ * Generate file construction for side-pocket quality inspection: convert the original output of the model into a "file set" for `qualifySkillFiles`
+ * Check. Maintains the same caliber as UI's buildSkillFiles (skill parses `<file>` tag;
+ * prompt/brief uses summary as PROMPT/WORKFLOW text).
  */
 export function buildFilesForQualification(
   summary: string,
@@ -137,8 +137,8 @@ export function buildFilesForQualification(
       .filter((file) => file.path.length > 0 && file.content.length > 0);
     if (parsed.some((file) => file.path.toLowerCase() === "skill.md"))
       return parsed;
-    // 未解析出 SKILL.md → 整个摘要视为内容，frontmatter 检查自然判不合格，
-    // 从而触发重试。
+    // SKILL.md is not parsed → the entire summary is regarded as content, and the frontmatter check will naturally fail.
+    // This triggers a retry.
     return [{ path: "SKILL.md", content: summary }];
   }
   const docPath = kind === "brief" ? "WORKFLOW.md" : "PROMPT.md";
@@ -152,16 +152,16 @@ export function buildFilesForQualification(
 }
 
 /**
- * 对一组产物文件做质检。`kind` 决定适用规则：
- * - skill：完整 SKILL_PROMPT 规则（description 长度/关键词、scripts/ 决策等）
- * - prompt / brief：结构规则（frontmatter、体积、无未完成标记、文件非空）
+ * Conduct quality inspection on a set of product documents. `kind` determines which rules apply:
+ * - skill: complete SKILL_PROMPT rules (description length/keywords, scripts/decisions, etc.)
+ * - prompt/brief: structure rules (frontmatter, volume, no unfinished mark, file is not empty)
  */
 export function qualifySkillFiles(
   files: readonly { path: string; content: string }[],
   kind: "skill" | "prompt" | "brief",
 ): SkillQualification {
-  // 质检是兜底增强：任何异常都按"通过"返回，绝不抛错、绝不让质检炸掉主流程。
-  // 有结果返回即可，质检只在正常路径上给用户参考。
+  // Quality inspection is all-encompassing: any abnormality will be returned by pressing "Pass", errors will never be thrown, and quality inspection will never blow up the main process.
+  // As long as the results are returned, the quality inspection will only provide users with reference on the normal path.
   try {
     return qualifySkillFilesInner(files, kind);
   } catch {
@@ -173,8 +173,8 @@ function qualifySkillFilesInner(
   files: readonly { path: string; content: string }[],
   kind: "skill" | "prompt" | "brief",
 ): SkillQualification {
-  // 防御：超大产物/超多文件直接判不合格并返回，避免在渲染/保存路径上做
-  // 无谓的重型处理（质检是纯函数，本就不会死循环，这里只防"卡"）。
+  // Defense: Very large products/too many files will be directly judged as unqualified and returned to avoid doing so on the rendering/save path.
+  // Unnecessary heavy-duty processing (quality inspection is a pure function, there is no infinite loop, this is just to prevent "stuck").
   const totalBytes = files.reduce(
     (sum, file) => sum + new TextEncoder().encode(file.content).byteLength,
     0,
@@ -307,7 +307,7 @@ function qualifySkillFilesInner(
     `${Math.round(size / 1024)}KB`,
   );
 
-  // SKILL.md 内的未完成标记是硬性问题；references/scripts 里的仅作建议。
+  // The unfinished marks in SKILL.md are hard questions; the ones in references/scripts are only suggestions.
   const skillUnfinished = UNFINISHED_MARKERS.filter((marker) =>
     skillFile.content.includes(marker),
   ).slice(0, 3);

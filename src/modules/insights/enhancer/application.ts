@@ -447,7 +447,7 @@ export function createInsightEnhancer(
       if (!validation.ok) {
         // The model's output shape varies per attempt; a fresh attempt may
         // comply with the schema. Attribute the rejection so the settings
-        // page can say WHY instead of a generic "模型响应异常".
+        // page can say WHY instead of a generic "Model responded abnormally".
         return {
           result: {
             status: "invalid-output",

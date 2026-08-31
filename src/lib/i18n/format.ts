@@ -93,7 +93,7 @@ export function formatTime(locale: Locale, value: string | Date): string {
 }
 
 /**
- * Currency fraction-digit rules (docs/plan v1.2 展示货币策略):
+ * Currency fraction-digit rules (docs/plan v1.2 showing currency strategies):
  * JPY/KRW always use 0 digits; CNY/USD keep the magnitude-based behavior
  * (0 digits for amounts ≥ 100, otherwise 2 digits).
  */

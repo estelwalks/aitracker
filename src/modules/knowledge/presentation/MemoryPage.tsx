@@ -64,7 +64,7 @@ function download(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-/** 单条记忆导出 MD：frontmatter + 完整正文（FR-014），浏览器本地下载（不触碰网络）。 */
+/** Single memory export MD: frontmatter + complete text (FR-014), download locally from the browser (without touching the network). */
 function downloadMemoryMarkdown(
   item: MemoryEntry,
   t: ReturnType<typeof useI18n>["t"],
@@ -89,10 +89,11 @@ function downloadMemoryMarkdown(
 }
 
 /**
- * 记忆库整页（V3.0 原型对齐）：JarvisInsight 概览、数据概览统计条、搜索 + 类型
- * 筛选、卡片网格（2/3 列）、编辑表单与删除确认。所有
- * 数据来自 knowledge 模块的 renderer-safe server fns —— 仅投影元数据与 provenance
- * 摘要，绝不返回对话正文（CLEAN_ROOM）。
+ * Memory hub page aligned with the reference design: JarvisInsight summary, overview
+ * stats, search + type filters, card grid (2/3 columns), edit form, and delete
+ * confirmation. All
+ * Data comes from the renderer-safe server fns of the knowledge module - only projection metadata and provenance
+ * Summary, never return the conversation body (CLEAN_ROOM).
  */
 export function MemoryPage() {
   const { t, format } = useI18n();
@@ -132,8 +133,8 @@ export function MemoryPage() {
       .filter((item) => (type === "all" ? true : item.type === type))
       .filter((item) => {
         if (!keyword) return true;
-        // 与原型一致（搜「正文」）：搜 title/正文/来源/项目。正文是记忆产物
-        // （FR-014），绝不返回对话正文（CLEAN_ROOM）。
+        // Consistent with the prototype (search "text"): search title/text/source/project. Text is a product of memory
+        // (FR-014), never return the conversation body (CLEAN_ROOM).
         return [
           item.title,
           item.body ?? item.summary,
@@ -257,7 +258,7 @@ export function MemoryPage() {
         dotsLabel={t("memory.insightDots")}
       />
 
-      {/* 数据概览（V3.0 原型对齐） */}
+      {/* Overview statistics */}
       <div className="overflow-hidden rounded-xl bg-card">
         <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
           {statCards.map((card) => (
@@ -282,7 +283,7 @@ export function MemoryPage() {
         </div>
       </div>
 
-      {/* 筛选栏（V3.0 原型：aitracker-panel + 玻璃分段） */}
+      {/* Filters: aitracker-panel with a glass segmented control */}
       <div className="aitracker-panel flex flex-wrap items-center gap-2 p-2">
         <SearchInput
           value={q}
@@ -445,8 +446,8 @@ function MemoryCard({
   onDelete: () => void;
 }) {
   const { t, format } = useI18n();
-  // 透明白玻璃卡片：无强配色，仅用图标区分类型（画像=人像、任务记忆=大脑），
-  // 正文用紧凑 Markdown 渲染（标题/列表/粗体），让卡片内容更丰富。
+  // Transparent white glass card: no strong color matching, only icons are used to distinguish types (portraits = portraits, task memory = brain),
+  // The main text is rendered in compact Markdown (title/list/bold) to make the card richer.
   const Icon = item.type === "profile" ? UserRound : Brain;
   const bodyText = item.body ?? item.summary ?? "";
 

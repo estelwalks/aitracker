@@ -30,7 +30,7 @@ import {
 /**
  * Built-in baseline exchange rates (offline fallback). These are static
  * approximations — the UI labels their source as "fallback" and never presents
- * them as live prices (docs/plan v1.2 汇率与离线).
+ * them as live prices (docs/plan v1.2 Exchange Rates and Offline).
  */
 export const BUILTIN_RATES: Record<Currency, number> = {
   CNY: 7.2,
@@ -137,7 +137,7 @@ function nanoToUsd(nano: bigint): number {
  * and app code), so the function is effectively pure. A single dashboard
  * render re-aggregates the same snapshot across source/model/project/tokenType
  * plus the grand total — caching turns those repeated passes into O(1) lookups
- * (~4× fewer rule-matching calls on a 10万-event snapshot, NFR-001).
+ * (~4× fewer rule-matching calls on a 100,000-event snapshot, NFR-001).
  */
 const eventCostCache = new WeakMap<LocalUsageEvent, CostEstimate>();
 
@@ -239,7 +239,7 @@ export function estimateUsageCost(events: LocalUsageEvent[]): CostEstimate {
  * to its date in resolve.ts). Bucketing events by (source, model, day) lets us
  * run `estimateEventCost` once per bucket on the aggregated tokens and scale
  * the result by the bucket's event count — identical numbers, without
- * materializing up to 5 full event copies per input event (10万事件 → ~50万
+ * materializing up to 5 full event copies per input event (100,000 events → ~500,000
  * objects).
  */
 interface TokenCountFields {

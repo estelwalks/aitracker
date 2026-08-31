@@ -65,8 +65,6 @@ export function rootHead({ loaderData }: { loaderData?: RootLoaderData }) {
         content: getMessage(catalog, "meta.description", brandParams),
       },
       { name: "author", content: APP_NAME },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
       // Desktop starts must remain offline-safe. The CSS font stacks prefer

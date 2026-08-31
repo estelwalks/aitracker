@@ -4,8 +4,8 @@ import { useI18n } from "../lib/i18n/context.tsx";
 import { AITrackerButton } from "./aitracker.tsx";
 
 /**
- * 全局统一的「蒸馏」按钮：会话列表、会话详情、片段蒸馏均使用同一形态与文案。
- * 未选择内容时置灰，并给出一致的提示。
+ * Globally unified "Distillation" button: session list, session details, and segment distillation all use the same form and copy.
+ * When no content is selected, it will be grayed out and a consistent prompt will be given.
  */
 export function DistillButton({
   count,

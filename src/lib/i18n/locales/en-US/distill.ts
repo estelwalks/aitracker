@@ -1,4 +1,4 @@
-/** Distillation workbench copy (aligned with the V3.0 prototype). */
+/** Distillation workbench copy aligned with the reference design. */
 export const distill = {
   jarvisTitle: "Jarvis Insights",
   insightDots: "Insight carousel",

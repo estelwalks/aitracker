@@ -9,8 +9,8 @@ import { useEffect, useState, type ReactNode } from "react";
 
 /**
  * Shared Jarvis insight card: a rounded hero with an orb, a typewriter
- * message, a dot carousel and a rotate control. Visually mirrors the V3.0
- * prototype. The shared page-level default is `variant="hero"`; the compact
+ * message, a dot carousel and a rotate control. Visually mirrors the reference
+ * design. The shared page-level default is `variant="hero"`; the compact
  * `variant="inline"` remains available only for embedded surfaces. The
  * component stays i18n-free — callers pass fully localized `lines` and labels.
  *
@@ -30,7 +30,7 @@ import { useEffect, useState, type ReactNode } from "react";
  * - `pills` renders extra chips in the title row (after the title), matching
  *   the homepage's `dashboard-hero-pill` status pills.
  * - `severity` renders a neutral three-state (info/attention/risk) badge.
- * - `source="enhanced"` adds a small neutral "AI 增强" mark to the title row.
+ * - `source="enhanced"` adds a small neutral "AI Enhanced" mark to the title row.
  * - `onEnhance` + `enhanceLabel` render an enhance button (caller passes
  *   `onEnhance` only when the envelope is enhanceable).
  * - `onAction` + `actionLabel` render an action button (caller closes over
@@ -117,9 +117,9 @@ export function JarvisInsight({
   severity?: JarvisSeverity;
   /** Localized label for the severity badge (optional). */
   severityLabel?: string;
-  /** `enhanced` adds a small neutral "AI 增强" mark to the title row. */
+  /** `enhanced` adds a small neutral "AI enhanced" mark to the title row. */
   source?: "rules" | "enhanced";
-  /** Localized "AI 增强" mark label. */
+  /** Localized "AI enhanced" mark label. */
   enhancedLabel?: string;
   /** Renders an enhance button when provided together with `enhanceLabel`. */
   onEnhance?: () => void;
@@ -135,7 +135,7 @@ export function JarvisInsight({
   const hero = variant === "hero";
   const Heading = headingLevel === 2 ? "h2" : "h1";
   // Callers may map their insight lines during every parent render. Use the
-  // content signature as the dependency so a click on "换一条" cannot be
+  // content signature as the dependency so a click on "Change" cannot be
   // immediately reset by a newly allocated-but-identical array.
   const linesKey = JSON.stringify(lines);
   const safeLines = lines.filter((line) => line.length > 0);

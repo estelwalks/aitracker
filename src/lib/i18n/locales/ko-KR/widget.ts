@@ -43,13 +43,13 @@ export const widget = {
   noData: "데이터 없음",
   noDataDesc:
     "아직 로컬 AI 도구 사용량이 관측되지 않았습니다. 스캔 후 실시간 지표가 표시됩니다",
-  // 플로팅 패널 헤더
+  // floating panel header
   updatedAt: "{time} 업데이트",
   refresh: "새로고침",
   widgetSettings: "위젯 설정",
   backToPanel: "패널로 돌아가기",
   nextLine: "다음",
-  // 보안 탭
+  // security tab
   securityTitle: "보안 스캔",
   scannedSkills: "{count}개 Skill",
   safeCount: "{count} 안전",
@@ -60,7 +60,7 @@ export const widget = {
   lastScan: "마지막 스캔 {time}",
   scanNow: "지금 검사",
   goScan: "검사하러 가기",
-  // 사용량 탭
+  // Usage Tab
   usageTitle: "토큰 사용량",
   totalTokens: "총 사용량",
   estimatedCost: "예상 비용",
@@ -73,14 +73,14 @@ export const widget = {
   enabled: "켜기",
   disabled: "끄기",
   trendPoint: "{date} {tokens}",
-  // 오늘 탭
+  // today tab
   todaySummary: "오늘 요약",
   toolCount: "도구",
   sessionCount: "세션",
   tokenCount: "토큰",
   last7d: "최근 7일",
   todayByTool: "오늘 도구별",
-  // 메뉴바
+  // menu bar
   barStyle: "표시 스타일",
   barStyleHint: "숫자=실시간 토큰 사용량, 상태 점=보안 초록/노랑/빨강",
   barIcon: "아이콘만",
@@ -91,7 +91,7 @@ export const widget = {
   barClickMain: "메인 창 열기",
   safe: "안전",
   riskCount: "{count} 위험",
-  // 설정 패널
+  // settings panel
   configBar: "메뉴바",
   configPanel: "플로팅 패널",
   configDesktop: "데스크톱 위젯",
@@ -122,7 +122,7 @@ export const widget = {
   themeDark: "다크",
   themeSystem: "시스템 따르기",
   resetDefaults: "기본값 복원",
-  // 자비스 안내 (구어체/간결은 톤으로 전환)
+  // Jarvis Guide (Convert colloquial/succinct to tone)
   jarvisIdle: "모두 대기 중, 지켜보고 있어요.",
   jarvisIdleConcise: "활동 없음",
   jarvisDanger:
@@ -140,7 +140,7 @@ export const widget = {
   jarvisSessionsConcise: "오늘 세션 {count}",
   jarvisTotal: "오늘 총 {tokens} 토큰을 사용했습니다.",
   jarvisTotalConcise: "오늘 {tokens}",
-  // 데스크톱 위젯
+  // desktop widgets
   dwTools: "TOOLS",
   dwActive: "{count} 활성",
   dwSecurity: "SECURITY",
@@ -161,11 +161,11 @@ export const widget = {
   dwIdle: "대기",
   dwToolTop: "오늘 소비 Top {count}",
   dwCost: "예상 비용 {cost}",
-  // 패널 하단
+  // bottom of panel
   openDashboard: "열기",
   generateReport: "보고서 생성",
   openSettings: "설정",
-  // 트레이
+  // tray
   trayToday: "오늘",
   trayWeek: "7일",
   trayMonth: "30일",

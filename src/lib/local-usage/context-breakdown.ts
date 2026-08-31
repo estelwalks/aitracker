@@ -29,7 +29,7 @@ export interface LocalUsageContextBreakdown {
   /**
    * Per-message-role token view for the context source tree.
    *
-   * Clean-room safe (docs/compliance/CLEAN_ROOM.md §隐私口径): this is a cache-proxy
+   * Clean-room safe (docs/compliance/CLEAN_ROOM.md § Privacy Policy): this is a cache-proxy
    * heuristic that only RELABELS the event's existing token fields — it reads no
    * message role/content. Mapping:
    *   cachedInputTokens        → conversation_history (cache hits = re-sent history)
@@ -105,8 +105,8 @@ function splitInteger(value: number, parts: number, index: number): number {
 }
 
 /**
- * 按 calls 权重把一个数值分配给多个份额，返回每个份额的分得量（含取整余数兜底，
- * 保证 sum === value）。weights 长度 = 份额数。
+ * Distribute a value to multiple shares according to the call weight, and return the amount of each share (including rounding the remainder,
+ * Guaranteed sum === value). weights length = number of shares.
  */
 function allocateByWeights(value: number, weights: number[]): number[] {
   const sum = weights.reduce((s, w) => s + w, 0);
@@ -121,7 +121,7 @@ function allocateByWeights(value: number, weights: number[]): number[] {
   return floor;
 }
 
-/** 按 calls 权重把完整 LocalTokenCounts 分配给各工具，返回每工具的 counts。 */
+/** Assigns the full LocalTokenCounts to each tool by call weight, returning counts per tool. */
 function allocateCountsByWeights(
   counts: LocalTokenCounts,
   weights: number[],
@@ -327,13 +327,13 @@ export function buildContextBreakdown(
       addObservedRow(observedSkills, skill.name, skill.calls);
     }
 
-    // 归因模型 A：
-    // - input 系列（input/cached/cacheCreation）归 messageRoles（对话历史/
-    //   用户输入/系统提示词），按角色互斥。
-    // - 工具调用分摊**完整事件 token**（input+cache+output），作为独立归因
-    //   视角——即「为调用这些工具而消耗的全部上下文」。与 Messages 不互斥
-    //   （Messages 与 Tool calls 的视图可并存）。
-    //   故 SourceDetail 对工具/MCP 维度不显示「合计=100%」式的百分比。
+    // Attribution model A:
+    // - input series (input/cached/cacheCreation) belongs to messageRoles (dialogue history/
+    // User input/system prompt words), mutually exclusive by role.
+    // - Tool call amortization **complete event token** (input+cache+output) as independent attribution
+    // Perspective - that is, "the total context consumed in invoking these tools." Not mutually exclusive with Messages
+    // (Views for Messages and Tool calls can coexist).
+    // Therefore, SourceDetail does not display the "Total=100%" percentage for the tool/MCP dimension.
     const fullCounts = distributableCounts(event);
 
     if (eventTools.length === 0) {
@@ -342,7 +342,7 @@ export function buildContextBreakdown(
       continue;
     }
 
-    // 按 calls 权重分摊完整 token 给各工具（模型 A：工具分摊完整事件 token）
+    // Allocate complete tokens to each tool according to call weight (Model A: Tools allocate complete event tokens)
     const weights = eventTools.map((t) => t.calls);
     const toolCounts = allocateCountsByWeights(fullCounts, weights);
     const allocations = new Map<string, LocalTokenCounts>();

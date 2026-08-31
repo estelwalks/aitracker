@@ -463,7 +463,7 @@ export async function saveCandidateAsSkill(
     });
   }
   const skillPath = join(targetDir, "SKILL.md");
-  // 生成后自动质检：对产物按候选 kind 应用对应规则，随保存结果返回。
+  // Automatic quality inspection after generation: apply corresponding rules to the product according to the candidate kind, and return it with the saved results.
   const qualification = qualifySkillFiles(
     validated.map((file) => ({
       path: relative(targetDir, file.targetFile),

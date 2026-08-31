@@ -35,12 +35,12 @@ const CYCLE_OPTIONS: readonly SecurityScanCycle[] = [
 ];
 
 /**
- * 安全页自动扫描定时：与 V3.0 原型 ScheduleBar 对齐的卡片。
+ * Automatic security-scan schedule card aligned with the reference design.
  *
- * 头部为「状态行 + 开关 + 设置」，展开后仅两行（周期 / 时间），
- * 下方不再有说明步骤。读写真实扫描计划（getScanSchedule/setScanSchedule），
- * 「调整范围」跳转 /settings 全量扫描配置页。
- * SSR 安全 —— 客户端挂载后才解析 client 并读取计划，未就绪前渲染中性加载态。
+ * The header is "Status Line + Switch + Settings". After expansion, there are only two lines (cycle/time).
+ * There are no further steps below. Read and write the real scan schedule (getScanSchedule/setScanSchedule),
+ * "Adjustment range" jumps to the /settings full scan configuration page.
+ * SSR security - the client is parsed and the plan is read only after the client is mounted, and the neutral loading state is rendered before it is ready.
  */
 export function AutoScanGuide({
   onNextScanAtChange,
@@ -92,7 +92,7 @@ export function AutoScanGuide({
     async (patch: Partial<SecurityScanScheduleView>) => {
       if (client == null || schedule == null) return;
       const previous = schedule;
-      // 永远展开完整 schedule 再写单个字段，绝不重构部分对象。
+      // Always expand the complete schedule before writing a single field, and never reconstruct partial objects.
       const next = { ...schedule, ...patch };
       setSchedule(next);
       setSaving(true);

@@ -7,7 +7,7 @@
  * scripts/generate-pricing-imports.mjs); the runtime compiler trusts the
  * already-validated generated data and builds a read-only index.
  *
- * Design rules (docs/develop/architecture/AITracker-模型定价与转换规则-架构设计文档.md):
+ * Design rules (docs/develop/architecture/AITracker-Model Pricing and Conversion Rules-Architecture Design Document.md):
  * - Matchers are restricted (exact/alias/prefix/suffix/token-sequence/any);
  *   no regex, no substring-contains, no JS expressions.
  * - Amounts are decimal strings of non-negative integers compiled to bigint

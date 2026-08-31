@@ -2,16 +2,16 @@ import { useI18n } from "../../../../lib/i18n/context";
 
 /**
  * Four workbench metrics aligned with the prototype (lines 762-777):
- * 已选素材 (~tokens) / 素材 Token (本次输入预估) / 蒸馏次数 (累计 / 进行中…)
- * / 已入库 (保存为 Skill). Runs and committed both aggregate the persisted
- * totals plus this page session's increments — the same 口径, so a reload
+ * Selected materials (~tokens) / Material Token (estimated input this time) / Distillation times (accumulated / in progress...)
+ * / Already stored (saved as Skill). Runs and committed both aggregate the persisted
+ * totals plus this page session's increments — the same caliber, so a reload
  * shows the persisted count instead of resetting one card and keeping the
  * other.
  *
  * The token figure is a documented heuristic estimate derived from the
  * selected sessions' real turn counts — the privacy-safe renderer projection
  * deliberately omits raw token totals, so it is presented as an estimate
- * (sub-line "本次输入预估"), never as a measured value.
+ * (sub-line "This input estimate"), never as a measured value.
  */
 export function DistillMetrics({
   selectedCount,
@@ -31,8 +31,8 @@ export function DistillMetrics({
   busy: boolean;
 }) {
   const { t, format } = useI18n();
-  // 原型指标条：已选素材 sub 恒显「~{tokens} tokens」，素材 Token 恒显数值
-  // （非空才出现，无「—」；估计值本身已带「~」语义，见 E-200）。
+  // Prototype indicator bar: The selected material sub always displays "~{tokens} tokens", and the material Token always displays the value.
+  // (Appears only if it is not empty, without "-"; the estimated value itself has "~" semantics, see E-200).
   const cards = [
     {
       k: t("distill.metricMaterial"),

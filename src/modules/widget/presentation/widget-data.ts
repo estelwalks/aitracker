@@ -36,7 +36,7 @@ export interface WidgetToolStat {
   readonly name: string;
   readonly tokens: number;
   readonly events: number;
-  /** null 表示定价不可用（与 dashboard 的 estimatedCostUsd 语义一致）。 */
+  /** null means pricing is not available (same semantics as dashboard's estimatedCostUsd). */
   readonly costUsd: number | null;
 }
 
@@ -49,18 +49,18 @@ export interface WidgetDataModel {
   readonly week: WidgetPeriodStats;
   readonly month: WidgetPeriodStats;
   readonly total: WidgetPeriodStats;
-  /** 产出可用性（蒸馏输出 / 日报），null 表示该能力未提供数据。 */
+  /** Output availability (distillation output/daily), null means no data is provided for this capability. */
   readonly outputs: {
     readonly distilled: number | null;
     readonly reports: number | null;
     /**
-     * 知识库已批准的记忆资产数（approved/published），来自 knowledge 模块；
-     * null 表示拉取失败或未提供数据（UI 显示「—」）。
+     * The number of memory assets approved by the knowledge base (approved/published), from the knowledge module;
+     * null means that the pull failed or no data was provided (the UI displays "—").
      */
     readonly memory: number | null;
   };
   readonly security: SecurityScanOverview;
-  /** 手动重新拉取（status + model + memory 失效）。 */
+  /** Manually re-pull (status + model + memory invalid). */
   readonly refresh: () => void;
 }
 
@@ -90,7 +90,7 @@ const emptyPeriod = (): WidgetPeriodStats => ({
   topTools: [],
 });
 
-/** 知识库已批准（approved/published）的记忆资产数；拉取失败返回 null。 */
+/** The number of memory assets that have been approved/published by the knowledge base; null is returned if the pull fails. */
 function countApprovedMemories(entries: readonly { status: string }[]): number {
   return entries.filter(
     (entry) => entry.status === "approved" || entry.status === "published",
@@ -103,9 +103,9 @@ const MODEL_KEY = (locale: Locale, revision: string | null) =>
 const MEMORY_KEY = ["widget-memory"] as const;
 
 /**
- * 小组件页统一数据源：紧凑 Widget 读模型（服务端预聚合四周期）+ 安全扫描概览。
- * 首次渲染看到 loading 初始态（与 SSR 保持一致）；status 为空（无快照）时
- * 保持空态，后台刷新完成后 status 的 revision 变化会自动触发 model 拉取。
+ * Unified data source for widget pages: compact widget reading model (four cycles of server-side pre-aggregation) + security scanning overview.
+ * When rendering for the first time, you will see the loading initial state (consistent with SSR); when status is empty (no snapshot)
+ * Keep it empty. After the background refresh is completed, the revision change of status will automatically trigger the model pull.
  */
 export function useWidgetData(): WidgetDataModel {
   const { locale, t } = useI18n();
@@ -116,12 +116,12 @@ export function useWidgetData(): WidgetDataModel {
   const statusQuery = useQuery({
     queryKey: STATUS_KEY(locale),
     queryFn: () => getWidgetStatusReadModel({ data: locale }),
-    // 可见时每 60 秒轮询；document 隐藏时 React Query 自动暂停
-    // （refetchIntervalInBackground 默认 false）。
+    // Poll every 60 seconds when visible; React Query automatically pauses when the document is hidden
+    // (refetchIntervalInBackground defaults to false).
     refetchInterval: STATUS_INTERVAL_MS,
     staleTime: STATUS_INTERVAL_MS - 5_000,
-    // P4-T4-06: 恢复可见时立即校验 revision（无论隐藏多久），保证
-    // 回到窗口后 status/model 与后台刷新保持一致。
+    // P4-T4-06: Verify revision immediately when visible again (no matter how long it is hidden), guaranteed
+    // After returning to the window, status/model remains consistent with background refresh.
     refetchOnWindowFocus: "always",
   });
   const status = statusQuery.data;
@@ -217,8 +217,8 @@ export function useWidgetData(): WidgetDataModel {
 }
 
 /**
- * 小组件整体状态：无数据=idle，有高风险=danger，有可疑=warn，否则 live。
- * 供浮窗状态点 / 菜单栏灵魂点 / 桌面情绪球共用。
+ * The overall status of the widget: no data=idle, high risk=danger, suspicious=warn, otherwise live.
+ * Shared by floating window status points/menu bar soul points/desktop mood balls.
  */
 export function useWidgetMood(): WidgetMood {
   const { hasData, security } = useWidgetData();

@@ -2,7 +2,7 @@ import type { MessageKey } from "../../../../lib/i18n/messages";
 import type { CandidateOutput } from "../../contracts.ts";
 
 /**
- * Output-type catalog aligned with the V3.0 prototype's OUT_TYPES/OUT_GROUPS
+ * Output-type catalog aligned with the reference design's OUT_TYPES/OUT_GROUPS
  * (prototype `lib/distill-kinds.ts`: 5 types in 2 groups), mapped onto the
  * existing candidate `kind` contract:
  *
@@ -99,7 +99,7 @@ export function outTypeMeta(id: OutTypeId): OutTypeMeta {
   return OUT_TYPES.find((meta) => meta.id === id) ?? OUT_TYPES[0];
 }
 
-/** Memory-library output types (画像 / 任务记忆). */
+/** Memory-library output types (portrait / task memory). */
 export function isMemoryKind(kind: OutCandidateKind): boolean {
   return kind === "persona" || kind === "memory";
 }

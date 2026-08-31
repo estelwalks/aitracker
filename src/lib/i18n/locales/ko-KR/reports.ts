@@ -1,4 +1,4 @@
-/** /reports(브리핑 & 메모리) V3.0 프로토타입 정렬 문구. */
+/** /reports (Briefings & Memory) reference design copy. */
 export const reports = {
   insight: {
     title: "오늘의 인사이트",

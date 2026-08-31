@@ -32,9 +32,9 @@ const timeSpans: Record<TimeFilter, number> = {
 };
 
 /**
- * 扫描历史与原型保持一致：历史行只负责打开任务详情，Skill 名称和
- * 「Skill 扫描报告」入口统一在任务详情弹窗中展示，避免行内展开造成
- * 与原型不同的卡片高度和交互层级。
+ * The scan history is consistent with the prototype: the history line is only responsible for opening task details, Skill name and
+ * The "Skill Scan Report" entrance is uniformly displayed in the task details pop-up window to avoid in-line expansion.
+ * Different card heights and interaction levels than the prototype.
  */
 export function ScanHistory({
   entries,

@@ -1,6 +1,18 @@
 # AITracker
 
-[English](../README.md) | [简体中文](README_CN.md) | [日本語](README_JA.md) | [한국어](README_KO.md)
+<p align="center">
+  <img src="../public/favicon-dark.svg" alt="AITracker 로고" width="180" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/l3m0nc9/aitracker/stargazers"><img src="https://img.shields.io/github/stars/l3m0nc9/aitracker?style=flat-square&cacheSeconds=3600" alt="GitHub Stars" /></a>
+  <a href="https://github.com/l3m0nc9/aitracker/blob/main/LICENSE"><img src="https://img.shields.io/github/license/l3m0nc9/aitracker?style=flat-square&cacheSeconds=3600" alt="라이선스" /></a>
+  <a href="https://github.com/l3m0nc9/aitracker/releases/latest"><img src="https://img.shields.io/github/v/release/l3m0nc9/aitracker?style=flat-square&cacheSeconds=3600" alt="최신 릴리스" /></a>
+</p>
+
+<p align="center">
+  <a href="../README.md">English</a> | <a href="README_CN.md">简体中文</a> | <a href="README_JA.md">日本語</a> | <a href="README_KO.md">한국어</a>
+</p>
 
 > **사용한 토큰은 얼마인지, 비용은 얼마나 들었는지, 어떤 Agent 도구가 가장 유용한지 한눈에 확인하세요.**
 
@@ -33,6 +45,39 @@ Claude Code, Codex, Cursor, Cline, Gemini CLI, OpenCode……
 **AITracker는 이 모든 일을 한곳에 모아줍니다.**
 
 AI 사용 현황을 파악하고, AI 역량을 관리하며, Skills를 추출하고, 지식과 장기 기억을 축적합니다. AI를 일회성 도구가 아니라 계속 성장하는 작업 자산으로 만들어줍니다.
+
+---
+
+## 🚀 빠른 시작
+
+AITracker는 Electron, TanStack Start, React와 TypeScript로 만든 데스크톱 애플리케이션입니다. 필요한 `skill-scanner` 패키지도 저장소에 포함되어 있어 클론 후 바로 설치하고 개발할 수 있습니다.
+
+### 요구 사항
+
+- Node.js 24 이상
+- npm 10 이상
+- macOS 또는 Windows (완전한 데스크톱 환경)
+
+```bash
+git clone https://github.com/l3m0nc9/aitracker.git
+cd aitracker
+npm ci
+npm run dev:desktop
+```
+
+브라우저 개발 서버만 실행하려면 `npm run dev`를 사용하세요.
+
+### 빌드 및 테스트
+
+```bash
+npm run build:desktop       # Web 앱 및 Electron main / preload 번들
+npm run typecheck           # 앱 및 내장 scanner 타입 검사
+npm run lint                # 앱 및 내장 scanner 린트
+npm run test:all            # 단위, 도구, 데이터베이스 및 scanner 테스트
+npm run check:opensource-hygiene
+```
+
+플랫폼 설치 파일은 `npm run dist:mac` 또는 `npm run dist:win:x64`로 만들 수 있습니다. 전체 명령어, 생성 파일 정책과 저장소 구조는 [개발 가이드](DEVELOPMENT.md)를 참고하세요.
 
 ---
 
@@ -130,7 +175,7 @@ AI가 매번 처음부터 다시 시작하지 않도록 합니다.
 
 ---
 
-## 더 많은 AI Coding Tools 지원
+## 더 많은 AI 코딩 도구 지원
 
 AITracker는 여러 AI 도구를 대상으로 설계되었으며, 다음과 같은 주요 AI Coding Tools를 단계적으로 지원합니다.
 
@@ -140,7 +185,7 @@ AITracker는 여러 AI 도구를 대상으로 설계되었으며, 다음과 같�
 
 ---
 
-## Local First
+## 로컬 우선
 
 AITracker는 기본적으로 로컬에서 실행됩니다.
 
@@ -172,7 +217,6 @@ AITracker가 만들고자 하는 것이 바로 그것입니다.
 
 > **AI 파악 → 역량 관리 → 경험 추출 → 지속적인 축적**
 
----
 
 ## 기여하기
 
@@ -190,6 +234,6 @@ AITracker는 MIT License에 따라 배포됩니다. 자세한 내용은 [LICENSE
 
 ---
 
-## Star
+## 프로젝트 응원하기
 
 AITracker가 도움이 되었다면 프로젝트에 Star를 보내주세요. 감사합니다.

@@ -13,11 +13,11 @@ import {
 import { SecurityCard } from "./SecurityCard";
 
 /**
- * 不安全 Skill 名单：与 V3.0 原型一致的「不安全 Skill 名单」卡片。
+ * Unsafe Skill list card aligned with the reference design.
  *
- * 仅列出最近一次扫描中具有明确 warn/block 结论的现存 Skill。检测失败
- * 和未完成结果留在扫描历史中，不得伪装成已确认的安全风险。
- * 每页 10 项分页；「查看报告」打开该 Skill 的真实扫描报告弹窗。
+ * Only list existing Skills with an explicit warn/block conclusion from the most recent scan. Detection failed
+ * and outstanding results remain in the scan history and must not be disguised as confirmed security risks.
+ * There are 10 pagination items per page; "View Report" opens the real scan report pop-up window of this Skill.
  */
 export function UnsafeSkillList({
   entries,

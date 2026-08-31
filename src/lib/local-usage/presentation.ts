@@ -108,9 +108,9 @@ export function sourceLabel(source: LocalUsageSource | string): string {
   return MANIFEST_SOURCE_LABELS.get(source) ?? source;
 }
 
-// NOTE: 展示格式化统一走 src/lib/i18n/format.ts (locale 参数化)。
-// 本模块只保留纯数据逻辑;formatTokens/formatDateTime/formatEventTime
-// 的调用方改用 useI18n().format.*。
+// NOTE: For display formatting, use src/lib/i18n/format.ts (locale parameterization).
+// This module only retains pure data logic; formatTokens/formatDateTime/formatEventTime
+// The caller uses useI18n().format.* instead.
 
 export function filterDailyUsage(
   daily: LocalUsageDaily[],
@@ -162,16 +162,16 @@ export function totalsFromDaily(daily: LocalUsageDaily[]): LocalUsageTotals {
 }
 
 /**
- * 缓存命中率（口径说明）：
- *   命中率 = cachedInputTokens / (inputTokens + cachedInputTokens + cacheCreationInputTokens) × 100%
- * 其中：
- *   - inputTokens             = 未命中缓存、实际计费的输入 token（已扣除缓存命中部分）
- *   - cachedInputTokens       = 命中缓存的输入 token（按缓存价计费）
- *   - cacheCreationInputTokens = 本次写入缓存的输入 token（首次/变化片段，缓存写入价）
- * 分母是全部输入 token（含缓存命中与缓存写入），分子是命中缓存的 token。
- * 分母为 0 时返回 0（无输入则不构成命中率）。
- * 聚合层只产出原始计数（见各 scanner 的 totals），命中率属于展示层派生指标，
- * 由展示层统一调用本函数，保证各处口径一致。
+ * Cache hit rate (caliber description):
+ *   Hit rate = cachedInputTokens / (inputTokens + cachedInputTokens + cacheCreationInputTokens) × 100%
+ * Among them:
+ *   - inputTokens = input tokens that miss the cache and are actually charged (the cache hit part is deducted)
+ *   - cachedInputTokens = Input tokens that hit the cache (charged according to the cache price)
+ *   - cacheCreationInputTokens = the input token written to the cache this time (first time/change fragment, cache write price)
+ * The denominator is all input tokens (including cache hits and cache writes), and the numerator is the token that hits the cache.
+ * Returns 0 when the denominator is 0 (no input does not constitute a hit rate).
+ * The aggregation layer only produces raw counts (see the totals of each scanner), and the hit rate belongs to the display layer-derived indicator.
+ * This function is called uniformly by the display layer to ensure consistent caliber everywhere.
  */
 export function cacheRate(counts: LocalTokenCounts): number {
   const inputTotal =
@@ -186,9 +186,9 @@ export function shareOf(value: number, total: number): number {
 }
 
 /**
- * Compute the period-over-period (环比) percentage for a metric.
+ * Compute the period-over-period percentage for a metric.
  *
- * 环比 = (current − previous) / previous × 100%. For the "all"/"year" ranges
+ * Period = (current − previous) / previous × 100%. For the "all"/"year" ranges
  * there is no well-defined previous equal-length window, so this returns null
  * (the UI renders "−−"). Returns null whenever previous is 0 or non-finite to
  * avoid division-by-zero or misleading infinity deltas.

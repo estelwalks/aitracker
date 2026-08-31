@@ -338,7 +338,7 @@ async function showWidgetWindow(
   positionWidgetWindow(trayBounds);
 
   if (process.platform === "darwin") {
-    // macOS 菜单栏小组件惯例：浮于所有桌面空间（含全屏 Space）之上。
+    // macOS menu bar widget convention: float on all desktop spaces (including full-screen Space).
     widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     widgetWindow.setAlwaysOnTop(true, "floating");
   }
@@ -396,7 +396,7 @@ async function showWidgetWindow(
   }
 }
 
-/** macOS 菜单栏入口只负责切换浮窗，不附带其他菜单操作。 */
+/** The macOS menu bar entry is only responsible for switching floating windows and does not come with other menu operations. */
 async function toggleWidgetWindow(
   trayBounds: Electron.Rectangle,
 ): Promise<void> {
@@ -640,7 +640,7 @@ function registerIpcHandlers(): void {
   });
   ipcMain.handle(desktopIpc.windowClose, (event): void => {
     assertTrustedSender(event);
-    // 复用现有 close 拦截：隐藏到托盘（而非真正退出）。
+    // Reuse existing close interception: hide to tray (instead of actually exiting).
     mainWindow?.close();
   });
   ipcMain.handle(desktopIpc.windowIsMaximized, (event): boolean => {
@@ -695,7 +695,7 @@ function registerIpcHandlers(): void {
       // Legacy manual shortcut — pins the manual locale mode.
       const next = normalizeDesktopLocale(locale);
       if (next == null) {
-        // IPC 不接受任意 locale — only the four supported values.
+        // IPC does not accept any locale — only the four supported values.
         throw new TypeError("Unsupported locale");
       }
       if (!desktopStateBroker)
@@ -928,12 +928,12 @@ async function createMainWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     ...mainWindowSize,
     icon: currentAppIconPath() ?? undefined,
-    // 无边框 + 自绘标题栏：隐藏系统原生标题栏与窗口按钮，由渲染进程
-    // 提供与主题一致的深色标题栏（macOS 保留原生红绿灯按钮）。
+    // Borderless + self-drawn title bar: Hide the system's native title bar and window buttons, and the rendering process
+    // Provides a theme-consistent dark title bar (macOS retains native traffic light buttons).
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     autoHideMenuBar: true,
-    // 立即显示窗口（深色底避免白屏闪烁）：首次完整扫描可能耗时较久，
-    // 等待 ready-to-show 会让用户以为应用没有启动。
+    // Show window immediately (dark background to avoid white screen flickering): the first complete scan may take a long time,
+    // Waiting for ready-to-show will make the user think that the application has not started.
     show: true,
     backgroundColor: nativeIconAppearance() === "dark" ? "#0b0b10" : "#f6f7f9",
     title: APP_NAME,
@@ -1176,9 +1176,9 @@ if (!hasSingleInstanceLock) {
           desktopStateBroker!.writeScheduleRuntime(runtime),
         attempt: (schedule) => runAutomaticSecurityScan(schedule),
       });
-      // 打包后的 Windows/Linux 去掉默认 File/Edit/View 菜单栏（标题栏已自绘，
-      // 菜单栏既遮挡又难看）；开发模式与 macOS 保留：macOS 菜单在系统菜单栏，
-      // 开发模式需要默认快捷键（DevTools/Reload）。
+      // The packaged Windows/Linux removes the default File/Edit/View menu bar (the title bar has been drawn by itself,
+      // The menu bar is both blocked and ugly); development mode and macOS are retained: the macOS menu is in the system menu bar,
+      // Development mode requires the default shortcut key (DevTools/Reload).
       if (process.platform !== "darwin" && app.isPackaged) {
         Menu.setApplicationMenu(null);
       }
