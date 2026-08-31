@@ -597,9 +597,9 @@ async function assertManagedSkillPath(
     throw new AppError("errors.skills.symlinkEscape");
   }
 
-  // 必须指向单个 Skill:含 marker 的目录,或 `.md` 文件。防止把集合目录/父
-  // 目录(如 `~/.claude/skills/development`)当作卸载、安装或同步目标,导致
-  // 整目录被 `rm -rf`/回收。
+  // Must point to a single Skill: directory containing marker, or `.md` file. Prevent putting collection directory/parent
+  // Directories (such as `~/.claude/skills/development`) are used as uninstall, installation or synchronization targets, resulting in
+  // The entire directory is recycled with `rm -rf`/.
   const rule = RULE_BY_AGENT.get(matchingAgent);
   const markers = rule?.markers ?? DEFAULT_MARKERS;
   const entryStat = await lstat(candidateRealPath);
@@ -618,8 +618,8 @@ function containsParentTraversal(path: string): boolean {
 }
 
 /**
- * 可注入的 home/data 目录(与 ScanOptions 同构),供测试把全部 Skill
- * 操作隔离到临时根,避免触碰真实 `~/.claude/skills`。
+ * Injectable home/data directory (isomorphic with ScanOptions) for testing all Skills
+ * Operations are isolated to temporary roots to avoid touching the real `~/.claude/skills`.
  */
 interface SkillOpOptions {
   homeDirectory?: string;
@@ -627,7 +627,7 @@ interface SkillOpOptions {
   stateRepository?: SkillStateRepository;
 }
 
-/** 解析注入的数据目录:显式 dataDirectory 优先,否则跟随 homeDirectory。 */
+/** Parse the injected data directory: explicit dataDirectory takes precedence, otherwise homeDirectory follows. */
 function dataDirectoryFor(options: SkillOpOptions = {}): string {
   return resolve(
     options.dataDirectory ??
@@ -636,9 +636,9 @@ function dataDirectoryFor(options: SkillOpOptions = {}): string {
 }
 
 /**
- * 可恢复删除:把目标整体 rename 进回收目录并追加 JSONL 清单,
- * 取代不可逆的 `rm -rf`。清单即审计记录;`dataDirectory` 可注入
- * (测试用),默认数据目录。
+ * Recoverable deletion: rename the entire target into the recycling directory and append the JSONL list.
+ * Replaces irreversible `rm -rf`. The list is the audit record; `dataDirectory` can be injected
+ * (for testing), default data directory.
  */
 async function moveToTrash(
   targetPath: string,
@@ -657,7 +657,7 @@ async function moveToTrash(
     const trashPath = join(trashDir, `${base}-${suffix}`);
     try {
       await rename(targetPath, trashPath);
-      // 清单与操作日志尽力而为,不因记账失败而回滚/误报删除失败。
+      // The list and operation log will do their best to avoid rollback/false positive deletion failure due to accounting failure.
       const record = {
         trashedAt: new Date().toISOString(),
         action,
@@ -676,7 +676,7 @@ async function moveToTrash(
   throw new AppError("errors.skills.recycleWriteFailed");
 }
 
-/** 追加一条 Skill 操作日志(尽力而为,不阻断主流程)。 */
+/** Add a Skill operation log (do your best without blocking the main process). */
 async function appendSkillOpLog(
   entry: Record<string, unknown>,
   options: SkillOpOptions = {},
@@ -716,7 +716,7 @@ async function assertMarketSkillPath(
     throw new AppError("errors.skills.invalidSourcePath");
   }
 
-  // 受控临时根跟随注入的 dataDirectory(测试隔离),默认数据目录/tmp。
+  // The controlled temporary root follows the injected dataDirectory (test isolation), the default data directory /tmp.
   const temporaryRoot = join(dataDirectoryFor(options), "tmp");
   const [temporaryRootRealPath, sourceRealPath] = await Promise.all([
     realpath(temporaryRoot),
@@ -1087,22 +1087,22 @@ export async function readSkillFiles(
 }
 
 /**
- * 安装前置校验：目标工具必须真实安装，否则拒绝写入并给出明确提示。
+ * Pre-installation verification: The target tool must be truly installed, otherwise writing will be refused and a clear prompt will be given.
  *
- * IDE 类工具（如 Cursor）的配置目录可能只是应用残留、甚至由本应用写入
- * skill 目录时顺带创建，不足以证明工具本体已安装——因此对声明了
- * `detection.executable` 的 IDE 工具要求 PATH 中存在对应可执行文件
- * （Cursor 的 `cursor` 命令）。CLI 工具沿用目录探测的宽松判定，避免误伤
- * 已安装但未把 CLI 放进 PATH 的工具（如 Gemini CLI / Grok Build）。
+ * The configuration directory of IDE tools (such as Cursor) may be leftover from the application or even written by the application.
+ * The skill directory is created by the way, which is not enough to prove that the tool itself has been installed - so it is declared
+ * IDE tools for `detection.executable` require that the corresponding executable file exists in PATH
+ * (Cursor’s `cursor` command). The CLI tool follows the loose judgment of directory detection to avoid accidental damage.
+ * Tools that are installed but do not have the CLI in PATH (e.g. Gemini CLI / Grok Build).
  *
- * 仅在生产 home（未注入 `homeDirectory`）下执行——测试注入的临时 home 不
- * 触发该校验，从而保持隔离测试不依赖真实机器环境。
+ * Execute only under production home (without `homeDirectory` injected) - test injected temporary home does not
+ * This verification is triggered to keep the isolated test independent of the real machine environment.
  */
 export async function assertTargetToolInstalled(
   targetAgent: SkillAgent,
   options: SkillOpOptions = {},
 ): Promise<void> {
-  // 测试/工具注入的隔离 home 不执行真实环境校验。
+  // Isolated homes injected by tests/tools do not perform real environment verification.
   if (options.homeDirectory != null) return;
   const rule = RULE_BY_AGENT.get(targetAgent);
   const tool = rule
@@ -1132,8 +1132,8 @@ async function copySkillToAgent(
   if (!SKILL_AGENTS.includes(input.targetAgent))
     throw new AppError("errors.skills.unsupportedAgent");
 
-  // 未安装的工具不接受安装/同步写入（如只有残留 ~/.cursor 目录但没有
-  // Cursor 本体时，明确提示工具未安装而不是假装成功）。
+  // Tools that are not installed do not accept install/sync writes (e.g. have a residual ~/.cursor directory but no
+  // When using Cursor, explicitly prompt that the tool is not installed instead of pretending to be successful).
   await assertTargetToolInstalled(input.targetAgent, options);
 
   const roots = resolveAgentRoots(
@@ -1153,8 +1153,8 @@ async function copySkillToAgent(
   if (!isPathInside(targetRoot, targetPath))
     throw new AppError("errors.skills.invalidTargetPath");
 
-  // 自删防护:目标与源相同或互为祖先/子孙时,覆盖删除会连源一起毁掉
-  // (例如把 `~/.claude/skills/foo` 同步回 Claude Code 自身)。
+  // Self-deletion protection: When the target and the source are the same or ancestors/descendants of each other, overwriting and deleting will destroy the source together.
+  // (e.g. sync `~/.claude/skills/foo` back to Claude Code itself).
   const sourceResolved = resolve(input.sourcePath);
   const targetResolved = resolve(targetPath);
   if (

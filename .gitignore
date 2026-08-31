@@ -22,6 +22,6 @@ tests/fixtures/performance/fixture-10x.events.json
 .skill-scanner.json
 
 # External reference sample (downloaded zip + extracted project), not repo code
-docs/V3.0_*/project-sparkle-hub-*
+docs/*/project-sparkle-hub-*
 
 # Local agent skills directory (personal workflow tooling, not repo code)

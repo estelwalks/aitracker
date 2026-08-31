@@ -37,9 +37,9 @@ test("无快照时首页渲染空态而非错误页", async ({ page }) => {
   const loadMs = Date.now() - startedAt;
 
   expect(response?.status() ?? 0).toBeLessThan(400);
-  // 无快照页面应在预算内返回（首屏 ≤ 300ms + 开发模式余量）。
+  // Pages without snapshots should be returned within budget (above the fold ≤ 300ms + development mode margin).
   expect(loadMs).toBeLessThan(10_000);
-  // 必须渲染应用壳（PageBar/导航），而不是白屏或错误页。
+  // The app shell (PageBar/Navigation) must be rendered, not a white screen or error page.
   await expect(page.getByText("页面加载失败")).toHaveCount(0);
   await expect(page.locator("main")).toBeVisible();
   expect(pageErrors, "不应触发未捕获页面错误").toEqual([]);

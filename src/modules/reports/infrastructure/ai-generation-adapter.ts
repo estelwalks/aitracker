@@ -108,8 +108,8 @@ function fmtDuration(min: number): string {
 
 /**
  * Deterministic Chinese report draft built from the real collected context.
- * Mirrors the V3.0 prototype's `draftOf` structure: 摘要 / Agent 使用详情表 /
- * 蒸馏产出 / 安全概况 / 建议 / 页脚引用. Every figure comes from the redacted
+ * Mirrors the reference design's `draftOf` structure: summary / Agent usage table /
+ * Distillation Output / Safety Profile / Recommendations / Footer References. Every figure comes from the redacted
  * `context` aggregates — never fabricated, never raw sessions or paths.
  */
 export function buildOfflineReportDraft(

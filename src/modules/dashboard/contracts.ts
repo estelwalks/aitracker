@@ -176,9 +176,9 @@ export interface DashboardV2AvailabilityMetric {
 }
 
 export interface DashboardV2DistillationBreakdown {
-  /** 能力资产（skill 类蒸馏产物）。 */
+  /** Capability assets (skill-like distillation products). */
   readonly capability: number | null;
-  /** 记忆资产。 */
+  /** memory assets. */
   readonly memory: number | null;
 }
 

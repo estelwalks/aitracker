@@ -24,9 +24,9 @@ const STEPS = [
 ] as const;
 
 /**
- * 首次进入引导覆盖层,对齐原型 779-839:absolute 覆盖内容区,chart-1 模糊 blob、
- * HelpCircle 图标、两段介绍、2 列步骤网格 + 开始使用 CTA。遮罩可点击关闭;
- * 关闭后写入 SQLite 不再自动弹出,可在标题栏点「?」重看。
+ * Enter the boot overlay for the first time, align prototype 779-839: absolute coverage content area, chart-1 fuzzy blob,
+ * HelpCircle icon, two-paragraph introduction, 2-column steps grid + get started with CTA. The mask can be clicked to close;
+ * Writing to SQLite will no longer automatically pop up after closing. You can click "?" in the title bar to re-read.
  */
 export function DistillGuide({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();

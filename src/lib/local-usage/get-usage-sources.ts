@@ -120,7 +120,7 @@ export function deriveUsageSources(
 
     let status: UsageSourceStatus;
     if (installed) {
-      // "已接入" follows the installation/detection fact used by the
+// "connected" follows the installation/detection fact used by the
       // dashboard and Agent overview. Log availability is reported separately
       // by the status tabs and must not lower the installed-agent count.
       connectedCount += 1;

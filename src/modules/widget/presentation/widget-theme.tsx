@@ -4,8 +4,8 @@ import { useWidgetPrefs } from "./widget-prefs";
 import "./widget-theme.css";
 
 /**
- * 小组件预览的主题作用域：`widgetTheme === "dark"` 时在子树内强制应用暗色
- * 变量（应用处于亮色主题时预览仍为暗色）；`system` 时跟随应用主题。
+ * Theme scope for widget preview: Force dark color within subtree when `widgetTheme === "dark"`
+ * Variable (the preview remains dark when the app is in light theme); follows the app theme when `system` is used.
  */
 export function WidgetThemeScope({ children }: { children: ReactNode }) {
   const { prefs } = useWidgetPrefs();

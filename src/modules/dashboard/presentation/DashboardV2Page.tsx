@@ -247,7 +247,7 @@ export function DashboardV2Page({
         return t("dashboard.v2.baselinePrevious");
     }
   }, [period, t]);
-  // 热力图统计周期窗口：始终展示 12 个月，仅高亮该窗口（近 7 天 / 近 30 天…）。
+  // Heat map statistical period window: always displays 12 months, and only highlights this window (last 7 days/last 30 days...).
   const focusRange = useMemo(
     () => resolveUsageRange(period, from, to),
     [from, period, to],

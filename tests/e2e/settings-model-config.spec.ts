@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "playwright/test";
 
 test.beforeEach(async ({ page }) => {
-  // 固定浏览器系统语言为 zh-CN 且无存储偏好，保证默认语言为中文
-  // （与 locale.spec.ts 的既有做法一致）。
+  // Fixed browser system language to zh-CN and no stored preference, ensuring the default language is Chinese
+  // (Consistent with the existing practice of locale.spec.ts).
   await page.addInitScript(() => {
     window.localStorage.removeItem("aitracker-locale");
     window.localStorage.removeItem("aitracker-locale-mode");
@@ -11,14 +11,14 @@ test.beforeEach(async ({ page }) => {
       configurable: true,
     });
   });
-  // 偏好已迁移到 SQLite；通过真实 UI 将共享隔离数据库归一化为中文。
+  // Preferences migrated to SQLite; shared isolation database normalized to Chinese via real UI.
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await page.waitForURL(/locale=/, { timeout: 15_000 });
   await page.getByRole("button", { name: "应用偏好", exact: true }).click();
   await page.getByRole("button", { name: "中文", exact: true }).click();
 });
 
-/** 设置页内容面板（排除侧边导航中的「日报周报」等链接文本）。 */
+/** Settings page content panel (excluding link text such as "Daily and Weekly Report" in the side navigation). */
 function content(page: Page) {
   return page.locator("main");
 }
@@ -44,26 +44,26 @@ test("S-005 模型配置页对齐原型：左列表/右表单/操作入口，无
   const pageErrors = await openModelSection(page);
   const main = content(page);
 
-  // 等待列表加载完成（server fn 返回、hydration 完成），避免点击落在
-  // SSR 静态 HTML 上：「加载中...」（common.loading）仅在 loading 期间渲染；
-  // dev 冷启动首次编译 server fn 可能较慢，给足超时。
+  // Wait for the list to be loaded (server fn returns, hydration completes) to avoid clicking on
+  // On SSR static HTML: "Loading..." (common.loading) is only rendered during loading;
+  // Compiling server fn for the first time during dev cold start may be slow due to sufficient timeout.
   await expect(main.getByText("加载中...")).toHaveCount(0, {
     timeout: 60_000,
   });
 
-  // 左列表：标题计数；新增和启用入口属于当前原型契约。
+  // Left list: Title count; new and enabled entries belong to the current prototype contract.
   await expect(main.getByText(/模型配置（\d+）/)).toBeVisible();
   await expect(main.getByRole("button", { name: "新增" })).toBeVisible();
   await expect(
     main.getByRole("button", { name: "启用" }).first(),
   ).toBeVisible();
 
-  // 已去除的多余说明（提及其它 AI 功能用词，仅检查设置内容面板）
+  // Removed redundant descriptions (words referring to other AI functions, only check the settings content panel)
   await expect(main.getByText(/安全检测|日报周报|今日洞察/)).toHaveCount(0);
   await expect(main.getByText(/蒸馏/)).toHaveCount(0);
   await expect(main.getByText(/API Key 仅保存于本机服务端文件/)).toHaveCount(0);
 
-  // 新版默认仅展示配置列表；点击新增后再校验右侧编辑表单。
+  // The new version only displays the configuration list by default; click Add and then verify the editing form on the right.
   await main.getByRole("button", { name: "新增" }).click();
 
   const dialog = page.getByRole("dialog", { name: "新增模型配置" });
@@ -95,7 +95,7 @@ test("S-005 扫描与安全分类不再出现模型相关说明", async ({ page 
     page.getByText("扫描与安全", { exact: true }).first(),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "扫描计划" })).toBeVisible();
-  // 已删除的「自动扫描将根据是否配置模型自动选择快速/深度检测」说明
+  // Deleted "Automatic scan will automatically select fast/deep detection based on whether the model is configured" description
   await expect(content(page).getByText(/快速\/深度检测/)).toHaveCount(0);
   await page.waitForTimeout(200);
   expect(pageErrors).toEqual([]);

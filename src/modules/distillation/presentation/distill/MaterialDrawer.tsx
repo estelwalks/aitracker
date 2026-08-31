@@ -78,8 +78,8 @@ export function MaterialDrawer({
     };
   }, [onClose]);
 
-  // 来源筛选列出全部已知会话工具 + 全量会话中出现过的来源，避免筛选时
-  // agent 不全（例如某 agent 当前时间窗内没有会话时仍然可见）。
+  // Source filtering lists all known session tools + sources that have appeared in all sessions to avoid filtering time
+  // The agent is incomplete (for example, an agent is still visible even if there is no session in the current time window).
   const sources = useMemo(() => {
     const known = new Set<string>(SESSION_TOOL_IDS);
     for (const item of sessions) known.add(item.source);
@@ -111,7 +111,7 @@ export function MaterialDrawer({
       );
     });
   }, [sessions, query, source, range, proj]);
-  // 按日期分组（原型 1480-1484：sticky 日期头），按数值排序保证各语言正确。
+  // Group by date (prototype 1480-1484: sticky date header), sort by value to ensure correctness in each language.
   const grouped = useMemo(() => {
     const map = new Map<
       string,
@@ -119,7 +119,7 @@ export function MaterialDrawer({
     >();
     for (const item of filtered) {
       const date = new Date(item.startedAt);
-      // 零填充保证字典序 = 时间序（"2026-08-19" > "2026-08-09"）。
+      // Zero padding guarantees lexicographic order = chronological order ("2026-08-19" > "2026-08-09").
       const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
       const entry = map.get(dayKey) ?? {
         label: format.formatDate(item.startedAt),
@@ -751,8 +751,8 @@ export function MaterialDrawer({
 }
 
 /**
- * Prototype Select (distill.tsx 1436-1450): 用 Radix Select 替换原生
- * <select>，下拉面板与选项均为应用内样式（不再出现系统原生控件外观）。
+ * Prototype Select (distill.tsx 1436-1450): Replace native with Radix Select
+ * <select>, the drop-down panel and options are all in-app styles (the appearance of system native controls no longer appears).
  */
 function FilterSelect({
   value,

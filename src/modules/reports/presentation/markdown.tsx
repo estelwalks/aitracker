@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 
 /**
- * 轻量 Markdown 渲染器（逐字对齐 V3.0 原型 MarkdownView 的样式类，并补充围栏代码块）。
+ * Lightweight Markdown renderer using the reference MarkdownView styles and fenced
+ * code-block support.
  *
- * 原型未用 react-markdown 等框架，而是手写渲染器并把排版类直接写死在每个标签上
- * （表格 aitracker-table、引用 chart-1 边框、标题字号等），因此预览区无需外层 .aitracker-md 也能
- * 还原同样的视觉效果。纯函数 + React 元素：SSR 安全（不触碰 DOM、不用
- * dangerouslySetInnerHTML），零外部依赖。行内支持 **粗体** 与 `行内代码`；块级支持
- * 标题 / 列表 / 表格 / 引用 / 围栏代码块 / 段落。
+ * The prototype does not use frameworks such as react-markdown, but instead writes a handwritten renderer and writes the typesetting class directly on each label.
+ * (Table aitracker-table, reference chart-1 border, title font size, etc.), so the preview area does not need an outer .aitracker-md
+ * Restore the same visual effect. Pure functions + React elements: SSR safe (no touching DOM, no need
+ * dangerouslySetInnerHTML), zero external dependencies. Inline support **bold** and `inline code`; block level support
+ * Titles/Lists/Tables/Quotes/Fence Blocks/Paragraphs.
  */
 
 const INLINE_TOKEN =
@@ -68,7 +69,7 @@ function safeLinkHref(href: string): string | undefined {
     : undefined;
 }
 
-/** 行内解析：粗体、斜体、代码与安全链接，其余均为纯文本。 */
+/** Inline parsing: bold, italics, codes and safe links, the rest is plain text. */
 function inline(source: string, key: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   let last = 0;
@@ -161,7 +162,7 @@ export function MarkdownView({
       continue;
     }
 
-    // 围栏代码块：``` 开始，直到下一个 ```（语言标注被忽略）。
+    // Fence code block: ``` starts until next ``` (language annotation is ignored).
     if (FENCE_OPEN.test(line.trim())) {
       i += 1;
       const buffer: string[] = [];
@@ -169,7 +170,7 @@ export function MarkdownView({
         buffer.push(lines[i]);
         i += 1;
       }
-      i += 1; // 跳过闭合围栏（可能到文件末尾）
+      i += 1; // Jump over closing fence (possibly to end of file)
       out.push(
         <pre
           key={`f${i}`}
@@ -183,7 +184,7 @@ export function MarkdownView({
       continue;
     }
 
-    // 表格：| a | b | 头行 + |---|---| 分隔行。
+    // Table: | a | b | header row + |---|---| delimiter rows.
     if (isTableRow(line) && TABLE_SEPARATOR.test(lines[i + 1]?.trim() ?? "")) {
       const head = tableCells(line);
       i += 2;
@@ -247,7 +248,7 @@ export function MarkdownView({
       continue;
     }
 
-    // 标题：# ~ ####
+    // Title: # ~ ####
     const heading = HEADING.exec(line);
     if (heading) {
       out.push(
@@ -259,7 +260,7 @@ export function MarkdownView({
       continue;
     }
 
-    // 引用：> 连续行合并为一个 blockquote。
+    // Quotes: >Contiguous lines are merged into one blockquote.
     if (line.trim().startsWith(">")) {
       const buffer: string[] = [];
       while (i < lines.length && lines[i].trim().startsWith(">")) {
@@ -278,7 +279,7 @@ export function MarkdownView({
       continue;
     }
 
-    // 列表：- / * / 1. 连续行合并为一个 ul / ol。
+    // List:- /*/ 1. Consecutive lines merged into one ul/ol.
     if (LIST_ITEM.test(line)) {
       const ordered = /^\s*\d+\./.test(line);
       const buffer: string[] = [];
@@ -309,7 +310,7 @@ export function MarkdownView({
       continue;
     }
 
-    // 段落：连续普通行合并为一个 <p>（遇到块级结构即停止）。
+    // Paragraph: Continuous ordinary lines are merged into a <p> (stop when encountering block-level structure).
     const buffer: string[] = [];
     while (
       i < lines.length &&

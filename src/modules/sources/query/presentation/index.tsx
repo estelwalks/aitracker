@@ -301,8 +301,8 @@ function SourceCard({
   const { t, format } = useI18n();
   const meta = STATUS_META[entry.status];
   const hasPaths = entry.paths.length > 0;
-  // 迁移按钮仅在工具确实已安装、有 Skill 根且存在 Skill 时可用。未安装的
-  // 工具（例如残留 ~/.cursor 目录但没有 Cursor 本体）不允许一键迁移。
+  // The Migrate button is only available if the tool is actually installed, has a skill root, and the skill exists. not installed
+  // Tools (such as a residual ~/.cursor directory but no Cursor body) do not allow one-click migration.
   const canMigrate =
     entry.status !== "not-installed" &&
     hasInstalledTargets &&

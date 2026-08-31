@@ -1,9 +1,9 @@
 import type { MessageKey } from "../i18n/messages";
 
 /**
- * 中文即数据：安全模块的过滤器/状态/严重度等值以中文作为数据层的稳定标识
- * （scanner.ts / rules.ts / history.ts 中保持不变），展示层通过以下映射在渲染时
- * 翻译成当前语言。扫描规则的 name / kind / message 属于规则标识，不翻译。
+ * Chinese is data: the filter/status/severity and other values of the security module use Chinese as a stable identifier of the data layer
+ * (remain unchanged in scanner.ts / rules.ts / history.ts), the presentation layer is rendered when rendering through the following mapping
+ * Translate into current language. The name / kind / message of the scanning rule belongs to the rule identifier and is not translated.
  */
 export const severityLabels: Record<string, MessageKey> = {
   高危: "security.severity.high",
@@ -28,5 +28,5 @@ export const phaseLabels: Record<string, MessageKey> = {
   已完成: "security.phase.done",
 };
 
-/** “全部”筛选值没有对应的 verdict 数据值，单独映射。 */
+/** The "all" filter value does not have a corresponding verdict data value and is mapped separately. */
 export const filterAllLabel: MessageKey = "security.verdict.all";

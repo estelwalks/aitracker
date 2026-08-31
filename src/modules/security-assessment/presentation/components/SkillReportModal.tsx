@@ -70,11 +70,11 @@ const skipReasonKeys: Record<SecuritySkippedReasonCode, MessageKey> = {
 };
 
 /**
- * 单 Skill 安全报告弹窗：与 V3.0 原型 SkillReportModal 对齐。
+ * Single-Skill security report modal aligned with the reference design.
  *
- * 数据全部来自该 Skill 历史条目的真实扫描报告（SecurityReportView），
- * 不发起任何额外请求。score 为安全分（100=安全，来自 computeScore），
- * 直接展示不复位。Footer 的「重新检测此 Skill」走真实单 Skill 重扫接口。
+ * The data all comes from the real scan report (SecurityReportView) of the Skill's historical entries.
+ * No additional requests are initiated. score is the safety score (100=safe, from computeScore),
+ * Direct display without reset. Footer's "Recheck this Skill" implements a real single Skill rescan interface.
  */
 export function SkillReportModal({
   entry,

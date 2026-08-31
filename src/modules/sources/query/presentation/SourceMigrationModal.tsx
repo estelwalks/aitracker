@@ -17,9 +17,9 @@ import { migrateSourceSkills } from "../../migration.server-fns";
 import type { SourcesQueryEntry } from "./model";
 
 /**
- * Sources 一键迁移（Story B-300）目标选择弹窗：可用 agent 多选 grid（排除
- * 源工具自身）+ 冲突策略（默认 skip）。确认后调 `migrateSourceSkills` ——
- * Skill 目录由服务端枚举，路径不出服务端；结果以 toast 汇总。
+ * Sources one-click migration (Story B-300) target selection pop-up window: available agent multi-select grid (exclude
+ * source tool itself) + conflict strategy (default skip). Adjust `migrateSourceSkills` after confirmation——
+ * Skill directories are enumerated by the server, and the path does not leave the server; the results are summarized in toasts.
  */
 export function SourceMigrationModal({
   source,

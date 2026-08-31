@@ -10,7 +10,7 @@ import {
 import { SECURITY_RULE_KINDS, SECURITY_RULES_VERSION } from "./rules.ts";
 
 /**
- * 表驱动：为每个维度提供一行样本，并断言其被内置规则命中。
+ * Table-driven: Provides a sample row for each dimension and asserts that it is hit by the built-in rules.
  */
 const DIMENSION_SAMPLES: Array<{
   kind: SecurityRiskKind;
@@ -92,7 +92,7 @@ test("every built-in dimension has a positive detection sample", () => {
     );
     seen.add(sample.kind);
   }
-  // 确保覆盖全部 11 维度
+  // Ensure coverage of all 11 dimensions
   for (const kind of SECURITY_RULE_KINDS) {
     assert.ok(seen.has(kind), `缺少维度 ${kind} 的正向用例`);
   }
@@ -135,7 +135,7 @@ test("verdict escalates to 危险 only on 高危 severity", () => {
   const onlyLow = scanSecurityFiles([
     { name: "ip.txt", content: "nc 10.0.0.1 1234" },
   ]);
-  // 原始 IP 外联为低危；无高危命中时应判为 可疑
+  // The original IP outreach is low-risk; if there are no high-risk hits, it should be judged as suspicious.
   assert.ok(onlyLow.risks.length > 0);
   if (onlyLow.risks.every((r) => r.severity !== "高危")) {
     assert.equal(onlyLow.verdict, "可疑");
@@ -243,7 +243,7 @@ test("riskScore weights 高危25 / 中危8 / 低危2 and caps at 100", () => {
   assert.equal(computeRiskScore([mid]), 8);
   assert.equal(computeRiskScore([high]), 25);
   assert.equal(computeRiskScore([low, mid, high]), 35);
-  // 5 高危 = 125 → 封顶 100
+  // 5 high risk = 125 → capped at 100
   assert.equal(computeRiskScore([high, high, high, high, high]), 100);
 });
 

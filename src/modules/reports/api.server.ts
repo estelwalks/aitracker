@@ -220,7 +220,7 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
  * performs a real model call; without one the generation adapter produces a
  * deterministic Chinese draft from the real collected session context
  * (status `offline`), which is still a usable, editable report. The UI reads
- * `feed.offline` to show the honest "未配置模型" banner, but never blocks
+ * `feed.offline` to show the honest "model not configured" banner, but never blocks
  * generation on it.
  */
 export async function generateReport(

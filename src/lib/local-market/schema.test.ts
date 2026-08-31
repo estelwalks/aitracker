@@ -63,7 +63,7 @@ test("parseMarketApiResponse ignores legacy stats fields and defaults size to nu
         repo_name: "r",
         repo_path: "p",
         description: "D",
-        // 外接 API v1 不再返回安装数/token 估算/官方标记等不准统计字段。
+        // External API v1 no longer returns inaccurate statistical fields such as installation number/token estimate/official mark.
         install_count: 999,
         token_estimate: { total_tokens: 414 },
         is_official: true,

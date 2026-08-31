@@ -46,7 +46,7 @@ import type {
 } from "../contracts.ts";
 import type { MonitoringStatus } from "../../monitoring/contracts.ts";
 
-/** 注册表工具 id → 展示配置（icon kind + 品牌色），浏览器安全投影。 */
+/** Registry tool id → display configuration (icon kind + brand color), browser security projection. */
 const toolDisplayById = new Map(
   PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool]),
 );
@@ -267,19 +267,19 @@ export function DashboardMetricGrid({
   security?: MonitoringStatus["security"];
   securityScan: SecurityScanOverview;
   /**
-   * Comparison-baseline label for cards that show a delta (e.g. "较前 30 天").
+   * Comparison-baseline label for cards that show a delta (e.g. "vs. previous 30 days").
    * Only delta cards append it to their hint line, matching the reference.
    */
   baselineLabel?: string;
 }) {
   const { t, format } = useI18n();
   const unavailable = t("dashboard.kpi.unavailable");
-  // 真实扫描历史（Electron IPC / 本地 companion API）解析成功后，安全扫描卡
-  // 显示累计扫描次数（runCount），不再使用 monitoring 占位摘要；解析失败时
-  // 保留原有服务端回退，绝不凭空捏造数字。
+  // After the real scan history (Electron IPC / local companion API) is parsed successfully, the security scan card
+  // Display the cumulative number of scans (runCount), no longer use the monitoring placeholder summary; when parsing fails
+  // Keep the original server rollback and never make up numbers out of thin air.
   const securityRunsReal = securityScan.available && !securityScan.loading;
-  // 休眠 = 已检测 − 本周期活跃（与系统快照卡 toolCountHint 口径一致，
-  // 保证「活跃 + 休眠 = 已检测」自洽；不用实时 liveTools，避免口径打架）
+  // Hibernation = Detected − Active in this cycle (consistent with the toolCountHint caliber of the system snapshot card,
+  // Ensure that "active + dormant = detected" is self-consistent; no need for real-time liveTools to avoid caliber fights)
   const dormantTools = Math.max(0, monitoring.detectedTools - view.activeTools);
   const reportMetrics = view.outputAvailability;
   const anyReportsAvailable =
@@ -292,8 +292,8 @@ export function DashboardMetricGrid({
       (reportMetrics.monthlyReports.count ?? 0)
     : null;
   /**
-   * 区间天数（原型 rangeDays 语义）：自定义区间按真实日期跨度，其余按预设；
-   * "all" 固定为 90，避免用 1970 哨兵起点算出的虚假日均。
+   * Number of days in the interval (prototype rangeDays semantics): the custom interval is based on the real date span, and the rest is based on the default;
+   * "all" is fixed to 90 to avoid spurious daily averages calculated using a 1970 sentinel starting point.
    */
   const days = useMemo(() => {
     if (view.period === "all") return 90;
@@ -479,7 +479,7 @@ export function DashboardMetricGrid({
           const Icon = card.icon;
           const cardBaselineLabel =
             "baselineLabel" in card ? card.baselineLabel : baselineLabel;
-          // 基准文案：有环比时（或卡片声明始终展示，如会话总数）追加「· 较前 N 天」
+          // Baseline copy: When there is a chain comparison (or the card statement is always displayed, such as the total number of sessions) add "· compared to the previous N days"
           const showBaseline =
             cardBaselineLabel &&
             (card.delta != null ||
@@ -746,7 +746,7 @@ export function DashboardToolSwitcher({
           {t("dashboard.context.allTools")}
         </button>
         {orderedTools.map((tool) => {
-          // 优先使用工具注册表配置的品牌图标/配色，未配置时回退名称启发式
+          // Prioritize the use of brand icons/colors configured in the tool registry, and fall back to name heuristics if not configured.
           const color = tool.color ?? brandColorOf(tool.name);
           return (
             <button
@@ -1145,7 +1145,7 @@ export function DashboardProjectOverview({
   );
 }
 
-/** 本地日期 +N 天（避免 UTC 时区偏移）。 */
+/** Local date +N days (to avoid UTC time zone offset). */
 function addLocalDays(date: Date, amount: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + amount);
@@ -1163,16 +1163,16 @@ export function DashboardContribHeatmap({
   periodLabel,
 }: {
   points: readonly DashboardV2CalendarPoint[];
-  /** 统计周期窗口起点（该窗口内高亮，其余淡出）；null = 整图高亮。 */
+  /** The starting point of the statistical period window (highlight within this window and fade out the rest); null = highlight the entire picture. */
   focusFrom?: Date | null;
-  /** 统计周期窗口终点。 */
+  /** The end of the statistical period window. */
   focusTo?: Date | null;
-  /** 周期文案（如「近 30 天」），在标题中高亮展示。 */
+  /** Cycle copy (such as "Last 30 days") is highlighted in the title. */
   periodLabel?: string;
 }) {
   const { format, t } = useI18n();
-  // 完全没有活跃数据时也合成最近 365 天（全零），保证日历骨架始终有样式，
-  // 不会渲染成空白面板。
+  // Even when there is no active data at all, the last 365 days (all zeros) are synthesized to ensure that the calendar skeleton always has style.
+  // Will not render to a blank panel.
   const cells = useMemo(() => {
     if (points.length > 0) return points.slice(-365);
     const out: DashboardV2CalendarPoint[] = [];
@@ -1206,11 +1206,11 @@ export function DashboardContribHeatmap({
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    // 直接量滚动容器自身：clientWidth 含水平内边距（getComputedStyle 取真实
-    // padding 值扣除）。容器宽度由父级布局决定、不受内容溢出影响，因此不会
-    // 像「量内容元素」那样在溢出后锁死在旧宽度上——浏览器缩放/客户端窗口
-    // 变化后立即自适应，无需刷新。scrollbar-gutter 已在本容器上关闭，
-    // clientWidth - paddingX 即真实可用宽度。
+    // Directly measure the scrolling container itself: clientWidth includes horizontal padding (getComputedStyle takes true
+    // padding value deduction). The container width is determined by the parent layout and is not affected by content overflow, so it will not
+    // Like "volume content elements" that lock at the old width after overflow - browser zoom/client window
+    // Adapt immediately after changes, no need to refresh. scrollbar-gutter is closed on this container,
+    // clientWidth - paddingX is the actual available width.
     const measure = () => {
       const style = getComputedStyle(el);
       const padX =
@@ -1219,8 +1219,8 @@ export function DashboardContribHeatmap({
     };
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    // 浏览器缩放（Ctrl+滚轮 / Ctrl+±）改变视口 CSS 尺寸时，部分浏览器/
-    // 窗口环境不触发 ResizeObserver —— 用 resize 与 visualViewport 兜底。
+    // When browser zoom (Ctrl+Scroll Wheel / Ctrl+±) changes the viewport CSS size, some browsers/
+    // The window environment does not trigger the ResizeObserver - use resize and visualViewport to find out.
     window.addEventListener("resize", measure);
     window.visualViewport?.addEventListener("resize", measure);
     measure();
@@ -1230,13 +1230,13 @@ export function DashboardContribHeatmap({
       window.visualViewport?.removeEventListener("resize", measure);
     };
   }, []);
-  // 高亮窗口（日期键比较，避免时区偏移）。
+  // Highlight window (date key comparison, avoid time zone offset).
   const focusStartKey = focusFrom ? localDayKey(focusFrom) : null;
   const focusEndKey = focusTo ? localDayKey(focusTo) : null;
   const inFocus = (point: DashboardV2CalendarPoint) =>
     (focusStartKey == null || point.date >= focusStartKey) &&
     (focusEndKey == null || point.date <= focusEndKey);
-  // 头部统计跟随统计周期（高亮窗口），与「近 7 天 / 近 30 天」联动。
+  // Head statistics follow the statistical period (highlight window) and are linked to "last 7 days/last 30 days".
   const focusStats = useMemo(() => {
     const window = cells.filter(inFocus);
     let streak = 0;
@@ -1252,13 +1252,13 @@ export function DashboardContribHeatmap({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cells, focusStartKey, focusEndKey]);
-  // 随容器宽度自适应：单元格恰好铺满可用宽度，任何缩放/窗口尺寸都无横向
-  // 滚动（不设下限，避免窄容器下锁死为可拖动状态）。
+  // Adapt to container width: cell exactly fills available width, no horizontal aspect at any zoom/window size
+  // Scroll (no lower limit is set to prevent narrow containers from being locked into a draggable state).
   const GAP = 3;
   const LABEL_W = 26;
   type GridCell = DashboardV2CalendarPoint & { future: boolean };
-  // 自然周网格（周日 → 周六）：窗口首日前补空、末日后标为 future（透明），
-  // 与原型一致——周日是一周的开始，纵坐标标注周一/周三/周五。
+  // Natural week grid (Sunday → Saturday): Fill in the blanks before the first day of the window, and mark it as future (transparent) after the last day.
+  // Consistent with the prototype - Sunday is the beginning of the week, and the vertical axis is marked Monday/Wednesday/Friday.
   const grid = useMemo<GridCell[][]>(() => {
     const first = cells[0];
     const last = cells[cells.length - 1];
@@ -1298,8 +1298,8 @@ export function DashboardContribHeatmap({
     return out;
   }, [cells]);
   const columns = grid;
-  // 随容器宽度自适应：单元格恰好铺满可用宽度，任何缩放/窗口尺寸都无横向
-  // 滚动（无 10px 下限，避免窄容器下锁死为可拖动状态）。
+  // Adapt to container width: cell exactly fills available width, no horizontal aspect at any zoom/window size
+  // Scroll (no 10px lower limit to avoid being locked into a draggable state under narrow containers).
   const cellSize =
     box > 0 && columns.length > 0
       ? (box - LABEL_W - (columns.length - 1) * GAP) / columns.length
@@ -1436,7 +1436,7 @@ export function DashboardContribHeatmap({
                         style={{
                           width: cellSize,
                           height: cellSize,
-                          // 未来日期透明；统计周期窗口外淡出，窗口内高亮
+                          // Future dates are transparent; they fade out outside the statistical period window and highlight inside the window.
                           opacity: point.future ? 0 : inFocus(point) ? 1 : 0.22,
                           background: point.future ? "transparent" : undefined,
                         }}

@@ -41,7 +41,7 @@ test("refresh loads latest exchange rate and stamps the offline rule-pack versio
   };
 
   try {
-    // 后台/手动刷新路径显式请求网络（T3-05：页面读取永不联网）。
+    // The background/manual refresh path explicitly requests the network (T3-05: page reading never connects to the Internet).
     const snapshot = await buildPricingSnapshot([], {
       homeDirectory,
       now: new Date("2026-07-28T12:00:00.000Z"),

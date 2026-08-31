@@ -118,7 +118,7 @@ function periodModel(
       key,
       from: key,
       to: key,
-      // Locale-aware date + weekday (zh: 2026/02/11周三, en: 02/11/2026 Wed).
+      // Locale-aware date + weekday (zh: 2026/02/11 Shuzo, en: 02/11/2026 Wed).
       label: format.formatDate(safeStart, { weekday: "short" }),
       short: `${month}/${day}`,
     };
@@ -175,11 +175,11 @@ function definitionFor(
 }
 
 /**
- * /reports (日报 / 周报) faithfully mirrors the V3.0 prototype layout:
- * hero JarvisInsight → ReportSchedule → sticky archive bar (日报/周报/月报
+ * /reports (daily / weekly) faithfully mirrors the reference design layout:
+ * hero JarvisInsight → ReportSchedule → sticky archive bar (daily/weekly/monthly report
  * segmented + period pills with real session counts and a saved-dot + archive
  * search) → report body card (period label + real session/token/cost stats +
- * "立即生成" + PeriodCalendar + "今天/本周/本月") → inline preview/edit Markdown
+ * "Generate now" + PeriodCalendar + "Today/this week/this month") → inline preview/edit Markdown
  * editor → rewrite confirm modal.
  *
  * All figures come from the server read model: `feed.density` aggregates real
@@ -420,7 +420,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
       <div className="space-y-4">
         <ReportSchedule />
 
-        {/* 顶部：归档筛选 + 当前周期操作（V3.0 原型） */}
+        {/* Archive filters and current-period actions */}
         <section className="sticky top-14 z-10 rounded-xl bg-card p-2.5 shadow-[0_10px_24px_-18px_rgba(0,0,0,0.7)] ring-1 ring-border/60 backdrop-blur">
           <div className="flex flex-wrap items-center gap-2">
             <div className="aitracker-seg shrink-0">

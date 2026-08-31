@@ -14,7 +14,7 @@ const SAFE_SOURCE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,240}$/;
  * Privacy guard (P1-9): only genuine private *shapes* are rejected — absolute
  * user paths and credential VALUES. Standalone technical words (token, prompt,
  * content, …) are legal index terms and must never trip the guard, otherwise
- * one legitimate title ("Token 使用统计") bricks the whole search index.
+ * one legitimate title ("Token usage statistics") bricks the whole search index.
  *
  * The shapes mirror `src/modules/distillation/domain.ts` (PRIVATE_PATH_RE /
  * CREDENTIAL_VALUE_RE): identity-revealing paths and `key=value` credentials.

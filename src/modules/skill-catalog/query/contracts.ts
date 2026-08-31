@@ -102,7 +102,7 @@ export interface SkillSnapshotSkill {
   readonly id: string;
   readonly name: string;
   readonly description: string | null;
-  /** 形态；旧快照可能缺失（undefined），投影层归一化为 null。 */
+  /** Shape; old snapshots may be missing (undefined) and projection layers normalized to null. */
   readonly form?: SkillForm | null;
   readonly lastUsedAt: string | null;
   readonly sizeBytes: number;

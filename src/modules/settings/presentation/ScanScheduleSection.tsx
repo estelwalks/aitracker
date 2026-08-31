@@ -44,11 +44,11 @@ const scopeKeys: Record<
 };
 
 /**
- * 扫描配置：与 V3.0 原型对齐的 Field 行 + chip 风格。
+ * Scan configuration using the reference design's field-row and chip styles.
  *
- * 定时扫描(Toggle) / 扫描周期(chip) / 扫描时间 / 扫描范围(全部/指定 Agent/指定目录)
- * / 告警通知(Toggle)。全部绑定真实 SecurityClient.getScanSchedule()/
- * setScanSchedule()，范围选择通过 schedule.agents / schedule.dir 持久化。
+ * Scheduled scan (Toggle) / Scan cycle (chip) / Scan time / Scan range (all/specified Agent/specified directory)
+ * / Alarm notification (Toggle). All bound to true SecurityClient.getScanSchedule()/
+ * setScanSchedule(), the range selection is persisted through schedule.agents / schedule.dir.
  */
 export function ScanScheduleSection({
   client,
@@ -112,7 +112,7 @@ export function ScanScheduleSection({
     };
   }, [client]);
 
-  // 真实可选的 Agent 列表来自已发现 Skill 的 agents 元数据。
+  // The actual list of selectable agents comes from the agents metadata of the discovered Skill.
   useEffect(() => {
     if (client == null) return;
     let cancelled = false;

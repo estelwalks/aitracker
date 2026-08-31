@@ -76,8 +76,8 @@ function SectionTitle({ children }: { children: ReactNode }) {
 }
 
 /**
- * 小组件配置面板：菜单栏 / 浮窗 / 桌面小组件 三组选项，SQLite 持久化。
- * 供设置页「小组件」分类与浮窗内 ⚙ 轻量配置复用。
+ * Widget configuration panel: menu bar/floating window/desktop widget three sets of options, SQLite persistence.
+ * For the "widget" classification of the settings page and ⚙ lightweight configuration reuse in the floating window.
  */
 export function WidgetConfigPanel({
   sections = ["bar", "panel", "desktop"],

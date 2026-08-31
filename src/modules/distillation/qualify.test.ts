@@ -32,7 +32,7 @@ test("qualifySkillFiles: 执行类 skill 结构完整时判定合格", () => {
 });
 
 test("qualifySkillFiles: 软性问题（缺 scripts/、描述偏短、泛化词）只提示不判不合格", () => {
-  // 缺 scripts/（warn）
+  // Missing scripts/(warn)
   const noScripts = qualifySkillFiles(
     [
       {
@@ -50,7 +50,7 @@ test("qualifySkillFiles: 软性问题（缺 scripts/、描述偏短、泛化词�
     "warn",
   );
 
-  // 描述过短 + 泛化词（warn）
+  // Description too short + general words (warn)
   const soft = qualifySkillFiles(
     [{ path: "SKILL.md", content: skillMd("很短的描述，包含所有任何任意") }],
     "skill",
@@ -65,7 +65,7 @@ test("qualifySkillFiles: 软性问题（缺 scripts/、描述偏短、泛化词�
     "warn",
   );
 
-  // 知识类误建 scripts/（warn）
+  // Knowledge class misconstruction scripts/(warn)
   const knowledgeWithScripts = qualifySkillFiles(
     [
       {
@@ -106,7 +106,7 @@ test("qualifySkillFiles: SKILL.md 内 TODO/FIXME 判不合格", () => {
     result.checks.find((c) => c.id === "no-todo")?.severity,
     "error",
   );
-  // references 里的 TODO 只是建议，不判不合格
+  // TODO in references are just suggestions and will not be judged as unqualified.
   const refTodo = qualifySkillFiles(
     [
       { path: "SKILL.md", content: skillMd(desc) },

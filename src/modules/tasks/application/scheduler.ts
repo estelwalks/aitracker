@@ -173,7 +173,7 @@ export function nextRunAt(schedule: Schedule, from: Date): Date {
   if (schedule.kind === "monthly") {
     // Local calendar semantics: a day-of-month beyond the target month's length
     // clamps to its last day (31st fires on Feb 28/29), matching how a user
-    // reads "每月 31 号" rather than rolling into the following month.
+    // reads "the 31st of each month" rather than rolling into the following month.
     const clamp = (day: number, year: number, monthIndex: number) =>
       Math.min(day, new Date(year, monthIndex + 1, 0).getDate());
     candidate.setDate(
