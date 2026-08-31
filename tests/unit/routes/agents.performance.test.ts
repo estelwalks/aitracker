@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const route = readFileSync(new URL("./agents.tsx", import.meta.url), "utf8");
+const route = readFileSync(
+  new URL("../../../src/routes/agents.tsx", import.meta.url),
+  "utf8",
+);
 const page = readFileSync(
-  new URL("./agents.lazy.tsx", import.meta.url),
+  new URL("../../../src/routes/agents.lazy.tsx", import.meta.url),
   "utf8",
 );
 

@@ -17,7 +17,6 @@ import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as TrackerRouteImport } from './routes/tracker'
@@ -65,11 +64,6 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/settings.lazy').then((d) => d.Route))
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SkillsRoute = SkillsRouteImport.update({
   id: '/skills',
   path: '/skills',
@@ -110,7 +104,6 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
@@ -127,7 +120,6 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
@@ -145,7 +137,6 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
@@ -164,7 +155,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/security'
     | '/settings'
-    | '/sitemap.xml'
     | '/skills'
     | '/sources'
     | '/tracker'
@@ -181,7 +171,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/security'
     | '/settings'
-    | '/sitemap.xml'
     | '/skills'
     | '/sources'
     | '/tracker'
@@ -198,7 +187,6 @@ export interface FileRouteTypes {
     | '/reports'
     | '/security'
     | '/settings'
-    | '/sitemap.xml'
     | '/skills'
     | '/sources'
     | '/tracker'
@@ -216,7 +204,6 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   SecurityRoute: typeof SecurityRoute
   SettingsRoute: typeof SettingsRoute
-  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SkillsRoute: typeof SkillsRoute
   SourcesRoute: typeof SourcesRoute
   TrackerRoute: typeof TrackerRoute
@@ -283,13 +270,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/skills': {
       id: '/skills'
       path: '/skills'
@@ -344,7 +324,6 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   SecurityRoute: SecurityRoute,
   SettingsRoute: SettingsRoute,
-  SitemapDotxmlRoute: SitemapDotxmlRoute,
   SkillsRoute: SkillsRoute,
   SourcesRoute: SourcesRoute,
   TrackerRoute: TrackerRoute,

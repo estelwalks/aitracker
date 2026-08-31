@@ -12,7 +12,8 @@ interface TrackerLoader {
   readonly model: TrackerReadModel;
 }
 
-/** 空燃烧榜读模型：路由加载失败时降级为空榜单，而不是整页崩溃。 */
+/** Empty burning-board read model: falls back to an empty board on loader
+ * failure instead of crashing the whole page. */
 function emptyTrackerReadModel(): TrackerReadModel {
   return {
     generatedAt: null,

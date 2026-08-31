@@ -16,13 +16,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
+      - name: Typecheck (app + Electron + scanner)
         run: npm run typecheck
 
       - name: Lint
@@ -34,9 +34,22 @@ jobs:
       - name: Architecture boundaries (blocking)
         run: npm run verify:architecture:blocking
 
-      # Bundle gates (verify:bundle-no-sqlite) scan .output, so build first.
+      # Bundle gates (verify:bundle-no-sqlite, verify:bundle-budget) scan
+      # .output, so build first.
       - name: Build (for bundle gates)
         run: npm run build
+
+      - name: Bundle size budget
+        run: npm run verify:bundle-budget
+
+      - name: Read-model performance budgets
+        run: npm run verify:read-model-budgets
+
+      # Compiles the Electron main/preload TypeScript project and bundles the
+      # preload script, catching desktop-side type and bundling errors that
+      # `npm run typecheck` (noEmit) cannot.
+      - name: Electron build
+        run: npm run build:electron
 
       - name: Database tests
         run: npm run test:database
@@ -71,3 +84,25 @@ jobs:
 
       - name: Skill scanner tests
         run: npm run test:scanner
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e

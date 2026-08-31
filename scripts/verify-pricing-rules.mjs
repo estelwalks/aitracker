@@ -33,9 +33,7 @@ const registry = compilePricingRegistry(
 );
 
 console.log("pricing-rules verify");
-console.log(
-  "鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
-);
+console.log("─────────────────────────────────────────");
 console.log(`packs:              ${PRICING_PACKS.length}`);
 console.log(`  conversion rules: ${registry.rules.length}`);
 console.log(`  rates:            ${registry.rates.size}`);

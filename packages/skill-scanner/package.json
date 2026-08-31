@@ -25,7 +25,7 @@
     "NOTICE"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "build": "tsup src/index.ts src/cli.ts --format esm --dts --clean --sourcemap && node scripts/copy-prompts.mjs",

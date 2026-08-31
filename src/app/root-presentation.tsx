@@ -9,7 +9,6 @@ import {
 import { useEffect, useRef, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import {
   addChunkReloadNonce,
   claimChunkReload,
@@ -210,9 +209,6 @@ export function ErrorComponent({
   console.error(error);
   const router = useRouter();
   const { t } = useI18n();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
   useEffect(() => {
     if (!isChunkLoadError(error)) return;
     console.error("Route chunk failed; attempting one safe reload", error);
