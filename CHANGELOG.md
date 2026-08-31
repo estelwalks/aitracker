@@ -7,8 +7,11 @@ uses semantic versioning for published releases.
 
 - Prepared the repository for public, reproducible development.
 - Bundled the required `skill-scanner` workspace package.
-- Documented inherited SQLite-only and public-bundle release blockers.
+- Moved renderer persistence to SQLite-backed application preferences.
+- Removed unreachable server implementation chunks from the public browser
+  bundle and made both privacy audits blocking release gates.
+- Added privacy, release, and dependency-notice documentation.
 
-## [1.0.0] - 2026-08-28
+## [1.0.0-beta.1] - 2026-08-31
 
-- Initial open-source desktop release.
+- First public prerelease of the open-source desktop application.

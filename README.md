@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/estelwalks/aitracker/stargazers"><img src="https://img.shields.io/github/stars/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="GitHub stars" /></a>
   <a href="https://github.com/estelwalks/aitracker/blob/main/LICENSE"><img src="https://img.shields.io/github/license/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="License" /></a>
-  <a href="https://github.com/estelwalks/aitracker/releases/latest"><img src="https://img.shields.io/github/v/release/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="Latest release" /></a>
+  <a href="https://github.com/estelwalks/aitracker/releases"><img src="https://img.shields.io/github/v/release/estelwalks/aitracker?include_prereleases=1&style=flat-square&cacheSeconds=3600" alt="Latest release" /></a>
 </p>
 
 <p align="center">
@@ -85,6 +85,11 @@ this repository.
 
 See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
 generated-file policy, and repository layout.
+
+This repository is currently published as the `1.0.0-beta.1` prerelease. See
+[Privacy](PRIVACY.md) for data-handling details and
+[third-party notices](THIRD_PARTY_NOTICES.md) for dependency license
+attribution.
 
 ---
 
@@ -236,6 +241,9 @@ opening a public issue.
 
 AITracker is licensed under the MIT License. See [LICENSE](LICENSE) for the
 full license text.
+
+See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency notices.
 
 The bundled `packages/skill-scanner` component retains its MIT license; see its
 own `LICENSE` and `NOTICE` files.

@@ -21,6 +21,11 @@ const sources = {
   light: join(projectRoot, "public", "favicon.svg"),
   dark: join(projectRoot, "public", "favicon-dark.svg"),
 };
+// Electron's recommended macOS tray canvas is 16×16 (32×32 @2x). The app
+// artwork leaves generous breathing room for Dock-sized rendering, so crop
+// that margin only for the tray export. This makes the visible mark about 11%
+// larger while preserving the native menu-bar canvas used by other apps.
+const TRAY_ARTWORK_VIEW_BOX = "52 52 920 920";
 const outputNames = [
   "favicon-light.png",
   "favicon-light@2x.png",
@@ -48,7 +53,8 @@ async function exists(path) {
 
 async function currentManifest() {
   return {
-    version: 1,
+    version: 2,
+    trayArtworkViewBox: TRAY_ARTWORK_VIEW_BOX,
     sources: {
       light: await sha256(sources.light),
       dark: await sha256(sources.dark),
@@ -77,27 +83,45 @@ async function isCurrent(manifest) {
 }
 
 async function generateAppearance(stagingDirectory, appearance, source) {
-  const iconSet = join(stagingDirectory, `${appearance}-set`);
+  const appIconSet = join(stagingDirectory, `${appearance}-app-set`);
   await runIconsTool({
     inputFile: source,
     outputFormat: "set",
-    outDir: iconSet,
+    outDir: appIconSet,
   });
+
+  const traySource = join(stagingDirectory, `${appearance}-tray.svg`);
+  const traySvg = (await readFile(source, "utf8")).replace(
+    'viewBox="0 0 1024 1024"',
+    `viewBox="${TRAY_ARTWORK_VIEW_BOX}"`,
+  );
+  await writeFile(traySource, traySvg, "utf8");
+  const trayIconSet = join(stagingDirectory, `${appearance}-tray-set`);
+  await runIconsTool({
+    inputFile: traySource,
+    outputFormat: "set",
+    outDir: trayIconSet,
+  });
+
   await Promise.all([
     copyFile(
-      join(iconSet, "16x16.png"),
+      join(trayIconSet, "16x16.png"),
       join(stagingDirectory, `favicon-${appearance}.png`),
     ),
     copyFile(
-      join(iconSet, "32x32.png"),
+      join(trayIconSet, "32x32.png"),
       join(stagingDirectory, `favicon-${appearance}@2x.png`),
     ),
     copyFile(
-      join(iconSet, "512x512.png"),
+      join(appIconSet, "512x512.png"),
       join(stagingDirectory, `favicon-${appearance}-512.png`),
     ),
   ]);
-  await rm(iconSet, { recursive: true, force: true });
+  await Promise.all([
+    rm(appIconSet, { recursive: true, force: true }),
+    rm(trayIconSet, { recursive: true, force: true }),
+    rm(traySource, { force: true }),
+  ]);
 }
 
 async function main() {

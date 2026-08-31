@@ -110,7 +110,7 @@ export function InsightCard({
   if (renderedLines.length === 0 && !showEmpty) return null;
 
   const textLines = renderedLines.map((line) => line.text);
-// Neutral informational lines should not add a distracting “notice” pill;
+  // Neutral informational lines should not add a distracting “notice” pill;
   // reserve the badge for actionable attention/risk states.
   const topSeverity =
     showSeverity && renderedLines[0]?.severity !== "info"
