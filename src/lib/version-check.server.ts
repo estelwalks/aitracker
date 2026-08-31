@@ -34,26 +34,69 @@ const RELEASE_REPO = process.env[ENV.RELEASE_REPO] ?? releasePath[1] ?? APP_ID;
 const CHECK_TIMEOUT_MS = 5_000;
 
 /**
- * Loose semver compare (major.minor.patch, ignoring pre-release/build tags).
- * Returns >0 if a is newer, <0 if b is newer, 0 if equal.
+ * Semver compare for the release tags used by the update checker. Build
+ * metadata is ignored, while prereleases correctly sort before their stable
+ * counterpart (`1.0.0-beta.1` < `1.0.0`). Returns >0 if a is newer, <0 if b
+ * is newer, 0 if equal.
  */
 export function compareVersions(a: string, b: string): number {
-  const parse = (value: string): [number, number, number] => {
-    const match = value.trim().replace(/^v/i, "").split("-")[0]!.split(".");
+  const parse = (
+    value: string,
+  ): {
+    core: [number, number, number];
+    prerelease: readonly (number | string)[] | null;
+  } => {
+    const normalized = value.trim().replace(/^v/i, "").split("+")[0] ?? "";
+    const [coreText, prereleaseText] = normalized.split("-", 2);
+    const match = coreText!.split(".");
     const major = Number.parseInt(match[0] ?? "0", 10);
     const minor = Number.parseInt(match[1] ?? "0", 10);
     const patch = Number.parseInt(match[2] ?? "0", 10);
-    return [
-      Number.isFinite(major) ? major : 0,
-      Number.isFinite(minor) ? minor : 0,
-      Number.isFinite(patch) ? patch : 0,
-    ];
+    const prerelease =
+      prereleaseText == null || prereleaseText === ""
+        ? null
+        : prereleaseText.split(".").map((part) => {
+            const number = Number(part);
+            return /^\d+$/u.test(part) && Number.isSafeInteger(number)
+              ? number
+              : part;
+          });
+    return {
+      core: [
+        Number.isFinite(major) ? major : 0,
+        Number.isFinite(minor) ? minor : 0,
+        Number.isFinite(patch) ? patch : 0,
+      ],
+      prerelease,
+    };
   };
-  const [aMaj, aMin, aPat] = parse(a);
-  const [bMaj, bMin, bPat] = parse(b);
-  if (aMaj !== bMaj) return aMaj - bMaj;
-  if (aMin !== bMin) return aMin - bMin;
-  return aPat - bPat;
+  const parsedA = parse(a);
+  const parsedB = parse(b);
+  for (let index = 0; index < parsedA.core.length; index += 1) {
+    const difference = parsedA.core[index]! - parsedB.core[index]!;
+    if (difference !== 0) return difference;
+  }
+  if (parsedA.prerelease === null && parsedB.prerelease === null) return 0;
+  if (parsedA.prerelease === null) return 1;
+  if (parsedB.prerelease === null) return -1;
+  for (
+    let index = 0;
+    index < Math.max(parsedA.prerelease.length, parsedB.prerelease.length);
+    index += 1
+  ) {
+    const left = parsedA.prerelease[index];
+    const right = parsedB.prerelease[index];
+    if (left === undefined) return -1;
+    if (right === undefined) return 1;
+    if (left === right) continue;
+    if (typeof left === "number" && typeof right === "number") {
+      return left - right;
+    }
+    if (typeof left === "number") return -1;
+    if (typeof right === "number") return 1;
+    return left.localeCompare(right);
+  }
+  return 0;
 }
 
 function unknown(

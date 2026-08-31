@@ -28,7 +28,8 @@ import {
  * changes — the model query key embeds the revision. No raw events ever cross
  * this boundary and no client-side re-aggregation happens. Query caching
  * deduplicates the read model across widget previews within one renderer;
- * cross-renderer reads hit the same server-side projection.
+ * cross-renderer reads hit the same server-side projection and SQLite-backed
+ * preference cache.
  */
 
 export interface WidgetToolStat {
@@ -112,7 +113,6 @@ export function useWidgetData(): WidgetDataModel {
   const queryClient = useQueryClient();
   const security = useSecurityScanOverview();
 
-  const cachedModel = readCachedWidgetReadModel(locale);
   const statusQuery = useQuery({
     queryKey: STATUS_KEY(locale),
     queryFn: () => getWidgetStatusReadModel({ data: locale }),
@@ -132,13 +132,26 @@ export function useWidgetData(): WidgetDataModel {
     // dependency, so the floating window never waits on status→model.
     queryKey: MODEL_KEY(locale, null),
     queryFn: () => getWidgetReadModel({ data: locale }),
-    initialData: cachedModel,
-    // A persisted compact model is valid until the tiny status probe reports
-    // a different revision. With no cache, React Query still starts this
-    // request immediately in parallel with status.
+    // A persisted compact model is hydrated below and remains valid until the
+    // tiny status probe reports a different revision. Without a cache, React
+    // Query starts this request immediately in parallel with status.
     staleTime: Number.POSITIVE_INFINITY,
     refetchOnMount: false,
   });
+
+  useEffect(() => {
+    let active = true;
+    void readCachedWidgetReadModel(locale).then((cached) => {
+      if (!active || cached == null) return;
+      queryClient.setQueryData<WidgetReadModel | undefined>(
+        MODEL_KEY(locale, null),
+        (current) => current ?? cached,
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [locale, queryClient]);
 
   useEffect(() => {
     const revision = status?.revision;
@@ -153,7 +166,8 @@ export function useWidgetData(): WidgetDataModel {
   }, [locale, modelQuery.data?.revision, queryClient, status?.revision]);
 
   useEffect(() => {
-    if (modelQuery.data) writeCachedWidgetReadModel(locale, modelQuery.data);
+    if (modelQuery.data)
+      void writeCachedWidgetReadModel(locale, modelQuery.data);
   }, [locale, modelQuery.data]);
 
   const memoryQuery = useQuery({

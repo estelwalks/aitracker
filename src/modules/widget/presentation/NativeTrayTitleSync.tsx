@@ -27,7 +27,6 @@ export function NativeTrayTitleSync() {
   const queryClient = useQueryClient();
   const desktopAvailable =
     typeof window !== "undefined" && window.desktopApi != null;
-  const cachedModel = readCachedWidgetReadModel(locale);
   const statusQuery = useQuery({
     queryKey: ["widget-status", locale],
     queryFn: () => getWidgetStatusReadModel({ data: locale }),
@@ -38,14 +37,27 @@ export function NativeTrayTitleSync() {
   });
   const summaryQuery = useQuery({
     // Share the compact query with the Widget renderer in the same window;
-    // separate Electron windows additionally share the localStorage cache.
+    // separate Electron windows additionally share the SQLite preference cache.
     queryKey: ["widget-model", locale, null],
     queryFn: () => getWidgetReadModel({ data: locale }),
     enabled: desktopAvailable,
-    initialData: cachedModel,
     staleTime: Number.POSITIVE_INFINITY,
     refetchOnMount: false,
   });
+  useEffect(() => {
+    if (!desktopAvailable) return undefined;
+    let active = true;
+    void readCachedWidgetReadModel(locale).then((cached) => {
+      if (!active || cached == null) return;
+      queryClient.setQueryData(
+        ["widget-model", locale, null],
+        (current) => current ?? cached,
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [desktopAvailable, locale, queryClient]);
   useEffect(() => {
     const statusRevision = statusQuery.data?.revision;
     const modelRevision = summaryQuery.data?.revision;
@@ -65,8 +77,9 @@ export function NativeTrayTitleSync() {
     summaryQuery.data?.revision,
   ]);
   useEffect(() => {
-    if (summaryQuery.data)
-      writeCachedWidgetReadModel(locale, summaryQuery.data);
+    if (summaryQuery.data) {
+      void writeCachedWidgetReadModel(locale, summaryQuery.data);
+    }
   }, [locale, summaryQuery.data]);
   const today = summaryQuery.data?.today;
   const top = today?.topTools[0];

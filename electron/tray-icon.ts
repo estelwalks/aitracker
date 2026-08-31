@@ -28,7 +28,7 @@ function findNativeIconPath(
   return fileExists(candidate) ? candidate : null;
 }
 
-/** Resolve a 16pt tray/menu-bar icon; Electron discovers the adjacent @2x file. */
+/** Resolve a 16pt tray/menu-bar icon with enlarged artwork; Electron discovers the adjacent @2x file. */
 export function findTrayIconPath(
   input: {
     readonly isPackaged: boolean;
