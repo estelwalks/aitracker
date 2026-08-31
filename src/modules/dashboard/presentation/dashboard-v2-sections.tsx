@@ -1655,14 +1655,6 @@ export function DashboardAgentWorkstreams({
                     </dd>
                   </div>
                   <div>
-                    <dt>{t("dashboard.v2.securityLabel")}</dt>
-                    <dd>
-                      {view.outputAvailability.securityRuns.available
-                        ? t("dashboard.v2.securityClean")
-                        : t("dashboard.kpi.unavailable")}
-                    </dd>
-                  </div>
-                  <div>
                     <dt>{t("dashboard.v2.distillationOutputsLabel")}</dt>
                     <dd>
                       {view.outputAvailability.distillationOutputs.available
