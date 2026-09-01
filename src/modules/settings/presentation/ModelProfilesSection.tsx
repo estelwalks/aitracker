@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "@tanstack/react-router";
 import { Loader2, RefreshCw, Zap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -153,6 +154,7 @@ function officialEntry(name: string): ModelProfileView {
 
 export function ModelProfilesSection() {
   const { t, locale } = useI18n();
+  const router = useRouter();
   const [profiles, setProfiles] = useState<ModelProfileView[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -235,6 +237,7 @@ export function ModelProfilesSection() {
       }
       setActiveId(profile.id);
       notifyPageInsightsModelChanged();
+      await router.invalidate();
       toast.success(
         t("settings.modelProfiles.activatedToast", { name: profile.name }),
       );
@@ -335,6 +338,7 @@ export function ModelProfilesSection() {
         t("settings.modelProfiles.savedToast", { name: saved.name }),
       );
       if (saved.id === activeId) notifyPageInsightsModelChanged();
+      await router.invalidate();
       await load();
     } catch (error) {
       const ui = toUiError(error);
@@ -363,6 +367,7 @@ export function ModelProfilesSection() {
         t("settings.modelProfiles.deletedToast", { name: deleteTarget.name }),
       );
       if (deleteTarget.id === activeId) notifyPageInsightsModelChanged();
+      await router.invalidate();
       await load();
     } catch (error) {
       const ui = toUiError(error);

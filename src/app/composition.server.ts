@@ -127,7 +127,8 @@ export interface CompositionRoot {
   /**
    * Reports application. Backed by the normalized SQLite report store, the AI
    * generation adapter (using `aiExecutor`) and the offline context port.
-   * Generation currently runs against the deterministic offline model.
+   * Reports always have a deterministic renderer; an active profile may add
+   * an optional AI summary.
    */
   readonly reports: ReportsApplication;
   /**
@@ -608,11 +609,16 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     }),
     generation: createReportGenerationPort({
       ai: aiExecutor,
-      // B-400: reports reuse the active S-500 profile (a real model call via
-      // the `profile` provider); without one the adapter keeps the default
-      // offline model id. `null` here lets the adapter apply its own default.
-      resolveModelId: async () =>
-        (await modelProfiles.getActiveView())?.id ?? null,
+      // Scheduled reports also use the active executable profile for their
+      // optional AI summary. Missing credentials keep the fixed report path.
+      resolveModelId: async () => {
+        const active = await modelProfiles.getActiveView();
+        if (!active) return null;
+        const profile = await modelProfiles.getProfileForExecution(active.id);
+        return profile?.apiKey?.trim() && profile.model?.trim()
+          ? profile.id
+          : null;
+      },
     }),
     now: () => new Date(),
     createId: (prefix) => `${prefix}:${randomUUID()}`,

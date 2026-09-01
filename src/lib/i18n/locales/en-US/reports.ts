@@ -14,6 +14,12 @@ export const reports = {
     rotate: "Shuffle",
     dots: "Insight carousel",
   },
+  aiGuide: {
+    title: "Connect AI for an automatic report summary",
+    desc: "Complete fixed-format reports work without a model. Once connected, AI adds a summary based on the generated report and includes it in Markdown and PDF exports.",
+    action: "Connect model",
+    compact: "Connect AI for insights",
+  },
   archive: {
     title: "History archive",
     search: "Search archive",

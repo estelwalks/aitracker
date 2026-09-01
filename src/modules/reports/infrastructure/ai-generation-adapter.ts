@@ -35,6 +35,7 @@ import type {
   ReportStats,
 } from "../contracts.ts";
 import type { Locale } from "../../../lib/i18n/locale";
+import { aiSummaryTemplateFor } from "../templates.ts";
 import { buildDailyReportDocument } from "./daily-report-document.ts";
 import { buildPeriodicReportDocument } from "./periodic-report-document.ts";
 
@@ -45,6 +46,13 @@ export interface ReportAIExecutor {
 
 const REPORT_TIMEOUT_MS = 300_000;
 const REPORT_MODEL_ID = "report-generator";
+
+const AI_SUMMARY_HEADING: Readonly<Record<Locale, string>> = {
+  "zh-CN": "AI 总结",
+  "en-US": "AI summary",
+  "ja-JP": "AI 要約",
+  "ko-KR": "AI 요약",
+};
 
 const FALLBACK_OFFLINE_TEXT =
   "Offline report fallback: no model response was available.";
@@ -69,6 +77,56 @@ export interface ReportGenerationAdapterOptions {
    * fallback. `null`/undefined keeps the default `REPORT_MODEL_ID`.
    */
   readonly resolveModelId?: () => Promise<string | null>;
+}
+
+function fixedReportBody(
+  definition: ReportDefinition,
+  context: ReportContext,
+  locale: Locale,
+  templateKind?: ReportTemplateKind,
+): string {
+  return definition.kind === "daily"
+    ? buildDailyReportDocument(context, locale)
+    : buildPeriodicReportDocument(
+        context,
+        templateKind === "monthly" ? "monthly" : "weekly",
+        locale,
+      );
+}
+
+function hasReportUsage(stats: ReportStats): boolean {
+  return (
+    stats.sessions > 0 ||
+    stats.turns > 0 ||
+    stats.tokens > 0 ||
+    (stats.bySource?.length ?? 0) > 0
+  );
+}
+
+function normalizeAISummary(value: string): string | null {
+  try {
+    const summary = safeReportText(value, 2_400)
+      .split(/\r?\n/u)
+      .filter((line) => !/^\s*(?:#{1,6}\s|```|\|.*\|\s*$)/u.test(line))
+      .map((line) => line.replace(/^\s*>\s?/u, ""))
+      .join("\n")
+      .replace(/\n{3,}/gu, "\n\n")
+      .trim();
+    return summary || null;
+  } catch {
+    return null;
+  }
+}
+
+function insertAISummary(
+  body: string,
+  summary: string,
+  locale: Locale,
+): string {
+  const section = `## ${AI_SUMMARY_HEADING[locale]}\n\n${summary}`;
+  const firstSection = body.indexOf("\n## ");
+  if (firstSection < 0) return `${body}\n\n${section}`;
+  return `${body.slice(0, firstSection)}\n\n${section}${body.slice(firstSection)}`;
 }
 
 function offlineResult(text: string | undefined): ReportGenerationResult {
@@ -405,21 +463,65 @@ export function createReportGenerationPort(
     }): Promise<ReportGenerationResult> {
       const { definition, context, budgetUsd } = input;
       const locale = input.locale ?? "zh-CN";
-      // All report cadences are fixed data documents. Do not spend a model call
-      // or accept free-form model Markdown; the renderer owns headings, tables,
-      // language, ordering and missing-data placeholders.
+      // The renderer always owns the report structure. A configured model may
+      // add one bounded summary section, but it never controls tables, labels,
+      // ordering or missing-data behaviour.
       if (context.stats) {
-        return {
-          status: "succeeded",
-          body:
-            definition.kind === "daily"
-              ? buildDailyReportDocument(context, locale)
-              : buildPeriodicReportDocument(
-                  context,
-                  input.templateKind === "monthly" ? "monthly" : "weekly",
-                  locale,
-                ),
-        };
+        const body = fixedReportBody(
+          definition,
+          context,
+          locale,
+          input.templateKind,
+        );
+        if (!hasReportUsage(context.stats)) {
+          return { status: "succeeded", body };
+        }
+
+        let modelId = input.modelId;
+        if (!modelId) {
+          try {
+            modelId = (await options.resolveModelId?.()) ?? undefined;
+          } catch {
+            modelId = undefined;
+          }
+        }
+        if (!modelId || modelId === REPORT_MODEL_ID) {
+          return { status: "succeeded", body };
+        }
+
+        const templateKind =
+          input.templateKind ??
+          (definition.kind === "daily" ? "daily" : "weekly");
+        const prompt = aiSummaryTemplateFor(templateKind, locale);
+        try {
+          const aiResult = await options.ai.execute({
+            requestId: randomUUID(),
+            providerId: "profile",
+            modelId,
+            prompt: {
+              id: prompt.templateId,
+              version: prompt.version,
+              template: prompt.template,
+            },
+            input: { text: body },
+            budgetUsd,
+            timeoutMs: REPORT_TIMEOUT_MS,
+          });
+          const summary =
+            aiResult.summary.status === "completed" &&
+            aiResult.response?.providerId !== "offline" &&
+            aiResult.response?.text
+              ? normalizeAISummary(aiResult.response.text)
+              : null;
+          return {
+            status: "succeeded",
+            body: summary ? insertAISummary(body, summary, locale) : body,
+          };
+        } catch {
+          // AI enhancement is optional. A provider failure must not prevent the
+          // fixed, data-backed report from being created and exported.
+          return { status: "succeeded", body };
+        }
       }
       const template = templateForLocale(
         definition,

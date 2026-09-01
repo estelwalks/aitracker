@@ -80,11 +80,10 @@ async function enableTestModel(): Promise<void> {
   assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
 }
 
-test("sync rejects enabled schedules without an enabled model", async () => {
+test("sync allows enabled schedules without a model", async () => {
   await isolatedRoot(async () => {
     assert.deepEqual(await syncReportScheduleToTaskPreference(base), {
-      ok: false,
-      errorCode: "errors.reports.modelRequired",
+      ok: true,
     });
   });
 });
