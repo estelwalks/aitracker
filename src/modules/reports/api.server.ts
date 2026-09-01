@@ -182,9 +182,8 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
       getSessionSnapshot,
       getUsageSnapshot,
     ),
-    // Generation runs only when an S-500 model profile is active; without one
-    // the page shows the honest offline state so it disables generation
-    // instead of faking it.
+    // The fixed report works offline. This flag only controls the compact
+    // optional-AI-summary hint shown outside the report body.
     offline: !hasExecutableModel,
   });
   const result = await presentation.query();
@@ -215,8 +214,8 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
 }
 
 /**
- * Trigger a draft report generation. All report cadences are assembled from
- * fixed data templates and do not require a model profile.
+ * Trigger a draft report generation. All cadences use fixed data templates;
+ * an executable model profile optionally adds a bounded summary section.
  */
 export async function generateReport(
   definitionId: string,
@@ -235,10 +234,14 @@ export async function generateReport(
     const activeProfile = activeView
       ? await root.modelProfiles.getProfileForExecution(activeView.id)
       : null;
+    const modelId =
+      activeProfile?.apiKey?.trim() && activeProfile.model?.trim()
+        ? activeProfile.id
+        : undefined;
     const result = await root.reports.generate({
       definitionId,
       trigger: "manual",
-      modelId: activeProfile?.id,
+      modelId,
       period,
       locale,
     });

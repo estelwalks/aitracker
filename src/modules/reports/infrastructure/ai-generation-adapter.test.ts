@@ -156,6 +156,95 @@ test("daily reports ignore model Markdown and use the fixed document renderer", 
   assert.match(result.body ?? "", /^# AITracker 日报/);
 });
 
+test("a configured model adds a bounded AI analysis without changing the fixed report", async () => {
+  const captured: { request?: AIRequest } = {};
+  const generation = createReportGenerationPort({
+    ai: fake(
+      {
+        summary: summary("completed"),
+        response: response(
+          "Codex 与主要项目承载了本周期的大部分使用，模型与成本分布显示使用结构较为集中。缓存数据表明已有较高比例的上下文被复用，但这本身不代表效率高低。\n\n建议：\n1. 优先回看报告中 Token 与轮次同时集中的会话，确认是否存在可复用流程。\n2. 结合模型成本差异检查后续任务的模型选择。",
+          "profile",
+        ),
+      },
+      captured,
+    ),
+  });
+  const result = await generation.generate({
+    definition: definition(),
+    modelId: "profile-1",
+    context: {
+      evidence: [],
+      summary: "model receives the fixed report only",
+      stats: {
+        periodLabel: "今日 2026-08-31",
+        sessions: 1,
+        turns: 3,
+        tokens: 100,
+        costUsd: 1,
+        bySource: [
+          {
+            source: "Codex",
+            sessions: 1,
+            tokens: 100,
+            costUsd: 1,
+            edits: 0,
+            durationMin: 2,
+          },
+        ],
+        projects: ["aitracker"],
+        edits: 0,
+        durationMin: 2,
+      },
+    },
+  });
+
+  assert.equal(result.status, "succeeded");
+  assert.match(result.body ?? "", /## AI 总结/);
+  assert.match(result.body ?? "", /建议：\n1\./);
+  assert.match(result.body ?? "", /## 今日概览/);
+  assert.ok(
+    (result.body ?? "").indexOf("## AI 总结") <
+      (result.body ?? "").indexOf("## 今日概览"),
+  );
+  assert.equal(captured.request?.providerId, "profile");
+  assert.match(captured.request?.prompt.id ?? "", /daily\.zh-CN\.ai-summary/);
+  assert.match(captured.request?.input.text ?? "", /^# AITracker 日报/);
+  assert.doesNotMatch(captured.request?.input.text ?? "", /## AI 总结/);
+});
+
+test("AI summary failure keeps the fixed report usable", async () => {
+  const generation = createReportGenerationPort({
+    ai: {
+      async execute() {
+        throw new Error("provider unavailable");
+      },
+    },
+  });
+  const result = await generation.generate({
+    definition: definition(),
+    modelId: "profile-1",
+    context: {
+      evidence: [],
+      summary: "fixed context",
+      stats: {
+        periodLabel: "今日 2026-08-31",
+        sessions: 1,
+        turns: 1,
+        tokens: 100,
+        costUsd: 1,
+        bySource: [],
+        projects: [],
+        edits: 0,
+        durationMin: 1,
+      },
+    },
+  });
+  assert.equal(result.status, "succeeded");
+  assert.match(result.body ?? "", /^# AITracker 日报/);
+  assert.doesNotMatch(result.body ?? "", /## AI 总结/);
+});
+
 test("weekly reports use the fixed localized document renderer", async () => {
   let called = false;
   const generation = createReportGenerationPort({

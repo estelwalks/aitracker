@@ -14,6 +14,12 @@ export const reports = {
     rotate: "换一条",
     dots: "洞察轮播",
   },
+  aiGuide: {
+    title: "接入 AI，自动生成报告总结",
+    desc: "不接入模型也可以生成完整的固定格式报告；接入后，AI 会基于已生成的数据报告补充一段总结，并随 Markdown 和 PDF 一起导出。",
+    action: "接入模型",
+    compact: "接入 AI 获取深度总结",
+  },
   archive: {
     title: "历史归档",
     search: "搜索归档",
@@ -123,7 +129,7 @@ export const reports = {
   },
   header: {
     sessions: "{count} 场会话",
-    tokens: "{tokens} tokens",
+    tokens: "{tokens} Token",
     cost: "{cost}",
     generating: "生成中…",
     goToday: "今天",
