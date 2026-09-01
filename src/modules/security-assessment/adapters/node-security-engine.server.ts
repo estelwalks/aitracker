@@ -1,4 +1,4 @@
-import type { LocaleKey, ScanSkillReport } from "skill-scanner";
+import type { LocaleKey, ScanSkillReport } from "@estelwalks/agent-threat-scanner";
 
 export interface SecurityEngineMemoryFile {
   readonly path: string;
@@ -9,21 +9,7 @@ export async function runQuickNodeSecurityEngine(
   files: readonly SecurityEngineMemoryFile[],
   locale: LocaleKey = "zh-CN",
 ): Promise<ScanSkillReport> {
-  const packageName = String.fromCharCode(
-    115,
-    107,
-    105,
-    108,
-    108,
-    45,
-    115,
-    99,
-    97,
-    110,
-    110,
-    101,
-    114,
-  );
+  const packageName = "@estelwalks/agent-threat-scanner";
   const entryPoint = String.fromCharCode(
     115,
     99,

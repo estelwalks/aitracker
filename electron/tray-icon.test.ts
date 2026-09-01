@@ -9,6 +9,7 @@ import {
   findAppIconPath,
   findTrayIconPath,
   TRAY_ICON_FILENAMES,
+  WINDOWS_TRAY_ICON_FILENAMES,
 } from "./tray-icon.js";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -34,11 +35,13 @@ test("packaging generates and preserves both native icon appearances", () => {
   assert.match(builderConfig, /icon: public\/favicon\.svg/u);
   for (const filename of [
     ...Object.values(TRAY_ICON_FILENAMES),
+    ...Object.values(WINDOWS_TRAY_ICON_FILENAMES),
     ...Object.values(APP_ICON_FILENAMES),
   ]) {
     assert.match(generator, new RegExp(filename.replace(".", "\\."), "u"));
   }
   assert.match(generator, /TRAY_ARTWORK_VIEW_BOX = "52 52 920 920"/u);
+  assert.match(generator, /WINDOWS_TRAY_ARTWORK_VIEW_BOX = "80 80 864 864"/u);
   assert.match(generator, /join\(trayIconSet, "16x16\.png"\)/u);
   assert.match(generator, /join\(trayIconSet, "32x32\.png"\)/u);
   assert.match(generator, /join\(appIconSet, "512x512\.png"\)/u);
@@ -58,6 +61,30 @@ test("development paths select light and dark generated icons", () => {
           isPackaged: false,
           resourcesPath: "/unused",
           appPath: projectRoot,
+        },
+        appearance,
+        (candidate) => candidate === trayPath,
+      ),
+      trayPath,
+    );
+  }
+});
+
+test("Windows development paths select the tighter tray icon crop", () => {
+  for (const appearance of ["light", "dark"] as const) {
+    const trayPath = join(
+      projectRoot,
+      "build",
+      "native-icons",
+      WINDOWS_TRAY_ICON_FILENAMES[appearance],
+    );
+    assert.equal(
+      findTrayIconPath(
+        {
+          isPackaged: false,
+          resourcesPath: "/unused",
+          appPath: projectRoot,
+          platform: "win32",
         },
         appearance,
         (candidate) => candidate === trayPath,

@@ -1,5 +1,5 @@
 import type { SecurityReport } from "../../../lib/security/scanner.ts";
-import type { ScanSkillReport } from "skill-scanner";
+import type { ScanSkillReport } from "@estelwalks/agent-threat-scanner";
 import { createAssetAssessment } from "../application/index.ts";
 import type { AssetAssessment, AssetKind, AssetRef } from "../contracts.ts";
 

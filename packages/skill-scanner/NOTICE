@@ -1,5 +1,0 @@
-skill-scanner
-Copyright (c) 2026 estelwalks contributors
-
-This package contains an independently implemented TypeScript scanner based on
-security rules, prompts, and samples used with permission from estelwalks.

@@ -111,19 +111,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           style={{ width: railWidth, top: chromeOffset }}
         >
           <div
-            className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "gap-2.5"}`}
+            className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "gap-3"}`}
           >
             <img
               src={APP_BRAND_ICON_DARK_URL}
               alt=""
               aria-hidden="true"
-              className="aitracker-brand-mark aitracker-brand-mark-dark size-7 shrink-0 rounded-md object-cover"
+              className="aitracker-brand-mark aitracker-brand-mark-dark size-8 shrink-0 rounded-md object-cover"
             />
             <img
               src={APP_BRAND_ICON_LIGHT_URL}
               alt=""
               aria-hidden="true"
-              className="aitracker-brand-mark aitracker-brand-mark-light size-7 shrink-0 rounded-md object-cover"
+              className="aitracker-brand-mark aitracker-brand-mark-light size-8 shrink-0 rounded-md object-cover"
             />
             {!collapsed && (
               <div className="min-w-0 leading-tight">

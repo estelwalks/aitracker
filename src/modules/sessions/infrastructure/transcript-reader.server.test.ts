@@ -221,6 +221,56 @@ test("AiPy: extracts ordered USER/LLM text and reasoning from its SQLite databas
   });
 });
 
+test("AiPy: reads the full indexed task without database/message/text caps and tolerates older schemas", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "aipy-s300-full-aaaaaaaa";
+    const aipyDir = join(home, "Library", "Application Support", "aipy-pro");
+    await mkdir(aipyDir, { recursive: true });
+    const databasePath = join(aipyDir, "aipy");
+    const database = new NodeSqliteDatabase({ path: databasePath });
+    try {
+      // Older AiPy databases may not have the optional `reason` column.
+      database.exec(`
+        CREATE TABLE task_event (
+          task_id TEXT,
+          type TEXT,
+          content TEXT,
+          time INTEGER
+        );
+      `);
+      const insert = database.prepare(
+        "INSERT INTO task_event (task_id, type, content, time) VALUES (?, ?, ?, ?)",
+      );
+      insert.run(sessionId, "llm", "A complete assistant response", 2000);
+      insert.run(sessionId, "user", "A complete user prompt", 1000);
+    } finally {
+      database.close();
+    }
+
+    const transcript = await loadSessionTranscript(
+      { source: "aipy", sessionId },
+      {
+        homeDirectory: home,
+        platform: "darwin",
+        limits: {
+          maxFileBytes: 1,
+          maxRecordsPerFile: 1,
+          maxMessages: 1,
+          maxTextLength: 1,
+        },
+      },
+    );
+
+    assert.deepEqual(
+      transcript.messages.map((message) => [message.role, message.text]),
+      [
+        ["user", "A complete user prompt"],
+        ["assistant", "A complete assistant response"],
+      ],
+    );
+  });
+});
+
 test("returns an empty transcript when no local file matches the session", async () => {
   await withTempHome(async (home) => {
     const transcript = await loadSessionTranscript(

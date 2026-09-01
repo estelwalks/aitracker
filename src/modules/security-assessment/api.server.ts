@@ -1,5 +1,5 @@
 import type { TaskApi } from "../tasks/index.ts";
-import type { ScanSkillReport } from "skill-scanner";
+import type { ScanSkillReport } from "@estelwalks/agent-threat-scanner";
 import type { SecurityInputFile } from "../../lib/security/scanner.ts";
 import {
   assessmentHistorySummary,

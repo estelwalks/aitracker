@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { constants, zstdCompressSync } from "node:zlib";
 
@@ -1571,5 +1572,84 @@ test("session project identity uses the same Git-root canonicalization as usage"
       new Set(["~/Documents/Dev/repo"]),
     );
     assert.ok(summary.sessions.every((record) => record.isGitProject === true));
+  });
+});
+
+test("AiPy: starts a session at its first USER message, not an earlier lifecycle event", async () => {
+  await withTempHome(async (home) => {
+    const aipyDirectory = join(
+      home,
+      "Library",
+      "Application Support",
+      "aipy-pro",
+    );
+    await mkdir(aipyDirectory, { recursive: true });
+    const database = new DatabaseSync(join(aipyDirectory, "aipy"));
+    try {
+      database.exec(`
+        CREATE TABLE workspace (id TEXT, workdir TEXT);
+        CREATE TABLE task (
+          id TEXT,
+          title TEXT,
+          model TEXT,
+          workdir TEXT,
+          workspace_id TEXT
+        );
+        CREATE TABLE task_event (
+          task_id TEXT,
+          model TEXT,
+          type TEXT,
+          usage TEXT,
+          time INTEGER
+        );
+      `);
+      database
+        .prepare(
+          "INSERT INTO task (id, title, model, workdir, workspace_id) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run("aipy-delayed-start", "Delayed start", "gpt-test", "/tmp", null);
+      const insertEvent = database.prepare(
+        "INSERT INTO task_event (task_id, model, type, usage, time) VALUES (?, ?, ?, ?, ?)",
+      );
+      insertEvent.run(
+        "aipy-delayed-start",
+        "gpt-test",
+        "STATE",
+        "{}",
+        Date.parse("2026-08-01T09:00:00.000Z"),
+      );
+      insertEvent.run(
+        "aipy-delayed-start",
+        "gpt-test",
+        "STDIN",
+        "{}",
+        Date.parse("2026-08-01T09:00:00.001Z"),
+      );
+      insertEvent.run(
+        "aipy-delayed-start",
+        "gpt-test",
+        "USER",
+        "{}",
+        Date.parse("2026-08-05T10:00:00.000Z"),
+      );
+      insertEvent.run(
+        "aipy-delayed-start",
+        "gpt-test",
+        "LLM",
+        '{"input_tokens":10,"output_tokens":5,"total_tokens":15}',
+        Date.parse("2026-08-05T10:00:02.000Z"),
+      );
+    } finally {
+      database.close();
+    }
+
+    const session = soleSession(
+      (await scanLocalSessions({ homeDirectory: home, now: NOW })).sessions,
+    );
+    assert.equal(session.source, "aipy");
+    assert.equal(session.startedAt, "2026-08-05T10:00:00.000Z");
+    assert.equal(session.endedAt, "2026-08-05T10:00:02.000Z");
+    assert.equal(session.totals.totalTokens, 15);
+    assertPrivacyClean(session);
   });
 });

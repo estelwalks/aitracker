@@ -8,8 +8,6 @@ evidence without adding another CI workflow or slowing ordinary pull requests.
 - Confirm `package.json`, `package-lock.json`, and `src/lib/app-config.ts` use
   the same semantic version (the current channel is `1.0.0-beta.1`).
 - Update `CHANGELOG.md` with user-facing changes and known limitations.
-- Regenerate `THIRD_PARTY_NOTICES.md` after dependency changes and review the
-  resulting diff.
 - Run `npm ci` from a clean checkout.
 
 ## Automated evidence

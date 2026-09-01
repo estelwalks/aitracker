@@ -6,7 +6,7 @@ uses semantic versioning for published releases.
 ## [Unreleased]
 
 - Prepared the repository for public, reproducible development.
-- Bundled the required `skill-scanner` workspace package.
+- Integrated the published `@estelwalks/agent-threat-scanner` npm package.
 - Moved renderer persistence to SQLite-backed application preferences.
 - Removed unreachable server implementation chunks from the public browser
   bundle and made both privacy audits blocking release gates.

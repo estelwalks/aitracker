@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 
-import { ProviderSchema, type ModelConfig } from "skill-scanner";
+import type { ModelConfig } from "@estelwalks/agent-threat-scanner";
 
 import { ENV } from "../../../lib/app-config.ts";
 import { SECURITY_LLM_REVIEW_PREF_KEY } from "../llm-review.contracts.ts";
@@ -128,29 +128,11 @@ interface StoredModelProfile {
 
 type ScannerProtocol = "openai-responses" | "openai-completions" | "anthropic";
 
-/**
- * Bridge the app's protocol names to both older and protocol-aware
- * skill-scanner contracts. Older packages only accept `openai`; protocol-aware
- * versions accept the explicit three-value format.
- */
+/** Maps the app's legacy profile label to the published scanner protocol. */
 function scannerProtocol(profile: StoredModelProfile): ScannerProtocol {
   return profile.protocol === "openai"
     ? "openai-completions"
     : profile.protocol;
-}
-
-function scannerProvider(profile: StoredModelProfile): string | undefined {
-  const protocol = scannerProtocol(profile);
-  const parsed = ProviderSchema.safeParse(protocol);
-  return parsed.success
-    ? parsed.data
-    : ProviderSchema.safeParse(
-          protocol === "anthropic" ? "anthropic" : "openai",
-        ).success
-      ? protocol === "anthropic"
-        ? "anthropic"
-        : "openai"
-      : undefined;
 }
 
 export function toSecurityModelConfig(
@@ -176,8 +158,7 @@ export function toSecurityModelConfig(
     timeoutMs: 120_000,
     maxAgentTurns: 8,
   };
-  const provider = scannerProvider(profile);
-  if (provider !== undefined) config.provider = provider;
+  config.provider = scannerProtocol(profile);
   return config as ModelConfig;
 }
 

@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ProviderSchema } from "skill-scanner";
-
 import { DesktopStateBroker } from "./desktop-state-broker.js";
 import { ENV } from "./app-config.js";
 
@@ -168,11 +166,7 @@ test("model config is returned whenever the shared model profile is configured",
       timeoutMs: 120_000,
       maxAgentTurns: 8,
     };
-    if (ProviderSchema.safeParse("openai-completions").success) {
-      expected.provider = "openai-completions";
-    } else {
-      expected.provider = "openai";
-    }
+    expected.provider = "openai-completions";
     assert.deepEqual(config, expected);
     assert.deepEqual(paths, ["/api/desktop-state/model-profile"]);
   } finally {
@@ -203,11 +197,7 @@ test("desktop model config preserves the explicit Responses protocol for upgrade
       },
     });
     const config = (await broker.modelConfig()) as Record<string, unknown>;
-    if (ProviderSchema.safeParse("openai-responses").success) {
-      assert.equal(config.provider, "openai-responses");
-    } else {
-      assert.equal(config.provider, "openai");
-    }
+    assert.equal(config.provider, "openai-responses");
   } finally {
     if (previous == null) delete process.env[ENV.DESKTOP_BROKER_TOKEN];
     else process.env[ENV.DESKTOP_BROKER_TOKEN] = previous;

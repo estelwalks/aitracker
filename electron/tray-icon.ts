@@ -8,6 +8,11 @@ export const TRAY_ICON_FILENAMES = {
   dark: "favicon-dark.png",
 } as const;
 
+export const WINDOWS_TRAY_ICON_FILENAMES = {
+  light: "favicon-light-windows.png",
+  dark: "favicon-dark-windows.png",
+} as const;
+
 export const APP_ICON_FILENAMES = {
   light: "favicon-light-512.png",
   dark: "favicon-dark-512.png",
@@ -28,17 +33,22 @@ function findNativeIconPath(
   return fileExists(candidate) ? candidate : null;
 }
 
-/** Resolve a 16pt tray/menu-bar icon with enlarged artwork; Electron discovers the adjacent @2x file. */
+/** Resolve the platform-specific 16px tray/menu-bar icon. */
 export function findTrayIconPath(
   input: {
     readonly isPackaged: boolean;
     readonly resourcesPath: string;
     readonly appPath: string;
+    readonly platform?: NodeJS.Platform;
   },
   appearance: NativeIconAppearance,
   fileExists: (path: string) => boolean = existsSync,
 ): string | null {
-  return findNativeIconPath(input, TRAY_ICON_FILENAMES[appearance], fileExists);
+  const filenames =
+    input.platform === "win32"
+      ? WINDOWS_TRAY_ICON_FILENAMES
+      : TRAY_ICON_FILENAMES;
+  return findNativeIconPath(input, filenames[appearance], fileExists);
 }
 
 /** Resolve the large runtime icon used by the macOS Dock and Windows windows. */

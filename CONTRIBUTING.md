@@ -24,5 +24,5 @@ credentials, or unrelated formatting changes. Generated registries should be
 updated only through their `npm run generate:*` commands.
 
 By participating, you agree to follow `CODE_OF_CONDUCT.md`. Contributions are
-accepted under the MIT License. The bundled `packages/skill-scanner/` component
-retains its own MIT copyright notice.
+accepted under the MIT License. Security scanning is provided by the separately
+distributed `@estelwalks/agent-threat-scanner` package.

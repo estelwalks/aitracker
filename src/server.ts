@@ -89,7 +89,7 @@ function isH3SwallowedErrorBody(body: string): boolean {
 /**
  * Lazily serves the browser-dev security backend (`/api/security/*`).
  *
- * The dev backend pulls in `skill-scanner` through `electron/security-scanner-service.ts`,
+ * The dev backend pulls in `agent-threat-scanner` through `electron/security-scanner-service.ts`,
  * which reads its `dist/prompts/*.md` resources at module load. Importing it
  * statically here would put that whole module graph in the SSR entry, so every
  * route (including `/`) would evaluate the scanner and depend on its built

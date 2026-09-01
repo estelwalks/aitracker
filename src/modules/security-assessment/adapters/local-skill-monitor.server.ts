@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, opendir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ScanSkillReport } from "skill-scanner";
+import type { ScanSkillReport } from "@estelwalks/agent-threat-scanner";
 
 import { scanLocalSkills } from "../../../lib/local-skills/scanner.server.ts";
 import type {
