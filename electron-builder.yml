@@ -17,8 +17,8 @@ files:
   - "!node_modules/**/*"
   # Main-process-only scanner runtime. Its ESM bundle loads Prompt markdown at
   # module initialization even for quick scans, and imports zod at runtime.
-  - node_modules/skill-scanner/dist/**/*
-  - node_modules/skill-scanner/package.json
+  - node_modules/@l3m0nc9/agent-threat-scanner/dist/**/*
+  - node_modules/@l3m0nc9/agent-threat-scanner/package.json
   - node_modules/zod/**/*
 extraResources:
   # Native tray/window APIs require raster images. The build generates these

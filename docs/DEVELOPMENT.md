@@ -5,18 +5,18 @@ checkout.
 
 ## Repository layout
 
-| Path | Purpose |
-| --- | --- |
-| `src/` | TanStack Start application and shared product modules |
-| `electron/` | Desktop process, preload bridge, tray, and native integration |
-| `packages/skill-scanner/` | MIT-licensed workspace package used by security scanning |
-| `scripts/` | Code generation, validation, packaging, and performance tooling |
-| `tests/e2e/` | Playwright end-to-end scenarios |
-| `tests/fixtures/` | Versioned deterministic test fixtures |
-| `tests/performance/` | Performance budgets and scenarios |
-| `build/` | Electron packaging inputs plus ignored generated bundles |
-| `public/` | Static assets copied into the web application |
-| `.github/` | CI and collaboration templates |
+| Path                            | Purpose                                                         |
+| ------------------------------- | --------------------------------------------------------------- |
+| `src/`                          | TanStack Start application and shared product modules           |
+| `electron/`                     | Desktop process, preload bridge, tray, and native integration   |
+| `@l3m0nc9/agent-threat-scanner` | Published npm package used by security scanning                 |
+| `scripts/`                      | Code generation, validation, packaging, and performance tooling |
+| `tests/e2e/`                    | Playwright end-to-end scenarios                                 |
+| `tests/fixtures/`               | Versioned deterministic test fixtures                           |
+| `tests/performance/`            | Performance budgets and scenarios                               |
+| `build/`                        | Electron packaging inputs plus ignored generated bundles        |
+| `public/`                       | Static assets copied into the web application                   |
+| `.github/`                      | CI and collaboration templates                                  |
 
 ## Install
 
@@ -27,8 +27,8 @@ nvm use
 npm ci
 ```
 
-`npm ci` builds the bundled scanner package and installs Electron. No API key
-is required for local-only features or automated tests.
+`npm ci` installs the published scanner package and Electron. No API key is
+required for local-only features or automated tests.
 
 ## Development
 
@@ -52,22 +52,21 @@ npm run lab:first-run:seed      # seed the isolated lab home
 
 ## Quality checks
 
-| Command | Scope |
-| --- | --- |
-| `npm run typecheck` | App, Electron, and scanner TypeScript contracts |
-| `npm run lint` | App and scanner lint rules |
-| `npm run test:unit` | App, Electron, and tests/unit tests |
-| `npm run test:scripts` | Repository validation tooling |
-| `npm run test:database` | SQLite migrations, repositories, recovery, and privacy |
-| `npm run test:scanner` | Bundled skill-scanner package |
-| `npm run test:e2e` | Playwright end-to-end tests (default config) |
-| `npm run test:e2e:empty-home` | E2E resilience scenarios with an empty usage home |
-| `npm run test:e2e:stale-home` | E2E resilience scenarios with a seeded stale home |
-| `npm run test:e2e:offline` | E2E offline-exchange-rate resilience scenario |
-| `npm run test:route-performance` | Route open-performance budget spec |
-| `npm run test:all` | All non-E2E automated test suites |
-| `npm run check:opensource-hygiene` | Paths, credentials, and legacy-name scan |
-| `npm run generate:third-party-notices` | Refresh dependency license inventory |
+| Command                                | Scope                                                  |
+| -------------------------------------- | ------------------------------------------------------ |
+| `npm run typecheck`                    | App and Electron TypeScript contracts                  |
+| `npm run lint`                         | App lint rules                                         |
+| `npm run test:unit`                    | App, Electron, and tests/unit tests                    |
+| `npm run test:scripts`                 | Repository validation tooling                          |
+| `npm run test:database`                | SQLite migrations, repositories, recovery, and privacy |
+| `npm run test:scanner`                 | Published scanner import and CLI smoke tests           |
+| `npm run test:e2e`                     | Playwright end-to-end tests (default config)           |
+| `npm run test:e2e:empty-home`          | E2E resilience scenarios with an empty usage home      |
+| `npm run test:e2e:stale-home`          | E2E resilience scenarios with a seeded stale home      |
+| `npm run test:e2e:offline`             | E2E offline-exchange-rate resilience scenario          |
+| `npm run test:route-performance`       | Route open-performance budget spec                     |
+| `npm run test:all`                     | All non-E2E automated test suites                      |
+| `npm run check:opensource-hygiene`     | Paths, credentials, and legacy-name scan               |
 
 Run focused checks while developing, then run `npm run test:all`,
 `npm run typecheck`, `npm run lint`, and `npm run build:desktop` before opening

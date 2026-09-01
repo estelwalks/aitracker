@@ -14,14 +14,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import type { ScanSkillReport } from "skill-scanner";
+import type { ScanSkillReport } from "@l3m0nc9/agent-threat-scanner";
 
 import {
   SecurityScannerService,
   type SecretStoragePort,
   type SecurityScannerPersistence,
 } from "./security-scanner-service.js";
-import type { ModelConfig } from "skill-scanner";
+import type { ModelConfig } from "@l3m0nc9/agent-threat-scanner";
 
 const cleanup: string[] = [];
 test.afterEach(async () => {
@@ -896,7 +896,7 @@ test("resolves the active model profile only for an explicit full scan and redac
   );
 });
 
-test("runs the real skill-scanner quick engine through the in-memory boundary", async () => {
+test("runs the real agent-threat-scanner quick engine through the in-memory boundary", async () => {
   const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,

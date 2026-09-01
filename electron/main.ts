@@ -137,6 +137,7 @@ function nativeIconLocationInput() {
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
     appPath: app.getAppPath(),
+    platform: process.platform,
   } as const;
 }
 

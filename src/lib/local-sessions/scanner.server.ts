@@ -91,6 +91,8 @@ interface SessionFragment {
   model: string | null;
   projectRef: string | null;
   timestamps: RecordTimestamp[];
+  /** Earliest user-authored message, when the reader can identify one. */
+  firstUserAt: RecordTimestamp | null;
   totals: SessionTokenCounts;
   turns: number;
   editTurns: number;
@@ -356,6 +358,7 @@ function createEmptyFragment(
     model: null,
     projectRef: null,
     timestamps: [],
+    firstUserAt: null,
     totals: emptyTokenCounts(),
     turns: 0,
     editTurns: 0,
@@ -1533,9 +1536,10 @@ async function fragmentToRecord(
   const sortedTimestamps = fragment.timestamps
     .map((entry) => entry.ms)
     .sort((left, right) => left - right);
-  const startedMs = sortedTimestamps[0];
+  const startedMs = fragment.firstUserAt?.ms ?? sortedTimestamps[0];
   const endedMs = sortedTimestamps[sortedTimestamps.length - 1];
   const startedAt =
+    fragment.firstUserAt?.iso ??
     fragment.timestamps.find((entry) => entry.ms === startedMs)?.iso ??
     (startedMs != null
       ? new Date(startedMs).toISOString()
@@ -1647,6 +1651,7 @@ async function scanAipySessions(
         `SELECT
            e.task_id AS sessionId,
            e.model AS eventModel,
+           e.type AS type,
            e.time AS timestamp,
            e.usage AS usage,
            t.title AS title,
@@ -1679,7 +1684,16 @@ async function scanAipySessions(
           null;
       }
       const timestamp = parseTimestampValue(row.timestamp);
-      if (timestamp) fragment.timestamps.push(timestamp);
+      if (timestamp) {
+        fragment.timestamps.push(timestamp);
+        if (
+          stringValue(row.type) === "USER" &&
+          (fragment.firstUserAt == null ||
+            timestamp.ms < fragment.firstUserAt.ms)
+        ) {
+          fragment.firstUserAt = timestamp;
+        }
+      }
       fragment.turns += 1;
       let usage: JsonObject | undefined;
       if (typeof row.usage === "string") {

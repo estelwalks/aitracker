@@ -15,7 +15,6 @@ export default tseslint.config(
       "release",
       "test-results",
       "vendor",
-      "packages/skill-scanner",
       // Documentation directory (contains external zip unpack samples), not
       // repository code.
       "docs",

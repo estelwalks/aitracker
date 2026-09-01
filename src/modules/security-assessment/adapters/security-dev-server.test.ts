@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { ProviderSchema } from "skill-scanner";
-import type { ScanSkillReport } from "skill-scanner";
+import type { ScanSkillReport } from "@l3m0nc9/agent-threat-scanner";
 
 import type {
   DesktopLocale,
@@ -226,11 +225,7 @@ function expectedScannerModel(
     timeoutMs: 120_000,
     maxAgentTurns: 8,
   };
-  if (ProviderSchema.safeParse(explicit).success) {
-    output.provider = explicit;
-  } else {
-    output.provider = protocol === "anthropic" ? "anthropic" : "openai";
-  }
+  output.provider = explicit;
   return output;
 }
 
@@ -262,11 +257,7 @@ test("dev model adapter preserves the explicit Responses protocol for upgraded s
     string,
     unknown
   >;
-  if (ProviderSchema.safeParse("openai-responses").success) {
-    assert.equal(config.provider, "openai-responses");
-  } else {
-    assert.equal(config.provider, "openai");
-  }
+  assert.equal(config.provider, "openai-responses");
 });
 
 test("dev model adapter maps every profile protocol to the scanner contract", () => {
@@ -285,14 +276,7 @@ test("dev model adapter maps every profile protocol to the scanner contract", ()
       },
       true,
     ) as Record<string, unknown>;
-    if (ProviderSchema.safeParse(scannerProtocol).success) {
-      assert.equal(config.provider, scannerProtocol);
-    } else {
-      assert.equal(
-        config.provider,
-        scannerProtocol === "anthropic" ? "anthropic" : "openai",
-      );
-    }
+    assert.equal(config.provider, scannerProtocol);
   }
 });
 

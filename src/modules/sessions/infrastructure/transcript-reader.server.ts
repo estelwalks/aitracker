@@ -30,8 +30,9 @@ import type {
  * It is intentionally a SEPARATE reader from the metadata scanner
  * (src/lib/local-sessions/scanner.server.ts): the scanner stays a
  * metadata-only, content-free guardrail, and this reader owns the only code
- * path that surfaces local conversation text. Resource caps below mirror the
- * scanner's so a malformed/oversized log cannot exhaust memory.
+ * path that surfaces local conversation text. JSONL readers retain resource
+ * caps; AiPy is read by an indexed task-id query and is not capped by the
+ * database file's total size.
  */
 
 export interface LoadSessionTranscriptInput {
@@ -113,6 +114,17 @@ function asObject(value: unknown): JsonObject | undefined {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/** SQLite may expose a legacy TEXT value as a Uint8Array/BLOB. */
+function sqliteTextValue(value: unknown): string | undefined {
+  const text = stringValue(value);
+  if (text != null) return text;
+  if (value instanceof Uint8Array) {
+    const decoded = new TextDecoder().decode(value);
+    return decoded.length > 0 ? decoded : undefined;
+  }
+  return undefined;
 }
 
 function clamp(value: string, maximum: number): string {
@@ -371,12 +383,17 @@ function pushMessage(
   text: string,
   thinking: string | undefined,
   ts: number,
-  limits: Limits,
+  limits?: Limits,
 ): void {
-  if (out.length >= limits.maxMessages) return;
-  const safeText = clamp(text, limits.maxTextLength).trim();
+  if (limits != null && out.length >= limits.maxMessages) return;
+  const safeText =
+    limits == null ? text.trim() : clamp(text, limits.maxTextLength).trim();
   const safeThinking =
-    thinking == null ? undefined : clamp(thinking, limits.maxTextLength).trim();
+    thinking == null
+      ? undefined
+      : limits == null
+        ? thinking.trim()
+        : clamp(thinking, limits.maxTextLength).trim();
   if (safeText.length === 0 && safeThinking == null) return;
   out.push({
     ts,
@@ -654,38 +671,45 @@ async function readAipyTranscript(
   root: string,
   sessionId: string,
   out: CollectedMessage[],
-  limits: Limits,
 ): Promise<void> {
   const databasePath = join(root, "aipy");
-  const databaseSize = await readFileSize(databasePath);
-  if (databaseSize < 0 || databaseSize > limits.maxFileBytes) return;
 
   let database: ReturnType<typeof openReadOnlySqlite> | undefined;
   try {
     database = openReadOnlySqlite(databasePath);
+    const columns = new Set(
+      database
+        .queryRows("PRAGMA table_info(task_event)")
+        .map((row) => stringValue(row.name))
+        .filter((name): name is string => name != null),
+    );
+    if (!columns.has("task_id") || !columns.has("type")) return;
+
+    // AiPy's task_event schema has evolved. Keep optional columns as empty
+    // values so an older database can still render its user/assistant text.
+    const contentColumn = columns.has("content") ? "content" : "''";
+    const reasonColumn = columns.has("reason") ? "reason" : "''";
+    const timeColumn = columns.has("time") ? "time" : "NULL";
+    const orderBy = columns.has("time") ? "time ASC, rowid ASC" : "rowid ASC";
     const rows = database.queryRows(
-      `SELECT type, content, reason, time
+      `SELECT type, ${contentColumn} AS content, ${reasonColumn} AS reason, ${timeColumn} AS time
        FROM task_event
-       WHERE task_id = ? AND type IN ('USER', 'LLM')
-       ORDER BY time ASC, rowid ASC
-       LIMIT ?`,
+       WHERE task_id = ? AND UPPER(type) IN ('USER', 'LLM')
+       ORDER BY ${orderBy}`,
       sessionId,
-      limits.maxRecordsPerFile,
     );
 
     for (const row of rows) {
-      if (out.length >= limits.maxMessages) break;
-      const type = stringValue(row.type);
+      const type = stringValue(row.type)?.toUpperCase();
       const role =
         type === "USER" ? "user" : type === "LLM" ? "assistant" : null;
       if (role == null) continue;
       pushMessage(
         out,
         role,
-        stringValue(row.content) ?? "",
-        role === "assistant" ? stringValue(row.reason) : undefined,
+        sqliteTextValue(row.content) ?? "",
+        role === "assistant" ? sqliteTextValue(row.reason) : undefined,
         parseTimestampMs(row.time),
-        limits,
       );
     }
   } catch {
@@ -697,8 +721,8 @@ async function readAipyTranscript(
 
 /**
  * Load one session's transcript into memory (S-300). Returns an empty
- * transcript for unknown sources, unsafe ids, missing logs, or oversized
- * files — it never throws for missing data and never touches the disk
+ * transcript for unknown sources, unsafe ids, or missing logs — it never
+ * throws for missing data and never touches the disk
  * beyond read-only access.
  */
 export async function loadSessionTranscript(
@@ -748,7 +772,8 @@ export async function loadSessionTranscript(
         collected,
         limits,
       );
-      if (collected.length >= limits.maxMessages) break;
+      if (input.source !== "aipy" && collected.length >= limits.maxMessages)
+        break;
     }
     collected.sort((left, right) =>
       left.ts === right.ts ? left.seq - right.seq : left.ts - right.ts,
@@ -756,9 +781,10 @@ export async function loadSessionTranscript(
     return {
       sessionId: input.sessionId,
       source: input.source,
-      messages: collected
-        .slice(0, limits.maxMessages)
-        .map((entry) => entry.message),
+      messages: (input.source === "aipy"
+        ? collected
+        : collected.slice(0, limits.maxMessages)
+      ).map((entry) => entry.message),
     };
   } catch {
     // Any failure degrades to an empty transcript — never a 500 for local logs.
@@ -781,7 +807,7 @@ async function readSourceTranscript(
     case "grok-session-v1":
       return readGrokTranscript(root, sessionId, out, limits);
     case "aipy-session-v1":
-      return readAipyTranscript(root, sessionId, out, limits);
+      return readAipyTranscript(root, sessionId, out);
     default:
       // Unknown reader — no transcript extraction implemented for it yet.
       return;

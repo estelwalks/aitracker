@@ -10,7 +10,6 @@ import { resolveNpmSpawn } from "../scripts/npm-spawn.mjs";
 // the config); check-app-config-sync.mjs cross-checks them on every check:i18n.
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const skillScannerRoot = resolve(projectRoot, "packages/skill-scanner");
 const viteOptimizationMetadata = join(
   projectRoot,
   "node_modules/.vite/deps/_metadata.json",
@@ -147,25 +146,6 @@ async function prepareIfStale({ label, inputs, outputs, build }) {
 }
 
 export async function prepareDesktop() {
-  await prepareIfStale({
-    label: "skill-scanner",
-    inputs: [
-      join(skillScannerRoot, "src"),
-      join(skillScannerRoot, "prompts"),
-      join(skillScannerRoot, "scripts"),
-      join(skillScannerRoot, "package.json"),
-      join(skillScannerRoot, "package-lock.json"),
-      join(skillScannerRoot, "tsconfig.json"),
-      join(skillScannerRoot, "tsup.config.ts"),
-    ],
-    outputs: [
-      join(skillScannerRoot, "dist/index.js"),
-      join(skillScannerRoot, "dist/index.d.ts"),
-      join(skillScannerRoot, "dist/cli.js"),
-    ],
-    build: () => runNpmCommand(["run", "build:skill-scanner"]),
-  });
-
   const electronSourceInputs = (
     await readdir(join(projectRoot, "electron"), {
       withFileTypes: true,

@@ -19,7 +19,7 @@ tests/fixtures/performance/fixture-10x.events.json
 .DS_Store
 
 # Local configuration and credentials
-.skill-scanner.json
+.agent-threat-scanner.json
 
 # External reference sample (downloaded zip + extracted project), not repo code
 docs/*/project-sparkle-hub-*

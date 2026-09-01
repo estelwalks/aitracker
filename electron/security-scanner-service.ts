@@ -10,7 +10,7 @@ import {
   scanSkill,
   type ModelConfig,
   type ScanSkillReport,
-} from "skill-scanner";
+} from "@l3m0nc9/agent-threat-scanner";
 
 import {
   SECURITY_SCAN_CYCLES,
@@ -294,7 +294,7 @@ const SKIP_REASON_CODES = new Set<
 ]);
 
 /**
- * skill-scanner reports require a `tokenUsage`; legacy history DTOs predate
+ * agent-threat-scanner reports require a `tokenUsage`; legacy history DTOs predate
  * billing data, so inject this fallback before the strict schema validates
  * old entries.
  */
@@ -311,7 +311,7 @@ const EMPTY_TOKEN_USAGE = {
 };
 
 /**
- * Stable content hash over the collected files, mirroring the `skill-scanner`
+ * Stable content hash over the collected files, mirroring the `agent-threat-scanner`
  * package's `contentHash`: sorted relative paths + NUL + content. Two install
  * copies of the same skill (different absolute paths) produce the same hash,
  * so it is the dedup/skip key for unchanged skills.

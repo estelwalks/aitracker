@@ -312,7 +312,7 @@ export interface SecurityScanReportDto {
     /** Sanitized bounded fallback only; UI should localize reasonCode. */
     reason: string;
   }>;
-  /** Model accounting returned by skill-scanner; absent on legacy history. */
+  /** Model accounting returned by agent-threat-scanner; absent on legacy history. */
   tokenUsage?: SecurityTokenUsageDto;
 }
 

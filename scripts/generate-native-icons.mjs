@@ -22,16 +22,19 @@ const sources = {
   dark: join(projectRoot, "public", "favicon-dark.svg"),
 };
 // Electron's recommended macOS tray canvas is 16×16 (32×32 @2x). The app
-// artwork leaves generous breathing room for Dock-sized rendering, so crop
-// that margin only for the tray export. This makes the visible mark about 11%
-// larger while preserving the native menu-bar canvas used by other apps.
+// artwork leaves generous breathing room for window-sized rendering, so crop
+// that margin only for the tray export. Windows uses an even tighter crop
+// because its notification area gives the icon a fixed 16×16 slot.
 const TRAY_ARTWORK_VIEW_BOX = "52 52 920 920";
+const WINDOWS_TRAY_ARTWORK_VIEW_BOX = "80 80 864 864";
 const outputNames = [
   "favicon-light.png",
   "favicon-light@2x.png",
+  "favicon-light-windows.png",
   "favicon-light-512.png",
   "favicon-dark.png",
   "favicon-dark@2x.png",
+  "favicon-dark-windows.png",
   "favicon-dark-512.png",
   "manifest.json",
 ];
@@ -55,6 +58,7 @@ async function currentManifest() {
   return {
     version: 2,
     trayArtworkViewBox: TRAY_ARTWORK_VIEW_BOX,
+    windowsTrayArtworkViewBox: WINDOWS_TRAY_ARTWORK_VIEW_BOX,
     sources: {
       light: await sha256(sources.light),
       dark: await sha256(sources.dark),
@@ -97,11 +101,31 @@ async function generateAppearance(stagingDirectory, appearance, source) {
   );
   await writeFile(traySource, traySvg, "utf8");
   const trayIconSet = join(stagingDirectory, `${appearance}-tray-set`);
-  await runIconsTool({
-    inputFile: traySource,
-    outputFormat: "set",
-    outDir: trayIconSet,
-  });
+  const windowsTraySource = join(
+    stagingDirectory,
+    `${appearance}-windows-tray.svg`,
+  );
+  const windowsTraySvg = (await readFile(source, "utf8")).replace(
+    'viewBox="0 0 1024 1024"',
+    `viewBox="${WINDOWS_TRAY_ARTWORK_VIEW_BOX}"`,
+  );
+  await writeFile(windowsTraySource, windowsTraySvg, "utf8");
+  const windowsTrayIconSet = join(
+    stagingDirectory,
+    `${appearance}-windows-tray-set`,
+  );
+  await Promise.all([
+    runIconsTool({
+      inputFile: traySource,
+      outputFormat: "set",
+      outDir: trayIconSet,
+    }),
+    runIconsTool({
+      inputFile: windowsTraySource,
+      outputFormat: "set",
+      outDir: windowsTrayIconSet,
+    }),
+  ]);
 
   await Promise.all([
     copyFile(
@@ -113,6 +137,10 @@ async function generateAppearance(stagingDirectory, appearance, source) {
       join(stagingDirectory, `favicon-${appearance}@2x.png`),
     ),
     copyFile(
+      join(windowsTrayIconSet, "16x16.png"),
+      join(stagingDirectory, `favicon-${appearance}-windows.png`),
+    ),
+    copyFile(
       join(appIconSet, "512x512.png"),
       join(stagingDirectory, `favicon-${appearance}-512.png`),
     ),
@@ -121,6 +149,8 @@ async function generateAppearance(stagingDirectory, appearance, source) {
     rm(appIconSet, { recursive: true, force: true }),
     rm(trayIconSet, { recursive: true, force: true }),
     rm(traySource, { force: true }),
+    rm(windowsTrayIconSet, { recursive: true, force: true }),
+    rm(windowsTraySource, { force: true }),
   ]);
 }
 

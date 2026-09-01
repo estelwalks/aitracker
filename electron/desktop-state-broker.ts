@@ -5,7 +5,7 @@ import type {
   SecurityScanSchedule,
   SecurityScanScheduleRuntime,
 } from "./contracts.js";
-import { ProviderSchema, type ModelConfig } from "skill-scanner";
+import type { ModelConfig } from "@l3m0nc9/agent-threat-scanner";
 
 interface StoredModelProfile {
   readonly mode: "official" | "custom";
@@ -17,34 +17,11 @@ interface StoredModelProfile {
 
 type ScannerProtocol = "openai-responses" | "openai-completions" | "anthropic";
 
-/**
- * Keep the desktop caller compatible with both scanner generations:
- * older packages call this field `provider` and only accept `openai`,
- * while the protocol-aware package accepts the explicit three-value format.
- * Prefer the explicit value as soon as the installed scanner schema supports
- * it; do not silently collapse Responses into Chat Completions in that case.
- */
+/** Maps the app's legacy profile label to the published scanner protocol. */
 function scannerProtocol(profile: StoredModelProfile): ScannerProtocol {
   return profile.protocol === "openai"
     ? "openai-completions"
     : profile.protocol;
-}
-
-function scannerProvider(profile: StoredModelProfile): string | undefined {
-  const protocol = scannerProtocol(profile);
-  const parsed = ProviderSchema.safeParse(protocol);
-  // Until skill-scanner is upgraded, preserve its legacy enum so the current
-  // strict schema remains valid. The upgraded schema accepts the explicit
-  // protocol identifiers above and therefore takes this branch naturally.
-  return parsed.success
-    ? parsed.data
-    : ProviderSchema.safeParse(
-          protocol === "anthropic" ? "anthropic" : "openai",
-        ).success
-      ? protocol === "anthropic"
-        ? "anthropic"
-        : "openai"
-      : undefined;
 }
 
 export interface DesktopStateBrokerOptions {
@@ -189,11 +166,8 @@ export class DesktopStateBroker {
       timeoutMs: 120_000,
       maxAgentTurns: 8,
     };
-    // `provider` is the skill-scanner protocol selector. During the package
-    // transition, explicit protocol values are used when accepted; otherwise
-    // the legacy `openai` alias keeps the current scanner schema valid.
-    const provider = scannerProvider(profile);
-    if (provider !== undefined) config.provider = provider;
+    // `provider` is the published scanner's protocol selector.
+    config.provider = scannerProtocol(profile);
     return config as ModelConfig;
   }
 }

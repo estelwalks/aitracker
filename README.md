@@ -51,8 +51,9 @@ From understanding your AI usage, to managing AI capabilities, to distilling Ski
 ## Quick Start
 
 AITracker is a desktop application built with Electron, TanStack Start, React,
-and TypeScript. The repository includes the `skill-scanner` package it depends
-on, so a fresh clone can be installed and built without a sibling repository.
+and TypeScript. Security scanning uses the published
+`@l3m0nc9/agent-threat-scanner` npm package, so a fresh clone only needs the
+root project dependencies.
 
 ### Requirements
 
@@ -73,8 +74,8 @@ To run the browser development server only, use `npm run dev`.
 
 ```bash
 npm run build:desktop       # Web app + Electron main/preload bundles
-npm run typecheck           # App and bundled scanner
-npm run lint                # App and bundled scanner
+npm run typecheck           # App and Electron integration
+npm run lint                # App lint rules
 npm run test:all            # Unit, tooling, database, and scanner tests
 npm run check:opensource-hygiene
 ```
@@ -87,9 +88,7 @@ See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
 generated-file policy, and repository layout.
 
 This repository is currently published as the `1.0.0-beta.1` prerelease. See
-[Privacy](PRIVACY.md) for data-handling details and
-[third-party notices](THIRD_PARTY_NOTICES.md) for dependency license
-attribution.
+[Privacy](PRIVACY.md) for data-handling details.
 
 ---
 
@@ -242,11 +241,10 @@ opening a public issue.
 AITracker is licensed under the MIT License. See [LICENSE](LICENSE) for the
 full license text.
 
-See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model and
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for dependency notices.
+See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
 
-The bundled `packages/skill-scanner` component retains its MIT license; see its
-own `LICENSE` and `NOTICE` files.
+The scanner package is distributed separately under the MIT license:
+`@l3m0nc9/agent-threat-scanner`.
 
 ---
 
