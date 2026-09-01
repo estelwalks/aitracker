@@ -25,3 +25,6 @@ tests/fixtures/performance/fixture-10x.events.json
 docs/*/project-sparkle-hub-*
 
 # Local agent skills directory (personal workflow tooling, not repo code)
+
+# Local development documentation
+dev-docs/
