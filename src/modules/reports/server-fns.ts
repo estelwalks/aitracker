@@ -231,35 +231,6 @@ export interface SyncReportScheduleResult {
   readonly errorCode?: string;
 }
 
-export const REPORT_SCHEDULE_MODEL_REQUIRED_ERROR =
-  "errors.reports.modelRequired" as const;
-
-export function hasEnabledReportSchedule(
-  config: Pick<ReportScheduleInput, (typeof REPORT_SCHEDULE_KINDS)[number]>,
-): boolean {
-  return REPORT_SCHEDULE_KINDS.some((kind) => config[kind].enabled);
-}
-
-async function enablesReportSchedule(
-  root: {
-    readonly preferences: {
-      get(key: string): Promise<{ readonly enabled?: boolean } | undefined>;
-    };
-  },
-  config: ReportScheduleInput,
-): Promise<boolean> {
-  const current = await Promise.all(
-    REPORT_SCHEDULE_KINDS.map(async (kind) => ({
-      kind,
-      preference: await root.preferences.get(REPORT_TASK_IDS[kind]),
-    })),
-  );
-  return current.some(
-    ({ kind, preference }) =>
-      config[kind].enabled && preference?.enabled !== true,
-  );
-}
-
 export interface ReportScheduleStatus {
   readonly lastRun: {
     readonly status:
@@ -301,28 +272,6 @@ export async function syncReportScheduleToTaskPreference(
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
-  if (
-    hasEnabledReportSchedule(config) &&
-    (await enablesReportSchedule(root, config))
-  ) {
-    try {
-      const activeView = await root.modelProfiles.getActiveView();
-      const activeProfile = activeView
-        ? await root.modelProfiles.getProfileForExecution(activeView.id)
-        : undefined;
-      if (!activeProfile?.apiKey?.trim() || !activeProfile.model?.trim()) {
-        return {
-          ok: false,
-          errorCode: REPORT_SCHEDULE_MODEL_REQUIRED_ERROR,
-        };
-      }
-    } catch {
-      return {
-        ok: false,
-        errorCode: REPORT_SCHEDULE_MODEL_REQUIRED_ERROR,
-      };
-    }
-  }
   for (const request of reportSchedulePreferenceRequests(config)) {
     const result = await root.taskApi.updatePreference(request);
     if (!result.ok) return { ok: false, errorCode: result.error.code };

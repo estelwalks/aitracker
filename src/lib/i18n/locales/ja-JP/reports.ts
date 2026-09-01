@@ -11,6 +11,12 @@ export const reports = {
     rotate: "別のインサイト",
     dots: "インサイトカルーセル",
   },
+  aiGuide: {
+    title: "AI を接続してレポート要約を自動生成",
+    desc: "モデル未接続でも固定形式の完全なレポートを生成できます。接続後は、生成済みレポートに基づく AI 要約が追加され、Markdown と PDF にも含まれます。",
+    action: "モデルを接続",
+    compact: "AI を接続して詳細要約",
+  },
   archive: {
     title: "履歴アーカイブ",
     search: "アーカイブを検索",
@@ -122,8 +128,8 @@ export const reports = {
     weekdayNarrow: "月火水木金土日",
   },
   header: {
-    sessions: "{count} 件",
-    tokens: "{tokens} tokens",
+    sessions: "{count} セッション",
+    tokens: "{tokens} トークン",
     cost: "{cost}",
     generating: "生成中…",
     goToday: "今日",

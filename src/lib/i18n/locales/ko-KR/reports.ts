@@ -10,6 +10,12 @@ export const reports = {
     rotate: "다른 인사이트",
     dots: "인사이트 캐러셀",
   },
+  aiGuide: {
+    title: "AI를 연결하여 보고서 요약 자동 생성",
+    desc: "모델을 연결하지 않아도 완전한 고정 형식 보고서를 생성할 수 있습니다. 연결 후에는 생성된 보고서를 기반으로 AI 요약이 추가되며 Markdown과 PDF 내보내기에도 포함됩니다.",
+    action: "모델 연결",
+    compact: "AI 연결로 심층 요약",
+  },
   archive: {
     title: "히스토리 아카이브",
     search: "아카이브 검색",
@@ -124,8 +130,8 @@ export const reports = {
     weekdayNarrow: "월화수목금토일",
   },
   header: {
-    sessions: "{count}개",
-    tokens: "{tokens} tokens",
+    sessions: "세션 {count}개",
+    tokens: "{tokens} 토큰",
     cost: "{cost}",
     generating: "생성 중…",
     goToday: "오늘",

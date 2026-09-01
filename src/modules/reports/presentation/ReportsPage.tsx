@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,7 +15,10 @@ import {
 import { toast } from "sonner";
 
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
-import { InsightCard } from "../../insights/index.ts";
+import {
+  InsightCard,
+  PAGE_INSIGHT_REFRESH_EVENT,
+} from "../../insights/index.ts";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import {
@@ -196,6 +199,21 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
   const { t, format, locale } = useI18n();
   const router = useRouter();
   const feed = initial.feed;
+
+  useEffect(() => {
+    const refreshAfterModelChange = () => {
+      void router.invalidate();
+    };
+    window.addEventListener(
+      PAGE_INSIGHT_REFRESH_EVENT,
+      refreshAfterModelChange,
+    );
+    return () =>
+      window.removeEventListener(
+        PAGE_INSIGHT_REFRESH_EVENT,
+        refreshAfterModelChange,
+      );
+  }, [router]);
 
   const [now] = useState(() => new Date());
   const [kind, setKind] = useState<PeriodGranularity>("day");
@@ -583,9 +601,22 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
           <section className="rounded-xl bg-card p-4">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-[13px] font-semibold tracking-tight">
-                  {period.label}
-                </h2>
+                <div className="flex min-w-0 items-center gap-2">
+                  <h2 className="truncate text-[13px] font-semibold tracking-tight">
+                    {period.label}
+                  </h2>
+                  {feed.offline && (
+                    <Link
+                      to="/settings"
+                      search={{ section: "model" }}
+                      title={t("reports.aiGuide.desc")}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground ring-1 ring-border/70 transition-colors hover:text-foreground"
+                    >
+                      <Sparkles className="size-3" />
+                      {t("reports.aiGuide.compact")}
+                    </Link>
+                  )}
+                </div>
                 <span className="aitracker-num mt-0.5 block truncate font-mono text-[10.5px] text-muted-foreground">
                   {t("reports.header.sessions", {
                     count: periodMetric.count,

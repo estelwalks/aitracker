@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { createServer, type IncomingMessage } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AddressInfo } from "node:net";
 
 import { ENV, TEST_TMP_PREFIX } from "../../lib/app-config.ts";
 import {
@@ -132,158 +130,38 @@ test("an env-configured LLM does not replace the active-profile requirement", as
   );
 });
 
-test("an active profile triggers a real generation against the profile endpoint", async () => {
-  await withIsolatedRoot(async (root) => {
-    let receivedBody = "";
-    const server = createServer((req: IncomingMessage, res) => {
-      let raw = "";
-      req.on("data", (chunk: Buffer) => {
-        raw += chunk.toString("utf8");
-      });
-      req.on("end", () => {
-        receivedBody = raw;
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(
-          JSON.stringify({
-            choices: [{ message: { content: "The weekly report content." } }],
-          }),
-        );
-      });
-    });
-    await new Promise<void>((resolve) =>
-      server.listen(0, "127.0.0.1", resolve),
-    );
-    const { port } = server.address() as AddressInfo;
-    try {
+test("an active profile does not invoke AI for an empty report", async () => {
+  const previousFetch = globalThis.fetch;
+  let requestCount = 0;
+  globalThis.fetch = async () => {
+    requestCount += 1;
+    throw new Error("AI must not be called for an empty report");
+  };
+  try {
+    await withIsolatedRoot(async (root) => {
       const profile = await root.modelProfiles.upsert({
         name: "integration-profile",
         mode: "custom",
         protocol: "openai",
-        endpoint: `http://127.0.0.1:${port}/v1`,
+        endpoint: "https://model.example.test/v1",
         model: "profile-test-model",
         apiKey: "sk-profile-123456",
       });
-      assert.ok(profile.id);
       assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
-
       const result = await generateReport(
         "reports.weekly",
         { granularity: "week", key: "2026-08-24" },
         "en-US",
       );
       assert.equal(result.triggered, true);
-
-      // The real call must have used the profile's endpoint + model, which
-      // proves modelId = profile id reached the profile-backed provider.
-      const payload = JSON.parse(receivedBody) as {
-        model?: string;
-        messages?: Array<{ role?: string; content?: string }>;
-      };
-      assert.equal(payload.model, "profile-test-model");
-      assert.equal(payload.messages?.[0]?.role, "system");
-      assert.match(
-        payload.messages?.[0]?.content ?? "",
-        /English Markdown weekly report/,
-      );
-      assert.match(
-        payload.messages?.[0]?.content ?? "",
-        /write the entire report in English/i,
-      );
-      assert.equal(payload.messages?.[1]?.role, "user");
-      assert.match(payload.messages?.[1]?.content ?? "", /本时段共/);
-      assert.doesNotMatch(payload.messages?.[1]?.content ?? "", /日报生成助手/);
+      assert.ok(result.reportId);
+      assert.equal(requestCount, 0);
       assert.equal(await latestRunStatus(root), "succeeded");
-    } finally {
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
-    }
-  });
-});
-
-test("weekly generation with an unreachable endpoint fails without replacing the report", async () => {
-  await withIsolatedRoot(async (root) => {
-    const profile = await root.modelProfiles.upsert({
-      name: "dead-profile",
-      mode: "custom",
-      protocol: "openai",
-      endpoint: "http://127.0.0.1:1/v1",
-      model: "dead-test-model",
-      apiKey: "sk-dead-123456",
+      const report = await getReportBody(result.reportId!);
+      assert.match(report?.body ?? "", /No AI usage was recorded this week/);
+      assert.doesNotMatch(report?.body ?? "", /## AI summary/);
     });
-    assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
-    const result = await generateReport(
-      "reports.weekly",
-      { granularity: "week", key: "2026-08-24" },
-      "en-US",
-    );
-    assert.equal(result.triggered, false);
-    assert.equal(result.reportId, undefined);
-    assert.equal(result.errorCode, "errors.reports.generationFailed");
-    assert.equal(await latestRunStatus(root), "failed");
-  });
-});
-
-test("a failed regeneration returns its error while the previous report remains readable", async () => {
-  await withIsolatedRoot(async (root) => {
-    let requestCount = 0;
-    const server = createServer((req: IncomingMessage, res) => {
-      req.resume();
-      req.on("end", () => {
-        requestCount += 1;
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(
-          JSON.stringify(
-            requestCount === 1
-              ? { choices: [{ message: { content: "Existing report." } }] }
-              : { choices: [] },
-          ),
-        );
-      });
-    });
-    await new Promise<void>((resolve) =>
-      server.listen(0, "127.0.0.1", resolve),
-    );
-    const { port } = server.address() as AddressInfo;
-    try {
-      const profile = await root.modelProfiles.upsert({
-        name: "failing-regeneration-profile",
-        mode: "custom",
-        protocol: "openai",
-        endpoint: `http://127.0.0.1:${port}/v1`,
-        model: "profile-test-model",
-        apiKey: "sk-profile-123456",
-      });
-      assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
-
-      const period = {
-        granularity: "week" as const,
-        key: "2026-08-24",
-      };
-      const previous = await generateReport("reports.weekly", period, "en-US");
-      assert.equal(previous.triggered, true);
-      assert.ok(previous.reportId);
-
-      const failed = await generateReport("reports.weekly", period, "en-US");
-      assert.equal(failed.triggered, false);
-      assert.equal(failed.reportId, undefined);
-      assert.equal(failed.errorCode, "errors.reports.generationFailed");
-      assert.equal(await latestRunStatus(root), "failed");
-      assert.equal(
-        (await getReportBody(previous.reportId!))?.body,
-        "Existing report.",
-      );
-      const view = await loadReports("zh-CN");
-      assert.equal(
-        view.viewModel.feed.reports.some(
-          (report) => report.reportId === previous.reportId,
-        ),
-        true,
-      );
-    } finally {
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
-    }
-  });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
