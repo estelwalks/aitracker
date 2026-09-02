@@ -209,6 +209,10 @@ Your AI usage records, analytics data, Skills, Rules, knowledge, and memories ar
 
 Your data belongs to you.
 
+Skills Market listings and exchange-rate data come from the project-operated
+service `ai.trusttools.cn`; when that service is unreachable, the app falls
+back to cached or built-in data instead.
+
 ---
 
 ## What Is AITracker Trying to Solve?
