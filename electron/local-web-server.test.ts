@@ -6,7 +6,10 @@ import { join } from "node:path";
 import test from "node:test";
 
 import type { SecurityScannerService } from "./security-scanner-service.js";
-import { startLocalWebServer } from "./local-web-server.js";
+import {
+  CONTENT_SECURITY_POLICY,
+  startLocalWebServer,
+} from "./local-web-server.js";
 import { SECURITY_CSRF_HEADER } from "./security-http-api.js";
 
 async function fixture(): Promise<string> {
@@ -231,4 +234,76 @@ test("refuses to serve Nitro server-function chunks from /assets before token va
     await server.close();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("applies CSP and Referrer-Policy to HTML document responses", async () => {
+  const root = await fixture();
+  const server = await startLocalWebServer(root, {
+    securityScanner: scanner(),
+  });
+  try {
+    const bootstrap = await fetch(
+      server.createBrowserBootstrapUrl("/tracker"),
+      { redirect: "manual" },
+    );
+    const cookie = bootstrap.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
+    assert.equal(bootstrap.status, 303);
+
+    const document = await fetch(`${server.origin}/tracker`, {
+      headers: { cookie },
+    });
+    assert.equal(document.status, 200);
+    assert.equal(
+      document.headers.get("content-security-policy"),
+      CONTENT_SECURITY_POLICY,
+    );
+    assert.equal(document.headers.get("referrer-policy"), "no-referrer");
+    // Long-standing transport behaviors must still hold on the same response.
+    assert.equal(document.headers.get("cache-control"), "no-store");
+    assert.equal(document.headers.get("x-content-type-options"), "nosniff");
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("stamps CSP and Referrer-Policy on static assets and JSON/error responses", async () => {
+  const root = await fixture();
+  const server = await startLocalWebServer(root, {
+    securityScanner: scanner(),
+  });
+  try {
+    // Static assets are served ahead of capability-token validation.
+    await writeFile(join(root, "public", "renderer.js"), "export const ok = 1");
+    const asset = await fetch(`${server.origin}/renderer.js`);
+    assert.equal(asset.status, 200);
+    assert.equal(
+      asset.headers.get("content-security-policy"),
+      CONTENT_SECURITY_POLICY,
+    );
+    assert.equal(asset.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(asset.headers.get("x-content-type-options"), "nosniff");
+
+    // JSON security API responses carry the policy too (harmless there).
+    const unauthorized = await fetch(
+      `${server.origin}/api/security/capability`,
+    );
+    assert.equal(unauthorized.status, 401);
+    assert.equal(
+      unauthorized.headers.get("content-security-policy"),
+      CONTENT_SECURITY_POLICY,
+    );
+    assert.equal(unauthorized.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(unauthorized.headers.get("x-content-type-options"), "nosniff");
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("CSP policy string matches the approved renderer policy exactly", () => {
+  assert.equal(
+    CONTENT_SECURITY_POLICY,
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+  );
 });
