@@ -40,7 +40,14 @@ npm run test:e2e:offline
   the target platform.
 - Inspect the unpacked artifact to ensure secrets, local databases, test
   fixtures, and source maps are not included unintentionally.
-- Preserve dependency license files and attach checksums to the release.
+- Preserve dependency license files: the `afterPack` hook
+  (`electron/after-pack.cjs`) runs `scripts/copy-license-files.mjs` on every
+  package, copying each production dependency's LICENSE/NOTICE/COPYING files
+  into `<app>/Contents/Resources/licenses/<package>/` (macOS) or
+  `<unpacked>/resources/licenses/<package>/` (Windows). Manually verify the
+  `licenses` folder exists in the unpacked artifact and includes
+  `@estelwalks/agent-threat-scanner`'s LICENSE and NOTICE before publishing.
+- Attach checksums to the release.
 - Sign and notarize platform artifacts with credentials held outside this
   repository. Never commit certificates, private keys, or signing logs.
 
