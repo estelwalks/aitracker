@@ -43,6 +43,7 @@ import type {
 } from "./contracts.ts";
 import type { MonitoringStatus } from "../monitoring/contracts.ts";
 import { APP_NAME } from "../../lib/app-config.ts";
+import { fetchExternal } from "../../lib/http/external-request.server.ts";
 
 const DASHBOARD_INSIGHT_PROMPT = {
   id: "dashboard.insight.aggregate",
@@ -428,7 +429,8 @@ export function createDashboardAIInsightService(
   const now = options.now ?? Date.now;
   const ttlMs = options.ttlMs ?? INSIGHT_TTL_MS;
   const timeoutMs = options.timeoutMs ?? INSIGHT_TIMEOUT_MS;
-  const fetchImpl = options.fetch ?? fetch;
+  const fetchImpl: typeof fetch = (input, init) =>
+    fetchExternal(input, init, options.fetch ?? fetch);
   let cache: CacheEntry | undefined;
   let resolved: DashboardAIInsightRuntimeConfig | undefined;
   let pending: Promise<DashboardAIInsightView> | undefined;

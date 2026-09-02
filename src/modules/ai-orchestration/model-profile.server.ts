@@ -35,6 +35,7 @@ import type {
   AIProviderRequest,
   AIResponse,
 } from "./contracts.ts";
+import { fetchExternal } from "../../lib/http/external-request.server.ts";
 
 class ProfileProviderInvocationError extends Error {
   readonly name = "ProfileProviderInvocationError";
@@ -281,7 +282,8 @@ export function createModelProfileNetworkOperations(options?: {
   readonly fetchFn?: typeof fetch;
   readonly timeoutMs?: number;
 }): ModelProfileNetworkOperations {
-  const fetchImpl = options?.fetchFn ?? fetch;
+  const fetchImpl: typeof fetch = (input, init) =>
+    fetchExternal(input, init, options?.fetchFn ?? fetch);
   const timeoutMs = options?.timeoutMs ?? MODEL_PROFILE_NETWORK_TIMEOUT_MS;
 
   async function test(
@@ -767,7 +769,8 @@ export async function diagnoseModelProfile(
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120_000) {
     throw new RangeError("timeoutMs must be an integer from 1 to 120000");
   }
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn: typeof fetch = (input, init) =>
+    fetchExternal(input, init, options.fetchFn ?? fetch);
   const now = options.now ?? Date.now;
   const common = { profile, model, fetchFn, timeoutMs, now };
   const attempts = [] as ModelDiagnosticAttempt[];
@@ -847,7 +850,8 @@ export function createProfileBackedProvider(options: {
   readonly resolve: (profileId: string) => Promise<ModelProfile | undefined>;
   readonly fetchFn?: typeof fetch;
 }): AIModelProvider {
-  const fetchImpl = options.fetchFn ?? fetch;
+  const fetchImpl: typeof fetch = (input, init) =>
+    fetchExternal(input, init, options.fetchFn ?? fetch);
   return {
     providerId: "profile",
     async invoke(request: AIProviderRequest): Promise<AIResponse> {

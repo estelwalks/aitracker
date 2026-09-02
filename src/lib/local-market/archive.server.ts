@@ -1,5 +1,6 @@
 import { gunzipSync } from "node:zlib";
 import { AppError } from "../errors";
+import { fetchExternal } from "../http/external-request.server.ts";
 
 import type {
   SkillDownloadInspection,
@@ -299,13 +300,17 @@ export async function downloadAndInspectSkill(
   );
 
   try {
-    const response = await (options.fetcher ?? fetch)(buildDownloadUrl(skill), {
-      headers: {
-        accept:
-          "application/gzip, application/x-gzip, application/octet-stream",
+    const response = await fetchExternal(
+      buildDownloadUrl(skill),
+      {
+        headers: {
+          accept:
+            "application/gzip, application/x-gzip, application/octet-stream",
+        },
+        signal: controller.signal,
       },
-      signal: controller.signal,
-    });
+      options.fetcher ?? fetch,
+    );
     if (!response.ok)
       throw new AppError("errors.market.archive.downloadHttp", {
         status: response.status,

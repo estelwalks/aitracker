@@ -31,6 +31,7 @@ import {
   type SecurityScanTrigger,
   type SecuritySkillTarget,
 } from "./contracts.js";
+import { createSecurityScannerFetch } from "./security-scanner-http.js";
 
 const MAX_FILES = 500;
 const MAX_DEPTH = 6;
@@ -1042,11 +1043,15 @@ export class SecurityScannerService {
           this.#state.resultIds.push(entry.id);
           continue;
         }
-        const report = await (this.#options.scanner ?? scanSkill)({
+        const scanRequest = {
           mode: request.mode,
           locale,
           files: collected.files,
           ...(config == null ? {} : { model: config }),
+        };
+        const scanner = this.#options.scanner ?? scanSkill;
+        const report = await scanner(scanRequest, {
+          fetch: createSecurityScannerFetch(),
         });
         if (!this.#isActive(id, epoch)) return;
         const dto = sanitizeReport(

@@ -64,29 +64,47 @@ export const getRatesSnapshot = createServerFn({ method: "POST" })
  */
 export const refreshExchangeRates = createServerFn({ method: "POST" }).handler(
   async (): Promise<RatesSnapshot> => {
-    const { getCompositionRoot } =
-      await import("../../app/composition.server.ts");
-    const { taskApi } = await getCompositionRoot();
-    const queued = await taskApi.runNow({ taskId: "exchange.refresh" });
-    if (!queued.ok) throw new AppError("errors.pricing.rateRefreshFailed");
-    const awaited = await taskApi.awaitRun({
-      runId: queued.value.runId,
-      timeoutMs: 25_000,
-    });
-    if (!awaited.ok || awaited.value.status !== "succeeded")
-      throw new AppError("errors.pricing.rateRefreshFailed");
-    // The task wrote the fresh cache file; bypass the in-memory TTL and read
-    // the file-backed snapshot so the caller sees the new rates immediately.
-    const { buildPricingSnapshot } = await import("./dynamic.server.ts");
-    const snapshot = await buildPricingSnapshot([], {
-      refreshExchange: false,
-    });
-    const value: RatesSnapshot = {
-      rates: snapshot.exchangeRates as Record<Currency, number>,
-      date: snapshot.exchangeRateDate,
-      source: snapshot.exchangeRateSource,
-    };
-    ratesCache = { at: Date.now(), value };
-    return value;
+    try {
+      const { getCompositionRoot } =
+        await import("../../app/composition.server.ts");
+      const { taskApi } = await getCompositionRoot();
+      const queued = await taskApi.runNow({ taskId: "exchange.refresh" });
+      if (queued.ok) {
+        await taskApi.awaitRun({
+          runId: queued.value.runId,
+          timeoutMs: 25_000,
+        });
+      }
+      // The task wrote the fresh cache when the network was available. When
+      // it did not, this cache-only read returns stale-cache/builtin rates;
+      // both are valid offline UI states and must not become an RPC error.
+      const { buildPricingSnapshot } = await import("./dynamic.server.ts");
+      const snapshot = await buildPricingSnapshot([], {
+        refreshExchange: false,
+      });
+      const value: RatesSnapshot = {
+        rates: snapshot.exchangeRates as Record<Currency, number>,
+        date: snapshot.exchangeRateDate,
+        source: snapshot.exchangeRateSource,
+      };
+      ratesCache = { at: Date.now(), value };
+      return value;
+    } catch {
+      // A broken scheduler/database path must not turn an offline manual
+      // refresh into an application error. Return the last in-memory value or
+      // the built-in snapshot if no value has been loaded yet.
+      if (ratesCache) return ratesCache.value;
+      const { buildPricingSnapshot } = await import("./dynamic.server.ts");
+      const snapshot = await buildPricingSnapshot([], {
+        refreshExchange: false,
+      });
+      const value: RatesSnapshot = {
+        rates: snapshot.exchangeRates as Record<Currency, number>,
+        date: snapshot.exchangeRateDate,
+        source: snapshot.exchangeRateSource,
+      };
+      ratesCache = { at: Date.now(), value };
+      return value;
+    }
   },
 );

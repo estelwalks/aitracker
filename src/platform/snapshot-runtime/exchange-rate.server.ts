@@ -1,6 +1,8 @@
 import { BUILTIN_RATES } from "../../lib/pricing/index.ts";
 import { RUNTIME_POLICY } from "../../app/runtime-policy.generated.ts";
 import type { Currency } from "../../lib/i18n/locale.ts";
+import { MARKET_API_BASE } from "../../lib/app-config.ts";
+import { fetchExternal } from "../../lib/http/external-request.server.ts";
 
 /**
  * P3-T3-05: Exchange-rate snapshot.
@@ -12,7 +14,7 @@ import type { Currency } from "../../lib/i18n/locale.ts";
  * refresh runs. Offline failures keep last-known-good.
  */
 
-interface ExchangeCache {
+export interface ExchangeCache {
   fetchedAt: string;
   date: string;
   rates: Partial<Record<Currency, number>>;
@@ -50,10 +52,6 @@ function positiveOrZero(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-function parseRate(value: unknown): number {
-  return positiveOrZero(value) ? value : 0;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === "object" && !Array.isArray(value);
 }
@@ -69,8 +67,111 @@ function withFallbacks(
   };
 }
 
-const EXCHANGE_URL =
-  "https://api.frankfurter.dev/v2/rates?base=USD&quotes=CNY,JPY,KRW";
+export const EXCHANGE_RATE_URL = `${MARKET_API_BASE}/v2/rates?base=USD&quotes=CNY,JPY,KRW`;
+
+const EXCHANGE_QUOTES = ["CNY", "JPY", "KRW"] as const;
+
+function validDate(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/u.test(value) &&
+    Number.isFinite(Date.parse(`${value}T00:00:00.000Z`))
+  );
+}
+
+function parseRemoteRates(
+  value: unknown,
+):
+  | { readonly date: string; readonly rates: Record<Currency, number> }
+  | undefined {
+  if (!Array.isArray(value) || value.length !== EXCHANGE_QUOTES.length)
+    return undefined;
+
+  let date: string | undefined;
+  const rates: Partial<Record<Currency, number>> = {};
+  for (const row of value) {
+    if (!isRecord(row)) return undefined;
+    if (row.base !== "USD" || !validDate(row.date)) return undefined;
+    if (date !== undefined && date !== row.date) return undefined;
+    date = row.date;
+    if (
+      typeof row.quote !== "string" ||
+      !EXCHANGE_QUOTES.includes(row.quote as (typeof EXCHANGE_QUOTES)[number])
+    )
+      return undefined;
+    const quote = row.quote as Currency;
+    if (rates[quote] !== undefined) return undefined;
+    if (!positiveOrZero(row.rate) || row.rate <= 0) return undefined;
+    rates[quote] = row.rate;
+  }
+
+  if (date === undefined) return undefined;
+  if (EXCHANGE_QUOTES.some((quote) => rates[quote] === undefined))
+    return undefined;
+  return {
+    date,
+    rates: {
+      CNY: rates.CNY!,
+      JPY: rates.JPY!,
+      KRW: rates.KRW!,
+      USD: 1,
+    },
+  };
+}
+
+function normalizeCached(
+  cached: ExchangeCache | undefined,
+  now: Date,
+): ExchangeCache | undefined {
+  if (!isRecord(cached)) return undefined;
+  const rates: Partial<Record<Currency, number>> = {};
+  for (const quote of EXCHANGE_QUOTES) {
+    if (positiveOrZero(cached.rates?.[quote]) && cached.rates[quote] > 0)
+      rates[quote] = cached.rates[quote];
+  }
+  if (Object.keys(rates).length === 0) return undefined;
+  return {
+    fetchedAt:
+      typeof cached.fetchedAt === "string" &&
+      Number.isFinite(Date.parse(cached.fetchedAt))
+        ? cached.fetchedAt
+        : new Date(0).toISOString(),
+    date: validDate(cached.date) ? cached.date : now.toISOString().slice(0, 10),
+    rates,
+  };
+}
+
+async function fetchRemoteRates(
+  runFetcher: typeof fetch,
+  timeoutMs: number,
+): Promise<ReturnType<typeof parseRemoteRates>> {
+  const controller = new AbortController();
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  const request = fetchExternal(
+    EXCHANGE_RATE_URL,
+    {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    },
+    runFetcher,
+  ).then(async (response) => {
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return parseRemoteRates(await response.json());
+  });
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutTimer = setTimeout(() => {
+      controller.abort();
+      reject(new Error("exchange rate request timed out"));
+    }, timeoutMs);
+  });
+  try {
+    const parsed = await Promise.race([request, timeout]);
+    if (!parsed) throw new Error("incomplete rate response");
+    return parsed;
+  } finally {
+    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+  }
+}
 
 async function defaultCache(): Promise<ExchangeRateCache> {
   const { getCompositionRoot } =
@@ -109,10 +210,12 @@ export function createExchangeRateRepository(
     readonly fetcher?: typeof fetch;
     readonly now?: () => Date;
     readonly cache?: ExchangeRateCache;
+    readonly timeoutMs?: number;
   } = {},
 ): ExchangeRateRepository {
   const policy = RUNTIME_POLICY.snapshotPolicies.exchangeRates;
   const freshForMs = policy.freshForMinutes * 60 * 1000;
+  const timeoutMs = options.timeoutMs ?? policy.timeoutMs;
 
   const cache = async () => options.cache ?? defaultCache();
   const loadCached = async (): Promise<ExchangeCache | undefined> =>
@@ -122,76 +225,49 @@ export function createExchangeRateRepository(
     cached: ExchangeCache | undefined,
     now: Date,
   ): ExchangeRateSnapshot => {
-    if (!cached) return builtinFallback(now);
-    const fetchedAt = new Date(cached.fetchedAt);
+    const normalized = normalizeCached(cached, now);
+    if (!normalized) return builtinFallback(now);
+    const fetchedAt = new Date(normalized.fetchedAt);
     const stale =
       !Number.isFinite(fetchedAt.getTime()) ||
       now.getTime() - fetchedAt.getTime() >= freshForMs;
     return {
-      rates: withFallbacks(cached.rates),
-      date: cached.date,
+      rates: withFallbacks(normalized.rates),
+      date: normalized.date,
       source: stale ? "stale-cache" : "cache",
-      fetchedAt: cached.fetchedAt,
+      fetchedAt: normalized.fetchedAt,
       stale,
     };
   };
 
   return {
     async readCache() {
-      return snapshotFromCache(
-        await loadCached(),
-        options.now?.() ?? new Date(),
-      );
+      let cached: ExchangeCache | undefined;
+      try {
+        cached = await loadCached();
+      } catch {
+        cached = undefined;
+      }
+      return snapshotFromCache(cached, options.now?.() ?? new Date());
     },
 
     async refresh({ fetcher, now } = {}) {
       const current = now ?? options.now?.() ?? new Date();
       const runFetcher = fetcher ?? options.fetcher ?? fetch;
-      const cached = await loadCached();
+      let cached: ExchangeCache | undefined;
+      try {
+        cached = await loadCached();
+      } catch {
+        cached = undefined;
+      }
       let next: ExchangeCache;
       try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), policy.timeoutMs);
-        let response: Response;
-        try {
-          response = await runFetcher(EXCHANGE_URL, {
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timer);
-        }
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const value = (await response.json()) as unknown;
-        let date: unknown;
-        let rawRates: Record<string, unknown> | undefined;
-        if (Array.isArray(value)) {
-          rawRates = {};
-          for (const row of value) {
-            if (!isRecord(row)) continue;
-            if (date === undefined && typeof row.date === "string") {
-              date = row.date;
-            }
-            if (typeof row.quote === "string") {
-              rawRates[row.quote] = row.rate;
-            }
-          }
-        } else if (isRecord(value)) {
-          date = value.date;
-          rawRates = isRecord(value.rates) ? value.rates : undefined;
-        }
-        if (typeof date !== "string" || !rawRates)
-          throw new Error("incomplete rate response");
-        const rates = {
-          CNY: parseRate(rawRates.CNY),
-          JPY: parseRate(rawRates.JPY),
-          KRW: parseRate(rawRates.KRW),
-        };
-        if (rates.CNY === 0 || rates.JPY === 0 || rates.KRW === 0)
-          throw new Error("missing currency");
+        const parsed = await fetchRemoteRates(runFetcher, timeoutMs);
+        if (!parsed) throw new Error("incomplete rate response");
         next = {
           fetchedAt: current.toISOString(),
-          date,
-          rates,
+          date: parsed.date,
+          rates: parsed.rates,
         };
       } catch {
         // Offline/failure: keep last-known-good (stale cache or builtin).

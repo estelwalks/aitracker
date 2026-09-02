@@ -6,6 +6,7 @@ import { APP_DATA_DIR, APP_ID, APP_VERSION, ENV } from "../lib/app-config.ts";
 import { SystemClock } from "../platform/persistence/clock.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
 import type { SnapshotRefreshPort } from "../platform/snapshot-runtime/contracts.ts";
+import type { ExchangeRateSource } from "../platform/snapshot-runtime/exchange-rate.server.ts";
 import { RUNTIME_POLICY } from "./runtime-policy.generated.ts";
 import {
   desktopHeavyCollectorLimit,
@@ -198,6 +199,10 @@ export interface CompositionRoot {
 }
 
 export const COMPOSITION_GLOBAL = `__${APP_ID.toUpperCase()}_COMPOSITION__`;
+
+export function isExchangeRefreshFailure(source: ExchangeRateSource): boolean {
+  return source === "fallback" || source === "stale-cache";
+}
 
 let secretCodecOverride: ModelSecretCodec | undefined;
 
@@ -713,10 +718,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
         const { createExchangeRateRepository } =
           await import("../platform/snapshot-runtime/exchange-rate.server.ts");
         const repository = createExchangeRateRepository();
+        // A network/response failure is a normal offline outcome. The
+        // repository returns stale-cache or built-in rates and the task must
+        // remain unsuccessful so the next startup can retry the expired cache.
         const result = await repository.refresh();
-        if (result.source === "fallback") {
+        if (isExchangeRefreshFailure(result.source))
           throw new Error("errors.pricing.rateUnavailable");
-        }
       },
     },
     // P3-T3-03: installation refresh runs through the shared snapshot

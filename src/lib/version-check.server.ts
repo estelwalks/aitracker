@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { APP_ID, APP_REPO_URL, APP_VERSION, ENV } from "./app-config";
+import { fetchExternal } from "./http/external-request.server.ts";
 
 /**
  * FR-033 — best-effort new-version check requested by the Settings UI.
@@ -128,7 +129,7 @@ async function fetchLatestRelease(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
   try {
-    const response = await fetch(url, {
+    const response = await fetchExternal(url, {
       headers: { Accept: "application/vnd.github+json" },
       signal: controller.signal,
     });

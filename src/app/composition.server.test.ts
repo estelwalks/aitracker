@@ -9,6 +9,7 @@ import { ENV } from "../lib/app-config.ts";
 import {
   COMPOSITION_GLOBAL,
   getCompositionRoot,
+  isExchangeRefreshFailure,
   resetCompositionRootForTests,
 } from "./composition.server.ts";
 
@@ -17,6 +18,13 @@ type CompositionGlobal = Record<typeof COMPOSITION_GLOBAL, unknown>;
 function compositionGlobal(): CompositionGlobal {
   return globalThis as unknown as CompositionGlobal;
 }
+
+test("exchange refresh only treats fallback snapshots as unavailable", () => {
+  assert.equal(isExchangeRefreshFailure("live"), false);
+  assert.equal(isExchangeRefreshFailure("cache"), false);
+  assert.equal(isExchangeRefreshFailure("stale-cache"), true);
+  assert.equal(isExchangeRefreshFailure("fallback"), true);
+});
 
 /**
  * The composition root resolves its data root from the configured usage-home
