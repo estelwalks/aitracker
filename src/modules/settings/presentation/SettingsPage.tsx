@@ -407,8 +407,17 @@ export function SettingsPage({
 
   const handleRefreshRates = async () => {
     try {
-      await refreshRates();
-      toast.success(t("settings.rate.refreshed"));
+      // Offline/failure never rejects (last-known-good is returned). Success
+      // is carried by the manual-refresh marker (the exchange.refresh task
+      // actually rewrote the http-cache); the snapshot `source` after a
+      // refresh is always a plain cache/stale/fallback read label, so it can
+      // never decide the outcome.
+      const snapshot = await refreshRates();
+      if (snapshot.refreshed === true) {
+        toast.success(t("settings.rate.refreshed"));
+      } else {
+        toast.error(t("settings.rate.failed"));
+      }
     } catch {
       toast.error(t("settings.rate.failed"));
     }
