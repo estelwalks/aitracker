@@ -334,9 +334,10 @@ export function usePageInsight(
     const refreshEvidence = async (
       initial: boolean,
       showLoading = false,
+      forceServerRead = false,
     ): Promise<void> => {
       if (refreshInFlight) return;
-      if (!showLoading) {
+      if (!showLoading && !forceServerRead) {
         const cached = readCachedInsight(requestKey);
         if (cached !== undefined) {
           setEnvelope(cached.envelope);
@@ -370,7 +371,9 @@ export function usePageInsight(
           setEnvelope(resolved);
           stopRefreshTimer();
           stopRefreshTimer = startPageInsightRefreshTimer(
-            () => refreshEvidence(false),
+            // A timer firing is the cache-expiry boundary. Do not let the
+            // renderer cache short-circuit the server read at that point.
+            () => refreshEvidence(false, false, true),
             window,
             resolved.refreshIntervalMs ?? refreshIntervalMs,
           );
@@ -388,7 +391,7 @@ export function usePageInsight(
       setEnvelope(cached.envelope);
       setLoading(false);
       stopRefreshTimer = startPageInsightRefreshTimer(
-        () => refreshEvidence(false),
+        () => refreshEvidence(false, false, true),
         window,
         cached.envelope.refreshIntervalMs ?? cached.refreshIntervalMs,
       );
@@ -409,6 +412,15 @@ export function usePageInsight(
         : null;
     refreshChannel?.addEventListener("message", onModelProfileChanged);
     window.addEventListener(PAGE_INSIGHT_REFRESH_EVENT, onModelProfileChanged);
+    const onResume = () => {
+      // Chromium may throttle a hidden/minimized renderer's timers. Once the
+      // app is visible again, reconcile with the server-side cache immediately
+      // so a background-generated AI envelope replaces a cached rules envelope.
+      if (document.visibilityState === "hidden") return;
+      void refreshEvidence(false, false, true);
+    };
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("focus", onResume);
     return () => {
       cancelled = true;
       stopRefreshTimer();
@@ -418,67 +430,16 @@ export function usePageInsight(
       );
       refreshChannel?.removeEventListener("message", onModelProfileChanged);
       refreshChannel?.close();
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("focus", onResume);
     };
   }, [surfaceId, locale, scopeData, requestKey]);
 
-  useEffect(() => {
-    // `status === "rules"` excludes "pending": a caller that lost a
-    // reservation to the batch must not re-fire its own enhance (the batch
-    // writes the cache when it finishes).
-    if (
-      envelope?.autoEnhance !== true ||
-      envelope.source !== "rules" ||
-      envelope.status !== "rules"
-    ) {
-      return;
-    }
-    if (enhancingRef.current) return;
-    // The rules envelope has already rendered. Queue auto enhancement in a
-    // separate turn so the provider can never enter the first-paint path.
-    const timer = window.setTimeout(() => {
-      const now = Date.now();
-      if (!canEnhanceNow(lastEnhanceAtRef.current, now)) return;
-      lastEnhanceAtRef.current = now;
-      enhancingRef.current = true;
-      setEnhancing(true);
-      const requestVersion = insightCacheVersion;
-      void requestEnhancement(
-        requestKey,
-        {
-          data: {
-            surfaceId,
-            locale,
-            scope: scopeData ?? {},
-            reason: "auto",
-          },
-        },
-        envelope.refreshIntervalMs ?? PAGE_INSIGHT_REFRESH_INTERVAL_MS,
-      )
-        .then((next) => {
-          if (requestVersion !== insightCacheVersion) return;
-          setEnvelope((previous) =>
-            previous?.source === "enhanced" && next.source === "rules"
-              ? previous
-              : next,
-          );
-        })
-        .catch(() => {
-          if (requestVersion !== insightCacheVersion) return;
-          // Keep the rule lines visible, but expose a stable fallback status
-          // when the browser cannot receive the server's failure envelope.
-          setEnvelope((previous) =>
-            previous == null || previous.source === "enhanced"
-              ? previous
-              : { ...previous, status: "enhancer-failed", source: "rules" },
-          );
-        })
-        .finally(() => {
-          enhancingRef.current = false;
-          setEnhancing(false);
-        });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [envelope, surfaceId, locale, scopeData, requestKey]);
+  // Automatic enhancement is intentionally not triggered from the renderer.
+  // The server-side `insights.refresh` task precomputes the persisted AI
+  // envelope while the app is idle/backgrounded. The page reads that envelope
+  // and only exposes `enhance()` for an explicit user action; this prevents a
+  // first visit from starting a multi-minute model request.
 
   const enhance = useCallback(
     async (reason: "manual" = "manual"): Promise<void> => {

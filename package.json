@@ -3,7 +3,7 @@
   "version": "1.0.0-beta.1",
   "description": "AITracker local AI development asset dashboard",
   "private": true,
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "build/electron/main.js",
   "sideEffects": false,
   "type": "module",

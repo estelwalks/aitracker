@@ -51,7 +51,8 @@ export interface MarketListResult {
   pagination: MarketPagination;
   source: "network" | "cache";
   fetchedAt: string;
-  warning: string | null;
+  /** i18n message key for a degraded-state note (e.g. cache shown offline), or null when healthy. */
+  warning: MessageKey | null;
   stats?: MarketStats;
 }
 

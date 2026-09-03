@@ -80,7 +80,7 @@ export function SecurityBriefing({
           {pending === 0 ? (
             <ShieldCheck className="size-3.5 text-ok" strokeWidth={1.8} />
           ) : (
-            <ShieldAlert className="size-3.5" strokeWidth={1.8} />
+            <ShieldAlert className="size-3.5 text-danger" strokeWidth={1.8} />
           )}
           {t("security.center.briefing.needsAttention", { count: pending })}
         </span>

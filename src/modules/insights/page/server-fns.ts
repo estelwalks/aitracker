@@ -16,6 +16,7 @@ import { AppError } from "../../../lib/errors.ts";
 import { LOCALES, type Locale } from "../../../lib/i18n/locale.ts";
 import {
   INSIGHT_SURFACE_IDS,
+  INSIGHT_LAST_LOCALE_PREFERENCE_KEY,
   type InsightEnvelope,
   type InsightMode,
   type InsightPreference,
@@ -77,6 +78,29 @@ export interface RefreshPageInsightsInput {
 
 export interface GetPageInsightRefreshStatusInput {
   readonly runId: string;
+}
+
+function rememberInsightLocale(
+  root: Awaited<
+    ReturnType<
+      (typeof import("../../../app/composition.server.ts"))["getCompositionRoot"]
+    >
+  >,
+  locale: Locale,
+): void {
+  try {
+    const preferences = root.database.features.appPreferences;
+    if (preferences.get(INSIGHT_LAST_LOCALE_PREFERENCE_KEY)?.value === locale)
+      return;
+    preferences.set({
+      key: INSIGHT_LAST_LOCALE_PREFERENCE_KEY,
+      value: locale,
+      updatedAtMs: Date.now(),
+    });
+  } catch {
+    // Locale memory is an optimization for the background task; a preference
+    // write failure must never break the insight read/enhance path.
+  }
 }
 
 function parseRefreshPageInsightsInput(
@@ -290,10 +314,14 @@ export const getPageInsight = createServerFn({ method: "GET" })
     parseGetPageInsightInput(input),
   )
   .handler(async ({ data }): Promise<InsightEnvelope> => {
-    const { getPageInsightsApplication } =
-      await import("../../../app/insight-registry.server.ts");
-    const application = await getPageInsightsApplication();
-    const envelope = await application.read(
+    const { getCompositionRoot } =
+      await import("../../../app/composition.server.ts");
+    const root = await getCompositionRoot();
+    // The background task has no renderer request from which to infer the
+    // active language. Remember the last requested locale as a safe, local
+    // preference so a hidden app can refresh the same language.
+    rememberInsightLocale(root, data.locale);
+    const envelope = await root.insights.read(
       data.surfaceId,
       data.scope,
       data.locale,
@@ -306,10 +334,11 @@ export const enhancePageInsight = createServerFn({ method: "POST" })
     parseEnhancePageInsightInput(input),
   )
   .handler(async ({ data }): Promise<InsightEnvelope> => {
-    const { getPageInsightsApplication } =
-      await import("../../../app/insight-registry.server.ts");
-    const application = await getPageInsightsApplication();
-    return application.enhance(data.surfaceId, data.scope, {
+    const { getCompositionRoot } =
+      await import("../../../app/composition.server.ts");
+    const root = await getCompositionRoot();
+    rememberInsightLocale(root, data.locale);
+    return root.insights.enhance(data.surfaceId, data.scope, {
       locale: data.locale,
       reason: data.reason,
     });

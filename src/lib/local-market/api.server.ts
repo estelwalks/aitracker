@@ -217,7 +217,8 @@ export async function fetchMarketSkills(
       return {
         ...cached,
         source: "cache",
-        warning: "网络不可用，正在显示本地缓存结果",
+        // i18n message key — the renderer translates it (market.network.cacheWarning).
+        warning: "market.network.cacheWarning",
       };
     }
 

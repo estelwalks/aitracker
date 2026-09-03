@@ -4,6 +4,7 @@ export const JOB_EXECUTOR_KEYS = [
   "refresh-usage-v1",
   "refresh-skills-v1",
   "refresh-sessions-v1",
+  "refresh-insights-v1",
   "apply-retention-v1",
   "generate-report-v1",
   "refresh-exchange-v1",
@@ -12,8 +13,10 @@ export const JOB_EXECUTOR_KEYS = [
 ] as const;
 export const JOB_I18N_KEYS = [
   "tasks.usageRefresh",
+  "tasks.exchangeRefresh",
   "tasks.skillsRefresh",
   "tasks.sessionsRefresh",
+  "tasks.insightsRefresh",
   "tasks.retentionApply",
   "tasks.reportsGenerate",
   "tasks.installationsRefresh",
@@ -100,7 +103,7 @@ export const JobTypeDefinitionSchema = z
   .object({
     id: taskId,
     executorKey: z.enum(JOB_EXECUTOR_KEYS),
-    category: z.enum(["collection", "maintenance", "report"]),
+    category: z.enum(["collection", "maintenance", "report", "insight"]),
     defaultSchedule: schedule,
     constraints,
     startupPolicy: z.enum(["disabled", "always", "if-stale"]),

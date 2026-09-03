@@ -106,6 +106,29 @@ test("defaults installation refresh on and excludes duplicate security schedulin
   await scheduler.stop();
 });
 
+test("defaults the background insight refresh on", async () => {
+  const h = harness();
+  const insights = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "insights.refresh",
+  );
+  assert.ok(insights);
+  let calls = 0;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [insights],
+    executors: {
+      "refresh-insights-v1": async () => {
+        calls += 1;
+      },
+    },
+  });
+  await scheduler.start();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+  await scheduler.stop();
+});
+
 test("新安装没有历史成功记录时，启动会默认执行汇率刷新", async () => {
   const h = harness();
   const exchange = JOB_DEFINITIONS.find(

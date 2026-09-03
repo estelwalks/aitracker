@@ -239,7 +239,7 @@ export const skills = {
     reasoningTokens: "추론",
     systemPrompt: "시스템 프롬프트",
     notSeparatelyObserved: "로그에서 별도로 관측되지 않음",
-    observedCalls: "사용 이벤트 {count}개",
+    observedCalls: "{count}개 이벤트",
     modelCount: "{count}개 모델",
     details: "사용 세부 정보",
     byModel: "모델별",

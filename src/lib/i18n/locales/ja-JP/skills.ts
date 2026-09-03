@@ -240,7 +240,7 @@ export const skills = {
     reasoningTokens: "推論",
     systemPrompt: "システムプロンプト",
     notSeparatelyObserved: "ログでは個別に観測不可",
-    observedCalls: "使用イベント {count} 件",
+    observedCalls: "{count} 件",
     modelCount: "{count} モデル",
     details: "消費詳細",
     byModel: "モデル別",

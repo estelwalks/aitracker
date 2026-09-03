@@ -27,6 +27,11 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 // is intentionally a compact summary, so keep a little headroom for schema
 // and serialization changes while retaining the newest entries.
 const MAX_PERSISTED_SECURITY_HISTORY_JSON_LENGTH = 60_000;
+// Keep one unusually noisy model report from exceeding the preference limit
+// even when it is the only history entry retained. Findings are more useful
+// than skipped-file diagnostics, so the per-entry fallback trims skipped files
+// first and findings only as a last resort.
+const MAX_PERSISTED_SECURITY_HISTORY_ENTRY_JSON_LENGTH = 56_000;
 
 function authorized(request: Request): boolean {
   const expected = process.env[ENV.DESKTOP_BROKER_TOKEN];
@@ -66,7 +71,9 @@ function enumValue(
 function safeSkillName(value: unknown): string {
   const cleaned = Array.from(String(value ?? ""), (character) => {
     const code = character.codePointAt(0) ?? 0;
-    return code <= 31 || code === 127 ? " " : character;
+    return code <= 31 || code === 127 || character === "\\" || character === '"'
+      ? " "
+      : character;
   })
     .join("")
     .trim();
@@ -82,7 +89,17 @@ function safeEvidenceText(
   fallback: string,
   maxLength: number,
 ): string {
-  const text = String(value ?? "")
+  // SQLite's app_preferences CHECK intentionally rejects backslashes in the
+  // serialized JSON. Quotes, backslashes and control characters in model
+  // evidence would otherwise be escaped by JSON.stringify and make an
+  // otherwise safe history write fail at the database constraint.
+  const text = Array.from(String(value ?? ""), (character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code <= 31 || code === 127 || character === "\\" || character === '"'
+      ? " "
+      : character;
+  })
+    .join("")
     .trim()
     .slice(0, maxLength);
   if (!text) return fallback;
@@ -328,9 +345,44 @@ async function body(request: Request): Promise<Record<string, unknown>> {
   return value as Record<string, unknown>;
 }
 
+function fitPersistedSecurityHistoryEntry(
+  value: PreferenceValue,
+): PreferenceValue {
+  if (value == null || typeof value !== "object" || Array.isArray(value))
+    return value;
+  const entry = value as { [key: string]: PreferenceValue };
+  const report = entry.report;
+  if (report == null || typeof report !== "object" || Array.isArray(report))
+    return value;
+  const reportObject = report as { [key: string]: PreferenceValue };
+  const skippedFiles = Array.isArray(reportObject.skippedFiles)
+    ? [...reportObject.skippedFiles]
+    : [];
+  const findings = Array.isArray(reportObject.findings)
+    ? [...reportObject.findings]
+    : [];
+  reportObject.skippedFiles = skippedFiles;
+  reportObject.findings = findings;
+
+  const serializedLength = (): number => JSON.stringify(entry).length;
+  while (
+    serializedLength() > MAX_PERSISTED_SECURITY_HISTORY_ENTRY_JSON_LENGTH &&
+    skippedFiles.length > 0
+  ) {
+    skippedFiles.pop();
+  }
+  while (
+    serializedLength() > MAX_PERSISTED_SECURITY_HISTORY_ENTRY_JSON_LENGTH &&
+    findings.length > 0
+  ) {
+    findings.pop();
+  }
+  return entry;
+}
+
 export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
   if (!Array.isArray(value)) throw new TypeError("History array is required");
-  const projected = value.slice(0, 200).map((raw) => {
+  const projected = value.slice(0, 200).map((raw, index) => {
     const entry = raw as Record<string, unknown>;
     const report = entry.report as Record<string, unknown> | undefined;
     const findings = Array.isArray(report?.findings)
@@ -391,10 +443,10 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
         })
       : [];
     const tokenUsage = projectTokenUsage(report?.tokenUsage);
-    return {
-      id: String(entry.id ?? "").slice(0, 160),
-      scanId: String(entry.scanId ?? "").slice(0, 80),
-      skillRef: String(entry.skillRef ?? "").slice(0, 80),
+    return fitPersistedSecurityHistoryEntry({
+      id: safeEvidenceText(entry.id, `scan-entry-${index + 1}`, 160),
+      scanId: safeEvidenceText(entry.scanId, "scan:unknown", 80),
+      skillRef: safeEvidenceText(entry.skillRef, "skill:unknown", 80),
       skillName: safeSkillName(entry.skillName),
       mode: entry.mode === "full" ? "full" : "quick",
       trigger: entry.trigger === "automatic" ? "automatic" : "manual",
@@ -403,11 +455,21 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
         ["zh-CN", "en-US", "ja-JP", "ko-KR"],
         "zh-CN",
       ),
-      status: String(entry.status ?? "failed").slice(0, 32),
-      startedAt: String(entry.startedAt ?? "").slice(0, 40),
-      finishedAt: String(entry.finishedAt ?? "").slice(0, 40),
+      status: enumValue(
+        entry.status,
+        ["complete", "partial", "failed", "skipped", "cancelled"],
+        "failed",
+      ),
+      startedAt: safeEvidenceText(entry.startedAt, "", 40),
+      finishedAt: safeEvidenceText(entry.finishedAt, "", 40),
       ...(typeof entry.errorCode === "string"
-        ? { errorCode: entry.errorCode.slice(0, 160) }
+        ? {
+            errorCode: safeEvidenceText(
+              entry.errorCode,
+              "security.scanFailed",
+              160,
+            ),
+          }
         : {}),
       ...(report
         ? {
@@ -420,12 +482,14 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
                 "unknown",
               ),
               riskScore: Number(report.riskScore) || 0,
-              rulesVersion: String(report.rulesVersion ?? "unknown").slice(
-                0,
+              rulesVersion: safeEvidenceText(
+                report.rulesVersion,
+                "unknown",
                 128,
               ),
-              engineVersion: String(report.engineVersion ?? "unknown").slice(
-                0,
+              engineVersion: safeEvidenceText(
+                report.engineVersion,
+                "unknown",
                 128,
               ),
               locale: enumValue(
@@ -433,14 +497,18 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
                 ["zh-CN", "en-US", "ja-JP", "ko-KR"],
                 "zh-CN",
               ),
-              contentHash: String(report.contentHash ?? "").slice(0, 128),
+              contentHash: safeEvidenceText(report.contentHash, "", 128),
               scannedFiles: Number(report.scannedFiles) || 0,
               threatLevel: enumValue(
                 report.threatLevel,
                 ["critical", "high", "medium", "low", "none"],
                 "none",
               ),
-              threatLevelDisplay: String(report.threatLevel ?? "none"),
+              threatLevelDisplay: safeEvidenceText(
+                report.threatLevel,
+                "none",
+                80,
+              ),
               // Category names are risk-kind identifiers (for example
               // `secret_access`). The preference privacy guard deliberately
               // rejects keys that look like credential fields, so category
@@ -461,7 +529,7 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
             },
           }
         : {}),
-    } as unknown as PreferenceValue;
+    } as unknown as PreferenceValue);
   });
 
   // The database stores this whole array in one app_preferences row. Drop the

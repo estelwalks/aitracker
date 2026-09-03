@@ -142,7 +142,7 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="aitracker-empty-state flex flex-col items-center justify-center rounded-xl px-6 py-12 text-center">
+    <div className="aitracker-empty-state flex flex-col items-center justify-center rounded-xl px-6 py-10 text-center">
       {icon && <div className="mb-3 text-muted-foreground">{icon}</div>}
       <p className="text-sm font-medium">{title}</p>
       {desc && (
@@ -408,7 +408,7 @@ export function MetricGrid({
           </div>
           {m.sub && (
             <div
-              className="mt-1 truncate text-[10px] text-muted-foreground/70"
+              className="mt-1 truncate text-[12px] text-muted-foreground"
               title={m.hint ?? undefined}
             >
               {m.sub}

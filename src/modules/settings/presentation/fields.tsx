@@ -17,14 +17,14 @@ export function SecurityLoadError({
 }) {
   const { t } = useI18n();
   return (
-    <div className="aitracker-text-body-sm flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-warn">
-      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+    <div className="aitracker-warning aitracker-text-body-sm flex items-start gap-2 rounded-xl px-3.5 py-3">
+      <AlertTriangle className="aitracker-warning-icon mt-0.5 size-4 shrink-0" />
       <div className="min-w-0">
-        <p className="font-medium">{message}</p>
+        <p className="aitracker-warning-title font-medium">{message}</p>
         <button
           type="button"
           onClick={onRetry}
-          className="aitracker-text-caption mt-1 inline-flex items-center gap-1 hover:opacity-80"
+          className="aitracker-text-caption mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-foreground/85 hover:bg-surface-2 hover:text-foreground"
         >
           <RefreshCw className="size-3" />
           {t("common.retry")}
@@ -38,19 +38,19 @@ export function SecurityLoadError({
 export function SecurityUnavailable({ onRetry }: { onRetry: () => void }) {
   const { t } = useI18n();
   return (
-    <div className="aitracker-text-body-sm flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-warn">
-      <MonitorX className="mt-0.5 size-4 shrink-0" />
+    <div className="aitracker-warning aitracker-text-body-sm flex items-start gap-2 rounded-xl px-3.5 py-3">
+      <MonitorX className="aitracker-warning-icon mt-0.5 size-4 shrink-0" />
       <div className="min-w-0">
-        <p className="font-medium">
+        <p className="aitracker-warning-title font-medium">
           {t("settings.security.unavailable.title")}
         </p>
-        <p className="mt-0.5 leading-relaxed text-warn/80">
+        <p className="aitracker-warning-detail mt-0.5 leading-relaxed">
           {t("settings.security.unavailable.desc")}
         </p>
         <button
           type="button"
           onClick={onRetry}
-          className="aitracker-text-caption mt-2 inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-1 hover:bg-accent"
+          className="aitracker-text-caption mt-2 inline-flex min-h-8 items-center gap-1 rounded-md bg-surface-2 px-2 hover:bg-accent"
         >
           <RefreshCw className="size-3" />
           {t("settings.security.unavailable.retry")}

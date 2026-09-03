@@ -278,7 +278,8 @@ Issueや、新しいAIツールへの対応に関する提案を歓迎します�
 
 ## ライセンス
 
-AITrackerはMIT Licenseの下でライセンスされています。詳しくは[LICENSE](../LICENSE)をご覧ください。
+AITrackerは、追加制限付きのGPL-3.0ベースのプロジェクトライセンスで
+配布されています。詳しくは[LICENSE](../LICENSE)をご覧ください。
 
 ---
 

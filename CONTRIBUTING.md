@@ -23,6 +23,7 @@ Keep commits reviewable and avoid committing generated installers, local data,
 credentials, or unrelated formatting changes. Generated registries should be
 updated only through their `npm run generate:*` commands.
 
-By participating, you agree to follow `CODE_OF_CONDUCT.md`. Contributions are
-accepted under the MIT License. Security scanning is provided by the separately
-distributed `@estelwalks/agent-threat-scanner` package.
+By participating, you agree to follow `CODE_OF_CONDUCT.md`. Contributions to
+AITracker are accepted under the same project license unless otherwise agreed.
+Security scanning is provided by the separately distributed
+`@estelwalks/agent-threat-scanner` package.

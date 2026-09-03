@@ -266,7 +266,8 @@ AITracker is open source.
 
 ## 许可证
 
-AITracker 采用 MIT 许可证。详见 [LICENSE](../LICENSE)。
+AITracker 采用基于 GPL-3.0 且附带额外限制的项目许可证。详见
+[LICENSE](../LICENSE)。
 
 ---
 

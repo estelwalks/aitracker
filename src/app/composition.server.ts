@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 
 import { APP_DATA_DIR, APP_ID, APP_VERSION, ENV } from "../lib/app-config.ts";
+import { LOCALES, type Locale } from "../lib/i18n/locale.ts";
 import { SystemClock } from "../platform/persistence/clock.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
 import type { SnapshotRefreshPort } from "../platform/snapshot-runtime/contracts.ts";
@@ -38,6 +39,11 @@ import {
   type AIExecutorPort,
 } from "../modules/ai-orchestration/ai-executor.ts";
 import type { PageInsightsApplication } from "../modules/insights/page/application.ts";
+import {
+  INSIGHT_LAST_LOCALE_PREFERENCE_KEY,
+  INSIGHT_SURFACE_IDS,
+  type InsightSurfaceId,
+} from "../modules/insights/page/contracts.ts";
 import {
   createProviderRegistry,
   createRegistryRouter,
@@ -692,6 +698,57 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   //
   // The usage.refresh executor updates the same SQLite snapshot coordinator
   // that page queries read.
+  // M3: page-insights application — the 14 surface evidence adapters plus the
+  // optional AI enhancer (M2). It is created before the executor registry so
+  // the scheduler can refresh expired AI insight caches without a renderer.
+  const { createPageInsightsApplicationForRoot } =
+    await import("./insight-registry.server.ts");
+  const insights = await createPageInsightsApplicationForRoot({
+    aiExecutor,
+    modelProfiles,
+    store: databaseRuntime.features.insights,
+    runtimeFlags: databaseRuntime.features.runtimeFlags,
+  });
+
+  const readInsightLocale = (): Locale => {
+    const value = databaseRuntime.features.appPreferences.get(
+      INSIGHT_LAST_LOCALE_PREFERENCE_KEY,
+    )?.value;
+    return typeof value === "string" &&
+      (LOCALES as readonly string[]).includes(value)
+      ? (value as Locale)
+      : "zh-CN";
+  };
+
+  const refreshInsightsInBackground = {
+    async refresh({ signal }: { readonly signal: AbortSignal }) {
+      if (signal.aborted) throw new Error("errors.tasks.cancelled");
+      const locale = readInsightLocale();
+      const results = await Promise.allSettled(
+        INSIGHT_SURFACE_IDS.map(async (surfaceId: InsightSurfaceId) => {
+          if (signal.aborted) throw new Error("errors.tasks.cancelled");
+          return insights.enhance(
+            surfaceId,
+            {},
+            {
+              locale,
+              reason: "batch",
+            },
+          );
+        }),
+      );
+      if (signal.aborted) throw new Error("errors.tasks.cancelled");
+      return {
+        scanned: results.length,
+        changed: results.filter(
+          (result) =>
+            result.status === "fulfilled" &&
+            result.value.status === "enhanced-ready",
+        ).length,
+      };
+    },
+  };
+
   const executorRegistry = createExecutorRegistry({
     usage: {
       async refresh({ signal }) {
@@ -704,6 +761,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
         await sessionSnapshot.refreshNow(signal);
       },
     },
+    insights: refreshInsightsInBackground,
     skills: {
       async refresh({ signal }) {
         if (signal.aborted) throw new Error("errors.tasks.cancelled");
@@ -925,19 +983,6 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
         .catch(() => {});
     },
   };
-
-  // M3: page-insights application — the 14 surface evidence adapters plus the
-  // optional AI enhancer (M2). Assembled through the registry so the root never
-  // statically imports the adapters (avoids a module cycle); the registry also
-  // owns the `insight.killswitch` gate (enhancer disabled, Profile unread).
-  const { createPageInsightsApplicationForRoot } =
-    await import("./insight-registry.server.ts");
-  const insights = await createPageInsightsApplicationForRoot({
-    aiExecutor,
-    modelProfiles,
-    store: databaseRuntime.features.insights,
-    runtimeFlags: databaseRuntime.features.runtimeFlags,
-  });
 
   return {
     database: databaseRuntime,

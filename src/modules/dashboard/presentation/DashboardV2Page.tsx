@@ -311,7 +311,7 @@ export function DashboardV2Page({
           <span className="shrink-0 text-[10px] tracking-[0.14em] text-foreground/75 uppercase">
             {t("dashboard.v2.overviewLabel")}
           </span>
-          <span className="aitracker-num truncate font-mono text-[11px] text-muted-foreground/70">
+          <span className="aitracker-num truncate font-mono text-[12px] text-muted-foreground">
             {format.formatTokens(view.totals.totalTokens)} tokens ·{" "}
             {view.estimatedCostUsd == null
               ? t("dashboard.kpi.unavailable")

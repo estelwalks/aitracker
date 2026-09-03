@@ -71,7 +71,6 @@ export const distill = {
     "{count} 场会话 · ~{tokens} tokens · 官方模型与推荐提示词，无需配置",
   runSummarySegments: "{count} 段素材 · ~{tokens} tokens",
   quotaRemaining: "官方额度今日剩余 {count} 次",
-  quotaHeader: "官方额度今日剩余 {count} 次",
   ownModelConnected: "自有模型 · 已连接",
   ownModelUnconfigured: "自有模型 · 未配置 Endpoint",
   manageModels: "管理模型",

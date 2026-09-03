@@ -1,21 +1,33 @@
-MIT License
+AITracker Project License
+GPL-3.0-based License with Additional Restrictions
 
-Copyright (c) 2026 estelwalks contributors
+Copyright (C) 2026 AITracker contributors
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This project is distributed under a custom project license based on version 3
+of the GNU General Public License (GPL-3.0). Individuals and businesses may
+use, modify, and distribute this project free of charge, provided that they
+comply with the terms of this license.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Additional Restrictions:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. You may not provide this project as a SaaS service to third parties without
+   prior permission from the copyright holder.
+2. You may not integrate this project or its code into a commercial product
+   for sale or giveaway without prior permission from the copyright holder.
+   To request a commercial license, contact estelwalks@gmail.com.
+
+Copyright (C) 2026 AITracker 贡献者
+
+本项目采用基于 GNU GPL-3.0 的自定义项目许可证。个人和企业可以免费
+使用、修改和分发本项目，但必须遵守本许可证的条款。
+
+额外限制：
+
+1. 未经版权所有者事先许可，不得将本项目作为 SaaS 服务提供给第三方；
+2. 未经版权所有者事先许可，不得将本项目或其代码集成到用于销售或
+   赠送的商业产品中；
+   如需申请商业授权，请联系 estelwalks@gmail.com。
+
+The GNU GPL-3.0 terms are incorporated into this license. The complete
+license text is available at:
+https://www.gnu.org/licenses/gpl-3.0.html

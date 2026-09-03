@@ -129,8 +129,8 @@ export function createPageInsightsApplication(options: {
         ...base,
         status: result.status,
         modelLabel: result.modelLabel,
-        // A pending envelope must not re-trigger the renderer's auto-enhance
-        // effect (it would claim the same reservation and loop).
+        // A pending envelope must not re-trigger automatic enhancement
+        // (it would claim the same reservation and loop).
         ...(result.status === "pending" ? { autoEnhance: false } : {}),
         ...(result.failureDetail !== undefined
           ? { failureDetail: result.failureDetail }
@@ -251,7 +251,7 @@ export function createPageInsightsApplication(options: {
     }
     // Page visits during an active batch may also enhance; singleflight and
     // the generation reservation dedupe against the batch's own calls.
-    const rendererAutoEnhanceAuthorized = autoAuthorized;
+    const automaticEnhanceAuthorized = autoAuthorized;
     const base = composeRulesEnvelope({
       adapter,
       bundle,
@@ -260,7 +260,7 @@ export function createPageInsightsApplication(options: {
       enhancerAvailable: enhancer !== undefined,
       modelConfigured,
       autoEnhanceAuthorized:
-        rendererAutoEnhanceAuthorized && modelConfigured !== false,
+        automaticEnhanceAuthorized && modelConfigured !== false,
       now,
     });
     const baseWithRefreshInterval: InsightEnvelope = {

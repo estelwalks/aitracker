@@ -292,7 +292,9 @@ test("fetchMarketSkills falls back to the query cache when network fails", async
   );
 
   assert.equal(result.source, "cache");
-  assert.match(result.warning ?? "", /网络不可用/);
+  // The degraded note is an i18n message key (renderer translates it), not a
+  // locale-baked server string.
+  assert.equal(result.warning, "market.network.cacheWarning");
 });
 
 test("fresh query cache avoids both list and size network requests", async () => {

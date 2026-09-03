@@ -301,8 +301,8 @@ welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a
 change. For vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of
 opening a public issue.
 
-AITracker is licensed under the MIT License. See [LICENSE](LICENSE) for the
-full license text.
+AITracker is distributed under a GPL-3.0-based project license with additional
+restrictions. See [LICENSE](LICENSE) for the full project terms.
 
 See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
 
