@@ -283,6 +283,23 @@ AITrackerは、追加制限付きのGPL-3.0ベースのプロジェクトライ�
 
 ---
 
+## 謝辞
+
+以下のコントリビューターに感謝します：
+
+- [gobuer](https://github.com/gobuer)
+- [estelwalks](https://github.com/estelwalks)
+- [JJBondOne](https://github.com/JJBondOne)
+
+開発では以下のツールを活用しました：
+
+- [Claude Code](https://code.claude.com/docs/en/)
+- [DeepSeek Harness](https://www.deepseek.com/harness/en/)
+- [Codex](https://developers.openai.com/codex/)
+- [Lovable](https://lovable.dev/)
+
+---
+
 ## プロジェクトを応援
 
 AITrackerがお役に立ったら、ぜひプロジェクトにStarをお願いします。ありがとうございます。

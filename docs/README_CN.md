@@ -271,6 +271,23 @@ AITracker 采用基于 GPL-3.0 且附带额外限制的项目许可证。详见
 
 ---
 
+## 致谢
+
+感谢以下贡献者：
+
+- [gobuer](https://github.com/gobuer)
+- [estelwalks](https://github.com/estelwalks)
+- [JJBondOne](https://github.com/JJBondOne)
+
+开发过程中使用了以下工具：
+
+- [Claude Code](https://code.claude.com/docs/en/)
+- [DeepSeek Harness](https://www.deepseek.com/harness/en/)
+- [Codex](https://developers.openai.com/codex/)
+- [Lovable](https://lovable.dev/)
+
+---
+
 ## 支持项目
 
 如果 AITracker 对你有帮助，欢迎给项目一个 Star，感谢。

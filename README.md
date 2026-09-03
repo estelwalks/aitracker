@@ -311,6 +311,23 @@ The scanner package is distributed separately under the MIT license:
 
 ---
 
+## Acknowledgements
+
+Thanks to the following contributors:
+
+- [gobuer](https://github.com/gobuer)
+- [estelwalks](https://github.com/estelwalks)
+- [JJBondOne](https://github.com/JJBondOne)
+
+Development was supported by:
+
+- [Claude Code](https://code.claude.com/docs/en/)
+- [DeepSeek Harness](https://www.deepseek.com/harness/en/)
+- [Codex](https://developers.openai.com/codex/)
+- [Lovable](https://lovable.dev/)
+
+---
+
 ## Star
 
 If AITracker has been helpful, please give the project a Star. Thank you.
