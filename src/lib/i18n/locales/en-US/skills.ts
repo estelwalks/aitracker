@@ -240,7 +240,7 @@ export const skills = {
     reasoningTokens: "Reasoning",
     systemPrompt: "System prompt",
     notSeparatelyObserved: "Not separately observed in logs",
-    observedCalls: "{count} usage events",
+    observedCalls: "{count} events",
     modelCount: "{count} models",
     details: "Usage details",
     byModel: "By model",

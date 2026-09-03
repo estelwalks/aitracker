@@ -10,6 +10,7 @@ import { ENV } from "../app-config";
 import {
   getDefaultRegistry,
   getScannerPolicy,
+  type PlatformOs,
 } from "../tool-registry/registry.ts";
 import { computeToolRegistryVersion } from "../tool-registry/fingerprint.server.ts";
 import { buildLocalUsageSnapshot } from "./aggregate.ts";
@@ -30,6 +31,7 @@ import {
   BUILTIN_USAGE_ADAPTERS,
   GENERIC_BUILTIN_USAGE_ADAPTERS,
 } from "./adapters/catalog.ts";
+import { osFromProcess } from "../tools/detection.server.ts";
 import {
   eventFromMappedRecord,
   fieldMismatchDiagnostic,
@@ -702,6 +704,30 @@ async function collectAdapterFiles(
       .sort((left, right) => right.modifiedAt - left.modifiedAt)
       .slice(0, maxFiles),
   };
+}
+
+/**
+ * Usage paths are declared for concrete registry targets (for example,
+ * AiPy's macOS Application Support path and its Windows AppData path). The
+ * compiled adapter retains those targets so the scanner cannot walk a path
+ * belonging to another operating system when both path shapes happen to
+ * exist under a test fixture or a shared home directory.
+ */
+function adapterPathsForPlatform(
+  paths: readonly UsageAdapterPath[],
+  os: PlatformOs,
+): UsageAdapterPath[] {
+  const targets =
+    os === "macos"
+      ? ["macos"]
+      : os === "windows"
+        ? ["windows10", "windows11"]
+        : ["linux"];
+  return paths.filter(
+    (path) =>
+      path.targets == null ||
+      path.targets.some((target) => targets.includes(target)),
+  );
 }
 
 async function readJsonLines(
@@ -2122,6 +2148,7 @@ async function scanStructuredAdapter(
   adapter: UsageAdapterContract,
   parser: StructuredParser,
   mergeMode: "unique" | "multiset",
+  platformOs: PlatformOs,
   homeDirectory: string,
   cutoffTime: number,
   nowTime: number,
@@ -2129,9 +2156,10 @@ async function scanStructuredAdapter(
   cachedFiles: Map<string, PersistentFileEntry>,
   signal?: AbortSignal,
 ): Promise<SourceScanResult> {
+  const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
   const selected = await collectAdapterFiles(
     homeDirectory,
-    adapter.paths,
+    pathConfigs,
     cutoffTime,
     maxFiles,
     signal,
@@ -2255,7 +2283,7 @@ async function scanStructuredAdapter(
       source: adapter.source,
       available: events.length > 0,
       detected: selected.detected,
-      paths: adapter.paths.map((pathConfig) =>
+      paths: pathConfigs.map((pathConfig) =>
         join(homeDirectory, pathConfig.root),
       ),
       filesConsidered: selected.files.length,
@@ -2450,6 +2478,7 @@ const GENERIC_ADAPTER_CONCURRENCY = 8;
 
 async function runBoundedGenericAdapters(
   adapters: readonly UsageAdapterContract[],
+  platformOs: PlatformOs,
   homeDirectory: string,
   cutoffTime: number,
   nowTime: number,
@@ -2469,6 +2498,7 @@ async function runBoundedGenericAdapters(
         if (adapter == null) continue;
         results[index] = await scanGenericAdapter(
           adapter,
+          platformOs,
           homeDirectory,
           cutoffTime,
           nowTime,
@@ -2485,6 +2515,7 @@ async function runBoundedGenericAdapters(
 
 async function scanGenericAdapter(
   adapter: UsageAdapterContract,
+  platformOs: PlatformOs,
   homeDirectory: string,
   cutoffTime: number,
   nowTime: number,
@@ -2492,9 +2523,10 @@ async function scanGenericAdapter(
   cachedFiles: Map<string, PersistentFileEntry>,
   signal?: AbortSignal,
 ): Promise<SourceScanResult> {
+  const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
   const selected = await collectAdapterFiles(
     homeDirectory,
-    adapter.paths,
+    pathConfigs,
     cutoffTime,
     maxFiles,
     signal,
@@ -2576,7 +2608,7 @@ async function scanGenericAdapter(
       source: adapter.source,
       available: events.length > 0,
       detected: selected.detected,
-      paths: adapter.paths.map((pathConfig) =>
+      paths: pathConfigs.map((pathConfig) =>
         join(homeDirectory, pathConfig.root),
       ),
       filesConsidered: selected.files.length,
@@ -2797,6 +2829,7 @@ export async function scanLocalUsage(
       adapter,
       parser,
       mergeMode,
+      osFromProcess(platform),
       homeDirectory,
       cutoffTime,
       nowTime,
@@ -2863,6 +2896,7 @@ export async function scanLocalUsage(
     ),
     ...(await runBoundedGenericAdapters(
       genericAdapters,
+      osFromProcess(platform),
       homeDirectory,
       cutoffTime,
       nowTime,

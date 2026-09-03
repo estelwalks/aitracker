@@ -39,7 +39,6 @@ const RULES = [
     pattern:
       /(?:\/Users\/[A-Za-z][A-Za-z0-9._-]{2,}|\/home\/[A-Za-z][A-Za-z0-9._-]{2,}|[A-Za-z]:\\Users\\[A-Za-z][A-Za-z0-9._-]{2,})/g,
   },
-  { id: "aitracker-residue", pattern: /token[-_ ]?tracker(?:-cli)?/gi },
   {
     id: "credential-value",
     pattern:

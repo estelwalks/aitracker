@@ -74,8 +74,10 @@ test("数据来源页支持状态筛选和平台目录", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "重新扫描", exact: true }),
   ).toHaveCount(0);
+  // F6-S3: the tool total renders inside the "已接入Agent" KPI caption
+  // ("已发现 {count}") — the count is no longer a standalone text node.
   await expect(
-    page.getByText(String(TOOL_COUNT), { exact: true }).first(),
+    page.getByText(`已发现 ${TOOL_COUNT}`, { exact: true }),
   ).toBeVisible();
   await expect(page.getByTestId("source-card-claude-code")).toBeVisible();
   await expect(

@@ -1,5 +1,12 @@
-import { HelpCircle, X } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../../../../components/ui/dialog";
 import { useI18n } from "../../../../lib/i18n/context";
 
 export const DISTILL_GUIDE_KEY = "tt.distill.guide";
@@ -31,38 +38,24 @@ const STEPS = [
 export function DistillGuide({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center p-6"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("distill.guideTitle")}
-    >
-      <div
-        className="aitracker-overlay absolute inset-0 rounded-xl backdrop-blur-md"
-        onClick={onClose}
-      />
-      <section className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-card p-7 shadow-2xl shadow-black/60">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto rounded-2xl bg-card p-7 shadow-2xl shadow-black/60">
         <div
           className="pointer-events-none absolute -top-24 right-0 size-64 rounded-full opacity-[0.18] blur-3xl"
           style={{ background: "var(--chart-1)" }}
         />
-        <header className="relative flex items-center gap-2">
-          <HelpCircle className="size-4" style={{ color: "var(--chart-1)" }} />
-          <h2 className="text-[14px] font-semibold tracking-tight">
+        <DialogHeader className="relative flex-row items-center gap-2 space-y-0 text-left">
+          <HelpCircle
+            className="size-4 shrink-0"
+            style={{ color: "var(--chart-1)" }}
+          />
+          <DialogTitle className="text-[14px] font-semibold tracking-tight">
             {t("distill.guideTitle")}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="ml-auto rounded-lg p-1 text-muted-foreground hover:text-foreground"
-            aria-label={t("common.close")}
-          >
-            <X className="size-4" />
-          </button>
-        </header>
-        <p className="relative mt-3 text-[13px] leading-relaxed">
+          </DialogTitle>
+        </DialogHeader>
+        <DialogDescription className="relative mt-3 text-[13px] leading-relaxed text-foreground">
           {t("distill.guideIntro1")}
-        </p>
+        </DialogDescription>
         <p className="relative mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
           {t("distill.guideIntro2")}
         </p>
@@ -103,7 +96,7 @@ export function DistillGuide({ onClose }: { onClose: () => void }) {
             {t("distill.guideReopenHint")}
           </span>
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

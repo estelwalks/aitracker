@@ -514,10 +514,10 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
               <button
                 type="button"
                 onClick={() => selectPeriod(prevKey)}
-                className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-2 hover:opacity-80"
+                className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 hover:opacity-80"
                 aria-label={t("reports.archive.prev")}
               >
-                <ChevronLeft className="size-3.5" />
+                <ChevronLeft className="size-4" />
               </button>
               <div className="flex min-w-0 flex-1 items-center justify-between gap-1">
                 {filteredPeriods.map((item) => {
@@ -543,10 +543,10 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                       type="button"
                       onClick={() => selectPeriod(item.key)}
                       title={item.label}
-                      className={`relative flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-1.5 py-1.5 font-mono text-[11px] transition-colors ${
+                      className={`relative flex min-h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-1.5 py-1.5 font-mono text-[12px] transition-colors ${
                         active
                           ? "bg-surface-2 font-semibold text-foreground ring-1 ring-border"
-                          : "text-muted-foreground hover:bg-surface-2/55"
+                          : "text-foreground/75 hover:bg-surface-2/55"
                       } ${n || has ? "" : "opacity-45"}`}
                     >
                       <span className="aitracker-num truncate whitespace-nowrap">
@@ -568,10 +568,10 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                 type="button"
                 onClick={() => selectPeriod(nextKey)}
                 disabled={isFuturePeriod(kind, nextKey, now)}
-                className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-2 hover:opacity-80 disabled:opacity-35"
+                className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 hover:opacity-80 disabled:opacity-35"
                 aria-label={t("reports.archive.next")}
               >
-                <ChevronRight className="size-3.5" />
+                <ChevronRight className="size-4" />
               </button>
             </div>
 
@@ -587,9 +587,9 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                 <button
                   type="button"
                   onClick={() => setQuery("")}
-                  className="shrink-0 text-muted-foreground"
+                  className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-foreground"
                 >
-                  <X className="size-3.5" />
+                  <X className="size-4" />
                 </button>
               )}
             </div>
@@ -650,7 +650,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                 <button
                   type="button"
                   onClick={() => selectPeriod(periodKeyOf(kind, now))}
-                  className="rounded-full bg-surface-2 px-3 py-1.5 font-mono text-[11px] hover:opacity-80"
+                  className="min-h-8 rounded-full bg-surface-2 px-3 py-1.5 font-mono text-[12px] hover:opacity-80"
                 >
                   {kind === "day"
                     ? t("reports.header.goToday")

@@ -1,0 +1,184 @@
+name: Unsigned Beta Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24
+
+jobs:
+  release-contract:
+    name: Release contract gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify beta tag and package versions
+        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel beta
+
+  build:
+    name: Build ${{ matrix.name }} installer
+    needs: release-contract
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: macOS arm64
+            os: macos-14
+            platform: darwin-arm64
+            command: npm run dist:mac:arm64
+            artifact_glob: release/*.dmg
+            artifact_name: release-macos-arm64
+          - name: macOS x64
+            os: macos-13
+            platform: darwin-x64
+            command: npm run dist:mac:x64
+            artifact_glob: release/*.dmg
+            artifact_name: release-macos-x64
+          - name: Windows x64
+            os: windows-latest
+            platform: win32-x64
+            command: npm run dist:win:x64
+            artifact_glob: release/*.exe
+            artifact_name: release-windows-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      # This workflow intentionally produces unsigned beta installers. No
+      # signing identity, certificate, notarization, or SmartScreen credential
+      # is configured here.
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag before packaging (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel beta
+
+      - name: Verify tag before packaging (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: npm run verify:release-contract -- --tag "$env:GITHUB_REF_NAME" --channel beta
+
+      - name: Build installer
+        run: ${{ matrix.command }}
+
+      - name: Verify expected installer name (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel beta --release-dir release --platform "$RELEASE_PLATFORM"
+
+      - name: Verify expected installer name (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: npm run verify:release-contract -- --tag "$env:GITHUB_REF_NAME" --channel beta --release-dir release --platform "$env:RELEASE_PLATFORM"
+
+      - name: Upload installer for release assembly
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          compression-level: 0
+
+  draft-release:
+    name: Assemble GitHub draft beta release
+    needs: [release-contract, build]
+    if: ${{ needs.release-contract.result == 'success' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download the three installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+
+      - name: Verify assembled release artifacts
+        shell: bash
+        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel beta --release-dir release
+
+      - name: Generate release metadata and checksums
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          npm run release:metadata -- --release-dir release --version "$version" --channel beta
+
+      - name: Refuse to reuse an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::error::A GitHub release already exists for $GITHUB_REF_NAME; refusing to overwrite it."
+            exit 1
+          fi
+
+      - name: Create draft prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --prerelease \
+            --verify-tag \
+            --title "AITracker $GITHUB_REF_NAME (unsigned beta)" \
+            --notes "Unsigned beta release for manual verification. This workflow does not sign, notarize, publish to npm, or update a Homebrew Tap. Review the draft and its checksums before manually publishing it; do not publish it as a stable release."
+
+      - name: Upload release assets without clobbering existing assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            release/AITracker-*.dmg \
+            release/AITracker-Setup-*.exe \
+            release/release-metadata.json \
+            release/checksums.txt
+
+      - name: Confirm draft-only beta outcome
+        run: echo "Draft prerelease created. A maintainer must inspect it before any manual publication; failed jobs do not publish a formal/stable channel."

@@ -22,7 +22,7 @@ export interface UsageSourceEntry {
   malformedLines: number;
   /** ISO timestamp of the last scan that touched this tool, else null. */
   lastScannedAt: string | null;
-  /** HOME-relative probe paths (normalized to ~/) used to detect the tool. */
+  /** HOME-relative scan/probe paths (normalized to ~/) exposed to the UI. */
   paths: string[];
   /** Registry-owned product surface, safe for the browser. */
   toolSurface: ToolSurface;
@@ -79,6 +79,7 @@ export function deriveUsageSources(
   installationFacts: readonly ToolInstallationFact[],
   generatedAt: string,
   homeDir: string,
+  fallbackPathsBySource: ReadonlyMap<string, readonly string[]> = new Map(),
 ): UsageSourcesSummary {
   const bySource = new Map<string, LocalUsageSourceSummary>();
   for (const summary of sourceSummaries) {
@@ -108,12 +109,21 @@ export function deriveUsageSources(
       summary?.detected === true || (summary?.available === true && events > 0);
     const installed = installation?.installed ?? inferredInstalled;
 
-    // Path display: prefer the concrete paths the scanner actually walked;
-    // fall back to the catalog's known probe roots.
+    // Path display: prefer the concrete paths reported by the usage scanner;
+    // fall back to the platform-specific registry projection when a scan has
+    // not produced paths yet (or failed before it could report them). The
+    // installation snapshot is retained as a compatibility fallback for
+    // callers that do not provide the registry projection. Keeping the
+    // registry projection ahead of installation paths is important: a probe
+    // root such as AiPy's ~/.aipyapp is not necessarily its usage-log root.
     const rawPaths =
-      installation?.detectedPaths && installation.detectedPaths.length > 0
-        ? installation.detectedPaths
-        : tool.detectRoots;
+      summary?.paths && summary.paths.length > 0
+        ? summary.paths
+        : fallbackPathsBySource.has(tool.id)
+          ? (fallbackPathsBySource.get(tool.id) ?? [])
+          : installation?.detectedPaths && installation.detectedPaths.length > 0
+            ? installation.detectedPaths
+            : tool.detectRoots;
     const paths = rawPaths
       .map((path) => normalizeForDisplay(path, homeDir))
       .filter((path): path is string => path !== null);

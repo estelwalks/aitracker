@@ -25,6 +25,7 @@ import { createHash } from "node:crypto";
 import type { LocalUsageEvent } from "../local-usage/types.ts";
 import { APP_DATA_DIR, MARKET_API_BASE } from "../app-config";
 import { AppError } from "../errors";
+import { fetchExternal } from "../http/external-request.server.ts";
 import { AI_TOOLS } from "../tools/catalog.ts";
 import { RUNTIME_POLICY } from "../../app/runtime-policy.generated.ts";
 import { getTool } from "../tool-registry/registry.ts";
@@ -1313,10 +1314,14 @@ export async function refreshMarketSkillEvidence(
       url.searchParams.set("page", "1");
       url.searchParams.set("limit", "20");
       url.searchParams.set("search", slug);
-      const response = await (options.fetcher ?? fetch)(url, {
-        headers: { accept: "application/json" },
-        signal: controller.signal,
-      });
+      const response = await fetchExternal(
+        url,
+        {
+          headers: { accept: "application/json" },
+          signal: controller.signal,
+        },
+        options.fetcher ?? fetch,
+      );
       if (!response.ok) continue;
       const body = marketRecord(await response.json());
       const records = Array.isArray(body?.data)

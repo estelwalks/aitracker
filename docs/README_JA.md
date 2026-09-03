@@ -67,6 +67,50 @@ npm run dev:desktop
 
 ブラウザ開発サーバーだけを起動する場合は、`npm run dev`を実行します。
 
+### インストール（Beta）
+
+最初のBeta版は、macOS（x64 / arm64）とWindows x64のデスクトップ
+インストーラーを対象としています。現在のBeta版は未署名で、公開状況は
+リリースチェックリストで別途管理しています。
+
+Beta用CLIパッケージと対応するGitHub Releaseが公開された後、Node.jsとnpmを
+インストール済みの場合は、次のコマンドでBeta版を起動できます。
+
+```bash
+npx --yes aitracker@beta
+```
+
+このコマンドはデスクトップインストーラーをダウンロードして開くものです。Node.js
+なしでサイレントインストールするコマンドではありません。macOSでは「開発元を確認
+できない」旨の警告が表示される場合があります。その場合は「システム設定」または
+アプリを右クリックして「開く」を選び、手動で起動を確認してください。Windowsでは
+SmartScreenの警告が表示される場合があります。続行する前に発行元と成果物を確認して
+ください。システム全体のセキュリティ設定を無効にしたり、危険な回避コマンドを実行
+したりしないでください。
+
+インストーラーを開かずにダウンロードと検証だけを行う場合は、保存先ディレクトリを
+指定します。ディレクトリが存在しなければ作成され、リリースメタデータの安全な
+ファイル名で保存されます。
+
+```bash
+npx --yes aitracker@beta --download-only ./downloads
+```
+
+ディレクトリを指定しない `--download-only` も後方互換のため利用できます。この場合は
+一時ディレクトリを使用し、コマンド終了時に一時ファイルを削除します。既存の対象
+ファイル、シンボリックリンクのディレクトリ、空のディレクトリ引数、重複指定、
+ファイルシステムのルートは拒否されます。
+
+macOSでは、プロジェクトのBeta用Tapも利用できます。
+
+```bash
+brew tap estelwalks/aitracker
+brew install --cask estelwalks/aitracker/aitracker-beta
+```
+
+署名済みの安定版と公式Homebrew Caskが準備できるまで、安定版用のコマンドは利用可能
+とは案内しません。
+
 ### ビルドとテスト
 
 ```bash
@@ -234,7 +278,25 @@ Issueや、新しいAIツールへの対応に関する提案を歓迎します�
 
 ## ライセンス
 
-AITrackerはMIT Licenseの下でライセンスされています。詳しくは[LICENSE](../LICENSE)をご覧ください。
+AITrackerは、追加制限付きのGPL-3.0ベースのプロジェクトライセンスで
+配布されています。詳しくは[LICENSE](../LICENSE)をご覧ください。
+
+---
+
+## 謝辞
+
+以下のコントリビューターに感謝します：
+
+- [gobuer](https://github.com/gobuer)
+- [estelwalks](https://github.com/estelwalks)
+- [JJBondOne](https://github.com/JJBondOne)
+
+開発では以下のツールを活用しました：
+
+- [Claude Code](https://code.claude.com/docs/en/)
+- [DeepSeek Harness](https://www.deepseek.com/harness/en/)
+- [Codex](https://developers.openai.com/codex/)
+- [Lovable](https://lovable.dev/)
 
 ---
 

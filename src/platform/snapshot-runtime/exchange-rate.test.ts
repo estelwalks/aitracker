@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { APP_VERSION } from "../../lib/app-config.ts";
+import { applicationUserAgent } from "../../lib/http/external-request.server.ts";
 import {
   createExchangeRateRepository,
+  EXCHANGE_RATE_URL,
   type ExchangeRateCache,
 } from "./exchange-rate.server.ts";
 
-const LIVE_RATES = {
-  date: "2026-08-05",
-  rates: { CNY: 7.15, JPY: 146, KRW: 1360 },
-};
+const LIVE_RATES = [
+  { date: "2026-08-05", base: "USD", quote: "CNY", rate: 7.15 },
+  { date: "2026-08-05", base: "USD", quote: "JPY", rate: 146 },
+  { date: "2026-08-05", base: "USD", quote: "KRW", rate: 1360 },
+];
 
 function memoryCache(): ExchangeRateCache {
   let value: Awaited<ReturnType<ExchangeRateCache["read"]>>;
@@ -30,6 +34,29 @@ function jsonFetcher(payload: unknown): typeof fetch {
       headers: { "content-type": "application/json" },
     });
 }
+
+test("汇率: 请求新 API 并带动态应用 UA", async () => {
+  const cache = memoryCache();
+  let requestUrl = "";
+  let requestHeaders: Headers | undefined;
+  const repo = createExchangeRateRepository({
+    fetcher: async (input, init) => {
+      requestUrl = String(input);
+      requestHeaders = new Headers(init?.headers);
+      return new Response(JSON.stringify(LIVE_RATES), { status: 200 });
+    },
+    now: () => new Date("2026-08-05T10:00:00Z"),
+    cache,
+  });
+
+  const result = await repo.refresh();
+  assert.equal(result.source, "live");
+  assert.equal(requestUrl, EXCHANGE_RATE_URL);
+  assert.equal(
+    requestHeaders?.get("user-agent"),
+    applicationUserAgent(APP_VERSION),
+  );
+});
 
 function failingFetcher(): typeof fetch {
   return async () => {
@@ -144,4 +171,46 @@ test("汇率: SQLite 写入失败直接上抛，不回退为缓存结果", async
     cache,
   });
   await assert.rejects(repo.refresh(), /sqlite write failed/);
+});
+
+test("汇率: 异常响应不会覆盖已有缓存", async () => {
+  const cache = memoryCache();
+  const fresh = createExchangeRateRepository({
+    fetcher: jsonFetcher(LIVE_RATES),
+    now: () => new Date("2026-08-05T10:00:00Z"),
+    cache,
+  });
+  await fresh.refresh();
+
+  const malformed = createExchangeRateRepository({
+    fetcher: jsonFetcher([
+      { date: "2026-08-06", base: "USD", quote: "CNY", rate: 7.2 },
+      { date: "2026-08-06", base: "USD", quote: "JPY", rate: "not-a-rate" },
+      { date: "2026-08-06", base: "USD", quote: "KRW", rate: 1370 },
+    ]),
+    now: () => new Date("2026-08-05T11:00:00Z"),
+    cache,
+  });
+  const result = await malformed.refresh();
+  assert.equal(result.source, "cache");
+  assert.equal(result.rates.CNY, 7.15);
+});
+
+test("汇率: 超时会中止请求并回退，不阻塞刷新", async () => {
+  const cache = memoryCache();
+  const repo = createExchangeRateRepository({
+    fetcher: async (_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("aborted", "AbortError")),
+          { once: true },
+        );
+      }),
+    now: () => new Date("2026-08-05T10:00:00Z"),
+    cache,
+    timeoutMs: 10,
+  });
+  const result = await repo.refresh();
+  assert.equal(result.source, "fallback");
 });

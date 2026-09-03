@@ -39,7 +39,16 @@ test("runtime policy accepts the embedded source", () => {
     maxProjectClassifiers: 8,
   });
   assert.equal(parsed.rollout.defaultStage, "new-default");
-  assert.equal(parsed.scheduledJobs.tasks.length, 11);
+  assert.equal(parsed.scheduledJobs.tasks.length, 12);
+  const insightRefresh = parsed.scheduledJobs.tasks.find(
+    (task) => task.id === "insights.refresh",
+  );
+  assert.ok(insightRefresh);
+  assert.deepEqual(insightRefresh.defaultSchedule, {
+    kind: "interval",
+    minutes: 60,
+  });
+  assert.equal(insightRefresh.startupPolicy, "if-stale");
   const usageRefresh = parsed.scheduledJobs.tasks.find(
     (task) => task.id === "usage.refresh",
   );

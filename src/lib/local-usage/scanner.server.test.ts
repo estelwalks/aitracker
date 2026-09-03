@@ -46,6 +46,50 @@ test("Windows reuses an injected empty WSL topology without enumerating again", 
   }
 });
 
+test("generic usage adapters scan only paths for the active platform", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-platform-paths-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const macPath = join(
+    homeDirectory,
+    "Library",
+    "Application Support",
+    "aipy-pro",
+  );
+  const windowsPath = join(homeDirectory, "AppData", "Roaming", "aipy-pro");
+  await mkdir(macPath, { recursive: true });
+  await mkdir(windowsPath, { recursive: true });
+
+  try {
+    const macSnapshot = await scanLocalUsage({
+      homeDirectory,
+      now: NOW,
+      platform: "darwin",
+      disablePersistentCache: true,
+    });
+    assert.deepEqual(sourceSummary(macSnapshot, "aipy").paths, [macPath]);
+
+    const windowsSnapshot = await scanLocalUsage({
+      homeDirectory,
+      now: NOW,
+      platform: "win32",
+      wslTopology: {
+        distros: [],
+        enumeratedAt: NOW.toISOString(),
+        failed: true,
+      },
+      disablePersistentCache: true,
+    });
+    assert.deepEqual(sourceSummary(windowsSnapshot, "aipy").paths, [
+      windowsPath,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("collapses nested Codex working directories to one Git repository project", async () => {
   const root = join(
     tmpdir(),

@@ -391,12 +391,11 @@ export function DistillConfig({
   const switchTarget = modelOptions.find(
     (option) => !option.offline && option.official !== true,
   );
-  const statusLabel =
-    quota != null && selectedOption?.official
-      ? t("distill.quotaHeader", { count: quota.remaining })
-      : selectedOption?.ok
-        ? t("distill.ownModelConnected")
-        : t("distill.ownModelUnconfigured");
+  const statusLabel = selectedOption?.official
+    ? null
+    : selectedOption?.ok
+      ? t("distill.ownModelConnected")
+      : t("distill.ownModelUnconfigured");
   // The prototype token is heuristically estimated (turns × EST_TOKENS_PER_TURN, E-200).
   const estTokens = selectedItems.reduce(
     (sum, item) => sum + item.turns * EST_TOKENS_PER_TURN,
@@ -462,12 +461,14 @@ export function DistillConfig({
             </button>
           ))}
         </div>
-        <span
-          className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
-          title={statusLabel}
-        >
-          {statusLabel}
-        </span>
+        {statusLabel && (
+          <span
+            className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
+            title={statusLabel}
+          >
+            {statusLabel}
+          </span>
+        )}
         <Link
           to="/settings"
           search={{ section: "model" }}

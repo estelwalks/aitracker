@@ -70,6 +70,50 @@ npm run dev:desktop
 
 To run the browser development server only, use `npm run dev`.
 
+### Install (Beta)
+
+The first beta targets desktop installers for macOS (x64 and arm64) and
+Windows x64. It is an unsigned beta release; publication status is tracked
+separately in the release checklist.
+
+After the beta CLI package and matching GitHub Release have been published,
+users with Node.js and npm installed can run:
+
+```bash
+npx --yes aitracker@beta
+```
+
+This command downloads and opens the desktop installer; it is not a silent
+installation that works without Node.js. On macOS, Gatekeeper may say that the
+developer cannot be verified. Use System Settings or the app's right-click
+Open action to manually confirm the launch. On Windows, SmartScreen may show a
+warning; review the publisher and artifact before choosing whether to continue.
+Do not disable global security protections or run unsafe bypass commands.
+
+To download and verify the installer without opening it, provide an output
+directory. The directory is created when needed, and the release-provided safe
+installer filename is used:
+
+```bash
+npx --yes aitracker@beta --download-only ./downloads
+```
+
+Without a directory, `--download-only` remains supported and uses a temporary
+directory that is cleaned up when the command exits. Existing target files,
+symlink directories, empty or repeated directory arguments, and filesystem
+roots are rejected.
+
+macOS users can also use the project's own beta Tap:
+
+```bash
+brew tap estelwalks/aitracker
+brew install --cask estelwalks/aitracker/aitracker-beta
+```
+
+The stable command is intentionally not documented as available yet. It will
+only be announced after a signed stable build and the official Homebrew Cask
+are ready.
+
 ### Build and Test
 
 ```bash
@@ -84,11 +128,26 @@ Platform installers can be produced with `npm run dist:mac` or
 `npm run dist:win:x64`. Signing and notarization credentials are not stored in
 this repository.
 
+The standalone installer launcher is packaged as `aitracker` and is intended
+to run with `npx` on macOS arm64/x64 or Windows x64 after publication:
+
+```bash
+npx aitracker
+npx aitracker --channel stable
+npx aitracker --version 1.0.0 --channel stable
+```
+
+The initial beta installers are unsigned. macOS Gatekeeper or Windows
+SmartScreen may show an operating-system security warning; verify the release
+source and checksum and use the normal per-file confirmation flow. Do not
+disable global security settings. Linux is not supported by the launcher.
+
 See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
 generated-file policy, and repository layout.
 
-This repository is currently published as the `1.0.0-beta.1` prerelease. See
-[Privacy](PRIVACY.md) for data-handling details.
+The current target version is `1.0.0-beta.1` (unsigned beta; distribution
+status is tracked separately). See [Privacy](PRIVACY.md) for data-handling
+details.
 
 ---
 
@@ -209,6 +268,10 @@ Your AI usage records, analytics data, Skills, Rules, knowledge, and memories ar
 
 Your data belongs to you.
 
+Skills Market listings and exchange-rate data come from the project-operated
+service `ai.trusttools.cn`; when that service is unreachable, the app falls
+back to cached or built-in data instead.
+
 ---
 
 ## What Is AITracker Trying to Solve?
@@ -238,13 +301,30 @@ welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a
 change. For vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of
 opening a public issue.
 
-AITracker is licensed under the MIT License. See [LICENSE](LICENSE) for the
-full license text.
+AITracker is distributed under a GPL-3.0-based project license with additional
+restrictions. See [LICENSE](LICENSE) for the full project terms.
 
 See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
 
 The scanner package is distributed separately under the MIT license:
 `@estelwalks/agent-threat-scanner`.
+
+---
+
+## Acknowledgements
+
+Thanks to the following contributors:
+
+- [gobuer](https://github.com/gobuer)
+- [estelwalks](https://github.com/estelwalks)
+- [JJBondOne](https://github.com/JJBondOne)
+
+Development was supported by:
+
+- [Claude Code](https://code.claude.com/docs/en/)
+- [DeepSeek Harness](https://www.deepseek.com/harness/en/)
+- [Codex](https://developers.openai.com/codex/)
+- [Lovable](https://lovable.dev/)
 
 ---
 

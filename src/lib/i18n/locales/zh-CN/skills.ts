@@ -228,7 +228,7 @@ export const skills = {
     reasoningTokens: "推理过程",
     systemPrompt: "系统提示词",
     notSeparatelyObserved: "日志未单独观测",
-    observedCalls: "{count} 个用量事件",
+    observedCalls: "{count} 事件",
     modelCount: "{count} 个模型",
     details: "消耗明细",
     byModel: "按模型",

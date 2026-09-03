@@ -82,7 +82,7 @@ export function DashboardTrendPanel({
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={[...points]}
-                margin={{ top: 8, right: 4, bottom: 0, left: -18 }}
+                margin={{ top: 8, right: 8, bottom: 0, left: 4 }}
               >
                 <CartesianGrid
                   vertical={false}
@@ -91,7 +91,7 @@ export function DashboardTrendPanel({
                 />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
+                  tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
                   tickFormatter={(value: string) =>
                     format.formatDate(`${value}T00:00:00`, {
                       month: "numeric",
@@ -104,11 +104,11 @@ export function DashboardTrendPanel({
                   minTickGap={20}
                 />
                 <YAxis
-                  tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
+                  tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
                   tickFormatter={(value: number) => format.formatTokens(value)}
                   tickLine={false}
                   axisLine={false}
-                  width={54}
+                  width={64}
                 />
                 <Tooltip
                   cursor={{

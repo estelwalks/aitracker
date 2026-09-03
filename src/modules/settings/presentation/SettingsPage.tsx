@@ -23,12 +23,18 @@ import { type Currency, type Locale } from "../../../lib/i18n/locale";
 import { themes, useTheme } from "../../../lib/theme";
 import { useVersionCheck } from "../../../lib/version-check";
 import {
+  AUTO_UPDATE_PREFERENCE_KEY,
+  DEFAULT_AUTO_UPDATE_ENABLED,
+  parseAutoUpdateEnabled,
+} from "../../../lib/update-preferences";
+import {
   listPreferences,
+  getPreference,
+  setPreference,
   removePreference,
 } from "../../../lib/preferences/client.ts";
 import {
   APP_VERSION,
-  APP_RELEASE_DATE,
   APP_REPO_URL,
   brandParams,
 } from "../../../lib/app-config";
@@ -181,11 +187,26 @@ export function SettingsPage({
     format,
   } = useI18n();
   const { theme, setTheme } = useTheme();
+  const desktopApi =
+    typeof window === "undefined" ? undefined : window.desktopApi;
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(
+    DEFAULT_AUTO_UPDATE_ENABLED,
+  );
+  const [autoUpdateSupported, setAutoUpdateSupported] = useState(false);
+  const [autoUpdateLoading, setAutoUpdateLoading] = useState(true);
+  const [desktopUpdateState, setDesktopUpdateState] =
+    useState<
+      Awaited<ReturnType<NonNullable<Window["desktopApi"]>["getUpdateState"]>>
+    >();
+  const [autoUpdatePreferenceLoaded, setAutoUpdatePreferenceLoaded] =
+    useState(false);
   const {
     result: versionResult,
     loading: versionLoading,
     refresh: versionRefresh,
-  } = useVersionCheck();
+  } = useVersionCheck(
+    autoUpdatePreferenceLoaded && autoUpdateEnabled && !desktopApi,
+  );
   const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(
     loaderData.storageUsage,
   );
@@ -230,6 +251,51 @@ export function SettingsPage({
       disposed = true;
     };
   }, []);
+
+  // The update preference is shared with the Electron main process through
+  // the desktop IPC bridge. Browser preview falls back to the regular local
+  // preference store so the setting remains deterministic in both runtimes.
+  useEffect(() => {
+    let cancelled = false;
+    const api = desktopApi;
+    const unsubscribe = api?.onUpdateStateChanged((next) => {
+      if (!cancelled) setDesktopUpdateState(next);
+    });
+
+    void (async () => {
+      try {
+        if (api) {
+          const [preference, state] = await Promise.all([
+            api.getAutoUpdate(),
+            api.getUpdateState(),
+          ]);
+          if (cancelled) return;
+          setAutoUpdateEnabled(preference.enabled);
+          setAutoUpdateSupported(preference.supported);
+          setDesktopUpdateState(state);
+        } else {
+          const preference = await getPreference(AUTO_UPDATE_PREFERENCE_KEY);
+          if (cancelled) return;
+          setAutoUpdateEnabled(parseAutoUpdateEnabled(preference));
+          setAutoUpdateSupported(true);
+        }
+      } catch {
+        if (cancelled) return;
+        setAutoUpdateEnabled(DEFAULT_AUTO_UPDATE_ENABLED);
+        setAutoUpdateSupported(api === undefined);
+      } finally {
+        if (!cancelled) {
+          setAutoUpdatePreferenceLoaded(true);
+          setAutoUpdateLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [desktopApi]);
 
   const changeLlmReview = async (enabled: boolean) => {
     setLlmReviewEnabled(enabled);
@@ -299,6 +365,87 @@ export function SettingsPage({
       toast.error(t("settings.toast.autoLaunchSaveFailed"));
     }
   };
+
+  const changeAutoUpdate = async (enabled: boolean) => {
+    const previous = autoUpdateEnabled;
+    setAutoUpdateEnabled(enabled);
+    try {
+      if (desktopApi) {
+        const next = await desktopApi.setAutoUpdate(enabled);
+        setAutoUpdateEnabled(next.enabled);
+        setAutoUpdateSupported(next.supported);
+      } else {
+        await setPreference(
+          AUTO_UPDATE_PREFERENCE_KEY,
+          JSON.stringify(enabled),
+        );
+      }
+      toast.success(
+        enabled
+          ? t("settings.toast.autoUpdateEnabled")
+          : t("settings.toast.autoUpdateDisabled"),
+      );
+    } catch {
+      setAutoUpdateEnabled(previous);
+      toast.error(t("settings.toast.autoUpdateSaveFailed"));
+    }
+  };
+
+  const handleCheckForUpdates = async () => {
+    try {
+      if (desktopApi) {
+        setDesktopUpdateState(await desktopApi.checkForUpdates());
+      } else {
+        await versionRefresh();
+      }
+    } catch {
+      toast.error(t("settings.toast.updateCheckFailed"));
+    }
+  };
+
+  const handleDownloadUpdate = async () => {
+    if (!desktopApi) return;
+    try {
+      setDesktopUpdateState(await desktopApi.downloadUpdate());
+    } catch {
+      toast.error(t("settings.toast.updateDownloadFailed"));
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!desktopApi) return;
+    try {
+      const result = await desktopApi.installUpdate();
+      if (!result.opened) toast.error(t("settings.toast.updateInstallFailed"));
+    } catch {
+      toast.error(t("settings.toast.updateInstallFailed"));
+    }
+  };
+
+  const shownUpdate = desktopApi
+    ? desktopUpdateState
+    : versionResult
+      ? {
+          status:
+            versionResult.status === "newer"
+              ? versionResult.downloadUrl
+                ? ("available" as const)
+                : ("error" as const)
+              : versionResult.status,
+          currentVersion: versionResult.currentVersion,
+          latestVersion: versionResult.latestVersion,
+          releaseDate: versionResult.releaseDate,
+          downloadUrl: versionResult.downloadUrl,
+          assetName: versionResult.assetName,
+          releaseUrl: versionResult.releaseUrl,
+          changelog: versionResult.changelog,
+          errorCode: versionResult.errorCode,
+        }
+      : undefined;
+  const updateChecking = desktopApi
+    ? desktopUpdateState?.status === "checking"
+    : versionLoading;
+  const updateDownloaded = shownUpdate?.status === "downloaded";
 
   const autoLaunchHint =
     autoLaunchStatus === "浏览器不可用"
@@ -407,8 +554,17 @@ export function SettingsPage({
 
   const handleRefreshRates = async () => {
     try {
-      await refreshRates();
-      toast.success(t("settings.rate.refreshed"));
+      // Offline/failure never rejects (last-known-good is returned). Success
+      // is carried by the manual-refresh marker (the exchange.refresh task
+      // actually rewrote the http-cache); the snapshot `source` after a
+      // refresh is always a plain cache/stale/fallback read label, so it can
+      // never decide the outcome.
+      const snapshot = await refreshRates();
+      if (snapshot.refreshed === true) {
+        toast.success(t("settings.rate.refreshed"));
+      } else {
+        toast.error(t("settings.rate.failed"));
+      }
     } catch {
       toast.error(t("settings.rate.failed"));
     }
@@ -840,58 +996,130 @@ export function SettingsPage({
             <div>
               <Field label={t("settings.version")}>
                 <span className="aitracker-num aitracker-text-body">
-                  V{APP_VERSION}
+                  V{shownUpdate?.currentVersion ?? APP_VERSION}
                 </span>
               </Field>
               <Field label={t("settings.releaseDate")}>
                 <span className="aitracker-text-body text-muted-foreground">
-                  {APP_RELEASE_DATE}
+                  {shownUpdate?.releaseDate
+                    ? format.formatDate(shownUpdate.releaseDate)
+                    : "—"}
                 </span>
+              </Field>
+              <Field label={t("settings.autoUpdate")}>
+                <Toggle
+                  value={autoUpdateEnabled}
+                  onChange={(value) => void changeAutoUpdate(value)}
+                  disabled={
+                    autoUpdateLoading ||
+                    (desktopApi !== undefined && !autoUpdateSupported)
+                  }
+                  ariaLabel={t("settings.autoUpdate")}
+                />
               </Field>
               <Field label={t("settings.checkUpdate")}>
                 <div className="flex items-center gap-2">
                   <AITrackerButton
                     variant="ghost"
                     size="sm"
-                    onClick={() => void versionRefresh()}
-                    disabled={versionLoading}
+                    onClick={() => void handleCheckForUpdates()}
+                    disabled={updateChecking}
                   >
-                    {versionLoading
+                    {updateChecking
                       ? t("settings.checking")
                       : t("settings.checkUpdate")}
                   </AITrackerButton>
-                  {versionResult && (
+                  {shownUpdate && (
                     <span className="aitracker-text-body-sm text-muted-foreground">
-                      {versionResult.status === "newer"
-                        ? t("settings.updateFound", {
-                            version: versionResult.latestVersion ?? "",
-                          })
-                        : versionResult.status === "current"
-                          ? t("settings.upToDate")
-                          : t("settings.updateFailed")}
+                      {shownUpdate.status === "downloaded"
+                        ? t("settings.updateDownloaded")
+                        : shownUpdate.status === "available"
+                          ? t("settings.updateFound", {
+                              version: shownUpdate.latestVersion ?? "",
+                            })
+                          : shownUpdate.status === "error" &&
+                              shownUpdate.errorCode === "no-asset"
+                            ? t("settings.updateNoAsset", {
+                                version: shownUpdate.latestVersion ?? "",
+                              })
+                            : shownUpdate.status === "current"
+                              ? t("settings.upToDate")
+                              : shownUpdate.status === "downloading"
+                                ? t("settings.downloading")
+                                : t("settings.updateFailed")}
                     </span>
                   )}
                 </div>
-                {versionResult && versionResult.status === "newer" && (
-                  <div className="mt-2 rounded-sm border border-primary/30 bg-primary/5 p-3">
-                    {versionResult.changelog && (
-                      <p className="aitracker-text-body-sm leading-relaxed text-muted-foreground">
-                        {versionResult.changelog}
-                      </p>
-                    )}
-                    {versionResult.releaseUrl && (
-                      <a
-                        href={versionResult.releaseUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="aitracker-text-body-sm mt-2 inline-flex items-center gap-1 text-primary hover:underline"
-                      >
-                        <ExternalLink className="size-3" />
-                        {t("settings.viewRelease")}
-                      </a>
-                    )}
-                  </div>
-                )}
+                {shownUpdate &&
+                  (shownUpdate.status === "available" ||
+                    shownUpdate.status === "downloading" ||
+                    shownUpdate.status === "downloaded" ||
+                    (shownUpdate.status === "error" &&
+                      shownUpdate.errorCode === "no-asset")) && (
+                    <div className="mt-2 rounded-sm border border-primary/30 bg-primary/5 p-3">
+                      {shownUpdate.changelog && (
+                        <p className="aitracker-text-body-sm leading-relaxed text-muted-foreground">
+                          {shownUpdate.changelog}
+                        </p>
+                      )}
+                      {shownUpdate.assetName && (
+                        <p className="aitracker-text-caption mt-2 text-muted-foreground">
+                          {t("settings.updateAsset", {
+                            asset: shownUpdate.assetName,
+                          })}
+                        </p>
+                      )}
+                      {shownUpdate.status === "available" && desktopApi && (
+                        <AITrackerButton
+                          variant="primary"
+                          size="sm"
+                          onClick={() => void handleDownloadUpdate()}
+                          className="mt-2"
+                        >
+                          {t("settings.downloadUpdate")}
+                        </AITrackerButton>
+                      )}
+                      {shownUpdate.status === "available" &&
+                        !desktopApi &&
+                        shownUpdate.downloadUrl && (
+                          <a
+                            href={shownUpdate.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="aitracker-text-body-sm mt-2 inline-flex items-center gap-1 text-primary hover:underline"
+                          >
+                            <ExternalLink className="size-3" />
+                            {t("settings.downloadUpdate")}
+                          </a>
+                        )}
+                      {shownUpdate.status === "downloading" && (
+                        <span className="aitracker-text-body-sm mt-2 inline-flex text-muted-foreground">
+                          {t("settings.downloading")}
+                        </span>
+                      )}
+                      {updateDownloaded && desktopApi && (
+                        <AITrackerButton
+                          variant="primary"
+                          size="sm"
+                          onClick={() => void handleInstallUpdate()}
+                          className="mt-2"
+                        >
+                          {t("settings.installUpdate")}
+                        </AITrackerButton>
+                      )}
+                      {shownUpdate.releaseUrl && (
+                        <a
+                          href={shownUpdate.releaseUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="aitracker-text-body-sm mt-2 inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          <ExternalLink className="size-3" />
+                          {t("settings.viewRelease")}
+                        </a>
+                      )}
+                    </div>
+                  )}
               </Field>
               <Field label={t("settings.sourceRepo")}>
                 <a

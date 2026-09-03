@@ -272,6 +272,7 @@ const DEFAULT_ENABLED_TASK_IDS = new Set([
   "usage.refresh",
   "skills.refresh",
   "sessions.refresh",
+  "insights.refresh",
   "exchange.refresh",
   "installation.refresh",
 ]);

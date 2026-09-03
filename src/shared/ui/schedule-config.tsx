@@ -43,7 +43,7 @@ export function ScheduleToggle({
       disabled={disabled}
       className={`h-5 w-9 rounded-full p-0.5 transition-colors ${
         value ? "bg-primary" : "border border-border bg-surface-2"
-      } disabled:cursor-not-allowed disabled:opacity-50`}
+      } disabled:cursor-not-allowed disabled:opacity-70 disabled:grayscale disabled:ring-1 disabled:ring-border-strong`}
       aria-pressed={value}
       aria-label={ariaLabel}
     >

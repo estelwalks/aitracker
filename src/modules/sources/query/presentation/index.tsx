@@ -197,13 +197,9 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
             icon: Boxes,
             label: t("sources.summary.connected"),
             v: format.formatNumber(summary.totals.connectedCount),
-            right: (
-              <span className="aitracker-num flex items-baseline gap-1 font-mono text-[13px] text-muted-foreground">
-                <span aria-hidden="true">/</span>
-                <span>{format.formatNumber(summary.totals.toolCount)}</span>
-              </span>
-            ),
-            sub: t("sources.summary.detectedLocally"),
+            sub: t("sources.summary.discovered", {
+              count: format.formatNumber(summary.totals.toolCount),
+            }),
           },
           {
             icon: FolderOpen,
@@ -363,7 +359,12 @@ function SourceCard({
 
       <div className="mt-2 border-t border-border pt-2 text-[12px] leading-relaxed text-muted-foreground">
         <span className="text-foreground/70">
-          {t("sources.row.paths", { paths: "" })}
+          {t(
+            entry.usageLogParsing === "unsupported"
+              ? "sources.row.probePaths"
+              : "sources.row.paths",
+            { paths: "" },
+          )}
         </span>
         <span className="aitracker-num ml-1 break-all">
           {hasPaths

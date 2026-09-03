@@ -41,6 +41,7 @@ export const Route = createFileRoute("/market")({
         source: "cache",
         fetchedAt: new Date().toISOString(),
         warning: null,
+        loadFailed: true,
         stats: {
           totalSkills: 0,
           installedCount: 0,

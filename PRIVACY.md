@@ -17,8 +17,22 @@ conversation content is not part of the renderer read models.
 
 Network access is feature-driven rather than required for local analytics:
 
-- the Skill market may contact `https://ai.trusttools.cn/api`;
-- exchange-rate refreshes may contact Frankfurter's public API;
+- the Skills Market and exchange-rate refreshes may contact the
+  project-operated service at `https://ai.trusttools.cn/api`, the same
+  developer-operated service that provides the Skills Market listings and
+  downloads. The exchange-rate request asks only for the
+  USD rate quoted in CNY, JPY, and KRW, and market requests carry only
+  catalog parameters such as search terms, tags, pagination, and sort; no
+  locally collected usage data, Skills or knowledge content, or account or
+  session identifiers are included. These requests are identified with the
+  User-Agent header `AITracker/<version> (Electron;
+  +https://github.com/estelwalks/aitracker)`;
+- when that service is unreachable or the machine is offline, AITracker
+  falls back to local data: exchange-rate display keeps the last cached
+  snapshot (a stale cache is still used while a background refresh runs, and
+  failed refreshes keep the last-known-good values) or falls back to the
+  built-in baseline rates shown as "fallback", while the Skills Market shows
+  its most recent cached results;
 - the optional update check reads the public GitHub releases API for this
   repository; and
 - distillation, enhanced insights, or other model features send the selected

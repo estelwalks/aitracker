@@ -26,6 +26,7 @@ export type {
   ApplyRetentionPort,
   ExecutorRegistry,
   ExecutorRegistryOptions,
+  RefreshInsightsPort,
   RefreshSessionsPort,
   RefreshSkillsPort,
 } from "./application/executor-registry/index.ts";

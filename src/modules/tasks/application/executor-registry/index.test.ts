@@ -3,6 +3,7 @@ import test from "node:test";
 import { JOB_EXECUTOR_KEYS } from "../../definitions/contracts.ts";
 import { createExecutorRegistry } from "./index.ts";
 import type { RefreshUsagePort } from "./index.ts";
+import type { RefreshInsightsPort } from "./index.ts";
 import type { TaskExecutionContext } from "../scheduler.ts";
 
 function context(taskId = "usage.refresh"): TaskExecutionContext {
@@ -73,6 +74,20 @@ test("a cancelled usage executor propagates the abort", async () => {
       }),
     /errors\.tasks\.cancelled/,
   );
+});
+
+test("insight executor delegates to the background refresh port", async () => {
+  let calls = 0;
+  const insights: RefreshInsightsPort = {
+    refresh: async () => {
+      calls += 1;
+    },
+  };
+  const result = await createExecutorRegistry({ insights }).executors[
+    "refresh-insights-v1"
+  ](context("insights.refresh"));
+  assert.equal(calls, 1);
+  assert.deepEqual(result, {});
 });
 
 test("unconfigured adapters return controlled availability errors", async () => {

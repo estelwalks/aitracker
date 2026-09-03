@@ -28,6 +28,16 @@ test("Windows source paths use AppData/Roaming instead of macOS paths", () => {
   ]);
 });
 
+test("AiPy usage paths follow the platform-specific registry definition", () => {
+  assert.deepEqual(sourcePathsForPlatform("aipy", "macos", "/Users/tester"), [
+    "~/Library/Application Support/aipy-pro",
+  ]);
+  assert.deepEqual(
+    sourcePathsForPlatform("aipy", "windows", "C:\\Users\\tester"),
+    ["~/AppData/Roaming/aipy-pro"],
+  );
+});
+
 test("reference agents expose their actual platform-specific directories", () => {
   assert.deepEqual(
     sourcePathsForPlatform("qwen", "windows", "C:\\Users\\tester"),

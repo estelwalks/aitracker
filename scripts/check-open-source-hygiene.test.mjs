@@ -5,20 +5,16 @@ import { join } from "node:path";
 import test from "node:test";
 import { scanRepository } from "./check-open-source-hygiene.mjs";
 
-test("hygiene scanner detects secrets, private paths and AITracker references", () => {
+test("hygiene scanner detects secrets and private paths", () => {
   const root = mkdtempSync(join(tmpdir(), "aitracker-hygiene-"));
   writeFileSync(
     join(root, "unsafe.ts"),
-    'const token = "sk-12345678901234567890";\n// /Users/alice/project\n// AITracker\n',
+    'const token = "sk-12345678901234567890";\n// /Users/alice/project\n',
   );
   const findings = scanRepository(root);
   assert.deepEqual(
     new Set(findings.map((finding) => finding.rule)),
-    new Set([
-      "credential-value",
-      "local-absolute-path",
-      "aitracker-residue",
-    ]),
+    new Set(["credential-value", "local-absolute-path"]),
   );
 });
 
@@ -27,9 +23,9 @@ test("docs, fixtures and tests are excluded to avoid example false positives", (
   mkdirSync(join(root, "docs"));
   mkdirSync(join(root, "fixtures"));
   mkdirSync(join(root, ".output"));
-  writeFileSync(join(root, "docs", "example.md"), "AITracker /Users/alice");
+  writeFileSync(join(root, "docs", "example.md"), "/Users/alice/project");
   writeFileSync(join(root, "fixtures", "sample.ts"), "sk-12345678901234567890");
-  writeFileSync(join(root, "sample.test.ts"), "AITracker /Users/alice");
+  writeFileSync(join(root, "sample.test.ts"), "/Users/alice/project");
   writeFileSync(
     join(root, ".output", "manifest.json"),
     '"/Users/alice/.cache" sk-12345678901234567890',

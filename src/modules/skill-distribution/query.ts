@@ -14,6 +14,11 @@ export type MarketSkill = Omit<LegacyMarketSkill, "repoPath"> & {
 };
 export type MarketListResult = Omit<LegacyMarketListResult, "skills"> & {
   readonly skills: readonly MarketSkill[];
+  /**
+   * Route-loader-only marker: the initial request failed (cold/offline) so
+   * the panel shows the "network unavailable" state instead of "no match".
+   */
+  readonly loadFailed?: boolean;
 };
 export type { MarketAgent, MarketSort };
 export type InstallSkillResult = Omit<

@@ -148,7 +148,7 @@ export function PeriodCalendar({
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         title={t("reports.calendar.toggle")}
-        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[11.5px] transition-colors ${
+        className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[12px] transition-colors ${
           open
             ? "bg-surface-2 text-foreground"
             : "bg-surface-2/70 text-muted-foreground hover:text-foreground"
@@ -164,10 +164,10 @@ export function PeriodCalendar({
             <button
               type="button"
               onClick={() => shiftCursor(-1)}
-              className="rounded-full bg-surface-2 p-1 hover:opacity-80"
+              className="grid size-8 place-items-center rounded-full bg-surface-2 hover:opacity-80"
               aria-label="prev"
             >
-              <ChevronLeft className="size-3.5" />
+              <ChevronLeft className="size-4" />
             </button>
             <span className="aitracker-num font-mono text-[12px] tracking-tight">
               {monthLabel}
@@ -175,10 +175,10 @@ export function PeriodCalendar({
             <button
               type="button"
               onClick={() => shiftCursor(1)}
-              className="rounded-full bg-surface-2 p-1 hover:opacity-80"
+              className="grid size-8 place-items-center rounded-full bg-surface-2 hover:opacity-80"
               aria-label="next"
             >
-              <ChevronRight className="size-3.5" />
+              <ChevronRight className="size-4" />
             </button>
           </div>
 
@@ -225,7 +225,7 @@ export function PeriodCalendar({
             </div>
           ) : (
             <>
-              <div className="mb-1 grid grid-cols-7 text-center font-mono text-[10px] text-muted-foreground/70">
+              <div className="mb-1 grid grid-cols-7 text-center font-mono text-[12px] text-muted-foreground">
                 {weekdayHeaders.map((weekday, index) => (
                   <span key={index} className="py-1">
                     {weekday}

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Flame, Minus } from "lucide-react";
 
@@ -120,7 +121,18 @@ export function RoastBoard({
         className="mb-3"
       />
       {rows.length === 0 ? (
-        <EmptyState title={t("tracker.empty")} desc={t("tracker.emptyDesc")} />
+        <EmptyState
+          title={t("tracker.empty")}
+          desc={t("tracker.emptyDesc")}
+          actions={
+            <Link
+              to="/sources"
+              className="inline-flex min-h-8 items-center rounded-lg bg-surface-2 px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-accent"
+            >
+              {t("nav.sources")}
+            </Link>
+          }
+        />
       ) : (
         <ol className="space-y-2">
           {rows.map((row, index) => {

@@ -476,14 +476,14 @@ function TrendPanel({
                 tickFormatter={(value: string) => value.slice(5)}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
               />
               <YAxis
-                width={44}
+                width={56}
                 tickFormatter={(value: number) => format.formatTokens(value)}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
               />
               <Tooltip
                 cursor={{ fill: "var(--surface-2)" }}
@@ -961,13 +961,7 @@ function ToolModelPanel({
           const metaB = isModels
             ? row.estimatedCostUsd == null
               ? DASH
-              : row.estimatedCostIsPartial
-                ? t("pricing.estimatedUnknown", {
-                    amount: format.formatUsd(row.estimatedCostUsd),
-                  })
-                : t("pricing.estimated", {
-                    amount: format.formatUsd(row.estimatedCostUsd),
-                  })
+              : format.formatUsd(row.estimatedCostUsd)
             : t("skills.agentOverview.pctShort", {
                 percent: format.formatNumber(
                   totalTokens > 0 ? (row.tokens / totalTokens) * 100 : 0,

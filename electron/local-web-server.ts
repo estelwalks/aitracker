@@ -235,9 +235,61 @@ function validateToken(
   return "none";
 }
 
+/**
+ * Production renderer Content-Security-Policy (audit finding P1-11).
+ *
+ * Served on every local-server response; the browser only enforces it on
+ * responses it treats as documents (the TanStack Start SSR HTML document and
+ * the standalone SSR error page), so carrying it on assets/JSON is harmless
+ * and guarantees no HTML-bearing response can ever go out without a policy.
+ *
+ * Deviations from the strict baseline and the code evidence for each:
+ *  - `script-src 'self' 'unsafe-inline'`: the SSR document emitted by
+ *    `.output/server` (TanStack Start / @tanstack/react-router) always embeds
+ *    two inline classic scripts that hydration depends on: a static
+ *    scroll-restoration script and a per-request `$tsr-stream-barrier` script
+ *    carrying the dynamically dehydrated router state (`window.$_TSR`).
+ *    The barrier content varies per route/request, so a hash allowlist is
+ *    impossible; TanStack's nonce support (`ssr.nonce`) would require wiring
+ *    in the src renderer entry, which is outside this Electron-only change.
+ *    No remote origin is listed, so externally hosted scripts stay blocked.
+ *  - `style-src 'self' 'unsafe-inline'` is kept from the baseline: React
+ *    components set inline `style={{...}}` attributes throughout (charts,
+ *    drawers, window chrome, badges) and the standalone SSR error page
+ *    (`src/lib/error-page.ts`) ships an inline <style> block.
+ * `img-src 'self' data:` and `font-src 'self' data:` cover the self-hosted
+ * /assets fonts (Inter, JetBrains Mono, Noto Sans SC) and allow data-URI
+ * images. `connect-src 'self'` covers the renderer's only browser network
+ * usage: same-origin ServerFn RPC fetches and the periodic snapshot-status
+ * poll; all market/exchange-rate traffic happens server-side. There is no
+ * browser WebSocket/EventSource and Vite HMR websockets exist only in dev,
+ * which never uses this server (see `resolveApplicationOrigin` in main.ts).
+ */
+export const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+].join("; ");
+
+/**
+ * Applied to every response the local server writes. Besides the long-standing
+ * no-cache/nosniff behavior it now stamps the renderer CSP (P1-11) and a
+ * no-referrer policy (the loopback origin is itself sensitive: responses can
+ * carry capability-bearing URLs, and no-referrer keeps any navigation from
+ * leaking local state or tokens to external sites).
+ */
 function securityResponseHeaders(response: ServerResponse): void {
   response.setHeader("cache-control", "no-store");
   response.setHeader("x-content-type-options", "nosniff");
+  response.setHeader("content-security-policy", CONTENT_SECURITY_POLICY);
+  response.setHeader("referrer-policy", "no-referrer");
 }
 
 function tokenCookieHeader(capabilityToken: string): string {
@@ -276,6 +328,13 @@ async function sendFetchResponse(
     nodeResponse.setHeader("set-cookie", cookies);
   }
 
+  // The app server's fetched response is copied verbatim above; never let it
+  // weaken the transport/document policy the local server is responsible for.
+  // no-store for non-HTML responses stays under the app server's control.
+  nodeResponse.setHeader("x-content-type-options", "nosniff");
+  nodeResponse.setHeader("content-security-policy", CONTENT_SECURITY_POLICY);
+  nodeResponse.setHeader("referrer-policy", "no-referrer");
+
   const responseBody = await fetchResponse.arrayBuffer();
   nodeResponse.end(Buffer.from(responseBody));
 }
@@ -313,6 +372,12 @@ export async function startLocalWebServer(
 
   const server = createServer(async (request, response) => {
     try {
+      // Stamp every response with the shared security headers up front so no
+      // branch (static assets, SSR middleware, server-fn RPC, error pages) can
+      // write a response without them. Branch code may still override
+      // cache-control (hashed /assets are immutable), and sendFetchResponse
+      // re-asserts the policy after copying the app server's own headers.
+      securityResponseHeaders(response);
       const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
       const requestUrl = new URL(request.url ?? "/", origin);
       if (

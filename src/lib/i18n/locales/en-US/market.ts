@@ -21,6 +21,7 @@ export const market = {
       "Network unavailable — the Security Market is temporarily inaccessible",
     unavailableDesc:
       "The locally cached list is still browsable; it will auto-sync with the latest data once the network recovers.",
+    cacheWarning: "Network unavailable — showing cached results",
   },
   empty: {
     noMatch: "No matching Skills",

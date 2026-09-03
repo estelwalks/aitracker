@@ -22,6 +22,8 @@ export type InsightSurfaceId = (typeof INSIGHT_SURFACE_IDS)[number];
 export const DEFAULT_INSIGHT_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
 export const MIN_INSIGHT_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 export const MAX_INSIGHT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/** Server-side hint used by the background enhancer to keep the active UI language. */
+export const INSIGHT_LAST_LOCALE_PREFERENCE_KEY = "insight.lastLocale";
 
 export interface InsightScope {
   readonly range?: "today" | "7d" | "30d" | "all";
@@ -113,7 +115,7 @@ export interface InsightEnvelope {
   readonly generatedAt: string;
   readonly source: "rules" | "enhanced";
   readonly canEnhance: boolean;
-  /** Renderer hint only. True after the server validated auto mode + consent. */
+  /** True after the server validated automatic mode + consent for background enhancement. */
   readonly autoEnhance: boolean;
   readonly modelLabel?: string;
   /** Effective settings value used for this page's refresh and AI cache. */

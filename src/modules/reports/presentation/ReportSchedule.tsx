@@ -181,9 +181,11 @@ export function ReportSchedule({
         </header>
 
         {schedulerOff && enabledCount > 0 && (
-          <div className="mt-2 flex items-start gap-1.5 text-[11px] text-warn">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            <span>{t("reports.schedule.schedulerOff")}</span>
+          <div className="aitracker-warning mt-2 flex items-start gap-1.5 rounded-lg px-3 py-2 text-[12px]">
+            <AlertTriangle className="aitracker-warning-icon mt-0.5 size-3.5 shrink-0" />
+            <span className="aitracker-warning-title">
+              {t("reports.schedule.schedulerOff")}
+            </span>
           </div>
         )}
 
@@ -216,14 +218,16 @@ export function ReportSchedule({
     );
   } else if (statusError) {
     content = (
-      <div className="aitracker-text-body-sm flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-warn">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+      <div className="aitracker-warning aitracker-text-body-sm flex items-start gap-2 rounded-xl px-3.5 py-3">
+        <AlertTriangle className="aitracker-warning-icon mt-0.5 size-4 shrink-0" />
         <div className="min-w-0">
-          <p className="font-medium">{t("reports.schedule.loadFailed")}</p>
+          <p className="aitracker-warning-title font-medium">
+            {t("reports.schedule.loadFailed")}
+          </p>
           <button
             type="button"
             onClick={reload}
-            className="aitracker-text-caption mt-1 inline-flex items-center gap-1 hover:opacity-80"
+            className="aitracker-text-caption mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-foreground/85 hover:bg-surface-2 hover:text-foreground"
           >
             <RefreshCw className="size-3" />
             {t("common.retry")}
@@ -236,13 +240,13 @@ export function ReportSchedule({
     content = (
       <div className="space-y-3">
         {schedulerOff && (
-          <div className="aitracker-text-body-sm flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-warn">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div className="aitracker-warning aitracker-text-body-sm flex items-start gap-2 rounded-xl px-3.5 py-3">
+            <AlertTriangle className="aitracker-warning-icon mt-0.5 size-4 shrink-0" />
             <div className="min-w-0">
-              <p className="font-medium">
+              <p className="aitracker-warning-title font-medium">
                 {t("reports.schedule.schedulerOff")}
               </p>
-              <p className="aitracker-text-caption mt-0.5">
+              <p className="aitracker-warning-detail aitracker-text-caption mt-0.5">
                 {t("reports.schedule.schedulerOffHint")}
               </p>
             </div>

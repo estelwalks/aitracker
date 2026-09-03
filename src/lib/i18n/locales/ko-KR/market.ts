@@ -21,6 +21,7 @@ export const market = {
       "네트워크를 사용할 수 없어 보안 마켓에 접근할 수 없습니다",
     unavailableDesc:
       "로컬에 캐시된 목록은 계속 볼 수 있으며, 네트워크가 복구되면 최신 데이터로 자동 동기화됩니다.",
+    cacheWarning: "네트워크를 사용할 수 없어 캐시된 결과를 표시하고 있습니다",
   },
   empty: {
     noMatch: "일치하는 Skill이 없습니다",

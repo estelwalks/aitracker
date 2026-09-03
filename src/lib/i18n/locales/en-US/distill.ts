@@ -75,7 +75,6 @@ export const distill = {
     "{count} session(s) · ~{tokens} tokens · official model and recommended prompt, no config needed",
   runSummarySegments: "{count} segment(s) · ~{tokens} tokens",
   quotaRemaining: "{count} official-model runs left today",
-  quotaHeader: "{count} official-model runs left today",
   ownModelConnected: "Own model · connected",
   ownModelUnconfigured: "Own model · endpoint not configured",
   manageModels: "Manage models",

@@ -1,4 +1,7 @@
-import type { UsageReaderKey } from "../../tool-registry/contracts.ts";
+import type {
+  PlatformTarget,
+  UsageReaderKey,
+} from "../../tool-registry/contracts.ts";
 import type { LocalUsageSource } from "../types.ts";
 
 export type UsageLogFormat = "json" | "jsonl" | "sqlite";
@@ -7,6 +10,8 @@ export interface UsageAdapterPath {
   root: string;
   glob: string;
   format: UsageLogFormat;
+  /** Platform targets from the registry; omitted means every platform. */
+  targets?: readonly PlatformTarget[];
 }
 
 export interface UsageFieldMapping {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import {
   chmod,
   mkdtemp,
@@ -14,13 +15,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import type { ScanSkillReport } from "@estelwalks/agent-threat-scanner";
+import type {
+  ScanDependencies,
+  ScanSkillReport,
+} from "@estelwalks/agent-threat-scanner";
 
 import {
   SecurityScannerService,
   type SecretStoragePort,
   type SecurityScannerPersistence,
 } from "./security-scanner-service.js";
+import { securityScannerUserAgent } from "./security-scanner-http.js";
+
+const rootPackageJson = createRequire(import.meta.url)("../package.json") as {
+  readonly version: string;
+};
 import type { ModelConfig } from "@estelwalks/agent-threat-scanner";
 
 const cleanup: string[] = [];
@@ -918,6 +927,54 @@ test("runs the real agent-threat-scanner quick engine through the in-memory boun
   assert.equal(entry.report?.branches[0]?.name, "static");
   assert.equal(entry.report?.branches[0]?.status, "complete");
   assert.equal(entry.report?.scannedFiles, 1);
+});
+
+test("injects the unified UA into the scanner HTTP dependency", async () => {
+  let capturedInput: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const scanner = async (
+    _request: unknown,
+    dependencies?: ScanDependencies,
+  ): Promise<ScanSkillReport> => {
+    assert.ok(dependencies?.fetch);
+    await dependencies.fetch("https://model.example/v1/models");
+    return report();
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    capturedInput = String(input);
+    capturedInit = init;
+    return new Response("{}", { status: 200 });
+  }) as typeof fetch;
+  try {
+    const { home } = await fixture();
+    const service = new SecurityScannerService({
+      homeDirectory: home,
+      locale: () => "zh-CN",
+      env: {},
+      secretStorage: unavailableStorage,
+      scanner: scanner as never,
+    });
+    const [target] = await service.listSkills();
+    await service.start({
+      scope: "single",
+      skillRef: target.skillRef,
+      mode: "quick",
+    });
+    await waitForTerminal(service);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(capturedInput, "https://model.example/v1/models");
+  assert.equal(
+    new Headers(capturedInit?.headers).get("User-Agent"),
+    `AITracker/${rootPackageJson.version} (Electron; +https://github.com/estelwalks/aitracker)`,
+  );
+  assert.equal(
+    securityScannerUserAgent(),
+    `AITracker/${rootPackageJson.version} (Electron; +https://github.com/estelwalks/aitracker)`,
+  );
 });
 
 test("binary files retain skip evidence but finish the scan", async () => {

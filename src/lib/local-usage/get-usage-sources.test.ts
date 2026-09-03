@@ -133,6 +133,43 @@ test("HOME-normalization: catalog relative path gets ~/, absolute scanner path r
   assert.equal(externalGrok.paths.includes("/var/private/grok"), false);
 });
 
+test("actual scanner paths take precedence over installation probe paths", () => {
+  const out = deriveUsageSources(
+    AI_TOOLS,
+    [
+      summary({
+        source: "workbuddy",
+        detected: true,
+        paths: [
+          `${HOME}/.workbuddy/projects`,
+          `${HOME}/.workbuddy/workbuddy.db`,
+        ],
+      }),
+    ],
+    installations(".workbuddy"),
+    "t",
+    HOME,
+  );
+  const workbuddy = out.entries.find((entry) => entry.id === "workbuddy")!;
+  assert.deepEqual(workbuddy.paths, [
+    "~/.workbuddy/projects",
+    "~/.workbuddy/workbuddy.db",
+  ]);
+});
+
+test("platform registry paths take precedence before the first usage snapshot", () => {
+  const out = deriveUsageSources(
+    AI_TOOLS,
+    [],
+    installations(".aipyapp"),
+    "t",
+    HOME,
+    new Map([["aipy", ["~/Library/Application Support/aipy-pro"]]]),
+  );
+  const aipy = out.entries.find((entry) => entry.id === "aipy")!;
+  assert.deepEqual(aipy.paths, ["~/Library/Application Support/aipy-pro"]);
+});
+
 test("totals aggregate across multiple connected tools", () => {
   const out = deriveUsageSources(
     AI_TOOLS,

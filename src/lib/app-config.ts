@@ -1,3 +1,5 @@
+import packageJson from "../../package.json";
+
 /**
  * Central application configuration — the single source of truth for the
  * product name and every runtime identifier derived from it.
@@ -31,10 +33,8 @@ export const APP_FAVICON_LIGHT_URL = "/favicon.svg";
 export const APP_BRAND_ICON_DARK_URL = APP_FAVICON_DARK_URL;
 export const APP_BRAND_ICON_LIGHT_URL = APP_FAVICON_LIGHT_URL;
 
-/** Product version shown in the UI; bump together with package.json `version`. */
-export const APP_VERSION = "1.0.0-beta.1";
-/** Release date shown on the About page. */
-export const APP_RELEASE_DATE = "2026-08-31";
+/** Product version shown in the UI, read from the package runtime source. */
+export const APP_VERSION = packageJson.version;
 /** Source repository link shown on the About page. */
 export const APP_REPO_URL = "https://github.com/estelwalks/aitracker";
 

@@ -61,16 +61,6 @@ function projectSources(
       const skillAgent = skillAgentLabelFor(entry.id);
       return {
         ...entry,
-        // Installation snapshots contain the paths that happened to exist at
-        // scan time. The Sources page must always show the platform-specific
-        // catalog paths as well, including not-installed agents, so users can
-        // locate their data before the first scan.
-        paths: sourcePathsForPlatform(
-          entry.id,
-          osFromProcess(process.platform),
-          process.env.HOME ?? process.env.USERPROFILE ?? "",
-          process.env,
-        ),
         skillCount:
           skillAgent == null ? null : (countByAgent.get(skillAgent) ?? 0),
         skillAgent,
@@ -169,6 +159,13 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
     await import("../../../lib/local-usage/get-usage-sources");
   const { homedir } = await import("node:os");
   const homeDirectory = homedir();
+  const platformOs = osFromProcess(process.platform);
+  const platformSourcePaths = new Map(
+    AI_TOOLS.map((tool) => [
+      tool.id,
+      sourcePathsForPlatform(tool.id, platformOs, homeDirectory, process.env),
+    ]),
+  );
   // InstallationSnapshot facts use `~/`-relative display paths; deriveUsageSources
   // normalizes them again idempotently, so the snapshot's paths feed directly.
   const installationFacts = (installations.data?.facts ?? []).map((fact) => ({
@@ -187,6 +184,7 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
       installations.lastSuccessAt,
     ),
     homeDirectory,
+    platformSourcePaths,
   );
 }
 

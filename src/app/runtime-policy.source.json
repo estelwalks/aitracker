@@ -95,7 +95,7 @@
         "requiresApproval": false,
         "ui": {
           "settingsVisible": true,
-          "i18nKey": "tasks.usageRefresh"
+          "i18nKey": "tasks.exchangeRefresh"
         }
       },
       {
@@ -214,6 +214,35 @@
         "ui": {
           "settingsVisible": true,
           "i18nKey": "tasks.installationsRefresh"
+        }
+      },
+      {
+        "id": "insights.refresh",
+        "executorKey": "refresh-insights-v1",
+        "category": "insight",
+        "defaultSchedule": {
+          "kind": "interval",
+          "minutes": 60
+        },
+        "constraints": {
+          "minMinutes": 60,
+          "maxMinutes": 1440,
+          "singleFlight": true
+        },
+        "startupPolicy": "if-stale",
+        "retry": {
+          "maxAttempts": 1,
+          "backoffSeconds": [
+            120
+          ]
+        },
+        "timeoutMs": 1800000,
+        "queue": "background",
+        "network": "forbidden",
+        "requiresApproval": false,
+        "ui": {
+          "settingsVisible": false,
+          "i18nKey": "tasks.insightsRefresh"
         }
       },
       {

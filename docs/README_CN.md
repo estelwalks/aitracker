@@ -65,6 +65,44 @@ npm run dev:desktop
 
 仅启动浏览器开发服务器时，运行 `npm run dev`。
 
+### 安装（Beta）
+
+首个 Beta 版本面向 macOS（x64 / arm64）和 Windows x64 桌面安装包。Beta
+安装包未签名。截至目前，Beta CLI 包、对应的 GitHub Release 和 beta Tap
+尚未发布，下面的命令仅在发布后可用。
+
+发布 Beta CLI 包和匹配的 GitHub Release 后，如果已安装 Node.js 和 npm，可运行：
+
+```bash
+npx --yes aitracker@beta
+```
+
+此命令会下载并打开桌面安装程序；它不是无需 Node.js 的静默安装。macOS
+Gatekeeper 可能提示“无法验证开发者”；请在确认发布来源和成果物后，通过“系统设置”
+或在应用上右键选择“打开”来手动确认启动。Windows 可能显示 SmartScreen 警告；继续
+前请检查发布者和成果物。不要关闭全局安全保护，也不要运行不安全的绕过命令。
+
+如果只想下载并校验安装程序而不打开，可以指定输出目录。目录不存在时会自动创建，
+并使用发布元数据提供的安全安装包文件名：
+
+```bash
+npx --yes aitracker@beta --download-only ./downloads
+```
+
+不指定目录的 `--download-only` 仍保持兼容：使用临时目录下载和校验，命令退出时清理
+临时文件。已存在的目标文件、符号链接目录、空目录参数、重复参数和文件系统根目录
+都会被拒绝。
+
+macOS 用户也可以在 beta Tap 发布后使用项目自己的 Tap：
+
+```bash
+brew tap estelwalks/aitracker
+brew install --cask estelwalks/aitracker/aitracker-beta
+```
+
+稳定版命令目前尚未作为可用选项发布；只有在稳定版完成签名且官方 Homebrew Cask
+准备就绪后，才会公布稳定版安装方式。
+
 ### 构建与测试
 
 ```bash
@@ -228,7 +266,25 @@ AITracker is open source.
 
 ## 许可证
 
-AITracker 采用 MIT 许可证。详见 [LICENSE](../LICENSE)。
+AITracker 采用基于 GPL-3.0 且附带额外限制的项目许可证。详见
+[LICENSE](../LICENSE)。
+
+---
+
+## 致谢
+
+感谢以下贡献者：
+
+- [gobuer](https://github.com/gobuer)
+- [estelwalks](https://github.com/estelwalks)
+- [JJBondOne](https://github.com/JJBondOne)
+
+开发过程中使用了以下工具：
+
+- [Claude Code](https://code.claude.com/docs/en/)
+- [DeepSeek Harness](https://www.deepseek.com/harness/en/)
+- [Codex](https://developers.openai.com/codex/)
+- [Lovable](https://lovable.dev/)
 
 ---
 

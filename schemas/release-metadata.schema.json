@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/estelwalks/aitracker/schemas/release-metadata.schema.json",
+  "title": "AITracker release metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "appVersion",
+    "channel",
+    "repository",
+    "gitTag",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "appVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$"
+    },
+    "channel": {
+      "type": "string",
+      "enum": ["stable", "beta"]
+    },
+    "repository": {
+      "type": "string",
+      "const": "estelwalks/aitracker"
+    },
+    "gitTag": {
+      "type": "string",
+      "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$"
+    },
+    "gitCommit": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["darwin-arm64", "darwin-x64", "win32-x64"],
+      "properties": {
+        "darwin-arm64": { "$ref": "#/$defs/artifact" },
+        "darwin-x64": { "$ref": "#/$defs/artifact" },
+        "win32-x64": { "$ref": "#/$defs/artifact" }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url", "sha256", "size"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/?#\\\\]+$"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://github\\.com/estelwalks/aitracker/releases/download/v[^/?#]+/[^/?#]+$"
+        },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

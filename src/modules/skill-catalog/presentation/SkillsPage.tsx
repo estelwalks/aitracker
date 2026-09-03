@@ -741,7 +741,7 @@ export function SkillsPage({
                 <div className="aitracker-num aitracker-text-metric mt-2 font-mono leading-none font-black tracking-tight">
                   {kpi.value}
                 </div>
-                <div className="mt-1.5 truncate text-[11px] text-muted-foreground/70">
+                <div className="mt-1.5 truncate text-[12px] text-muted-foreground">
                   {kpi.hint}
                 </div>
               </div>

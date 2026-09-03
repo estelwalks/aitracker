@@ -25,6 +25,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Release contract gate
+        run: npm run verify:release-contract
+
       - name: Typecheck (app + Electron + scanner)
         run: npm run typecheck
 

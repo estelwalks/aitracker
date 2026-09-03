@@ -95,8 +95,12 @@ export interface I18nContextValue {
   /** Latest exchange-rate snapshot (one shared snapshot for all amounts). */
   rates: RatesSnapshot | null;
   ratesLoading: boolean;
-  /** Force a network refresh (silent on failure — cache/built-in fallback). */
-  refreshRates: () => Promise<void>;
+  /**
+   * Force a network refresh of the exchange-rate snapshot. On offline/failure
+   * the repository keeps last-known-good (cache/built-in) and never rejects;
+   * the resolved `source` tells the caller whether the rates are actually live.
+   */
+  refreshRates: () => Promise<RatesSnapshot>;
   /** Type-safe lookup; key and params are checked at compile time. */
   t: <K extends MessageKey>(key: K, params?: MessageParams<K>) => string;
   /** Formatters bound to the current locale/currency/rate snapshot. */
@@ -132,7 +136,11 @@ const I18nContext = createContext<I18nContextValue>({
   setCurrencyMode: () => {},
   rates: null,
   ratesLoading: false,
-  refreshRates: async () => {},
+  refreshRates: async () => ({
+    rates: { ...BUILTIN_RATES },
+    date: "",
+    source: "fallback",
+  }),
   t: fallbackT,
   format: { ...createBoundFormatters("zh-CN"), formatUsd: () => "—" },
 });
@@ -459,6 +467,7 @@ export function I18nProvider({
       const { refreshExchangeRates } = await import("../pricing/server-fns");
       const snapshot = await refreshExchangeRates();
       setRates(snapshot);
+      return snapshot;
     } finally {
       setRatesLoading(false);
     }

@@ -13,6 +13,7 @@ import {
   Server,
   ShieldAlert,
   ShieldCheck,
+  WifiOff,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -158,9 +159,17 @@ const SORT_OPTIONS: { value: MarketSort; labelKey: MessageKey }[] = [
  * Security market (reference MarketPanel): KPI strip + search/sort + domain pills +
  * List row (security badge + Agent installation bar) + paging + details/installation pop-up window, all connected to real data.
  */
-export function MarketPanel({ initial }: { initial: MarketListResult }) {
+export function MarketPanel({
+  initial,
+  initialLoadFailed = false,
+}: {
+  initial: MarketListResult;
+  /** Route loader marked the request failed (cold/offline): show the unavailable state instead of "no match". */
+  initialLoadFailed?: boolean;
+}) {
   const { t, format } = useI18n();
   const [result, setResult] = useState(initial);
+  const [loadFailed, setLoadFailed] = useState<boolean>(initialLoadFailed);
   const [rawQuery, setRawQuery] = useState("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<MarketSort>("stars");
@@ -240,10 +249,16 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
       },
     })
       .then((next) => {
-        if (!cancelled) setResult(next);
+        if (!cancelled) {
+          setResult(next);
+          setLoadFailed(false);
+        }
       })
       .catch(() => {
-        if (!cancelled) toast.error(t("market.network.loadFailed"));
+        if (!cancelled) {
+          setLoadFailed(true);
+          toast.error(t("market.network.loadFailed"));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -411,7 +426,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
       </div>
 
       {result.warning && (
-        <p className="text-[11px] text-warn">{result.warning}</p>
+        <p className="text-[11px] text-warn">{t(result.warning)}</p>
       )}
 
       <div className="min-w-0">
@@ -497,10 +512,18 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
             <Progress value={undefined} className="h-1.5 w-40" />
           </div>
         ) : result.skills.length === 0 ? (
-          <EmptyState
-            title={t("market.empty.noMatch")}
-            desc={t("market.empty.noMatchDesc")}
-          />
+          loadFailed ? (
+            <EmptyState
+              icon={<WifiOff className="size-6" />}
+              title={t("market.network.unavailableTitle")}
+              desc={t("market.network.unavailableDesc")}
+            />
+          ) : (
+            <EmptyState
+              title={t("market.empty.noMatch")}
+              desc={t("market.empty.noMatchDesc")}
+            />
+          )
         ) : (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">

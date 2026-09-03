@@ -682,6 +682,28 @@ body:not(.aitracker-widget-float-document)
   background-color: oklch(0 0 0 / 0.62);
 }
 
+/* Warning surfaces keep the semantic yellow accent while using readable body
+   text for the explanation, especially in the light theme. */
+.aitracker-warning {
+  border: 1px solid
+    color-mix(in oklab, var(--color-warn) 38%, var(--color-border));
+  background-color: color-mix(
+    in oklab,
+    var(--color-warn) 12%,
+    var(--color-card)
+  );
+  color: var(--color-foreground);
+}
+
+.aitracker-warning-icon,
+.aitracker-warning-title {
+  color: color-mix(in oklab, var(--color-warn) 82%, var(--color-foreground));
+}
+
+.aitracker-warning-detail {
+  color: color-mix(in oklab, var(--color-foreground) 78%, transparent);
+}
+
 /* Translucent glass segmented control with an inset active pill. */
 @utility aitracker-seg {
   display: inline-flex;
@@ -1649,7 +1671,7 @@ body:not(.aitracker-widget-float-document)
   font-family: var(--font-sans);
   font-size: var(--aitracker-font-body-sm);
   line-height: var(--aitracker-line-body-sm);
-  color: color-mix(in oklab, var(--color-muted-foreground) 70%, transparent);
+  color: color-mix(in oklab, var(--color-muted-foreground) 86%, transparent);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2850,7 +2872,13 @@ body:not(.aitracker-widget-float-document)
 
 .security-config-input:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 0.68;
+  border-color: color-mix(
+    in oklab,
+    var(--color-border) 80%,
+    var(--color-foreground)
+  );
+  filter: saturate(0.65);
 }
 
 @media (prefers-reduced-motion: reduce) {

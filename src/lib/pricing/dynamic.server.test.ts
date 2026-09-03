@@ -23,14 +23,14 @@ function memoryCache(): ExchangeRateCache {
 /**
  * Model prices are resolved offline from the rule-pack registry (resolve.ts);
  * this snapshot only carries exchange rates + the rule-pack version stamp. The
- * frankfurter mock uses the real v2 response shape: one `{ date, quote, rate }`
+ * The mock uses the real v2 response shape: one `{ date, base, quote, rate }`
  * row per currency.
  */
 test("refresh loads latest exchange rate and stamps the offline rule-pack version", async () => {
   const homeDirectory = await mkdtemp(join(tmpdir(), "aitracker-pricing-"));
   const fetcher: typeof fetch = async (input) => {
     const url = String(input);
-    if (url.includes("frankfurter")) {
+    if (url.includes("/api/v2/rates")) {
       return Response.json([
         { date: "2026-07-28", base: "USD", quote: "CNY", rate: 8 },
         { date: "2026-07-28", base: "USD", quote: "JPY", rate: 200 },

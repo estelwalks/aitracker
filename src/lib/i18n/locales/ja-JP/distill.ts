@@ -74,7 +74,6 @@ export const distill = {
     "{count} セッション · ~{tokens} tokens · 公式モデルと推奨プロンプト、設定不要",
   runSummarySegments: "{count} 区間 · ~{tokens} tokens",
   quotaRemaining: "公式モデルの今日の残り回数: {count} 回",
-  quotaHeader: "公式モデルの今日の残り回数: {count} 回",
   ownModelConnected: "自前モデル · 接続済み",
   ownModelUnconfigured: "自前モデル · Endpoint 未設定",
   manageModels: "モデル管理",

@@ -195,12 +195,10 @@ let cachedService:
 async function applicationService(): Promise<InsightRefreshBatchService> {
   const { getCompositionRoot } =
     await import("../../../app/composition.server.ts");
-  const { getPageInsightsApplication } =
-    await import("../../../app/insight-registry.server.ts");
   const root = await getCompositionRoot();
   if (cachedService?.root === root) return cachedService.service;
   const service = createInsightRefreshBatchService({
-    application: await getPageInsightsApplication(),
+    application: root.insights,
     store: root.database.features.insights,
   });
   cachedService = { root, service };

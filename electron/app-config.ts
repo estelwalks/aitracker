@@ -11,6 +11,7 @@
  * AITracker namespace/data-directory boundary.
  */
 export const APP_NAME = "AITracker";
+export const APP_REPO_URL = "https://github.com/estelwalks/aitracker";
 export const APP_DATA_DIR = ".aitracker";
 export const STORAGE_KEY_PREFIX = "aitracker.";
 export const COOKIE_TOKEN_NAME = "aitracker_token";

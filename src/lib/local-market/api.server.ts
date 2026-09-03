@@ -1,6 +1,7 @@
 import { parseMarketApiResponse } from "./schema.ts";
 import { MARKET_API_BASE } from "../app-config";
 import { AppError } from "../errors";
+import { fetchExternal } from "../http/external-request.server.ts";
 import {
   marketCacheKey,
   readMarketCache,
@@ -170,23 +171,27 @@ export async function fetchMarketSkills(
     const url = new URL(`${MARKET_API}/search`);
     url.searchParams.set("lang", "zh");
 
-    const response = await (options.fetcher ?? fetch)(url, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
+    const response = await fetchExternal(
+      url,
+      {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          search: query.search,
+          limit: query.limit,
+          page: query.page,
+          tags,
+          // Sort_by enum for add-in API v1: security_score/stars/created_at/name_asc/name_desc.
+          // Search deduplication is controlled by the backend switch by default, and the caller does not need to pass deduplicate.
+          sort_by: sort,
+        }),
+        signal: controller.signal,
       },
-      body: JSON.stringify({
-        search: query.search,
-        limit: query.limit,
-        page: query.page,
-        tags,
-        // Sort_by enum for add-in API v1: security_score/stars/created_at/name_asc/name_desc.
-        // Search deduplication is controlled by the backend switch by default, and the caller does not need to pass deduplicate.
-        sort_by: sort,
-      }),
-      signal: controller.signal,
-    });
+      options.fetcher ?? fetch,
+    );
     if (!response.ok)
       throw new AppError("errors.market.api.http", { status: response.status });
 
@@ -212,7 +217,8 @@ export async function fetchMarketSkills(
       return {
         ...cached,
         source: "cache",
-        warning: "网络不可用，正在显示本地缓存结果",
+        // i18n message key — the renderer translates it (market.network.cacheWarning).
+        warning: "market.network.cacheWarning",
       };
     }
 
@@ -250,7 +256,8 @@ export async function prefetchSkillSizes(
 ): Promise<void> {
   const targets = skills.filter((skill) => skill.size == null);
   if (targets.length === 0) return;
-  const fetchFn = fetcher ?? fetch;
+  const fetchFn: typeof fetch = (input, init) =>
+    fetchExternal(input, init, fetcher ?? fetch);
   let cursor = 0;
   const worker = async (): Promise<void> => {
     while (cursor < targets.length) {

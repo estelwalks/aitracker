@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
   desktopIpc,
   type AutoLaunchState,
+  type AutoUpdateState,
   type DesktopCurrency,
   type DesktopAppRoute,
   type DesktopLocale,
@@ -10,6 +11,7 @@ import {
   type DesktopApi,
   type LocalePreferences,
   type RuntimeInfo,
+  type DesktopUpdateState,
   type SecurityRuntimeCapability,
   type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
@@ -30,6 +32,38 @@ const desktopApi: DesktopApi = Object.freeze({
       desktopIpc.setAutoLaunch,
       enabled,
     ) as Promise<AutoLaunchState>,
+  getAutoUpdate: () =>
+    ipcRenderer.invoke(desktopIpc.getAutoUpdate) as Promise<AutoUpdateState>,
+  setAutoUpdate: (enabled: boolean) =>
+    ipcRenderer.invoke(
+      desktopIpc.setAutoUpdate,
+      enabled,
+    ) as Promise<AutoUpdateState>,
+  getUpdateState: () =>
+    ipcRenderer.invoke(
+      desktopIpc.getUpdateState,
+    ) as Promise<DesktopUpdateState>,
+  checkForUpdates: () =>
+    ipcRenderer.invoke(
+      desktopIpc.checkForUpdates,
+    ) as Promise<DesktopUpdateState>,
+  downloadUpdate: () =>
+    ipcRenderer.invoke(
+      desktopIpc.downloadUpdate,
+    ) as Promise<DesktopUpdateState>,
+  installUpdate: () =>
+    ipcRenderer.invoke(desktopIpc.installUpdate) as Promise<{
+      opened: boolean;
+    }>,
+  onUpdateStateChanged: (callback: (state: DesktopUpdateState) => void) => {
+    const listener = (_event: unknown, state: unknown) => {
+      callback(state as DesktopUpdateState);
+    };
+    ipcRenderer.on(desktopIpc.updateStateChanged, listener);
+    return () => {
+      ipcRenderer.removeListener(desktopIpc.updateStateChanged, listener);
+    };
+  },
   showWindow: () => ipcRenderer.invoke(desktopIpc.showWindow) as Promise<void>,
   openWindowRoute: (route: DesktopAppRoute) =>
     ipcRenderer.invoke(desktopIpc.openWindowRoute, route) as Promise<void>,

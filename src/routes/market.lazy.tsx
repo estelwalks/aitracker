@@ -20,7 +20,10 @@ function MarketRoute() {
         title={t("insights.title")}
         dotsLabel={t("insights.dots")}
       />
-      <MarketPanel initial={initial} />
+      <MarketPanel
+        initial={initial}
+        initialLoadFailed={initial.loadFailed ?? false}
+      />
     </div>
   );
 }

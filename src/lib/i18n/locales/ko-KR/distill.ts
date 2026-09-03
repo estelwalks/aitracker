@@ -72,7 +72,6 @@ export const distill = {
     "{count}개 세션 · ~{tokens} tokens · 공식 모델과 추천 프롬프트, 설정 불필요",
   runSummarySegments: "{count}개 구간 · ~{tokens} tokens",
   quotaRemaining: "공식 모델 오늘 남은 횟수 {count}회",
-  quotaHeader: "공식 모델 오늘 남은 횟수 {count}회",
   ownModelConnected: "자체 모델 · 연결됨",
   ownModelUnconfigured: "자체 모델 · Endpoint 미설정",
   manageModels: "모델 관리",

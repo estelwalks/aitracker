@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import {
   Brain,
   Download,
@@ -273,7 +274,7 @@ export function MemoryPage() {
                 {card.value}
               </div>
               <div
-                className="mt-1 truncate text-[10px] text-muted-foreground/70"
+                className="mt-1 truncate text-[12px] text-muted-foreground"
                 title={card.sub}
               >
                 {card.sub}
@@ -357,6 +358,16 @@ export function MemoryPage() {
           icon={<Brain className="size-5" strokeWidth={1.8} />}
           title={t("memory.empty")}
           desc={t("memory.emptyDesc")}
+          actions={
+            !filtered ? (
+              <Link
+                to="/distill"
+                className="inline-flex min-h-8 items-center rounded-lg bg-surface-2 px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-accent"
+              >
+                {t("nav.distill")}
+              </Link>
+            ) : undefined
+          }
         />
       ) : (
         <>

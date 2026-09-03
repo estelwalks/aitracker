@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { MessagesSquare, RefreshCw, Sparkles, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -303,7 +303,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
             <div className="aitracker-num aitracker-text-metric mt-2 font-mono leading-none font-black tracking-tight">
               {card.value}
             </div>
-            <div className="mt-1.5 truncate text-[11px] text-muted-foreground/70">
+            <div className="mt-1.5 truncate text-[12px] text-muted-foreground">
               {card.hint}
             </div>
           </div>
@@ -409,6 +409,14 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
           <EmptyState
             title={t("sessions.empty.title")}
             desc={t("sessions.empty.desc")}
+            actions={
+              <Link
+                to="/sources"
+                className="inline-flex min-h-8 items-center rounded-lg bg-surface-2 px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-accent"
+              >
+                {t("nav.sources")}
+              </Link>
+            }
           />
         ) : (
           groups.map((group) => (

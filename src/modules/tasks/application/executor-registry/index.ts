@@ -29,6 +29,10 @@ export interface RefreshSessionsPort {
   refresh(request: { readonly signal: AbortSignal }): Promise<unknown>;
 }
 
+export interface RefreshInsightsPort {
+  refresh(request: { readonly signal: AbortSignal }): Promise<unknown>;
+}
+
 export interface RefreshSkillsPort {
   refresh(request: { readonly signal: AbortSignal }): Promise<unknown>;
 }
@@ -52,6 +56,7 @@ export interface ApplyBackupPort {
 export interface ExecutorRegistryOptions {
   readonly usage?: RefreshUsagePort;
   readonly sessions?: RefreshSessionsPort;
+  readonly insights?: RefreshInsightsPort;
   readonly skills?: RefreshSkillsPort;
   readonly exchange?: RefreshExchangePort;
   readonly installation?: RefreshInstallationPort;
@@ -104,6 +109,7 @@ function bindUsage(usage: RefreshUsagePort | undefined): TaskExecutor {
 function bindPort(
   port:
     | RefreshSessionsPort
+    | RefreshInsightsPort
     | RefreshSkillsPort
     | ApplyRetentionPort
     | ApplyBackupPort
@@ -223,6 +229,7 @@ export function createExecutorRegistry(
       bindPort(options.sessions),
       options.monitoring,
     ),
+    "refresh-insights-v1": bindPort(options.insights),
     "refresh-exchange-v1": monitored(
       "exchange",
       bindPort(options.exchange),

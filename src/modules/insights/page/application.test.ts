@@ -882,7 +882,7 @@ test("read advertises auto enhancement only with current valid consent", async (
   assert.equal((await stale.read("dashboard", {}, "zh-CN")).autoEnhance, false);
 });
 
-test("read keeps renderer auto enhancement enabled during a refresh batch", async () => {
+test("read keeps automatic enhancement enabled during a refresh batch", async () => {
   let active = true;
   const app = createPageInsightsApplication({
     adapters: [makeAdapter()],
@@ -896,8 +896,9 @@ test("read keeps renderer auto enhancement enabled during a refresh batch", asyn
     now: () => 2,
   });
 
-  // A page visit during a batch may also enhance; the generation reservation
-  // (not a global lock) coordinates ownership with the batch.
+  // A page read during a batch may observe automatic enhancement as enabled;
+  // the generation reservation (not a global lock) coordinates ownership
+  // with the background batch.
   assert.equal((await app.read("dashboard", {}, "zh-CN")).autoEnhance, true);
   active = false;
   assert.equal((await app.read("dashboard", {}, "zh-CN")).autoEnhance, true);

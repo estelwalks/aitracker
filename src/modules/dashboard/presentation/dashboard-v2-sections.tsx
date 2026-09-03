@@ -504,7 +504,7 @@ export function DashboardMetricGrid({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <p
-                    className="mt-1 truncate text-[10px] text-muted-foreground/70"
+                    className="mt-1 truncate text-[12px] text-muted-foreground"
                     title={hintLine}
                   >
                     {hintLine}

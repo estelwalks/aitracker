@@ -18,6 +18,7 @@ export const market = {
     loadFailed: "网络不可用：安全市场加载失败",
     unavailableTitle: "网络不可用，安全市场暂不可访问",
     unavailableDesc: "本地已缓存的列表仍可浏览，恢复网络后自动同步最新数据。",
+    cacheWarning: "网络不可用，正在显示本地缓存结果",
   },
   empty: {
     noMatch: "没有匹配的 Skill",
