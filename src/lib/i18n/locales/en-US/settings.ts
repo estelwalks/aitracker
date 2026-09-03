@@ -151,6 +151,9 @@ export const settings = {
   pageHeaderDesc:
     "General preferences are stored on this device; system-level options only apply in the desktop app",
   autoLaunch: "Launch at Login",
+  autoUpdate: "Automatic updates",
+  autoUpdateHint:
+    "Check and download new versions from GitHub tags; enabled by default",
   status: {
     reading: "Reading…",
     desktopAvailable: "Available in desktop app",
@@ -240,6 +243,13 @@ export const settings = {
   checkUpdate: "Check for updates",
   checking: "Checking…",
   updateFound: "New version available: {version}",
+  updateNoAsset:
+    "New version available: {version}, but no installer is available for this platform",
+  updateAsset: "Installer: {asset}",
+  downloadUpdate: "Download update",
+  downloading: "Downloading…",
+  updateDownloaded: "Update downloaded; ready to install",
+  installUpdate: "Open installer",
   upToDate: "You're up to date",
   updateFailed: "Could not fetch version info",
   viewRelease: "View release page",
@@ -364,6 +374,12 @@ export const settings = {
     autoLaunchDisabled: "Launch at login disabled",
     autoLaunchUnsupported: "Launch at login is not supported on this system",
     autoLaunchSaveFailed: "Failed to update launch at login",
+    autoUpdateEnabled: "Automatic updates enabled",
+    autoUpdateDisabled: "Automatic updates disabled",
+    autoUpdateSaveFailed: "Failed to update automatic updates",
+    updateCheckFailed: "Failed to check for updates",
+    updateDownloadFailed: "Failed to download update",
+    updateInstallFailed: "Failed to open installer",
     cleanupDone: "Cleaned up {count} expired cache files ({size})",
     keepForever: "Cache will be kept forever",
     retentionSaved: "Cache retention policy saved",

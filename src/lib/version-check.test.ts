@@ -6,7 +6,11 @@ import {
   readCachedVersionResult,
   VERSION_CHECK_TTL_MS,
 } from "./version-check.ts";
-import { compareVersions } from "./version-check.server.ts";
+import {
+  compareVersions,
+  selectLatestGitHubRelease,
+  selectReleaseAsset,
+} from "./version-check.server.ts";
 
 const key = (suffix: string) => `${STORAGE_KEY_PREFIX}update.${suffix}`;
 const checkedAt = "2026-08-19T00:00:00.000Z";
@@ -75,6 +79,8 @@ test("rehydrates an unknown result so offline mounts honor the TTL", () => {
     latestVersion: null,
     changelog: null,
     releaseUrl: null,
+    downloadUrl: null,
+    assetName: null,
     checkedAt,
   });
 });
@@ -87,4 +93,36 @@ test("compareVersions sorts prereleases before stable releases", () => {
 
 test("compareVersions ignores build metadata", () => {
   assert.equal(compareVersions("v1.0.0+build.1", "1.0.0+build.2"), 0);
+});
+
+test("selects the highest GitHub tag and matching installer asset", () => {
+  const releases = [
+    { tag_name: "v1.1.0", draft: false },
+    { tag_name: "v1.2.0-beta.1", draft: false },
+    { tag_name: "v1.0.0", draft: true },
+  ];
+  assert.equal(selectLatestGitHubRelease(releases)?.tag_name, "v1.2.0-beta.1");
+
+  assert.deepEqual(
+    selectReleaseAsset(
+      [
+        {
+          name: "AITracker-1.2.0-beta.1-arm64.dmg",
+          browser_download_url:
+            "https://github.com/estelwalks/aitracker/releases/download/v1.2.0-beta.1/AITracker-1.2.0-beta.1-arm64.dmg",
+        },
+        {
+          name: "AITracker-1.2.0-beta.1-x64.dmg",
+          browser_download_url:
+            "https://github.com/estelwalks/aitracker/releases/download/v1.2.0-beta.1/AITracker-1.2.0-beta.1-x64.dmg",
+        },
+      ],
+      "darwin",
+      "x64",
+    ),
+    {
+      name: "AITracker-1.2.0-beta.1-x64.dmg",
+      url: "https://github.com/estelwalks/aitracker/releases/download/v1.2.0-beta.1/AITracker-1.2.0-beta.1-x64.dmg",
+    },
+  );
 });

@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { APP_ID, APP_REPO_URL, APP_VERSION, ENV } from "./app-config";
+import { APP_REPO_URL, APP_VERSION } from "./app-config";
 import { fetchExternal } from "./http/external-request.server.ts";
 
 /**
@@ -21,6 +21,12 @@ export interface VersionCheckResult {
   changelog: string | null;
   /** HTML URL of the latest release page, when available. */
   releaseUrl: string | null;
+  /** Direct asset URL selected for the current platform and architecture. */
+  downloadUrl: string | null;
+  /** Selected release asset filename, when available. */
+  assetName: string | null;
+  /** Stable error category for non-blocking diagnostics. */
+  errorCode?: "not-found" | "network" | "invalid-response" | "no-asset";
   /** ISO timestamp the check ran. */
   checkedAt: string;
 }
@@ -29,10 +35,135 @@ export interface VersionCheckResult {
 const releasePath = new URL(APP_REPO_URL).pathname
   .split("/")
   .filter((part) => part.length > 0);
-const RELEASE_OWNER =
-  process.env[ENV.RELEASE_OWNER] ?? releasePath[0] ?? APP_ID;
-const RELEASE_REPO = process.env[ENV.RELEASE_REPO] ?? releasePath[1] ?? APP_ID;
+const RELEASE_OWNER = releasePath[0] ?? "estelwalks";
+const RELEASE_REPO = releasePath[1] ?? "aitracker";
 const CHECK_TIMEOUT_MS = 5_000;
+
+export interface GitHubReleaseAsset {
+  name?: unknown;
+  browser_download_url?: unknown;
+}
+
+export interface GitHubRelease {
+  tag_name?: unknown;
+  name?: unknown;
+  body?: unknown;
+  html_url?: unknown;
+  draft?: unknown;
+  assets?: unknown;
+}
+
+export interface SelectedReleaseAsset {
+  name: string;
+  url: string;
+}
+
+const ARCH_ALIASES: Record<string, readonly string[]> = {
+  arm64: ["arm64", "aarch64"],
+  x64: ["x64", "amd64", "x86_64"],
+  ia32: ["ia32", "x86", "win32"],
+};
+
+function platformExtensions(platform: NodeJS.Platform): readonly string[] {
+  if (platform === "darwin") return [".dmg", ".zip"];
+  if (platform === "win32") return [".exe", ".msi", ".zip"];
+  if (platform === "linux") return [".appimage", ".deb", ".rpm", ".tar.gz"];
+  return [];
+}
+
+function isTrustedReleaseAssetUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "github.com" &&
+      url.pathname.startsWith(
+        `/${RELEASE_OWNER}/${RELEASE_REPO}/releases/download/`,
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Select a user-installable GitHub asset, excluding updater metadata files. */
+export function selectReleaseAsset(
+  assets: readonly GitHubReleaseAsset[],
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): SelectedReleaseAsset | null {
+  const extensions = platformExtensions(platform);
+  const archNames = ARCH_ALIASES[arch] ?? [arch];
+  const candidates = assets.flatMap((asset) => {
+    if (
+      typeof asset.name !== "string" ||
+      typeof asset.browser_download_url !== "string"
+    ) {
+      return [];
+    }
+    if (!isTrustedReleaseAssetUrl(asset.browser_download_url)) return [];
+    const name = asset.name;
+    const lowerName = name.toLowerCase();
+    if (!extensions.some((extension) => lowerName.endsWith(extension)))
+      return [];
+    return [{ name, url: asset.browser_download_url, lowerName }];
+  });
+  if (candidates.length === 0) return null;
+
+  const exactArch = candidates.filter((candidate) =>
+    archNames.some((name) => candidate.lowerName.includes(name)),
+  );
+  const pool = exactArch.length > 0 ? exactArch : candidates;
+  const extensionRank = (name: string) => {
+    const index = extensions.findIndex((extension) => name.endsWith(extension));
+    return index < 0 ? extensions.length : index;
+  };
+  pool.sort(
+    (left, right) =>
+      extensionRank(left.lowerName) - extensionRank(right.lowerName) ||
+      left.name.localeCompare(right.name),
+  );
+  const selected = pool[0];
+  return selected ? { name: selected.name, url: selected.url } : null;
+}
+
+function validTag(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function releaseVersion(release: GitHubRelease): string | null {
+  return validTag(release.tag_name)
+    ? release.tag_name.trim().replace(/^v/i, "")
+    : null;
+}
+
+function releaseUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "github.com"
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Pick the highest non-draft tag from GitHub's releases response. */
+export function selectLatestGitHubRelease(
+  releases: readonly GitHubRelease[],
+): GitHubRelease | null {
+  return (
+    releases
+      .filter(
+        (release) => release.draft !== true && releaseVersion(release) != null,
+      )
+      .slice()
+      .sort((left, right) =>
+        compareVersions(releaseVersion(right)!, releaseVersion(left)!),
+      )[0] ?? null
+  );
+}
 
 /**
  * Semver compare for the release tags used by the update checker. Build
@@ -103,6 +234,7 @@ export function compareVersions(a: string, b: string): number {
 function unknown(
   currentVersion: string,
   checkedAt: string,
+  errorCode?: VersionCheckResult["errorCode"],
 ): VersionCheckResult {
   return {
     status: "unknown",
@@ -110,22 +242,52 @@ function unknown(
     latestVersion: null,
     changelog: null,
     releaseUrl: null,
+    downloadUrl: null,
+    assetName: null,
+    ...(errorCode ? { errorCode } : {}),
     checkedAt,
   };
 }
 
-interface GitHubRelease {
-  tag_name?: unknown;
-  name?: unknown;
-  body?: unknown;
-  html_url?: unknown;
+function resultFromRelease(
+  release: GitHubRelease,
+  currentVersion: string,
+  checkedAt: string,
+): VersionCheckResult {
+  const latestVersion = releaseVersion(release);
+  if (!latestVersion)
+    return unknown(currentVersion, checkedAt, "invalid-response");
+  const releaseAssets = Array.isArray(release.assets)
+    ? (release.assets as GitHubReleaseAsset[])
+    : [];
+  const asset = selectReleaseAsset(releaseAssets);
+  const changelog =
+    typeof release.body === "string"
+      ? release.body.slice(0, 600)
+      : typeof release.name === "string"
+        ? release.name
+        : null;
+  return {
+    status:
+      compareVersions(latestVersion, currentVersion) > 0 ? "newer" : "current",
+    currentVersion,
+    latestVersion,
+    changelog,
+    releaseUrl: releaseUrl(release.html_url),
+    downloadUrl: asset?.url ?? null,
+    assetName: asset?.name ?? null,
+    ...(compareVersions(latestVersion, currentVersion) > 0 && !asset
+      ? { errorCode: "no-asset" as const }
+      : {}),
+    checkedAt,
+  };
 }
 
 async function fetchLatestRelease(
   currentVersion: string,
   checkedAt: string,
 ): Promise<VersionCheckResult> {
-  const url = `https://api.github.com/repos/${RELEASE_OWNER}/${RELEASE_REPO}/releases/latest`;
+  const url = `https://api.github.com/repos/${RELEASE_OWNER}/${RELEASE_REPO}/releases?per_page=100`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
   try {
@@ -133,32 +295,23 @@ async function fetchLatestRelease(
       headers: { Accept: "application/vnd.github+json" },
       signal: controller.signal,
     });
-    if (!response.ok) return unknown(currentVersion, checkedAt);
-    const release = (await response.json()) as GitHubRelease;
-    const tag = typeof release.tag_name === "string" ? release.tag_name : null;
-    if (tag == null) return unknown(currentVersion, checkedAt);
-    const latestVersion = tag.replace(/^v/i, "");
-    const changelog =
-      typeof release.body === "string"
-        ? release.body.slice(0, 600)
-        : typeof release.name === "string"
-          ? release.name
-          : null;
-    const releaseUrl =
-      typeof release.html_url === "string" ? release.html_url : null;
-    return {
-      status:
-        compareVersions(latestVersion, currentVersion) > 0
-          ? "newer"
-          : "current",
-      currentVersion,
-      latestVersion,
-      changelog,
-      releaseUrl,
-      checkedAt,
-    };
+    if (!response.ok) {
+      return unknown(
+        currentVersion,
+        checkedAt,
+        response.status === 404 ? "not-found" : "network",
+      );
+    }
+    const payload = (await response.json()) as unknown;
+    if (!Array.isArray(payload)) {
+      return unknown(currentVersion, checkedAt, "invalid-response");
+    }
+    const release = selectLatestGitHubRelease(payload as GitHubRelease[]);
+    return release
+      ? resultFromRelease(release, currentVersion, checkedAt)
+      : unknown(currentVersion, checkedAt, "not-found");
   } catch {
-    return unknown(currentVersion, checkedAt);
+    return unknown(currentVersion, checkedAt, "network");
   } finally {
     clearTimeout(timeout);
   }

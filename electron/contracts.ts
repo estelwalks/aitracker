@@ -2,6 +2,13 @@ export const desktopIpc = {
   getRuntimeInfo: "desktop:get-runtime-info",
   getAutoLaunch: "desktop:get-auto-launch",
   setAutoLaunch: "desktop:set-auto-launch",
+  getAutoUpdate: "desktop:get-auto-update",
+  setAutoUpdate: "desktop:set-auto-update",
+  getUpdateState: "desktop:get-update-state",
+  checkForUpdates: "desktop:check-for-updates",
+  downloadUpdate: "desktop:download-update",
+  installUpdate: "desktop:install-update",
+  updateStateChanged: "desktop:update-state-changed",
   showWindow: "desktop:show-window",
   openWindowRoute: "desktop:open-window-route",
   openWidgetWindow: "desktop:open-widget-window",
@@ -77,6 +84,40 @@ export interface RuntimeInfo {
 export interface AutoLaunchState {
   enabled: boolean;
   supported: boolean;
+}
+
+export interface AutoUpdateState {
+  enabled: boolean;
+  supported: boolean;
+}
+
+export type DesktopUpdateLifecycle =
+  | "idle"
+  | "checking"
+  | "current"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "unknown"
+  | "error"
+  | "unsupported";
+
+export interface DesktopUpdateState {
+  status: DesktopUpdateLifecycle;
+  currentVersion: string;
+  latestVersion: string | null;
+  downloadUrl: string | null;
+  assetName: string | null;
+  releaseUrl: string | null;
+  changelog: string | null;
+  errorCode?:
+    | "development"
+    | "not-found"
+    | "network"
+    | "invalid-response"
+    | "no-asset"
+    | "download"
+    | "install";
 }
 
 export type SecurityScanMode = "quick" | "full";
@@ -345,6 +386,15 @@ export interface DesktopApi {
   getRuntimeInfo(): Promise<RuntimeInfo>;
   getAutoLaunch(): Promise<AutoLaunchState>;
   setAutoLaunch(enabled: boolean): Promise<AutoLaunchState>;
+  getAutoUpdate(): Promise<AutoUpdateState>;
+  setAutoUpdate(enabled: boolean): Promise<AutoUpdateState>;
+  getUpdateState(): Promise<DesktopUpdateState>;
+  checkForUpdates(): Promise<DesktopUpdateState>;
+  downloadUpdate(): Promise<DesktopUpdateState>;
+  installUpdate(): Promise<{ opened: boolean }>;
+  onUpdateStateChanged(
+    callback: (state: DesktopUpdateState) => void,
+  ): () => void;
   showWindow(): Promise<void>;
   /** Show the desktop client and navigate its main window to an allowed route. */
   openWindowRoute(route: DesktopAppRoute): Promise<void>;

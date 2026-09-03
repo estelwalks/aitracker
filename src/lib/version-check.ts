@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 // P6-T6-01 (fix): the server-fn value import is loaded dynamically so this
 // browser-safe module never statically reaches the `.server` module; the
@@ -25,6 +25,8 @@ const PREF_HAS_UPDATE = `${STORAGE_KEY_PREFIX}update.hasUpdate`;
 const PREF_LATEST = `${STORAGE_KEY_PREFIX}update.latestVersion`;
 const PREF_CHANGELOG = `${STORAGE_KEY_PREFIX}update.changelog`;
 const PREF_RELEASE_URL = `${STORAGE_KEY_PREFIX}update.releaseUrl`;
+const PREF_DOWNLOAD_URL = `${STORAGE_KEY_PREFIX}update.downloadUrl`;
+const PREF_ASSET_NAME = `${STORAGE_KEY_PREFIX}update.assetName`;
 const PREF_DISMISSED_LATEST = `${STORAGE_KEY_PREFIX}update.dismissedLatest`;
 const PREF_CHECKED_AT = `${STORAGE_KEY_PREFIX}update.checkedAt`;
 const PREF_CURRENT = `${STORAGE_KEY_PREFIX}update.currentVersion`;
@@ -46,14 +48,14 @@ function stringValue(
   return typeof values[key] === "string" ? values[key] : null;
 }
 
-export function useVersionCheck(): UpdateState {
+export function useVersionCheck(autoCheckEnabled = true): UpdateState {
   const [result, setResult] = useState<VersionCheckResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [persisted, setPersisted] = useState<Record<string, PreferenceValue>>(
     {},
   );
 
-  const runCheck = async (forceRefresh = true) => {
+  const runCheck = useCallback(async (forceRefresh = true) => {
     setLoading(true);
     try {
       if (!forceRefresh) {
@@ -77,6 +79,8 @@ export function useVersionCheck(): UpdateState {
         [PREF_LATEST]: next.latestVersion ?? "",
         [PREF_CHANGELOG]: next.changelog ?? "",
         [PREF_RELEASE_URL]: next.releaseUrl ?? "",
+        [PREF_DOWNLOAD_URL]: next.downloadUrl ?? "",
+        [PREF_ASSET_NAME]: next.assetName ?? "",
         [PREF_CHECKED_AT]: next.checkedAt,
         [PREF_CURRENT]: next.currentVersion,
         [PREF_STATUS]: next.status,
@@ -92,9 +96,13 @@ export function useVersionCheck(): UpdateState {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    if (!autoCheckEnabled) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     void (async () => {
       if (cancelled) return;
@@ -103,7 +111,7 @@ export function useVersionCheck(): UpdateState {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [autoCheckEnabled, runCheck]);
 
   const dismiss = () => {
     const latest = result?.latestVersion ?? "";
@@ -119,6 +127,7 @@ export function useVersionCheck(): UpdateState {
   const latestVersion =
     result?.latestVersion ?? stringValue(persisted, PREF_LATEST);
   const hasUpdate =
+    autoCheckEnabled &&
     persistedHasUpdate &&
     (latestVersion == null || latestVersion !== dismissedLatest);
 
@@ -159,6 +168,9 @@ export function readCachedVersionResult(
     latestVersion: status === "unknown" ? null : latestVersion,
     changelog: status === "unknown" ? null : getItem(PREF_CHANGELOG) || null,
     releaseUrl: status === "unknown" ? null : getItem(PREF_RELEASE_URL) || null,
+    downloadUrl:
+      status === "unknown" ? null : getItem(PREF_DOWNLOAD_URL) || null,
+    assetName: status === "unknown" ? null : getItem(PREF_ASSET_NAME) || null,
     checkedAt,
   };
 }

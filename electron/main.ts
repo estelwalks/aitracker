@@ -24,7 +24,9 @@ import {
   desktopAppRoutes,
   desktopIpc,
   type AutoLaunchState,
+  type AutoUpdateState,
   type DesktopAppRoute,
+  type DesktopUpdateState,
   type RuntimeInfo,
   type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
@@ -89,6 +91,11 @@ import {
 } from "./release-data-reset.js";
 import { shouldHideWindowOnClose } from "./window-close.js";
 import { isReloadShortcut } from "./reload-shortcut.js";
+import {
+  AUTO_UPDATE_PREFERENCE_KEY,
+  parseAutoUpdateEnabled,
+} from "./update-preferences.js";
+import { UpdateManager } from "./update-manager.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
@@ -118,6 +125,7 @@ let securityScanner: SecurityScannerService | null = null;
 let automaticSecurityScanScheduler: AutomaticSecurityScanScheduler | null =
   null;
 let desktopStateBroker: DesktopStateBroker | null = null;
+let updateManager: UpdateManager | null = null;
 let startupDocument = "";
 let currentTrayTitle = TRAY_TITLE_PLACEHOLDER;
 /** Resolved at startup: manual preference > system mapping > fallback. */
@@ -249,6 +257,47 @@ function setAutoLaunch(enabled: boolean): AutoLaunchState {
     args: isDevelopment ? [app.getAppPath()] : [],
   });
   return getAutoLaunchState();
+}
+
+async function getAutoUpdateState(): Promise<AutoUpdateState> {
+  const enabled = parseAutoUpdateEnabled(
+    (await desktopStateBroker?.preferences())?.[AUTO_UPDATE_PREFERENCE_KEY],
+  );
+  updateManager?.setEnabled(enabled);
+  return { enabled, supported: app.isPackaged };
+}
+
+async function setAutoUpdateEnabled(
+  enabled: boolean,
+): Promise<AutoUpdateState> {
+  if (!desktopStateBroker) {
+    throw new Error("Desktop state broker unavailable");
+  }
+  await desktopStateBroker.setPreference(AUTO_UPDATE_PREFERENCE_KEY, enabled);
+  updateManager?.setEnabled(enabled);
+  if (enabled) void updateManager?.startAutomaticCheck();
+  return { enabled, supported: app.isPackaged };
+}
+
+function emptyDesktopUpdateState(): DesktopUpdateState {
+  return {
+    status: app.isPackaged ? "idle" : "unsupported",
+    currentVersion: app.getVersion(),
+    latestVersion: null,
+    downloadUrl: null,
+    assetName: null,
+    releaseUrl: null,
+    changelog: null,
+    ...(app.isPackaged ? {} : { errorCode: "development" as const }),
+  };
+}
+
+function broadcastUpdateState(state: DesktopUpdateState): void {
+  for (const window of [mainWindow, widgetWindow]) {
+    if (window && !window.isDestroyed()) {
+      window.webContents.send(desktopIpc.updateStateChanged, state);
+    }
+  }
 }
 
 function showMainWindow(): void {
@@ -593,6 +642,48 @@ function registerIpcHandlers(): void {
       return setAutoLaunch(enabled);
     },
   );
+  ipcMain.handle(
+    desktopIpc.getAutoUpdate,
+    async (event): Promise<AutoUpdateState> => {
+      assertTrustedSender(event);
+      return getAutoUpdateState();
+    },
+  );
+  ipcMain.handle(
+    desktopIpc.setAutoUpdate,
+    async (event, enabled: unknown): Promise<AutoUpdateState> => {
+      assertTrustedSender(event);
+      if (typeof enabled !== "boolean") {
+        throw new TypeError("Auto-update value must be a boolean");
+      }
+      return setAutoUpdateEnabled(enabled);
+    },
+  );
+  ipcMain.handle(desktopIpc.getUpdateState, (event): DesktopUpdateState => {
+    assertTrustedSender(event);
+    return updateManager?.state ?? emptyDesktopUpdateState();
+  });
+  ipcMain.handle(
+    desktopIpc.checkForUpdates,
+    async (event): Promise<DesktopUpdateState> => {
+      assertTrustedSender(event);
+      return updateManager?.checkForUpdates() ?? emptyDesktopUpdateState();
+    },
+  );
+  ipcMain.handle(
+    desktopIpc.downloadUpdate,
+    async (event): Promise<DesktopUpdateState> => {
+      assertTrustedSender(event);
+      return updateManager?.downloadUpdate() ?? emptyDesktopUpdateState();
+    },
+  );
+  ipcMain.handle(
+    desktopIpc.installUpdate,
+    async (event): Promise<{ opened: boolean }> => {
+      assertTrustedSender(event);
+      return (await updateManager?.installUpdate()) ?? { opened: false };
+    },
+  );
   ipcMain.handle(desktopIpc.showWindow, (event): void => {
     assertTrustedSender(event);
     openMainWindowRoute("/");
@@ -679,6 +770,7 @@ function registerIpcHandlers(): void {
       if (!desktopStateBroker)
         throw new Error("Desktop state broker unavailable");
       const result = await desktopStateBroker.resetPreferences();
+      updateManager?.setEnabled(true);
       await securityScanner?.clear();
       return result;
     },
@@ -1099,6 +1191,12 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getRuntimeInfo);
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
+    ipcMain.removeHandler(desktopIpc.getAutoUpdate);
+    ipcMain.removeHandler(desktopIpc.setAutoUpdate);
+    ipcMain.removeHandler(desktopIpc.getUpdateState);
+    ipcMain.removeHandler(desktopIpc.checkForUpdates);
+    ipcMain.removeHandler(desktopIpc.downloadUpdate);
+    ipcMain.removeHandler(desktopIpc.installUpdate);
     ipcMain.removeHandler(desktopIpc.showWindow);
     ipcMain.removeHandler(desktopIpc.openWindowRoute);
     ipcMain.removeHandler(desktopIpc.openWidgetWindow);
@@ -1232,6 +1330,20 @@ if (!hasSingleInstanceLock) {
         persistedPreferences,
         app.getLocale(),
       );
+      updateManager = new UpdateManager({
+        currentVersion: app.getVersion(),
+        isPackaged: app.isPackaged,
+        platform: process.platform,
+        arch: process.arch,
+        tempDirectory: app.getPath("temp"),
+        openInstaller: (path) => shell.openPath(path),
+      });
+      updateManager.setEnabled(
+        parseAutoUpdateEnabled(
+          persistedPreferences[AUTO_UPDATE_PREFERENCE_KEY],
+        ),
+      );
+      updateManager.subscribe(broadcastUpdateState);
       currentTrayTitle = persistedTrayState.title;
       await securityScanner.recoverInterruptedRuns();
       registerIpcHandlers();
@@ -1241,6 +1353,7 @@ if (!hasSingleInstanceLock) {
       // when the visible page needs those resources most.
       await loadMainWindow();
       void automaticSecurityScanScheduler.start();
+      void updateManager.startAutomaticCheck();
     })
     .catch((error: unknown) => {
       // A failure before BrowserWindow construction must not leave a headless
