@@ -150,8 +150,6 @@ export const settings = {
     "일반 설정은 이 기기에 저장됩니다. 시스템 수준 옵션은 데스크톱 앱에서만 적용됩니다",
   autoLaunch: "로그인 시 실행",
   autoUpdate: "자동 업데이트",
-  autoUpdateHint:
-    "GitHub 태그에서 새 버전을 확인하고 다운로드합니다(기본값: 켜짐)",
   status: {
     reading: "읽는 중...",
     desktopAvailable: "데스크톱 앱에서 사용 가능",

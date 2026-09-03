@@ -23,6 +23,7 @@ import {
 
 const PREF_HAS_UPDATE = `${STORAGE_KEY_PREFIX}update.hasUpdate`;
 const PREF_LATEST = `${STORAGE_KEY_PREFIX}update.latestVersion`;
+const PREF_RELEASE_DATE = `${STORAGE_KEY_PREFIX}update.releaseDate`;
 const PREF_CHANGELOG = `${STORAGE_KEY_PREFIX}update.changelog`;
 const PREF_RELEASE_URL = `${STORAGE_KEY_PREFIX}update.releaseUrl`;
 const PREF_DOWNLOAD_URL = `${STORAGE_KEY_PREFIX}update.downloadUrl`;
@@ -77,6 +78,7 @@ export function useVersionCheck(autoCheckEnabled = true): UpdateState {
       const payload: Record<string, string> = {
         [PREF_HAS_UPDATE]: JSON.stringify(hasUpdate),
         [PREF_LATEST]: next.latestVersion ?? "",
+        [PREF_RELEASE_DATE]: next.releaseDate ?? "",
         [PREF_CHANGELOG]: next.changelog ?? "",
         [PREF_RELEASE_URL]: next.releaseUrl ?? "",
         [PREF_DOWNLOAD_URL]: next.downloadUrl ?? "",
@@ -166,6 +168,8 @@ export function readCachedVersionResult(
     status,
     currentVersion,
     latestVersion: status === "unknown" ? null : latestVersion,
+    releaseDate:
+      status === "unknown" ? null : getItem(PREF_RELEASE_DATE) || null,
     changelog: status === "unknown" ? null : getItem(PREF_CHANGELOG) || null,
     releaseUrl: status === "unknown" ? null : getItem(PREF_RELEASE_URL) || null,
     downloadUrl:

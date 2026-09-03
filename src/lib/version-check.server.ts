@@ -17,6 +17,8 @@ export interface VersionCheckResult {
   status: "newer" | "current" | "unknown";
   currentVersion: string;
   latestVersion: string | null;
+  /** ISO publication timestamp of the selected GitHub release. */
+  releaseDate: string | null;
   /** Short changelog/release notes excerpt, when available. */
   changelog: string | null;
   /** HTML URL of the latest release page, when available. */
@@ -49,6 +51,7 @@ export interface GitHubRelease {
   name?: unknown;
   body?: unknown;
   html_url?: unknown;
+  published_at?: unknown;
   draft?: unknown;
   assets?: unknown;
 }
@@ -149,6 +152,11 @@ function releaseUrl(value: unknown): string | null {
   }
 }
 
+function releaseDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return Number.isFinite(Date.parse(value)) ? value : null;
+}
+
 /** Pick the highest non-draft tag from GitHub's releases response. */
 export function selectLatestGitHubRelease(
   releases: readonly GitHubRelease[],
@@ -240,6 +248,7 @@ function unknown(
     status: "unknown",
     currentVersion,
     latestVersion: null,
+    releaseDate: null,
     changelog: null,
     releaseUrl: null,
     downloadUrl: null,
@@ -272,6 +281,7 @@ function resultFromRelease(
       compareVersions(latestVersion, currentVersion) > 0 ? "newer" : "current",
     currentVersion,
     latestVersion,
+    releaseDate: releaseDate(release.published_at),
     changelog,
     releaseUrl: releaseUrl(release.html_url),
     downloadUrl: asset?.url ?? null,

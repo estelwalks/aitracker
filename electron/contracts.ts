@@ -106,6 +106,7 @@ export interface DesktopUpdateState {
   status: DesktopUpdateLifecycle;
   currentVersion: string;
   latestVersion: string | null;
+  releaseDate: string | null;
   downloadUrl: string | null;
   assetName: string | null;
   releaseUrl: string | null;

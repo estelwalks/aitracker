@@ -35,7 +35,6 @@ import {
 } from "../../../lib/preferences/client.ts";
 import {
   APP_VERSION,
-  APP_RELEASE_DATE,
   APP_REPO_URL,
   brandParams,
 } from "../../../lib/app-config";
@@ -435,6 +434,7 @@ export function SettingsPage({
               : versionResult.status,
           currentVersion: versionResult.currentVersion,
           latestVersion: versionResult.latestVersion,
+          releaseDate: versionResult.releaseDate,
           downloadUrl: versionResult.downloadUrl,
           assetName: versionResult.assetName,
           releaseUrl: versionResult.releaseUrl,
@@ -1001,13 +1001,12 @@ export function SettingsPage({
               </Field>
               <Field label={t("settings.releaseDate")}>
                 <span className="aitracker-text-body text-muted-foreground">
-                  {APP_RELEASE_DATE}
+                  {shownUpdate?.releaseDate
+                    ? format.formatDate(shownUpdate.releaseDate)
+                    : "—"}
                 </span>
               </Field>
-              <Field
-                label={t("settings.autoUpdate")}
-                hint={t("settings.autoUpdateHint")}
-              >
+              <Field label={t("settings.autoUpdate")}>
                 <Toggle
                   value={autoUpdateEnabled}
                   onChange={(value) => void changeAutoUpdate(value)}

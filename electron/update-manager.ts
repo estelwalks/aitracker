@@ -28,6 +28,7 @@ interface GitHubRelease {
   name?: unknown;
   body?: unknown;
   html_url?: unknown;
+  published_at?: unknown;
   draft?: unknown;
   assets?: unknown;
 }
@@ -59,6 +60,7 @@ function emptyState(
     status,
     currentVersion,
     latestVersion: null,
+    releaseDate: null,
     downloadUrl: null,
     assetName: null,
     releaseUrl: null,
@@ -115,6 +117,13 @@ function compareVersions(a: string, b: string): number {
 function versionOf(release: GitHubRelease): string | null {
   return typeof release.tag_name === "string" && release.tag_name.trim()
     ? release.tag_name.trim().replace(/^v/i, "")
+    : null;
+}
+
+function releaseDateOf(release: GitHubRelease): string | null {
+  if (typeof release.published_at !== "string") return null;
+  return Number.isFinite(Date.parse(release.published_at))
+    ? release.published_at
     : null;
 }
 
@@ -277,6 +286,7 @@ export class UpdateManager {
         status: isNewer ? (asset ? "available" : "error") : "current",
         currentVersion: this.#options.currentVersion,
         latestVersion,
+        releaseDate: releaseDateOf(release),
         downloadUrl: asset?.url ?? null,
         assetName: asset?.name ?? null,
         releaseUrl:

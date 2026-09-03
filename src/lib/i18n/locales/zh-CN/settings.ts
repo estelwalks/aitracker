@@ -145,7 +145,6 @@ export const settings = {
   pageHeaderDesc: "一般配置保存在当前设备；系统级选项仅在桌面客户端生效",
   autoLaunch: "开机自启动",
   autoUpdate: "自动更新",
-  autoUpdateHint: "从 GitHub Tag 检查并下载新版本；默认开启",
   status: {
     reading: "正在读取",
     desktopAvailable: "桌面端可用",

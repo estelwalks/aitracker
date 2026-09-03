@@ -60,6 +60,7 @@ test("automatic checks use the GitHub tag and download its installer", async () 
         return response([
           {
             tag_name: "v2.0.0",
+            published_at: "2026-08-31T12:34:56Z",
             html_url:
               "https://github.com/estelwalks/aitracker/releases/tag/v2.0.0",
             assets: [
@@ -80,6 +81,7 @@ test("automatic checks use the GitHub tag and download its installer", async () 
   const state = await manager.startAutomaticCheck();
   assert.equal(state.status, "downloaded");
   assert.equal(state.latestVersion, "2.0.0");
+  assert.equal(state.releaseDate, "2026-08-31T12:34:56Z");
   assert.equal(state.assetName, "AITracker-2.0.0-x64.dmg");
   assert.equal(written.length, 1);
   assert.deepEqual([...written[0]!.data], [1, 2, 3]);

@@ -152,8 +152,6 @@ export const settings = {
     "General preferences are stored on this device; system-level options only apply in the desktop app",
   autoLaunch: "Launch at Login",
   autoUpdate: "Automatic updates",
-  autoUpdateHint:
-    "Check and download new versions from GitHub tags; enabled by default",
   status: {
     reading: "Reading…",
     desktopAvailable: "Available in desktop app",

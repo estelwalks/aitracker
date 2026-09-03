@@ -77,6 +77,7 @@ test("rehydrates an unknown result so offline mounts honor the TTL", () => {
     status: "unknown",
     currentVersion: APP_VERSION,
     latestVersion: null,
+    releaseDate: null,
     changelog: null,
     releaseUrl: null,
     downloadUrl: null,

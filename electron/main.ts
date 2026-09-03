@@ -284,6 +284,7 @@ function emptyDesktopUpdateState(): DesktopUpdateState {
     status: app.isPackaged ? "idle" : "unsupported",
     currentVersion: app.getVersion(),
     latestVersion: null,
+    releaseDate: null,
     downloadUrl: null,
     assetName: null,
     releaseUrl: null,

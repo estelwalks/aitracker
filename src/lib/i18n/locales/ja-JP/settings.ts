@@ -152,8 +152,6 @@ export const settings = {
     "一般設定はこの端末に保存されます。システムレベルのオプションはデスクトップアプリでのみ有効です",
   autoLaunch: "ログイン時に起動",
   autoUpdate: "自動更新",
-  autoUpdateHint:
-    "GitHub のタグから新しいバージョンを確認・ダウンロードします（デフォルトで有効）",
   status: {
     reading: "読み取り中...",
     desktopAvailable: "デスクトップアプリで利用可能",
