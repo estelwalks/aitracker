@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   downloadToFile,
+  formatDownloadProgress,
   openInstaller,
   parseArgs,
   resolveRelease,
@@ -13,37 +14,37 @@ import {
 } from "../src/cli.mjs";
 
 const metadataUrl =
-  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.2/release-metadata.json";
+  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.3/release-metadata.json";
 const artifactUrl =
-  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.2/AITracker-1.0.0-beta.2-arm64.dmg";
+  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.3/AITracker-1.0.0-beta.3-arm64.dmg";
 const bytes = Buffer.from("installer-bytes");
 const sha256 = createHash("sha256").update(bytes).digest("hex");
 const delay = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 const metadata = {
   schemaVersion: 1,
-  appVersion: "1.0.0-beta.2",
+  appVersion: "1.0.0-beta.3",
   channel: "beta",
   repository: "estelwalks/aitracker",
-  gitTag: "v1.0.0-beta.2",
+  gitTag: "v1.0.0-beta.3",
   artifacts: {
     "darwin-arm64": {
-      name: "AITracker-1.0.0-beta.2-arm64.dmg",
+      name: "AITracker-1.0.0-beta.3-arm64.dmg",
       url: artifactUrl,
       sha256,
       size: bytes.length,
     },
     "darwin-x64": {
-      name: "AITracker-1.0.0-beta.2-x64.dmg",
+      name: "AITracker-1.0.0-beta.3-x64.dmg",
       url: artifactUrl.replace("arm64", "x64"),
       sha256,
       size: bytes.length,
     },
     "win32-x64": {
-      name: "AITracker-Setup-1.0.0-beta.2-x64.exe",
+      name: "AITracker-Setup-1.0.0-beta.3-x64.exe",
       url: artifactUrl.replace(
-        "AITracker-1.0.0-beta.2-arm64.dmg",
-        "AITracker-Setup-1.0.0-beta.2-x64.exe",
+        "AITracker-1.0.0-beta.3-arm64.dmg",
+        "AITracker-Setup-1.0.0-beta.3-x64.exe",
       ),
       sha256,
       size: bytes.length,
@@ -62,7 +63,7 @@ function fakeFetch({ releases = undefined } = {}) {
             {
               draft: false,
               prerelease: true,
-              tag_name: "v1.0.0-beta.2",
+              tag_name: "v1.0.0-beta.3",
               assets: [
                 {
                   name: "release-metadata.json",
@@ -86,6 +87,21 @@ function responseWithUrl(body, url, init) {
   Object.defineProperty(response, "url", { value: url });
   return response;
 }
+
+test("formats download percentage and speed", () => {
+  assert.equal(
+    formatDownloadProgress({
+      downloaded: 1024 * 1024,
+      total: 2 * 1024 * 1024,
+      elapsedMs: 1000,
+    }),
+    "Downloading: 50.0% (1.00 MB / 2.00 MB) at 1.00 MB/s",
+  );
+  assert.equal(
+    formatDownloadProgress({ downloaded: 1024, elapsedMs: 500 }),
+    "Downloading: 1.00 KB downloaded at 2.00 KB/s",
+  );
+});
 
 test("defaults to the installed CLI package version and accepts explicit versions", () => {
   assert.equal(
@@ -180,16 +196,16 @@ test("resolves exact beta versions and keeps stable/beta releases isolated", asy
   const fake = fakeFetch();
   const resolved = await resolveRelease({
     channel: "beta",
-    version: "1.0.0-beta.2",
+    version: "1.0.0-beta.3",
     platform: "darwin",
     arch: "arm64",
     fetchImpl: fake.fetchImpl,
   });
-  assert.equal(resolved.metadata.appVersion, "1.0.0-beta.2");
+  assert.equal(resolved.metadata.appVersion, "1.0.0-beta.3");
 
   const stable = fakeFetch({
     releases: [
-      { draft: false, prerelease: true, tag_name: "v1.0.0-beta.2", assets: [] },
+      { draft: false, prerelease: true, tag_name: "v1.0.0-beta.3", assets: [] },
     ],
   });
   await assert.rejects(
@@ -210,7 +226,7 @@ test("rejects malicious final response hosts while allowing GitHub release asset
     () =>
       resolveRelease({
         channel: "beta",
-        version: "1.0.0-beta.2",
+        version: "1.0.0-beta.3",
         platform: "darwin",
         arch: "arm64",
         fetchImpl: async (url, options) => {
@@ -221,7 +237,7 @@ test("rejects malicious final response hosts while allowing GitHub release asset
                   {
                     draft: false,
                     prerelease: true,
-                    tag_name: "v1.0.0-beta.2",
+                    tag_name: "v1.0.0-beta.3",
                     assets: [],
                   },
                 ]),
@@ -236,7 +252,7 @@ test("rejects malicious final response hosts while allowing GitHub release asset
   const metadataRedirect = fakeFetch();
   const resolved = await resolveRelease({
     channel: "beta",
-    version: "1.0.0-beta.2",
+    version: "1.0.0-beta.3",
     platform: "darwin",
     arch: "arm64",
     fetchImpl: async (url, options) => {
@@ -249,14 +265,14 @@ test("rejects malicious final response hosts while allowing GitHub release asset
         : response;
     },
   });
-  assert.equal(resolved.artifact.name, "AITracker-1.0.0-beta.2-arm64.dmg");
+  assert.equal(resolved.artifact.name, "AITracker-1.0.0-beta.3-arm64.dmg");
 
   const evilMetadata = fakeFetch();
   await assert.rejects(
     () =>
       resolveRelease({
         channel: "beta",
-        version: "1.0.0-beta.2",
+        version: "1.0.0-beta.3",
         platform: "darwin",
         arch: "arm64",
         fetchImpl: async (url, options) => {
@@ -276,7 +292,7 @@ test("rejects malicious final response hosts while allowing GitHub release asset
 test("rejects draft releases, unsupported platforms and bad release metadata", async () => {
   const draft = fakeFetch({
     releases: [
-      { draft: true, prerelease: true, tag_name: "v1.0.0-beta.2", assets: [] },
+      { draft: true, prerelease: true, tag_name: "v1.0.0-beta.3", assets: [] },
     ],
   });
   await assert.rejects(
@@ -338,7 +354,7 @@ test("dry-run does not download the installer and download-only does not open it
     stdout: dryOutput,
   });
   assert.equal(dry.calls.includes(artifactUrl), false);
-  assert.match(dryOutput.text, /AITracker 1\.0\.0-beta\.2/);
+  assert.match(dryOutput.text, /AITracker 1\.0\.0-beta\.3/);
 
   const only = fakeFetch();
   let opened = false;
@@ -353,6 +369,24 @@ test("dry-run does not download the installer and download-only does not open it
   });
   assert.equal(only.calls.includes(artifactUrl), true);
   assert.equal(opened, false);
+});
+
+test("reports download progress while saving an installer", async () => {
+  const output = {
+    isTTY: false,
+    text: "",
+    write(value) {
+      this.text += value;
+    },
+  };
+  await runCli(["--download-only"], {
+    platform: "darwin",
+    arch: "arm64",
+    fetchImpl: fakeFetch().fetchImpl,
+    stdout: output,
+  });
+  assert.match(output.text, /Downloading: 100\.0%/);
+  assert.match(output.text, /at .*\/s/);
 });
 
 test("download-only directory saves the verified installer without opening it", async () => {

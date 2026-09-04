@@ -28,6 +28,7 @@ export const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30 * 1000;
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_DOWNLOAD_IDLE_TIMEOUT_MS = 2 * 60 * 1000;
+const DOWNLOAD_PROGRESS_INTERVAL_MS = 250;
 const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 export const DOWNLOAD_TIMEOUT_MS = timeoutFromEnv(
   "AITRACKER_DOWNLOAD_TIMEOUT_MS",
@@ -47,6 +48,63 @@ function timeoutFromEnv(name, fallback) {
     : fallback;
 }
 
+function formatBytes(bytes) {
+  const units = ["B", "KB", "MB", "GB"];
+  let value = Math.max(0, Number(bytes) || 0);
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const precision = unitIndex === 0 ? 0 : 2;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+export function formatDownloadProgress({ downloaded, total, elapsedMs }) {
+  const downloadedBytes = Math.max(0, Number(downloaded) || 0);
+  const totalBytes = Number.isFinite(total) && total > 0 ? total : undefined;
+  const elapsedSeconds = Math.max(1, Number(elapsedMs) || 0) / 1000;
+  const speed = downloadedBytes / elapsedSeconds;
+  const progress = totalBytes
+    ? `${Math.min(100, (downloadedBytes / totalBytes) * 100).toFixed(1)}% (${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)})`
+    : `${formatBytes(downloadedBytes)} downloaded`;
+  return `Downloading: ${progress} at ${formatBytes(speed)}/s`;
+}
+
+function createDownloadProgressReporter(stdout) {
+  if (!stdout?.write) return undefined;
+  const startedAt = Date.now();
+  const isTty = stdout.isTTY === true;
+  let lastUpdateAt = 0;
+  let ended = false;
+  const report = ({ downloaded, total, done = false }) => {
+    const now = Date.now();
+    if (
+      !done &&
+      downloaded !== total &&
+      now - lastUpdateAt < DOWNLOAD_PROGRESS_INTERVAL_MS
+    ) {
+      return;
+    }
+    lastUpdateAt = now;
+    const line = formatDownloadProgress({
+      downloaded,
+      total,
+      elapsedMs: now - startedAt,
+    });
+    stdout.write(isTty ? `\r${line}` : `${line}\n`);
+    if (done) {
+      ended = true;
+      if (isTty) stdout.write("\n");
+    }
+  };
+  report.finish = () => {
+    if (!ended && isTty) stdout.write("\n");
+    ended = true;
+  };
+  return report;
+}
+
 function optionValue(argv, index, name) {
   const value = argv[index + 1];
   if (!value || value.startsWith("--")) {
@@ -58,7 +116,7 @@ function optionValue(argv, index, name) {
 export function parseArgs(
   argv,
   {
-    packageVersion = "1.0.0-beta.1",
+    packageVersion = "1.0.0-beta.3",
     platform = process.platform,
     arch = process.arch,
   } = {},
@@ -167,6 +225,7 @@ export function helpText() {
   return `Usage: npx @estelwalks/aitracker [version] [options]
 
 Download and open the AITracker desktop installer.
+Real downloads show percentage, transferred size, and current speed.
 
 Options:
   --channel stable|beta  Release channel (defaults from this CLI version)
@@ -473,6 +532,7 @@ export async function downloadToFile({
   maxBytes = MAX_DOWNLOAD_BYTES,
   timeoutMs = DOWNLOAD_TIMEOUT_MS,
   idleTimeoutMs = DOWNLOAD_IDLE_TIMEOUT_MS,
+  onProgress,
 }) {
   assertAllowedDownloadUrl(url);
   return fetchWithTimeout(fetchImpl, url, {
@@ -489,6 +549,10 @@ export async function downloadToFile({
       if (Number.isFinite(advertisedSize) && advertisedSize > maxBytes) {
         throw new Error(`installer exceeds the ${maxBytes} byte size limit`);
       }
+      const progressTotal =
+        Number.isFinite(advertisedSize) && advertisedSize > 0
+          ? advertisedSize
+          : expectedSize;
 
       const hash = createHash("sha256");
       let total = 0;
@@ -516,6 +580,7 @@ export async function downloadToFile({
             );
           hash.update(chunk);
           noteProgress?.();
+          onProgress?.({ downloaded: total, total: progressTotal });
           if (!output.write(chunk)) await once(output, "drain");
         }
         if (outputError) throw outputError;
@@ -629,6 +694,7 @@ export async function runCli(
     explicitDownloadDirectory ?? tempDirectory,
     resolved.artifact.name,
   );
+  const reportProgress = createDownloadProgressReporter(stdout);
   try {
     await downloadToFile({
       fetchImpl,
@@ -636,12 +702,19 @@ export async function runCli(
       destination: installerPath,
       expectedSha256: resolved.artifact.sha256,
       expectedSize: resolved.artifact.size,
+      onProgress: reportProgress,
+    });
+    reportProgress?.({
+      downloaded: resolved.artifact.size,
+      total: resolved.artifact.size,
+      done: true,
     });
     stdout.write(`Downloaded and verified: ${installerPath}\n`);
     if (!options.downloadOnly)
       await openInstaller(options.platform, installerPath, spawnImpl);
     return 0;
   } finally {
+    reportProgress?.finish?.();
     if (tempDirectory)
       await rmAsync(tempDirectory, { recursive: true, force: true });
   }
