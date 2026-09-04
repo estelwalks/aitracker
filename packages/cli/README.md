@@ -6,7 +6,7 @@ Node.js launcher; it does not contain or copy the Electron application.
 ```bash
 npx @estelwalks/aitracker                 # use this CLI's default channel
 npx @estelwalks/aitracker --channel stable
-npx @estelwalks/aitracker 1.0.0-beta.3    # exact release
+npx @estelwalks/aitracker 1.0.0          # exact release
 npx @estelwalks/aitracker --version 1.0.0 --channel stable
 npx @estelwalks/aitracker --dry-run       # resolve and print, without downloading installer
 npx @estelwalks/aitracker --download-only # download and verify in a temporary directory

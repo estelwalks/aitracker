@@ -1,4 +1,4 @@
-name: Unsigned Beta Release
+name: Release
 
 on:
   push:
@@ -10,6 +10,7 @@ permissions:
 
 env:
   NODE_VERSION: 24
+  RELEASE_CHANNEL: ${{ contains(github.ref_name, '-') && 'beta' || 'stable' }}
 
 jobs:
   release-contract:
@@ -29,8 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify beta tag and package versions
-        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel beta
+      - name: Verify tag and package versions
+        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel "$RELEASE_CHANNEL"
 
   build:
     name: Build ${{ matrix.name }} installer
@@ -60,9 +61,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
-      # This workflow intentionally produces unsigned beta installers. No
-      # signing identity, certificate, notarization, or SmartScreen credential
-      # is configured here.
+      # This workflow intentionally produces unsigned installers. No signing
+      # identity, certificate, notarization, or SmartScreen credential is
+      # configured here.
       CSC_IDENTITY_AUTO_DISCOVERY: false
     steps:
       - name: Checkout
@@ -80,12 +81,12 @@ jobs:
       - name: Verify tag before packaging (macOS)
         if: runner.os == 'macOS'
         shell: bash
-        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel beta
+        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel "$RELEASE_CHANNEL"
 
       - name: Verify tag before packaging (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: npm run verify:release-contract -- --tag "$env:GITHUB_REF_NAME" --channel beta
+        run: npm run verify:release-contract -- --tag "$env:GITHUB_REF_NAME" --channel "$env:RELEASE_CHANNEL"
 
       - name: Build installer
         run: ${{ matrix.command }}
@@ -95,14 +96,14 @@ jobs:
         shell: bash
         env:
           RELEASE_PLATFORM: ${{ matrix.platform }}
-        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel beta --release-dir release --platform "$RELEASE_PLATFORM"
+        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel "$RELEASE_CHANNEL" --release-dir release --platform "$RELEASE_PLATFORM"
 
       - name: Verify expected installer name (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
           RELEASE_PLATFORM: ${{ matrix.platform }}
-        run: npm run verify:release-contract -- --tag "$env:GITHUB_REF_NAME" --channel beta --release-dir release --platform "$env:RELEASE_PLATFORM"
+        run: npm run verify:release-contract -- --tag "$env:GITHUB_REF_NAME" --channel "$env:RELEASE_CHANNEL" --release-dir release --platform "$env:RELEASE_PLATFORM"
 
       - name: Upload installer for release assembly
         uses: actions/upload-artifact@v4
@@ -113,7 +114,7 @@ jobs:
           compression-level: 0
 
   draft-release:
-    name: Assemble GitHub draft beta release
+    name: Assemble GitHub draft release
     needs: [release-contract, build]
     if: ${{ needs.release-contract.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
@@ -142,13 +143,13 @@ jobs:
 
       - name: Verify assembled release artifacts
         shell: bash
-        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel beta --release-dir release
+        run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel "$RELEASE_CHANNEL" --release-dir release
 
       - name: Generate release metadata and checksums
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          npm run release:metadata -- --release-dir release --version "$version" --channel beta
+          npm run release:metadata -- --release-dir release --version "$version" --channel "$RELEASE_CHANNEL"
 
       - name: Refuse to reuse an existing release
         env:
@@ -159,16 +160,73 @@ jobs:
             exit 1
           fi
 
-      - name: Create draft prerelease
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          if [[ "$RELEASE_CHANNEL" == "stable" ]]; then
+            cat > release-notes.md <<'EOF'
+          # AITracker v1.0.0
+
+          AITracker is an open-source, local-first AI workspace for understanding AI usage, managing capabilities, distilling reusable Skills, and building long-term knowledge and memory.
+
+          ## Core capabilities
+
+          - **AI usage analytics** — Track tokens, input/output/cache usage, costs, models, projects, and trends across supported AI tools.
+          - **AI tool analytics** — Compare real usage and consumption patterns across tools and models to understand what works best for you.
+          - **Skills management** — Discover and centrally manage Skills scattered across AI tools.
+          - **Configuration management** — Organize frequently used Rules and other AI configurations in one place.
+          - **Skills distillation** — Turn proven methods, work history, and troubleshooting experience into reusable Skills.
+          - **Knowledge base and long-term memory** — Preserve project context, working habits, and valuable experience for future sessions.
+          - **Local-first privacy** — Keep core data and configuration on your computer; no account is required for core capabilities.
+          - **Security scanning** — Use the published `@estelwalks/agent-threat-scanner` package for agent-related security checks.
+
+          ## Installation
+
+          ### npx (macOS and Windows)
+
+          ```bash
+          npx --yes @estelwalks/aitracker@1.0.0
+          ```
+
+          ### Homebrew (macOS)
+
+          ```bash
+          brew tap estelwalks/aitracker
+          brew install --cask estelwalks/aitracker/aitracker
+          ```
+
+          ### WinGet (Windows)
+
+          ```powershell
+          winget install --id estelwalks.AITracker -e
+          ```
+
+          ## Release assets
+
+          This release includes unsigned macOS arm64/x64 DMG installers, a Windows x64 NSIS installer, `release-metadata.json`, and `checksums.txt`. Verify the published SHA-256 checksums before installation.
+
+          macOS Gatekeeper or Windows SmartScreen may show a warning because these installers are not signed or notarized. Follow the operating system's normal per-file confirmation flow and do not disable global security settings.
+
+          See the [README](https://github.com/estelwalks/aitracker#readme) for the full feature overview, development commands, privacy model, and language versions.
+          EOF
+            echo "RELEASE_TITLE=AITracker $GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          else
+            cat > release-notes.md <<'EOF'
+          Unsigned beta release for manual verification. Review the release assets and checksums before using this prerelease.
+          EOF
+            echo "RELEASE_TITLE=AITracker $GITHUB_REF_NAME (unsigned beta)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --draft \
-            --prerelease \
-            --verify-tag \
-            --title "AITracker $GITHUB_REF_NAME (unsigned beta)" \
-            --notes "Unsigned beta release for manual verification. This workflow does not sign, notarize, publish to npm, or update a Homebrew Tap. Review the draft and its checksums before manually publishing it; do not publish it as a stable release."
+          release_args=("$GITHUB_REF_NAME" --draft --verify-tag --title "$RELEASE_TITLE" --notes-file release-notes.md)
+          if [[ "$RELEASE_CHANNEL" == "beta" ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh release create "${release_args[@]}"
 
       - name: Upload release assets without clobbering existing assets
         env:
@@ -180,5 +238,5 @@ jobs:
             release/release-metadata.json \
             release/checksums.txt
 
-      - name: Confirm draft-only beta outcome
-        run: echo "Draft prerelease created. A maintainer must inspect it before any manual publication; failed jobs do not publish a formal/stable channel."
+      - name: Confirm draft outcome
+        run: echo "Draft release created for $RELEASE_CHANNEL channel. A maintainer must inspect it before publication."

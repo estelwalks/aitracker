@@ -116,7 +116,7 @@ function optionValue(argv, index, name) {
 export function parseArgs(
   argv,
   {
-    packageVersion = "1.0.0-beta.3",
+    packageVersion = "1.0.0",
     platform = process.platform,
     arch = process.arch,
   } = {},
@@ -662,9 +662,12 @@ export async function runCli(
     spawnImpl = spawn,
     stdout = process.stdout,
     stderr = process.stderr,
+    packageVersion: packageVersionOverride,
   } = {},
 ) {
-  const pkg = await packageVersion();
+  const pkg = packageVersionOverride
+    ? { version: packageVersionOverride }
+    : await packageVersion();
   const options = parseArgs(argv, {
     packageVersion: pkg.version,
     platform,

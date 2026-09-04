@@ -352,6 +352,7 @@ test("dry-run does not download the installer and download-only does not open it
     arch: "arm64",
     fetchImpl: dry.fetchImpl,
     stdout: dryOutput,
+    packageVersion: "1.0.0-beta.3",
   });
   assert.equal(dry.calls.includes(artifactUrl), false);
   assert.match(dryOutput.text, /AITracker 1\.0\.0-beta\.3/);
@@ -363,6 +364,7 @@ test("dry-run does not download the installer and download-only does not open it
     arch: "arm64",
     fetchImpl: only.fetchImpl,
     stdout: { write() {} },
+    packageVersion: "1.0.0-beta.3",
     spawnImpl: () => {
       opened = true;
     },
@@ -384,6 +386,7 @@ test("reports download progress while saving an installer", async () => {
     arch: "arm64",
     fetchImpl: fakeFetch().fetchImpl,
     stdout: output,
+    packageVersion: "1.0.0-beta.3",
   });
   assert.match(output.text, /Downloading: 100\.0%/);
   assert.match(output.text, /at .*\/s/);
@@ -401,6 +404,7 @@ test("download-only directory saves the verified installer without opening it", 
       arch: "arm64",
       fetchImpl: fake.fetchImpl,
       stdout: { write() {} },
+      packageVersion: "1.0.0-beta.3",
       spawnImpl: () => {
         opened = true;
       },
@@ -434,6 +438,7 @@ test("download-only directory rejects unsafe directories and preserves existing 
           arch: "arm64",
           fetchImpl: fakeFetch().fetchImpl,
           stdout: { write() {} },
+          packageVersion: "1.0.0-beta.3",
         }),
       /real directory, not a file or symlink/,
     );
@@ -447,6 +452,7 @@ test("download-only directory rejects unsafe directories and preserves existing 
           arch: "arm64",
           fetchImpl: fakeFetch().fetchImpl,
           stdout: { write() {} },
+          packageVersion: "1.0.0-beta.3",
         }),
       /EEXIST|file already exists/,
     );
@@ -465,6 +471,7 @@ test("download-only directory rejects unsafe directories and preserves existing 
               : response;
           },
           stdout: { write() {} },
+          packageVersion: "1.0.0-beta.3",
         }),
       /size mismatch/,
     );
