@@ -80,7 +80,7 @@ After the beta CLI package and matching GitHub Release have been published,
 users with Node.js and npm installed can run:
 
 ```bash
-npx --yes aitracker@beta
+npx --yes @estelwalks/aitracker@beta
 ```
 
 This command downloads and opens the desktop installer; it is not a silent
@@ -95,7 +95,7 @@ directory. The directory is created when needed, and the release-provided safe
 installer filename is used:
 
 ```bash
-npx --yes aitracker@beta --download-only ./downloads
+npx --yes @estelwalks/aitracker@beta --download-only ./downloads
 ```
 
 Without a directory, `--download-only` remains supported and uses a temporary
@@ -132,9 +132,9 @@ The standalone installer launcher is packaged as `aitracker` and is intended
 to run with `npx` on macOS arm64/x64 or Windows x64 after publication:
 
 ```bash
-npx aitracker
-npx aitracker --channel stable
-npx aitracker --version 1.0.0 --channel stable
+npx @estelwalks/aitracker
+npx @estelwalks/aitracker --channel stable
+npx @estelwalks/aitracker --version 1.0.0 --channel stable
 ```
 
 The initial beta installers are unsigned. macOS Gatekeeper or Windows

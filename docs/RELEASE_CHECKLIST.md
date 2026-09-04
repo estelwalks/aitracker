@@ -64,7 +64,7 @@ scripts/generate-homebrew-cask.mjs --metadata release/release-metadata.json
   then run `brew style release/aitracker-beta.rb`
   and `brew audit --cask release/aitracker-beta.rb` when the local Tap checkout
   is available. Never hand-copy a URL or hash.
-- Run the CLI resolver in dry-run mode: `npx --no-install aitracker@beta
+- Run the CLI resolver in dry-run mode: `npx --no-install @estelwalks/aitracker@beta
 --dry-run`; confirm it selects only the beta channel and does not download or
   open an installer.
 - Verify the installer starts on a clean user profile and can complete the

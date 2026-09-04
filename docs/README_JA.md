@@ -77,7 +77,7 @@ Beta用CLIパッケージと対応するGitHub Releaseが公開された後、No
 インストール済みの場合は、次のコマンドでBeta版を起動できます。
 
 ```bash
-npx --yes aitracker@beta
+npx --yes @estelwalks/aitracker@beta
 ```
 
 このコマンドはデスクトップインストーラーをダウンロードして開くものです。Node.js
@@ -93,7 +93,7 @@ SmartScreenの警告が表示される場合があります。続行する前に
 ファイル名で保存されます。
 
 ```bash
-npx --yes aitracker@beta --download-only ./downloads
+npx --yes @estelwalks/aitracker@beta --download-only ./downloads
 ```
 
 ディレクトリを指定しない `--download-only` も後方互換のため利用できます。この場合は

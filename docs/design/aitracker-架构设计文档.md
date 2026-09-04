@@ -24,7 +24,7 @@
 
 AITracker 当前通过 Electron Builder 生成 macOS DMG 和 Windows NSIS 安装包，发布检查、签名、公证、校验和上传主要遵循人工清单。项目希望新增三种安装入口：
 
-- `npx aitracker`：为已安装 Node.js/npm 的用户提供一条命令启动安装。
+- `npx @estelwalks/aitracker`：为已安装 Node.js/npm 的用户提供一条命令启动安装。
 - `brew install --cask aitracker`：为 macOS 用户提供标准包管理体验。
 - `winget install --id estelwalks.AITracker -e`：为 Windows 用户提供标准包管理体验。
 
@@ -176,7 +176,7 @@ flowchart LR
 - `package.json` 的应用版本是版本输入源；Git tag 必须严格为 `v${version}`。
 - 稳定版本：GitHub Release `prerelease=false`，npm dist-tag=`latest`，更新正式 Cask 和 WinGet。
 - beta 版本：GitHub Release `prerelease=true`，npm dist-tag=`beta`，更新自有 Tap 的 beta Cask；第一阶段 beta 可使用未签名制品，默认不提交 WinGet 或官方 Homebrew Cask。
-- npm CLI 版本与应用版本相同。`npx aitracker@1.2.3` 必须只安装 AITracker 1.2.3；不得在运行时静默切换到其他版本。
+- npm CLI 版本与应用版本相同。`npx @estelwalks/aitracker@1.2.3` 必须只安装 AITracker 1.2.3；不得在运行时静默切换到其他版本。
 - 应用内更新必须区分 stable/beta。稳定版不能因为 GitHub 上出现更新的 beta 而自动升级到 beta。
 
 ### 6.3 发布状态模型
@@ -189,7 +189,7 @@ flowchart LR
 
 ### 7.1 npx
 
-根 Electron 包继续保留 `private: true`；新增独立公开包 `aitracker`。npm 当前未返回该名称的公开包，但名称只有成功发布后才算占用，应在首个真实 beta 发布时尽快确认。npx 第一阶段允许下载未签名 beta 安装包，但必须在命令输出和 README 中说明用户可能需要手动放行系统安全提示。
+根 Electron 包继续保留 `private: true`；新增独立公开包 `@estelwalks/aitracker`，并保留 `aitracker` 作为 bin 命令名。npx 第一阶段允许下载未签名 beta 安装包，但必须在命令输出和 README 中说明用户可能需要手动放行系统安全提示。
 
 CLI 的 `bin` 命令执行以下步骤：
 
@@ -202,9 +202,9 @@ CLI 的 `bin` 命令执行以下步骤：
 
 命令契约：
 
-- `npx --yes aitracker`：按当前 CLI 包版本推导频道；当前 `aitracker@1.0.0-beta.1` 默认解析 beta。
-- `npx --yes aitracker --channel beta`：安装当前 beta；稳定版发布后再使用 `--channel stable`。
-- `npx --yes aitracker@1.2.3`：安装精确版本。
+- `npx --yes @estelwalks/aitracker`：按当前 CLI 包版本推导频道；当前 `@estelwalks/aitracker@1.0.0-beta.1` 默认解析 beta。
+- `npx --yes @estelwalks/aitracker --channel beta`：安装当前 beta；稳定版发布后再使用 `--channel stable`。
+- `npx --yes @estelwalks/aitracker@1.2.3`：安装精确版本。
 - `aitracker --dry-run`：只显示将使用的版本、平台、URL 和 hash，不下载。
 - `aitracker --download-only <dir>`：下载并校验但不打开安装器，便于 CI/企业分发。
 
@@ -309,7 +309,7 @@ Cask 使用当前两份版本化 DMG，并通过 `arch` 为 Apple Silicon/Intel 
 ## 13. 分阶段落地
 
 - 阶段 A：统一制品合同。补齐 metadata、checksum、频道过滤和 draft release 门禁；签名作为稳定频道 gate，不阻塞实验 beta。
-- 阶段 B（当前 Phase 1）：未签名 beta 入口。代码和模板已就绪，目标命令为 `npx aitracker --channel beta` 和 `brew install --cask estelwalks/aitracker/aitracker-beta`；真实 npm/Tap 发布及用户环境验证尚未完成，并必须明确 Gatekeeper/SmartScreen 提示。
+- 阶段 B（当前 Phase 1）：未签名 beta 入口。代码和模板已就绪，目标命令为 `npx @estelwalks/aitracker --channel beta` 和 `brew install --cask estelwalks/aitracker/aitracker-beta`；真实 npm/Tap 发布及用户环境验证尚未完成，并必须明确 Gatekeeper/SmartScreen 提示。
 - 阶段 C：稳定渠道。获得签名凭据并发布首个签名稳定版，再提交官方 Cask 和 WinGet manifest。
 - 阶段 D：自动化与运营。实现渠道 PR 自动生成、失败重试、发布状态矩阵和回滚演练。
 
@@ -333,7 +333,7 @@ Cask 使用当前两份版本化 DMG，并通过 `arch` 为 Apple Silicon/Intel 
 | macOS/Windows 签名凭据尚未准备              | 中   | 高   | 不阻塞未签名 beta；作为稳定渠道和官方 Cask 的硬阻塞项           |
 | Homebrew 官方收录受 notability/安全要求影响 | 中   | 中   | 自有 Tap 作为立即可用路径，官方命令待上游合并后公布             |
 | WinGet Publisher 与安装器注册表不一致       | 中   | 高   | 在干净 Windows 主机读取真实 ARP 字段后锁定 identifier/metadata  |
-| `aitracker` npm 名称在首发前被占用          | 低   | 中   | 首发前再次检查；备用名称 `@estelwalks/aitracker`                   |
+| npm 非 scope 名称与现有包过于相似          | 已确认 | 中   | 采用 `@estelwalks/aitracker` 并使用 `--access public` 发布         |
 | npm 包和自有 Tap 尚未完成真实远程发布       | 高   | 高   | Phase 1 先完成本地生成与 draft 验证，再执行维护者授权的外部发布 |
 | GitHub community PR 审核时延                | 高   | 低   | 状态矩阵显示 lagging，不把外部合并时间纳入核心发布原子性        |
 
@@ -351,7 +351,7 @@ Cask 使用当前两份版本化 DMG，并通过 `arch` 为 Apple Silicon/Intel 
 
 - Apple Developer/Developer ID 和 Windows Authenticode 仅在进入稳定签名渠道前确认；不阻塞第一阶段未签名 beta。
 - 稳定版是否允许应用内自动安装更新，还是仅通知用户通过原渠道升级。
-- npm 正式包名采用 `aitracker` 还是作用域包 `@estelwalks/aitracker`。
+- npm 正式包名采用作用域包 `@estelwalks/aitracker`，发布时使用 `--access public`。
 - Publisher 的正式展示值及 WinGet PackageIdentifier 最终值。
 
 ### 使用的假设

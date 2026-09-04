@@ -144,10 +144,10 @@ node scripts/generate-homebrew-cask.mjs \
   --token aitracker-beta --output release/aitracker-beta.rb
 
 # Validate CLI selection without downloading or opening an installer.
-npx --no-install aitracker@beta --dry-run
+npx --no-install @estelwalks/aitracker@beta --dry-run
 
 # Download and verify without opening; the directory is retained.
-npx --no-install aitracker@beta --download-only release/downloads
+npx --no-install @estelwalks/aitracker@beta --download-only release/downloads
 ```
 
 `--download-only` without a directory remains the legacy temporary-directory

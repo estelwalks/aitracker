@@ -78,7 +78,7 @@ Beta CLI 패키지와 일치하는 GitHub Release가 공개된 후, Node.js와 n
 있다면 다음 명령으로 Beta를 실행할 수 있습니다.
 
 ```bash
-npx --yes aitracker@beta
+npx --yes @estelwalks/aitracker@beta
 ```
 
 이 명령은 데스크톱 설치 파일을 다운로드하여 엽니다. Node.js 없이 동작하는 무음
@@ -92,7 +92,7 @@ npx --yes aitracker@beta
 없으면 생성되며, 릴리스 메타데이터가 제공하는 안전한 파일 이름으로 저장됩니다.
 
 ```bash
-npx --yes aitracker@beta --download-only ./downloads
+npx --yes @estelwalks/aitracker@beta --download-only ./downloads
 ```
 
 디렉터리 없이 사용하는 `--download-only`도 하위 호환을 위해 계속 지원됩니다. 이 경우

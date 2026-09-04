@@ -144,7 +144,7 @@ export function parseArgs(
 }
 
 export function helpText() {
-  return `Usage: npx aitracker [version] [options]
+  return `Usage: npx @estelwalks/aitracker [version] [options]
 
 Download and open the AITracker desktop installer.
 

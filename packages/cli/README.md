@@ -4,14 +4,14 @@ The standalone `npx` launcher for AITracker desktop releases. It is a thin
 Node.js launcher; it does not contain or copy the Electron application.
 
 ```bash
-npx aitracker                 # use this CLI's default channel
-npx aitracker --channel stable
-npx aitracker 1.0.0-beta.1    # exact release
-npx aitracker --version 1.0.0 --channel stable
-npx aitracker --dry-run       # resolve and print, without downloading installer
-npx aitracker --download-only # download and verify in a temporary directory
-npx aitracker --download-only ./downloads # save verified installer in ./downloads
-npx aitracker --download-only=./downloads # equivalent directory form
+npx @estelwalks/aitracker                 # use this CLI's default channel
+npx @estelwalks/aitracker --channel stable
+npx @estelwalks/aitracker 1.0.0-beta.1    # exact release
+npx @estelwalks/aitracker --version 1.0.0 --channel stable
+npx @estelwalks/aitracker --dry-run       # resolve and print, without downloading installer
+npx @estelwalks/aitracker --download-only # download and verify in a temporary directory
+npx @estelwalks/aitracker --download-only ./downloads # save verified installer in ./downloads
+npx @estelwalks/aitracker --download-only=./downloads # equivalent directory form
 ```
 
 The CLI supports macOS arm64/x64 and Windows x64. Linux and unsupported

@@ -313,7 +313,7 @@ Story 开始前必须具备：
 - S-101 npx CLI 和 S-201 自有 Tap 的本地实现。
 - S-401 更新器频道与 checksum。
 - S-102 的真实 npm 发布、S-201 的远程 Tap 同步，以及 S-302 WinGet 生成和 Sandbox 验证后置，不计入当前完成状态。
-- 退出目标：未签名 `npx aitracker --channel beta` 和 `brew install --cask estelwalks/aitracker/aitracker-beta` 的代码/模板就绪，用户能看到明确的系统安全提示说明；真实 Release 发布后再执行干净环境安装验证。
+- 退出目标：未签名 `npx @estelwalks/aitracker --channel beta` 和 `brew install --cask estelwalks/aitracker/aitracker-beta` 的代码/模板就绪，用户能看到明确的系统安全提示说明；真实 Release 发布后再执行干净环境安装验证。
 
 ### Sprint 3：稳定发布和运营闭环
 

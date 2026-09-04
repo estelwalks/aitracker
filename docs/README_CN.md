@@ -74,7 +74,7 @@ npm run dev:desktop
 发布 Beta CLI 包和匹配的 GitHub Release 后，如果已安装 Node.js 和 npm，可运行：
 
 ```bash
-npx --yes aitracker@beta
+npx --yes @estelwalks/aitracker@beta
 ```
 
 此命令会下载并打开桌面安装程序；它不是无需 Node.js 的静默安装。macOS
@@ -86,7 +86,7 @@ Gatekeeper 可能提示“无法验证开发者”；请在确认发布来源和
 并使用发布元数据提供的安全安装包文件名：
 
 ```bash
-npx --yes aitracker@beta --download-only ./downloads
+npx --yes @estelwalks/aitracker@beta --download-only ./downloads
 ```
 
 不指定目录的 `--download-only` 仍保持兼容：使用临时目录下载和校验，命令退出时清理
