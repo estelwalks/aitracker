@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
+import { once } from "node:events";
 import { createWriteStream } from "node:fs";
 import { readFileSync } from "node:fs";
 import { lstat, mkdir, mkdtemp, rm as rmAsync } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { finished } from "node:stream/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
@@ -23,9 +25,27 @@ import {
 } from "./release-metadata.mjs";
 
 export const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
-export const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30 * 1000;
+const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_DOWNLOAD_IDLE_TIMEOUT_MS = 2 * 60 * 1000;
+const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+export const DOWNLOAD_TIMEOUT_MS = timeoutFromEnv(
+  "AITRACKER_DOWNLOAD_TIMEOUT_MS",
+  DEFAULT_DOWNLOAD_TIMEOUT_MS,
+);
+export const DOWNLOAD_IDLE_TIMEOUT_MS = timeoutFromEnv(
+  "AITRACKER_DOWNLOAD_IDLE_TIMEOUT_MS",
+  DEFAULT_DOWNLOAD_IDLE_TIMEOUT_MS,
+);
 const MAX_METADATA_BYTES = 8 * 1024 * 1024;
 const SAFE_INSTALLER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:dmg|exe)$/u;
+
+function timeoutFromEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isSafeInteger(value) && value > 0 && value <= MAX_TIMEOUT_MS
+    ? value
+    : fallback;
+}
 
 function optionValue(argv, index, name) {
   const value = argv[index + 1];
@@ -235,13 +255,50 @@ async function* responseChunks(response) {
 async function fetchWithTimeout(
   fetchImpl,
   url,
-  { timeoutMs, signal, consume, validateResponseUrl } = {},
+  {
+    timeoutMs,
+    idleTimeoutMs,
+    signal,
+    consume,
+    validateResponseUrl,
+    timeoutLabel = "request",
+  } = {},
 ) {
   const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    timeoutMs ?? DOWNLOAD_TIMEOUT_MS,
-  );
+  const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  let timeoutReason;
+  let timer;
+  let idleTimer;
+  const abortWithReason = (reason) => {
+    timeoutReason = reason;
+    controller.abort();
+  };
+  const armTimer = () => {
+    clearTimeout(timer);
+    timer = setTimeout(
+      () =>
+        abortWithReason(
+          `${timeoutLabel} timed out after ${effectiveTimeoutMs} ms`,
+        ),
+      effectiveTimeoutMs,
+    );
+  };
+  const armIdleTimer = () => {
+    if (idleTimeoutMs === undefined) return;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(
+      () =>
+        abortWithReason(
+          `${timeoutLabel} stalled after ${idleTimeoutMs} ms without receiving data`,
+        ),
+      idleTimeoutMs,
+    );
+  };
+  const noteProgress = () => {
+    armIdleTimer();
+  };
+  armTimer();
+  armIdleTimer();
   const onAbort = () => controller.abort();
   signal?.addEventListener("abort", onAbort, { once: true });
   try {
@@ -254,16 +311,15 @@ async function fetchWithTimeout(
     if (responseUrl && validateResponseUrl) {
       validateResponseUrl(responseUrl, `${url} response URL`);
     }
-    return consume ? await consume(response, controller.signal) : response;
+    return consume
+      ? await consume(response, controller.signal, noteProgress)
+      : response;
   } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error(
-        `download timed out after ${timeoutMs ?? DOWNLOAD_TIMEOUT_MS} ms`,
-      );
-    }
+    if (timeoutReason) throw new Error(timeoutReason);
     throw error;
   } finally {
     clearTimeout(timer);
+    clearTimeout(idleTimer);
     signal?.removeEventListener("abort", onAbort);
   }
 }
@@ -416,12 +472,15 @@ export async function downloadToFile({
   expectedSize,
   maxBytes = MAX_DOWNLOAD_BYTES,
   timeoutMs = DOWNLOAD_TIMEOUT_MS,
+  idleTimeoutMs = DOWNLOAD_IDLE_TIMEOUT_MS,
 }) {
   assertAllowedDownloadUrl(url);
   return fetchWithTimeout(fetchImpl, url, {
     timeoutMs,
+    idleTimeoutMs,
+    timeoutLabel: "download",
     validateResponseUrl: assertAllowedReleaseResponseUrl,
-    consume: async (response) => {
+    consume: async (response, signal, noteProgress) => {
       if (!response?.ok)
         throw new Error(
           `installer download failed (HTTP ${response?.status ?? "unknown"})`,
@@ -435,33 +494,36 @@ export async function downloadToFile({
       let total = 0;
       let output;
       let created = false;
+      let outputError;
+      let outputFinished;
       try {
         output = createWriteStream(destination, { flags: "wx" });
-        await new Promise((resolve, reject) => {
-          output.once("open", resolve);
-          output.once("error", reject);
+        output.on("error", (error) => {
+          outputError =
+            error instanceof Error ? error : new Error(String(error));
         });
+        outputFinished = finished(output);
+        outputFinished.catch(() => undefined);
+        await once(output, "open");
         created = true;
         for await (const chunk of responseChunks(response)) {
+          signal?.throwIfAborted?.();
+          if (outputError) throw outputError;
           total += chunk.byteLength;
           if (total > maxBytes)
             throw new Error(
               `installer exceeds the ${maxBytes} byte size limit`,
             );
           hash.update(chunk);
-          if (!output.write(chunk))
-            await new Promise((resolve, reject) => {
-              output.once("drain", resolve);
-              output.once("error", reject);
-            });
+          noteProgress?.();
+          if (!output.write(chunk)) await once(output, "drain");
         }
-        await new Promise((resolve, reject) => {
-          output.once("finish", resolve);
-          output.once("error", reject);
-          output.end();
-        });
+        if (outputError) throw outputError;
+        output.end();
+        await outputFinished;
       } catch (error) {
         output?.destroy();
+        await outputFinished?.catch(() => undefined);
         if (created) await rmAsync(destination, { force: true });
         throw error;
       }

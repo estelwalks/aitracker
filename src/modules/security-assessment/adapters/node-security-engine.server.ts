@@ -1,4 +1,7 @@
-import type { LocaleKey, ScanSkillReport } from "@estelwalks/agent-threat-scanner";
+import type {
+  LocaleKey,
+  ScanSkillReport,
+} from "@estelwalks/agent-threat-scanner";
 
 export interface SecurityEngineMemoryFile {
   readonly path: string;

@@ -67,47 +67,45 @@ npm run dev:desktop
 
 브라우저 개발 서버만 실행하려면 `npm run dev`를 사용하세요.
 
-### 설치 (Beta)
+### 설치
 
-첫 Beta 버전은 macOS(x64 / arm64)와 Windows x64 데스크톱 설치 파일을 대상으로
-합니다. Beta 설치 파일은 서명되지 않았습니다. 현재 Beta CLI 패키지, 해당 GitHub
-Release와 beta Tap은 아직 공개되지 않았으므로 아래 명령은 공개 후에만 사용할 수
-있습니다.
+다음 명령은 macOS 또는 Windows 정식 버전을 설치합니다. 정식 버전과 각 패키지
+관리자의 메타데이터가 공개된 후 사용할 수 있습니다.
 
-Beta CLI 패키지와 일치하는 GitHub Release가 공개된 후, Node.js와 npm이 설치되어
-있다면 다음 명령으로 Beta를 실행할 수 있습니다.
+#### npx (macOS 및 Windows)
 
-```bash
-npx --yes @estelwalks/aitracker@beta
-```
-
-이 명령은 데스크톱 설치 파일을 다운로드하여 엽니다. Node.js 없이 동작하는 무음
-설치 명령은 아닙니다. macOS에서는 Gatekeeper가 “개발자를 확인할 수 없음” 경고를
-표시할 수 있습니다. 배포 출처와 산출물을 확인한 뒤 시스템 설정 또는 앱의 오른쪽
-클릭 “열기” 동작으로 실행을 직접 승인하세요. Windows에서는 SmartScreen 경고가
-표시될 수 있으므로 계속하기 전에 게시자와 산출물을 확인하세요. 전역 보안 보호를
-비활성화하거나 안전하지 않은 우회 명령을 실행하지 마세요.
-
-설치 파일을 열지 않고 다운로드 및 검증만 하려면 저장할 디렉터리를 지정하세요. 디렉터리가
-없으면 생성되며, 릴리스 메타데이터가 제공하는 안전한 파일 이름으로 저장됩니다.
+Node.js와 npm이 설치되어 있다면 다음 명령을 실행하세요.
 
 ```bash
-npx --yes @estelwalks/aitracker@beta --download-only ./downloads
+npx --yes @estelwalks/aitracker@1.0.0
 ```
 
-디렉터리 없이 사용하는 `--download-only`도 하위 호환을 위해 계속 지원됩니다. 이 경우
-임시 디렉터리에 다운로드하고 명령이 끝나면 임시 파일을 삭제합니다. 이미 존재하는 대상
-파일, 심볼릭 링크 디렉터리, 빈 디렉터리 인수, 중복 지정 및 파일 시스템 루트는 거부됩니다.
+이 명령은 데스크톱 설치 파일을 다운로드하여 엽니다.
 
-macOS 사용자는 beta Tap이 공개된 후 프로젝트의 자체 Tap도 사용할 수 있습니다.
+사용 중인 npm 미러에 이 패키지가 없다면 공식 npm registry를 명시하세요.
+
+```bash
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.0
+```
+
+#### Homebrew (macOS)
+
+프로젝트 자체 Tap에서 정식 버전 Cask를 설치하거나 업그레이드하세요.
 
 ```bash
 brew tap estelwalks/aitracker
-brew install --cask estelwalks/aitracker/aitracker-beta
+brew install --cask estelwalks/aitracker/aitracker
+brew upgrade --cask estelwalks/aitracker/aitracker
 ```
 
-안정 버전 명령은 현재 사용 가능한 것으로 공개하지 않습니다. 서명된 안정 버전과
-공식 Homebrew Cask가 준비된 후에만 안정 버전 설치 방법을 안내합니다.
+#### WinGet (Windows)
+
+Microsoft Community Repository에서 정식 버전을 설치하거나 업그레이드하세요.
+
+```powershell
+winget install --id estelwalks.AITracker -e
+winget upgrade --id estelwalks.AITracker -e
+```
 
 ### 빌드 및 테스트
 

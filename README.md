@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/estelwalks/aitracker/stargazers"><img src="https://img.shields.io/github/stars/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="GitHub stars" /></a>
   <a href="https://github.com/estelwalks/aitracker/blob/main/LICENSE"><img src="https://img.shields.io/github/license/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="License" /></a>
-  <a href="https://github.com/estelwalks/aitracker/releases"><img src="https://img.shields.io/github/v/release/estelwalks/aitracker?include_prereleases=1&style=flat-square&cacheSeconds=3600" alt="Latest release" /></a>
+  <a href="https://github.com/estelwalks/aitracker/releases"><img src="https://img.shields.io/github/v/release/estelwalks/aitracker?style=flat-square&cacheSeconds=3600" alt="Latest release" /></a>
 </p>
 
 <p align="center">
@@ -70,49 +70,47 @@ npm run dev:desktop
 
 To run the browser development server only, use `npm run dev`.
 
-### Install (Beta)
+### Install
 
-The first beta targets desktop installers for macOS (x64 and arm64) and
-Windows x64. It is an unsigned beta release; publication status is tracked
-separately in the release checklist.
+The following commands install the official stable release on macOS or
+Windows. The package-manager entries become available after the stable release
+and their corresponding distribution metadata have been published.
 
-After the beta CLI package and matching GitHub Release have been published,
-users with Node.js and npm installed can run:
+#### npx (macOS and Windows)
 
-```bash
-npx --yes @estelwalks/aitracker@beta
-```
-
-This command downloads and opens the desktop installer; it is not a silent
-installation that works without Node.js. On macOS, Gatekeeper may say that the
-developer cannot be verified. Use System Settings or the app's right-click
-Open action to manually confirm the launch. On Windows, SmartScreen may show a
-warning; review the publisher and artifact before choosing whether to continue.
-Do not disable global security protections or run unsafe bypass commands.
-
-To download and verify the installer without opening it, provide an output
-directory. The directory is created when needed, and the release-provided safe
-installer filename is used:
+With Node.js and npm installed, run:
 
 ```bash
-npx --yes @estelwalks/aitracker@beta --download-only ./downloads
+npx --yes @estelwalks/aitracker@1.0.0
 ```
 
-Without a directory, `--download-only` remains supported and uses a temporary
-directory that is cleaned up when the command exits. Existing target files,
-symlink directories, empty or repeated directory arguments, and filesystem
-roots are rejected.
+This command downloads and opens the desktop installer.
 
-macOS users can also use the project's own beta Tap:
+If your npm configuration uses a mirror that does not contain the package, use
+the official npm registry explicitly:
+
+```bash
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.0
+```
+
+#### Homebrew (macOS)
+
+Install and upgrade the stable Cask from the project's Tap:
 
 ```bash
 brew tap estelwalks/aitracker
-brew install --cask estelwalks/aitracker/aitracker-beta
+brew install --cask estelwalks/aitracker/aitracker
+brew upgrade --cask estelwalks/aitracker/aitracker
 ```
 
-The stable command is intentionally not documented as available yet. It will
-only be announced after a signed stable build and the official Homebrew Cask
-are ready.
+#### WinGet (Windows)
+
+Install and upgrade the stable package from the Microsoft Community Repository:
+
+```powershell
+winget install --id estelwalks.AITracker -e
+winget upgrade --id estelwalks.AITracker -e
+```
 
 ### Build and Test
 
@@ -128,26 +126,13 @@ Platform installers can be produced with `npm run dist:mac` or
 `npm run dist:win:x64`. Signing and notarization credentials are not stored in
 this repository.
 
-The standalone installer launcher is packaged as `aitracker` and is intended
-to run with `npx` on macOS arm64/x64 or Windows x64 after publication:
-
-```bash
-npx @estelwalks/aitracker
-npx @estelwalks/aitracker --channel stable
-npx @estelwalks/aitracker --version 1.0.0 --channel stable
-```
-
-The initial beta installers are unsigned. macOS Gatekeeper or Windows
-SmartScreen may show an operating-system security warning; verify the release
-source and checksum and use the normal per-file confirmation flow. Do not
-disable global security settings. Linux is not supported by the launcher.
+The standalone installer launcher is packaged as `aitracker` and supports
+macOS arm64/x64 and Windows x64. Linux is not supported by the launcher.
 
 See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
 generated-file policy, and repository layout.
 
-The current target version is `1.0.0-beta.1` (unsigned beta; distribution
-status is tracked separately). See [Privacy](PRIVACY.md) for data-handling
-details.
+See [Privacy](PRIVACY.md) for data-handling details.
 
 ---
 

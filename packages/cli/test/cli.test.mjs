@@ -13,35 +13,37 @@ import {
 } from "../src/cli.mjs";
 
 const metadataUrl =
-  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.1/release-metadata.json";
+  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.2/release-metadata.json";
 const artifactUrl =
-  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.1/AITracker-1.0.0-beta.1-arm64.dmg";
+  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.2/AITracker-1.0.0-beta.2-arm64.dmg";
 const bytes = Buffer.from("installer-bytes");
 const sha256 = createHash("sha256").update(bytes).digest("hex");
+const delay = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
 const metadata = {
   schemaVersion: 1,
-  appVersion: "1.0.0-beta.1",
+  appVersion: "1.0.0-beta.2",
   channel: "beta",
   repository: "estelwalks/aitracker",
-  gitTag: "v1.0.0-beta.1",
+  gitTag: "v1.0.0-beta.2",
   artifacts: {
     "darwin-arm64": {
-      name: "AITracker-1.0.0-beta.1-arm64.dmg",
+      name: "AITracker-1.0.0-beta.2-arm64.dmg",
       url: artifactUrl,
       sha256,
       size: bytes.length,
     },
     "darwin-x64": {
-      name: "AITracker-1.0.0-beta.1-x64.dmg",
+      name: "AITracker-1.0.0-beta.2-x64.dmg",
       url: artifactUrl.replace("arm64", "x64"),
       sha256,
       size: bytes.length,
     },
     "win32-x64": {
-      name: "AITracker-Setup-1.0.0-beta.1-x64.exe",
+      name: "AITracker-Setup-1.0.0-beta.2-x64.exe",
       url: artifactUrl.replace(
-        "AITracker-1.0.0-beta.1-arm64.dmg",
-        "AITracker-Setup-1.0.0-beta.1-x64.exe",
+        "AITracker-1.0.0-beta.2-arm64.dmg",
+        "AITracker-Setup-1.0.0-beta.2-x64.exe",
       ),
       sha256,
       size: bytes.length,
@@ -60,7 +62,7 @@ function fakeFetch({ releases = undefined } = {}) {
             {
               draft: false,
               prerelease: true,
-              tag_name: "v1.0.0-beta.1",
+              tag_name: "v1.0.0-beta.2",
               assets: [
                 {
                   name: "release-metadata.json",
@@ -178,16 +180,16 @@ test("resolves exact beta versions and keeps stable/beta releases isolated", asy
   const fake = fakeFetch();
   const resolved = await resolveRelease({
     channel: "beta",
-    version: "1.0.0-beta.1",
+    version: "1.0.0-beta.2",
     platform: "darwin",
     arch: "arm64",
     fetchImpl: fake.fetchImpl,
   });
-  assert.equal(resolved.metadata.appVersion, "1.0.0-beta.1");
+  assert.equal(resolved.metadata.appVersion, "1.0.0-beta.2");
 
   const stable = fakeFetch({
     releases: [
-      { draft: false, prerelease: true, tag_name: "v1.0.0-beta.1", assets: [] },
+      { draft: false, prerelease: true, tag_name: "v1.0.0-beta.2", assets: [] },
     ],
   });
   await assert.rejects(
@@ -208,7 +210,7 @@ test("rejects malicious final response hosts while allowing GitHub release asset
     () =>
       resolveRelease({
         channel: "beta",
-        version: "1.0.0-beta.1",
+        version: "1.0.0-beta.2",
         platform: "darwin",
         arch: "arm64",
         fetchImpl: async (url, options) => {
@@ -219,7 +221,7 @@ test("rejects malicious final response hosts while allowing GitHub release asset
                   {
                     draft: false,
                     prerelease: true,
-                    tag_name: "v1.0.0-beta.1",
+                    tag_name: "v1.0.0-beta.2",
                     assets: [],
                   },
                 ]),
@@ -234,7 +236,7 @@ test("rejects malicious final response hosts while allowing GitHub release asset
   const metadataRedirect = fakeFetch();
   const resolved = await resolveRelease({
     channel: "beta",
-    version: "1.0.0-beta.1",
+    version: "1.0.0-beta.2",
     platform: "darwin",
     arch: "arm64",
     fetchImpl: async (url, options) => {
@@ -247,14 +249,14 @@ test("rejects malicious final response hosts while allowing GitHub release asset
         : response;
     },
   });
-  assert.equal(resolved.artifact.name, "AITracker-1.0.0-beta.1-arm64.dmg");
+  assert.equal(resolved.artifact.name, "AITracker-1.0.0-beta.2-arm64.dmg");
 
   const evilMetadata = fakeFetch();
   await assert.rejects(
     () =>
       resolveRelease({
         channel: "beta",
-        version: "1.0.0-beta.1",
+        version: "1.0.0-beta.2",
         platform: "darwin",
         arch: "arm64",
         fetchImpl: async (url, options) => {
@@ -274,7 +276,7 @@ test("rejects malicious final response hosts while allowing GitHub release asset
 test("rejects draft releases, unsupported platforms and bad release metadata", async () => {
   const draft = fakeFetch({
     releases: [
-      { draft: true, prerelease: true, tag_name: "v1.0.0-beta.1", assets: [] },
+      { draft: true, prerelease: true, tag_name: "v1.0.0-beta.2", assets: [] },
     ],
   });
   await assert.rejects(
@@ -336,7 +338,7 @@ test("dry-run does not download the installer and download-only does not open it
     stdout: dryOutput,
   });
   assert.equal(dry.calls.includes(artifactUrl), false);
-  assert.match(dryOutput.text, /AITracker 1\.0\.0-beta\.1/);
+  assert.match(dryOutput.text, /AITracker 1\.0\.0-beta\.2/);
 
   const only = fakeFetch();
   let opened = false;
@@ -463,6 +465,110 @@ test("streaming download verifies size/hash and cleans failed temporary files", 
     );
     await assert.rejects(() => access(destination));
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("resets the download idle timeout when streamed data makes progress", async () => {
+  const directory = await mkdtemp(
+    join(tmpdir(), "aitracker-download-progress-"),
+  );
+  const destination = join(directory, "installer.dmg");
+  const chunks = [
+    Buffer.from("first-"),
+    Buffer.from("second-"),
+    Buffer.from("third"),
+  ];
+  const expected = Buffer.concat(chunks);
+  try {
+    await downloadToFile({
+      fetchImpl: async () => ({
+        ok: true,
+        body: (async function* () {
+          for (const chunk of chunks) {
+            yield chunk;
+            await delay(20);
+          }
+        })(),
+      }),
+      url: artifactUrl,
+      destination,
+      expectedSha256: createHash("sha256").update(expected).digest("hex"),
+      expectedSize: expected.length,
+      timeoutMs: 250,
+      idleTimeoutMs: 35,
+    });
+    assert.deepEqual(await readFile(destination), expected);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("aborts a download that stops receiving data", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "aitracker-download-stall-"));
+  const destination = join(directory, "installer.dmg");
+  try {
+    await assert.rejects(
+      () =>
+        downloadToFile({
+          fetchImpl: async (_url, options) => ({
+            ok: true,
+            body: (async function* () {
+              yield Buffer.from("first");
+              await new Promise((_, reject) => {
+                options.signal.addEventListener(
+                  "abort",
+                  () => reject(new Error("aborted")),
+                  { once: true },
+                );
+              });
+            })(),
+          }),
+          url: artifactUrl,
+          destination,
+          expectedSha256: sha256,
+          expectedSize: bytes.length,
+          timeoutMs: 250,
+          idleTimeoutMs: 20,
+        }),
+      /download stalled after 20 ms without receiving data/,
+    );
+    await assert.rejects(() => access(destination));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("does not accumulate WriteStream error listeners under backpressure", async () => {
+  const directory = await mkdtemp(
+    join(tmpdir(), "aitracker-download-listeners-"),
+  );
+  const destination = join(directory, "installer.dmg");
+  const chunk = Buffer.alloc(64 * 1024, 0x61);
+  const chunks = Array.from({ length: 32 }, () => chunk);
+  const expected = Buffer.concat(chunks);
+  const warnings = [];
+  const onWarning = (warning) => {
+    if (warning.name === "MaxListenersExceededWarning") warnings.push(warning);
+  };
+  process.on("warning", onWarning);
+  try {
+    await downloadToFile({
+      fetchImpl: async () => ({
+        ok: true,
+        body: (async function* () {
+          yield* chunks;
+        })(),
+      }),
+      url: artifactUrl,
+      destination,
+      expectedSha256: createHash("sha256").update(expected).digest("hex"),
+      expectedSize: expected.length,
+    });
+    await delay(25);
+    assert.equal(warnings.length, 0);
+  } finally {
+    process.off("warning", onWarning);
     await rm(directory, { recursive: true, force: true });
   }
 });

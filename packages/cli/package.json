@@ -1,6 +1,6 @@
 {
   "name": "@estelwalks/aitracker",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Download and launch the AITracker desktop installer",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {

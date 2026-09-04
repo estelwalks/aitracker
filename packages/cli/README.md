@@ -6,7 +6,7 @@ Node.js launcher; it does not contain or copy the Electron application.
 ```bash
 npx @estelwalks/aitracker                 # use this CLI's default channel
 npx @estelwalks/aitracker --channel stable
-npx @estelwalks/aitracker 1.0.0-beta.1    # exact release
+npx @estelwalks/aitracker 1.0.0-beta.2    # exact release
 npx @estelwalks/aitracker --version 1.0.0 --channel stable
 npx @estelwalks/aitracker --dry-run       # resolve and print, without downloading installer
 npx @estelwalks/aitracker --download-only # download and verify in a temporary directory
@@ -16,8 +16,10 @@ npx @estelwalks/aitracker --download-only=./downloads # equivalent directory for
 
 The CLI supports macOS arm64/x64 and Windows x64. Linux and unsupported
 architectures are rejected; the installer is selected from the public GitHub
-Release metadata, streamed with a five-minute timeout and 512 MiB limit, and
-verified with its SHA-256 and byte size before it is opened.
+Release metadata, streamed with a 30-minute total timeout and a two-minute
+no-progress timeout, and verified with its SHA-256 and byte size before it is
+opened. Set `AITRACKER_DOWNLOAD_TIMEOUT_MS` or
+`AITRACKER_DOWNLOAD_IDLE_TIMEOUT_MS` to override the defaults (up to 24 hours).
 
 `--download-only` without a directory keeps the legacy behavior: it downloads
 and verifies the installer, does not open it, and removes the temporary file

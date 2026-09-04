@@ -67,49 +67,45 @@ npm run dev:desktop
 
 ブラウザ開発サーバーだけを起動する場合は、`npm run dev`を実行します。
 
-### インストール（Beta）
+### インストール
 
-最初のBeta版は、macOS（x64 / arm64）とWindows x64のデスクトップ
-インストーラーを対象としています。現在のBeta版は未署名で、公開状況は
-リリースチェックリストで別途管理しています。
+以下のコマンドはmacOSまたはWindowsの正式版をインストールするためのものです。
+正式版と各パッケージマネージャーのメタデータが公開された後に利用できます。
 
-Beta用CLIパッケージと対応するGitHub Releaseが公開された後、Node.jsとnpmを
-インストール済みの場合は、次のコマンドでBeta版を起動できます。
+#### npx（macOS / Windows）
 
-```bash
-npx --yes @estelwalks/aitracker@beta
-```
-
-このコマンドはデスクトップインストーラーをダウンロードして開くものです。Node.js
-なしでサイレントインストールするコマンドではありません。macOSでは「開発元を確認
-できない」旨の警告が表示される場合があります。その場合は「システム設定」または
-アプリを右クリックして「開く」を選び、手動で起動を確認してください。Windowsでは
-SmartScreenの警告が表示される場合があります。続行する前に発行元と成果物を確認して
-ください。システム全体のセキュリティ設定を無効にしたり、危険な回避コマンドを実行
-したりしないでください。
-
-インストーラーを開かずにダウンロードと検証だけを行う場合は、保存先ディレクトリを
-指定します。ディレクトリが存在しなければ作成され、リリースメタデータの安全な
-ファイル名で保存されます。
+Node.jsとnpmをインストール済みの場合は、次のコマンドを実行します。
 
 ```bash
-npx --yes @estelwalks/aitracker@beta --download-only ./downloads
+npx --yes @estelwalks/aitracker@1.0.0
 ```
 
-ディレクトリを指定しない `--download-only` も後方互換のため利用できます。この場合は
-一時ディレクトリを使用し、コマンド終了時に一時ファイルを削除します。既存の対象
-ファイル、シンボリックリンクのディレクトリ、空のディレクトリ引数、重複指定、
-ファイルシステムのルートは拒否されます。
+このコマンドはデスクトップインストーラーをダウンロードして開きます。
 
-macOSでは、プロジェクトのBeta用Tapも利用できます。
+使用中のnpmミラーにこのパッケージがない場合は、公式npmレジストリを明示します。
+
+```bash
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.0
+```
+
+#### Homebrew（macOS）
+
+プロジェクト独自のTapから正式版Caskをインストールまたはアップグレードします。
 
 ```bash
 brew tap estelwalks/aitracker
-brew install --cask estelwalks/aitracker/aitracker-beta
+brew install --cask estelwalks/aitracker/aitracker
+brew upgrade --cask estelwalks/aitracker/aitracker
 ```
 
-署名済みの安定版と公式Homebrew Caskが準備できるまで、安定版用のコマンドは利用可能
-とは案内しません。
+#### WinGet（Windows）
+
+Microsoft Community Repositoryから正式版をインストールまたはアップグレードします。
+
+```powershell
+winget install --id estelwalks.AITracker -e
+winget upgrade --id estelwalks.AITracker -e
+```
 
 ### ビルドとテスト
 
