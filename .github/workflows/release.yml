@@ -106,7 +106,7 @@ jobs:
         run: npm run verify:release-contract -- --tag "$env:GITHUB_REF_NAME" --channel "$env:RELEASE_CHANNEL" --release-dir release --platform "$env:RELEASE_PLATFORM"
 
       - name: Upload installer for release assembly
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_glob }}
