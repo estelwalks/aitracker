@@ -93,7 +93,7 @@ export const sources = {
     current: "現在のディレクトリ",
     none: "未設定: 既定の場所を使用",
     manual: "パスを入力",
-    placeholder: "例: ~/.hermes または /Users/name/.hermes",
+    placeholder: "例: ~/.hermes または絶対パス",
     manualHint:
       "先頭の ~ はホームに展開されます。macOS のダイアログ内で ⌘⇧. を押すと隠しフォルダーが表示されます。",
     apply: "パスを適用",

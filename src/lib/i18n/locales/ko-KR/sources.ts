@@ -93,7 +93,7 @@ export const sources = {
     current: "현재 디렉터리",
     none: "미설정: 기본 위치 사용",
     manual: "경로 직접 입력",
-    placeholder: "예: ~/.hermes 또는 /Users/name/.hermes",
+    placeholder: "예: ~/.hermes 또는 절대 경로",
     manualHint:
       "앞의 ~ 는 홈 디렉터리로 확장됩니다. macOS 대화상자에서 ⌘⇧. 을 누르면 숨김 폴더가 표시됩니다.",
     apply: "경로 적용",
