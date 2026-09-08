@@ -16,24 +16,24 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
         "path": ".hermes"
       },
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
         "path": ".hermes/state.db"
+      },
+      {
+        "targets": ["windows10", "windows11"],
+        "base": "userProfile",
+        "path": "hermes"
+      },
+      {
+        "targets": ["windows10", "windows11"],
+        "base": "userProfile",
+        "path": "hermes/state.db"
       }
     ]
   },
@@ -45,16 +45,58 @@
           "path": ".hermes/skills"
         }
       ],
-      "markers": [
-        "SKILL.md",
-        "skill.md"
-      ],
+      "markers": ["SKILL.md", "skill.md"],
       "maxDepth": 3
     }
   },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "adapter",
+      "reader": "generic-sqlite",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".hermes",
+          "glob": "state.db",
+          "format": "sqlite"
+        },
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".hermes",
+          "glob": "profiles/*/state.db",
+          "format": "sqlite"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "userProfile",
+          "path": "hermes",
+          "glob": "state.db",
+          "format": "sqlite"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "userProfile",
+          "path": "hermes",
+          "glob": "profiles/*/state.db",
+          "format": "sqlite"
+        }
+      ],
+      "mapping": {
+        "timestamp": ["timestamp"],
+        "sessionId": ["sessionId"],
+        "model": ["model"],
+        "project": ["project"],
+        "inputTokens": ["inputTokens"],
+        "cachedInputTokens": ["cachedInputTokens"],
+        "cacheCreationInputTokens": ["cacheCreationInputTokens"],
+        "outputTokens": ["outputTokens"],
+        "reasoningOutputTokens": ["reasoningOutputTokens"],
+        "totalTokens": ["totalTokens"]
+      },
+      "query": "SELECT\n  id AS sessionId,\n  (COALESCE(ended_at, started_at) * 1000) AS timestamp,\n  COALESCE(NULLIF(model, ''), 'unknown') AS model,\n  'unknown' AS project,\n  CAST(COALESCE(input_tokens, 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(cache_read_tokens, 0) AS INTEGER) AS cachedInputTokens,\n  CAST(COALESCE(cache_write_tokens, 0) AS INTEGER) AS cacheCreationInputTokens,\n  CAST(COALESCE(output_tokens, 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(reasoning_tokens, 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(input_tokens, 0) + COALESCE(cache_read_tokens, 0) + COALESCE(cache_write_tokens, 0) + COALESCE(output_tokens, 0) + COALESCE(reasoning_tokens, 0) AS INTEGER) AS totalTokens\nFROM sessions\nWHERE input_tokens > 0 OR cache_read_tokens > 0 OR cache_write_tokens > 0 OR output_tokens > 0 OR reasoning_tokens > 0",
+      "maxFileSizeBytes": 536870912
     },
     "skills": "read-write",
     "agents": "unsupported",

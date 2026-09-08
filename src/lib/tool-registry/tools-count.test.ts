@@ -93,6 +93,10 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "antigravity",
     "workbuddy",
     "dsh",
+    // Deliberate post-baseline addition: pi and oh-my-pi (same harness) gained
+    // native readers over their ~/.pi and ~/.omp session logs.
+    "pi",
+    "omp",
   ]);
   const BASELINE_USAGE_ADAPTER = new Set([
     "cursor",
@@ -107,6 +111,9 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "proma",
     "reasonix",
     "cherrystudio",
+    // Issue #31 companion: Hermes Agent gained a generic-sqlite usage adapter
+    // (sessions in state.db; default DB plus profiles/<name>/state.db).
+    "hermes",
   ]);
   const BASELINE_SESSIONS_RESUME = new Set([
     "claude-code",
@@ -131,13 +138,13 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
         : "unsupported";
     assert.equal(def.capabilities.usage.mode, expectedUsage);
     // agents/security unsupported for every tool; sessions include the
-    // read-only AiPy source in addition to the four resumable tools.
+    // read-only AiPy and pi sources in addition to the four resumable tools.
     assert.equal(def.capabilities.agents.mode, "unsupported");
     assert.equal(
       def.capabilities.sessions.mode,
       BASELINE_SESSIONS_RESUME.has(def.id)
         ? "resume"
-        : def.id === "aipy"
+        : def.id === "aipy" || def.id === "pi" || def.id === "omp"
           ? "read"
           : "unsupported",
     );

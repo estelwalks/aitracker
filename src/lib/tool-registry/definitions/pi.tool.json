@@ -11,7 +11,7 @@
   "platforms": {
     "macos": "supported",
     "windows": "supported",
-    "linux": "planned"
+    "linux": "supported"
   },
   "detection": {
     "locations": [
@@ -37,19 +37,47 @@
       }
     ]
   },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "home",
+        "path": ".pi"
+      }
+    ]
+  },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "native",
+      "reader": "pi-session-v1",
+      "paths": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".pi/agent/sessions",
+          "glob": "**/*.jsonl",
+          "format": "jsonl"
+        }
+      ],
+      "maxFileSizeBytes": 67108864
     },
     "skills": "unsupported",
     "agents": "unsupported",
     "sessions": {
-      "mode": "unsupported"
+      "mode": "read",
+      "reader": "pi-session-v1"
     },
     "market": "unsupported",
     "security": "unsupported"
   },
   "modelObservation": {
-    "modelField": "model"
+    "modelField": "model",
+    "tokenSemantics": {
+      "reasoningIncludedInOutput": false
+    }
   }
 }

@@ -791,6 +791,22 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".hermes/state.db"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "userProfile",
+          "path": "hermes"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "userProfile",
+          "path": "hermes/state.db"
         }
       ]
     },
@@ -811,7 +827,88 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".hermes",
+            "glob": "state.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".hermes",
+            "glob": "profiles/*/state.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "userProfile",
+            "path": "hermes",
+            "glob": "state.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "userProfile",
+            "path": "hermes",
+            "glob": "profiles/*/state.db",
+            "format": "sqlite"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "project"
+          ],
+          "inputTokens": [
+            "inputTokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ],
+          "totalTokens": [
+            "totalTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  id AS sessionId,\n  (COALESCE(ended_at, started_at) * 1000) AS timestamp,\n  COALESCE(NULLIF(model, ''), 'unknown') AS model,\n  'unknown' AS project,\n  CAST(COALESCE(input_tokens, 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(cache_read_tokens, 0) AS INTEGER) AS cachedInputTokens,\n  CAST(COALESCE(cache_write_tokens, 0) AS INTEGER) AS cacheCreationInputTokens,\n  CAST(COALESCE(output_tokens, 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(reasoning_tokens, 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(input_tokens, 0) + COALESCE(cache_read_tokens, 0) + COALESCE(cache_write_tokens, 0) + COALESCE(output_tokens, 0) + COALESCE(reasoning_tokens, 0) AS INTEGER) AS totalTokens\nFROM sessions\nWHERE input_tokens > 0 OR cache_read_tokens > 0 OR cache_write_tokens > 0 OR output_tokens > 0 OR reasoning_tokens > 0"
       },
       "skills": "read-write",
       "agents": "unsupported",
@@ -1083,20 +1180,64 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
         }
       ]
     },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "home",
+          "path": ".omp"
+        },
+        {
+          "base": "home",
+          "path": ".oh-my-pi"
+        }
+      ]
+    },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "omp-session-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".omp/agent/sessions",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".oh-my-pi/agent/sessions",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "unsupported",
       "agents": "unsupported",
       "sessions": {
-        "mode": "unsupported"
+        "mode": "read",
+        "reader": "omp-session-v1"
       },
       "market": "unsupported",
       "security": "unsupported"
     },
     "modelObservation": {
-      "modelField": "model"
+      "modelField": "model",
+      "tokenSemantics": {
+        "reasoningIncludedInOutput": false
+      }
     }
   },
   {
@@ -1627,7 +1768,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -1653,20 +1794,48 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
         }
       ]
     },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "home",
+          "path": ".pi"
+        }
+      ]
+    },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "pi-session-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".pi/agent/sessions",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "unsupported",
       "agents": "unsupported",
       "sessions": {
-        "mode": "unsupported"
+        "mode": "read",
+        "reader": "pi-session-v1"
       },
       "market": "unsupported",
       "security": "unsupported"
     },
     "modelObservation": {
-      "modelField": "model"
+      "modelField": "model",
+      "tokenSemantics": {
+        "reasoningIncludedInOutput": false
+      }
     }
   },
   {
@@ -3288,4 +3457,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "1875799686af094d";
+export const TOOL_REGISTRY_VERSION: string = "bcbee2b9f33f3202";

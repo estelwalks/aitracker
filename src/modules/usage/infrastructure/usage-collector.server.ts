@@ -161,6 +161,9 @@ export function createUsageCollector(
         ...(scanInput?.wslTopology
           ? { wslTopology: scanInput.wslTopology }
           : {}),
+        ...(scanInput?.toolDataRoots
+          ? { toolDataRoots: scanInput.toolDataRoots }
+          : {}),
         ...(request.budget?.maxFilesPerSource == null
           ? {}
           : { maxFilesPerSource: request.budget.maxFilesPerSource }),

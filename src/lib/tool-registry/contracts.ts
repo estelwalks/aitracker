@@ -74,6 +74,8 @@ export type UsageReaderKey =
   | "openclaw-session-v1"
   | "antigravity-transcript-v1"
   | "dsh-session-v1"
+  | "pi-session-v1"
+  | "omp-session-v1"
   | (string & {});
 
 export type SessionReaderKey =
@@ -82,6 +84,8 @@ export type SessionReaderKey =
   | "grok-session-v1"
   | "dsh-session-v1"
   | "aipy-session-v1"
+  | "pi-session-v1"
+  | "omp-session-v1"
   | (string & {});
 
 export interface UsageCapability {

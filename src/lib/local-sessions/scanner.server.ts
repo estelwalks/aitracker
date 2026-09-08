@@ -2264,6 +2264,218 @@ async function scanAipySessions(
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Pi (earendil-works/pi coding agent) — ~/.pi/agent/sessions/<--cwd-->/*.jsonl
+//
+// One plaintext JSONL file per session. First line is a v4 `{kind:"header",
+// id, cwd, createdAt, ...}` or legacy v3 `{type:"session", version:3, ...}`
+// storage header; assistant messages append metadata-only usage envelopes
+// (`{type:"message", id, message:{role, model, timestamp, usage:{...}}}`).
+// Pi has no explicit resume CLI surface here, so sessions are read-only
+// (resumeSupported=false, same as AiPy). Conversation text is only read
+// transiently for a privacy-safe fallback title.
+// ---------------------------------------------------------------------------
+
+/**
+ * Main-agent session logs only: `~/.pi/agent/sessions/<--cwd-->/*.jsonl`.
+ * oh-my-pi nests subagent/advisor transcripts BELOW the cwd level (a session
+ * directory instead of a file) — those are usage traffic, not separate
+ * sessions in the history list, so deeper levels are intentionally not
+ * traversed here.
+ */
+async function collectPiLikeSessionFiles(
+  sessionsRoot: string,
+  signal?: AbortSignal,
+): Promise<FileCandidate[]> {
+  const files: FileCandidate[] = [];
+  if (!(await directoryAvailable(sessionsRoot))) return files;
+  let discoveredEntries = 0;
+  try {
+    const topLevel = await opendir(sessionsRoot);
+    for await (const cwdEntry of topLevel) {
+      signal?.throwIfAborted();
+      discoveredEntries += 1;
+      if (discoveredEntries >= MAX_DIRECTORY_ENTRIES) break;
+      if (!cwdEntry.isDirectory()) continue;
+      const cwdPath = join(sessionsRoot, cwdEntry.name);
+      let directory;
+      try {
+        directory = await opendir(cwdPath);
+      } catch {
+        continue;
+      }
+      for await (const entry of directory) {
+        signal?.throwIfAborted();
+        discoveredEntries += 1;
+        if (discoveredEntries >= MAX_DIRECTORY_ENTRIES) break;
+        if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+        files.push({ path: join(cwdPath, entry.name) });
+        if (files.length >= MAX_FILES_PER_SOURCE) return files;
+      }
+    }
+  } catch {
+    // Ignore unreadable roots.
+  }
+  return files;
+}
+
+/** Session id from a pi file name `<createdAt>_<encodeURIComponent(id)>.jsonl`. */
+function piSessionIdFromFileName(fileName: string): string | undefined {
+  const base = fileName.endsWith(".jsonl")
+    ? fileName.slice(0, -".jsonl".length)
+    : fileName;
+  const separator = base.indexOf("_");
+  const encoded = separator >= 0 ? base.slice(separator + 1) : base;
+  if (encoded.length === 0) return undefined;
+  try {
+    const decoded = decodeURIComponent(encoded);
+    return decoded.length > 0 ? decoded : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function scanPiLikeSessions(
+  source: "pi" | "omp",
+  piDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  const sessionsRoot = join(piDirectory, "agent", "sessions");
+  const files = await collectPiLikeSessionFiles(sessionsRoot, signal);
+  const fragments = new Map<string, SessionFragment>();
+
+  for (const file of files) {
+    signal?.throwIfAborted();
+    let size = -1;
+    try {
+      const info = await stat(file.path);
+      size = info.size;
+    } catch {
+      continue;
+    }
+    if (size < 0 || size > MAX_FILE_BYTES) continue;
+    let content: string;
+    try {
+      content = await readFile(file.path, "utf8");
+    } catch {
+      continue;
+    }
+    let sessionId: string | undefined;
+    let projectRef: string | null = null;
+    let headerSeen = false;
+    let fallbackTitle: string | undefined;
+    const userMessageIds = new Set<string>();
+    const timestamps: RecordTimestamp[] = [];
+    const totals = emptyTokenCounts();
+    let userTurns = 0;
+    let assistantMessages = 0;
+    let lastModel: string | null = null;
+    const lines = content.split("\n");
+    const tornTail = !content.endsWith("\n");
+    for (let index = 0; index < lines.length; index += 1) {
+      signal?.throwIfAborted();
+      const line = lines[index] ?? "";
+      if (line.trim().length === 0) continue;
+      let record: JsonObject;
+      try {
+        record = asObject(JSON.parse(line)) ?? {};
+      } catch {
+        // Tolerate the trailing partial line of an in-flight writer.
+        if (!(tornTail && index === lines.length - 1)) continue;
+        continue;
+      }
+      const kind = stringValue(record.kind);
+      const type = stringValue(record.type);
+      if ((kind === "header" || type === "session") && !headerSeen) {
+        headerSeen = true;
+        const headerId = stringValue(record.id);
+        if (headerId != null) sessionId = headerId;
+        const headerCwd = stringValue(record.cwd);
+        if (headerCwd != null) projectRef = headerCwd;
+        const createdAt = parseTimestampValue(
+          kind === "header" ? record.createdAt : record.timestamp,
+        );
+        if (createdAt != null) timestamps.push(createdAt);
+        continue;
+      }
+      if (type !== "message") continue;
+      const message = asObject(record.message);
+      if (message == null) continue;
+      const role = stringValue(message.role);
+      const messageId = stringValue(record.id) ?? stringValue(message.id);
+      const messageTime = parseTimestampValue(
+        message.timestamp ?? record.timestamp,
+      );
+      if (messageTime != null) timestamps.push(messageTime);
+      const contentValue = message.content;
+      if (role === "user") {
+        if (messageId != null) {
+          if (userMessageIds.has(messageId)) continue;
+          userMessageIds.add(messageId);
+        }
+        userTurns += 1;
+        if (fallbackTitle === undefined && contentValue != null) {
+          fallbackTitle = safeFallbackTitle(contentValue);
+        }
+        continue;
+      }
+      if (role !== "assistant") continue;
+      assistantMessages += 1;
+      const model = stringValue(message.model);
+      if (model != null) lastModel = model;
+      const usage = asObject(message.usage);
+      if (usage == null) continue;
+      const inputTokens = tokenValue(usage.input ?? usage.inputTokens);
+      const cachedInputTokens = tokenValue(usage.cacheRead);
+      const cacheCreationInputTokens = tokenValue(usage.cacheWrite);
+      const outputTokens = tokenValue(usage.output ?? usage.outputTokens);
+      const reasoningOutputTokens = tokenValue(
+        usage.reasoningTokens ?? usage.reasoning,
+      );
+      const declaredTotal = tokenValue(usage.totalTokens);
+      const totalTokens =
+        declaredTotal > 0
+          ? declaredTotal
+          : inputTokens +
+            cachedInputTokens +
+            cacheCreationInputTokens +
+            outputTokens +
+            reasoningOutputTokens;
+      if (totalTokens === 0) continue;
+      addTokenCounts(totals, {
+        inputTokens,
+        cachedInputTokens,
+        cacheCreationInputTokens,
+        outputTokens,
+        reasoningOutputTokens,
+        totalTokens,
+      });
+    }
+    if (!headerSeen) continue;
+    const resolvedId =
+      sessionId ?? piSessionIdFromFileName(basename(file.path));
+    if (resolvedId === undefined || resolvedId === "") continue;
+    const fragment =
+      fragments.get(resolvedId) ?? createEmptyFragment(source, resolvedId);
+    if (fragment.projectRef == null && projectRef != null) {
+      fragment.projectRef = projectRef;
+    }
+    if (fragment.model == null && lastModel != null) fragment.model = lastModel;
+    if (fragment.fallbackTitle === "" && fallbackTitle != null) {
+      fragment.fallbackTitle = fallbackTitle;
+    }
+    fragment.timestamps.push(...timestamps);
+    addTokenCounts(fragment.totals, totals);
+    fragment.turns += userTurns > 0 ? userTurns : assistantMessages;
+    fragment.resumeSupported = false;
+    fragments.set(resolvedId, fragment);
+  }
+
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
+}
+
 // P1-3: controlled SessionReader registration. The scan implementations stay
 // in this module; the factory (tool-registry/readers/session-readers.ts) binds
 // the registry's `SessionReaderKey` to them so config and code cannot drift.
@@ -2295,6 +2507,30 @@ registerSessionReader({
   key: "aipy-session-v1",
   scan: scanAipySessions,
   defaultRoots: [],
+});
+function scanPiSessions(
+  piDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  return scanPiLikeSessions("pi", piDirectory, signal);
+}
+
+function scanOmpSessions(
+  piDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  return scanPiLikeSessions("omp", piDirectory, signal);
+}
+
+registerSessionReader({
+  key: "pi-session-v1",
+  scan: scanPiSessions,
+  defaultRoots: [".pi"],
+});
+registerSessionReader({
+  key: "omp-session-v1",
+  scan: scanOmpSessions,
+  defaultRoots: [".omp", ".oh-my-pi"],
 });
 /**
  * Scan every registry-declared session tool and return a merged, deduplicated,

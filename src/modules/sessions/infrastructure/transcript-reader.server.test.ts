@@ -9,7 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { NodeSqliteDatabase } from "../../../platform/database/infrastructure/node-sqlite-database.server.ts";
@@ -557,5 +557,140 @@ test("reading a transcript produces zero disk side effects", async () => {
 
     assert.ok(transcript.messages.length > 0);
     assert.deepEqual(after, before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pi (earendil-works/pi coding agent) — ~/.pi/agent/sessions/<--cwd-->/*.jsonl
+// ---------------------------------------------------------------------------
+
+const PI_TRANSCRIPT_SESSION_ID = "cccccccc-dddd-eeee-ffff-999999999999";
+
+function piTranscriptFile(
+  home: string,
+  sessionId: string,
+  fileNameId: string,
+): string {
+  const dir = join(home, ".pi", "agent", "sessions", "--Users-demo-proj--");
+  return join(
+    dir,
+    `${new Date("2026-08-03T09:00:00.000Z").toISOString().replace(/[:.]/g, "-")}_${encodeURIComponent(fileNameId)}.jsonl`,
+  );
+}
+
+test("Pi: extracts user/assistant text from v4 session logs", async () => {
+  await withTempHome(async (home) => {
+    const header = {
+      v: 4,
+      kind: "header",
+      id: PI_TRANSCRIPT_SESSION_ID,
+      storageVersion: 1,
+      createdAt: Date.parse("2026-08-03T09:00:00.000Z"),
+      cwd: join(home, "demo-proj"),
+    };
+    const lines = [
+      header,
+      {
+        type: "message",
+        id: "user-1",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Fix the bug" }],
+          timestamp: Date.parse("2026-08-03T09:00:01.000Z"),
+        },
+      },
+      {
+        type: "message",
+        id: "asst-1",
+        message: {
+          role: "assistant",
+          model: "deepseek-v4-pro",
+          content: [{ type: "text", text: "Looking into it" }],
+          timestamp: Date.parse("2026-08-03T09:00:02.000Z"),
+        },
+      },
+      // Duplicate write for the same message id — last write wins.
+      {
+        type: "message",
+        id: "asst-1",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Fixed now" }],
+          timestamp: Date.parse("2026-08-03T09:00:03.000Z"),
+        },
+      },
+      {
+        type: "message",
+        id: "tool-1",
+        message: {
+          role: "toolResult",
+          content: [{ type: "text", text: "ignored" }],
+        },
+      },
+    ];
+    const dir = dirname(piTranscriptFile(home, PI_TRANSCRIPT_SESSION_ID, "x"));
+    await mkdir(dir, { recursive: true });
+    // File name carries the encoded id (matching path).
+    await writeFile(
+      piTranscriptFile(
+        home,
+        PI_TRANSCRIPT_SESSION_ID,
+        PI_TRANSCRIPT_SESSION_ID,
+      ),
+      `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`,
+    );
+
+    const transcript = await loadSessionTranscript(
+      { source: "pi", sessionId: PI_TRANSCRIPT_SESSION_ID },
+      { homeDirectory: home },
+    );
+    assert.equal(transcript.sessionId, PI_TRANSCRIPT_SESSION_ID);
+    assert.equal(transcript.source, "pi");
+    assert.deepEqual(
+      transcript.messages.map((message) => message.role),
+      ["user", "assistant"],
+    );
+    assert.equal(transcript.messages[0]?.text, "Fix the bug");
+    assert.equal(transcript.messages[1]?.text, "Fixed now");
+  });
+});
+
+test("Pi: transcript lookup falls back to the storage header id", async () => {
+  await withTempHome(async (home) => {
+    const header = {
+      v: 4,
+      kind: "header",
+      id: PI_TRANSCRIPT_SESSION_ID,
+      storageVersion: 1,
+      createdAt: Date.parse("2026-08-03T09:00:00.000Z"),
+      cwd: join(home, "demo-proj"),
+    };
+    const lines = [
+      header,
+      {
+        type: "message",
+        id: "user-1",
+        message: {
+          role: "user",
+          content: "Legacy dir question",
+          timestamp: Date.parse("2026-08-03T09:00:01.000Z"),
+        },
+      },
+    ];
+    const dir = dirname(piTranscriptFile(home, PI_TRANSCRIPT_SESSION_ID, "x"));
+    await mkdir(dir, { recursive: true });
+    // File name carries a DIFFERENT id than the header.
+    await writeFile(
+      piTranscriptFile(home, PI_TRANSCRIPT_SESSION_ID, "other-file-id"),
+      `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`,
+    );
+
+    const transcript = await loadSessionTranscript(
+      { source: "pi", sessionId: PI_TRANSCRIPT_SESSION_ID },
+      { homeDirectory: home },
+    );
+    assert.equal(transcript.messages.length, 1);
+    assert.equal(transcript.messages[0]?.role, "user");
+    assert.equal(transcript.messages[0]?.text, "Legacy dir question");
   });
 });

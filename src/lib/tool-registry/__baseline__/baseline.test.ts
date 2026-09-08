@@ -57,9 +57,21 @@ test("baseline usage parsing matches usageLogParsingFor for every tool", () => {
       tool.id === "workbuddy" ||
       tool.id === "gemini-cli" ||
       tool.id === "grok" ||
-      tool.id === "openclaw"
+      tool.id === "openclaw" ||
+      // Expected diff (pi/omp usage support): the frozen baseline predates
+      // their log parsing; the registry now declares native readers over the
+      // pi (~/.pi) and oh-my-pi (~/.omp) session usage envelopes.
+      tool.id === "pi" ||
+      tool.id === "omp"
     ) {
       assert.equal(usageLogParsingFor(tool.id), "native");
+      continue;
+    }
+    if (tool.id === "hermes") {
+      // Expected diff (Hermes usage support, milestone v1.0.1): the frozen
+      // baseline predates Hermes log parsing; the registry now declares a
+      // generic-sqlite adapter over state.db sessions (default + profiles).
+      assert.equal(usageLogParsingFor(tool.id), "adapter");
       continue;
     }
     assert.equal(

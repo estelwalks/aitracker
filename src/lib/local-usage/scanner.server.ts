@@ -10,6 +10,7 @@ import { ENV } from "../app-config";
 import {
   getDefaultRegistry,
   getScannerPolicy,
+  getTool,
   type PlatformOs,
 } from "../tool-registry/registry.ts";
 import { computeToolRegistryVersion } from "../tool-registry/fingerprint.server.ts";
@@ -36,6 +37,11 @@ import {
   GENERIC_BUILTIN_USAGE_ADAPTERS,
 } from "./adapters/catalog.ts";
 import { osFromProcess } from "../tools/detection.server.ts";
+import {
+  isHomeFlattenedRoot,
+  rebaseRoot,
+  uniformDataSegment,
+} from "../tool-data-root/placement.server.ts";
 import {
   eventFromMappedRecord,
   fieldMismatchDiagnostic,
@@ -123,6 +129,12 @@ export interface LocalUsageScanOptions {
     readonly platform: NodeJS.Platform;
     readonly signal?: AbortSignal;
   }) => Promise<import("../wsl-topology-types.ts").WslTopologyInput>;
+  /**
+   * Per-tool user data-directory overrides (toolId -> absolute directory).
+   * When present for a tool, its HOME-anchored usage roots are rebased under
+   * that directory and non-HOME platform arms (AppData etc.) are skipped.
+   */
+  toolDataRoots?: ReadonlyMap<string, string>;
   /** Test seam for Windows-only topology behavior. */
   platform?: NodeJS.Platform;
   /** P5-T5-02: real cancellation; directory loops and file reads check it. */
@@ -761,9 +773,66 @@ function globExpression(glob: string): RegExp {
   return new RegExp(`${expression}$`);
 }
 
-async function collectAdapterFiles(
+interface UsagePlacement {
+  /** Absolute directory to scan for this path config. */
+  root: string;
+  pathConfig: UsageAdapterPath;
+}
+
+type UsageOverrideMap = ReadonlyMap<string, string>;
+
+export interface ToolUsageOverride {
+  segment: string;
+  dir: string;
+}
+
+/**
+ * Resolve the override shape for one usage source: the override directory
+ * plus the uniform HOME-anchored data segment of its registry usage roots.
+ * Tools without a uniform segment (or without any usage roots) are not
+ * rebasable and simply keep their default placement.
+ */
+export function usageOverrideFor(
+  source: string,
+  overrides: UsageOverrideMap | undefined,
+): ToolUsageOverride | null {
+  const dir = overrides?.get(source)?.trim();
+  if (!dir) return null;
+  const def = getTool(source);
+  const roots = (def?.capabilities.usage.paths ?? []).map((path) => path.root);
+  const segment = uniformDataSegment(roots.filter(isHomeFlattenedRoot));
+  return segment == null ? null : { segment, dir };
+}
+
+/**
+ * Turn per-path usage configs into absolute scan placements. Without an
+ * override this is the historic join(home, root); with an override the
+ * HOME-anchored roots are rebased under the override directory and every
+ * non-HOME platform arm is skipped.
+ */
+export function rebaseUsagePathConfigs(
+  pathConfigs: readonly UsageAdapterPath[],
   homeDirectory: string,
-  pathConfigs: UsageAdapterPath[],
+  override: ToolUsageOverride | null,
+): UsagePlacement[] {
+  if (override == null) {
+    return pathConfigs.map((pathConfig) => ({
+      root: join(homeDirectory, pathConfig.root),
+      pathConfig,
+    }));
+  }
+  const placements: UsagePlacement[] = [];
+  for (const pathConfig of pathConfigs) {
+    if (!isHomeFlattenedRoot(pathConfig.root)) continue;
+    const rebased = rebaseRoot(pathConfig.root, override.segment, override.dir);
+    if (rebased == null) continue;
+    placements.push({ root: rebased, pathConfig });
+  }
+  return placements;
+}
+
+async function collectAdapterFiles(
+  placements: readonly UsagePlacement[],
   cutoffTime: number,
   maxFiles: number,
   signal?: AbortSignal,
@@ -778,9 +847,9 @@ async function collectAdapterFiles(
   let discoveredEntries = 0;
   let detected = false;
 
-  for (const pathConfig of pathConfigs) {
+  for (const placement of placements) {
     signal?.throwIfAborted();
-    const root = join(homeDirectory, pathConfig.root);
+    const root = placement.root;
     let rootStat;
     try {
       rootStat = await stat(root);
@@ -790,7 +859,7 @@ async function collectAdapterFiles(
     if (!rootStat.isDirectory()) continue;
     detected = true;
 
-    const matcher = globExpression(pathConfig.glob);
+    const matcher = globExpression(placement.pathConfig.glob);
     const pendingDirectories = [root];
     while (
       pendingDirectories.length > 0 &&
@@ -825,7 +894,7 @@ async function collectAdapterFiles(
               path: entryPath,
               modifiedAt: fileStat.mtimeMs,
               size: fileStat.size,
-              format: pathConfig.format,
+              format: placement.pathConfig.format,
             });
           }
         } catch {
@@ -2168,6 +2237,183 @@ async function parseAntigravityUsageFile(
  * system prompts and tool payloads are read transiently and never cached.
  */
 // ---------------------------------------------------------------------------
+// Pi (earendil-works/pi coding agent) native reader.
+//
+// Pi persists one plaintext JSONL file per session under
+// ~/.pi/agent/sessions/<--cwd-->/, named `<createdAt>_<encodeURIComponent(id)>.jsonl`.
+// The first line is a storage header — v4 `{kind:"header", id, cwd,
+// createdAt, ...}` or legacy v3 `{type:"session", version:3, id, timestamp,
+// cwd}` — and assistant turns append metadata-only usage envelopes:
+// `{type:"message", id, message:{role:"assistant", model, provider,
+// timestamp, usage:{input, output, cacheRead, cacheWrite, reasoningTokens?,
+// reasoning?, totalTokens?}}}`. Pi routes each message to its own provider,
+// so model comes from the message, never from the file. Only stats are
+// extracted; message content is read transiently and never retained.
+// ---------------------------------------------------------------------------
+
+/** Pi-style timestamp: message millis or an ISO string on the record. */
+function piEventTimestampMs(
+  record: JsonObject,
+  message: JsonObject,
+): number | null {
+  const messageTime = message.timestamp;
+  if (
+    typeof messageTime === "number" &&
+    Number.isFinite(messageTime) &&
+    messageTime > 0
+  ) {
+    return messageTime;
+  }
+  for (const candidate of [messageTime, record.timestamp]) {
+    if (typeof candidate === "string" && candidate.length > 0) {
+      const parsed = Date.parse(candidate);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse one pi session log into usage events. Lines are plaintext JSONL; a
+ * trailing partially-written line (writer mid-append) is tolerated and not
+ * counted as malformed.
+ */
+async function parsePiLikeUsageFile(
+  source: "pi" | "omp",
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  fallbackSessionId: string,
+  signal?: AbortSignal,
+): Promise<{
+  identifiedEvents: CachedIdentifiedEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  signal?.throwIfAborted();
+  const identifiedEvents: CachedIdentifiedEvent[] = [];
+  let content: string;
+  try {
+    content = await readFile(file.path, "utf8");
+  } catch {
+    return {
+      identifiedEvents,
+      malformedLines: 1,
+      diagnostics: [
+        {
+          source,
+          code: "malformed-json",
+          path: file.path,
+          count: 1,
+          message: `${source === "pi" ? "pi" : "oh-my-pi"} 会话日志无法读取，已跳过。`,
+        },
+      ],
+    };
+  }
+  signal?.throwIfAborted();
+  let sessionId = fallbackSessionId;
+  let project = "unknown";
+  let malformedLines = 0;
+  const lines = content.split("\n");
+  const finalLineUnterminated = !content.endsWith("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    signal?.throwIfAborted();
+    const line = lines[index] ?? "";
+    if (line.trim().length === 0) continue;
+    let record: JsonObject;
+    try {
+      record = asObject(JSON.parse(line) as unknown) ?? {};
+    } catch {
+      // Tolerate a torn tail from an in-flight writer; other malformed lines
+      // are diagnostics only.
+      if (!(finalLineUnterminated && index === lines.length - 1)) {
+        malformedLines += 1;
+      }
+      continue;
+    }
+    const recordKind = stringValue(record.kind);
+    const recordType = stringValue(record.type);
+    // Storage header (v4 or legacy v3): owns session id + cwd.
+    if (recordKind === "header" || recordType === "session") {
+      const headerId = stringValue(record.id);
+      if (headerId != null) {
+        sessionId = sessionIdFromStructuredValue(source, headerId) ?? sessionId;
+      }
+      const cwd = stringValue(record.cwd);
+      if (cwd != null) project = cwd;
+      continue;
+    }
+    if (recordType !== "message") continue;
+    const message = asObject(record.message);
+    if (message == null) continue;
+    const role = stringValue(message.role);
+    if (role !== "assistant") continue;
+    const usage = asObject(message.usage);
+    if (usage == null) continue;
+    const inputTokens = tokenValue(usage.input ?? usage.inputTokens);
+    const cachedInputTokens = tokenValue(usage.cacheRead);
+    const cacheCreationInputTokens = tokenValue(usage.cacheWrite);
+    const outputTokens = tokenValue(usage.output ?? usage.outputTokens);
+    const reasoningOutputTokens = tokenValue(
+      usage.reasoningTokens ?? usage.reasoning,
+    );
+    const declaredTotal = tokenValue(usage.totalTokens);
+    const totalTokens =
+      declaredTotal > 0
+        ? declaredTotal
+        : inputTokens +
+          cachedInputTokens +
+          cacheCreationInputTokens +
+          outputTokens +
+          reasoningOutputTokens;
+    const entryId = stringValue(record.id);
+    if (entryId == null) continue;
+    const timestampMs = piEventTimestampMs(record, message);
+    if (timestampMs == null || totalTokens === 0) continue;
+    const model = stringValue(message.model) ?? "unknown";
+    identifiedEvents.push({
+      identity: privacyFingerprint(source, [sessionId, entryId]),
+      event: {
+        source,
+        timestamp: new Date(timestampMs).toISOString(),
+        sessionId,
+        model,
+        project,
+        inputTokens,
+        cachedInputTokens,
+        cacheCreationInputTokens,
+        outputTokens,
+        reasoningOutputTokens,
+        totalTokens,
+      },
+    });
+  }
+  return { identifiedEvents, malformedLines, diagnostics: [] };
+}
+
+async function parsePiUsageFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  fallbackSessionId: string,
+  signal?: AbortSignal,
+): Promise<{
+  identifiedEvents: CachedIdentifiedEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  return parsePiLikeUsageFile("pi", file, fallbackSessionId, signal);
+}
+
+async function parseOmpUsageFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  fallbackSessionId: string,
+  signal?: AbortSignal,
+): Promise<{
+  identifiedEvents: CachedIdentifiedEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  return parsePiLikeUsageFile("omp", file, fallbackSessionId, signal);
+}
+
+// ---------------------------------------------------------------------------
 // DSH (DeepSeek Harness) native reader — append-incremental.
 //
 // DSH session logs are concatenated-zstd JSONL containers with one tiny frame
@@ -2479,11 +2725,16 @@ async function scanStructuredAdapter(
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
   signal?: AbortSignal,
+  overrides?: UsageOverrideMap,
 ): Promise<SourceScanResult> {
   const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
-  const selected = await collectAdapterFiles(
-    homeDirectory,
+  const placements = rebaseUsagePathConfigs(
     pathConfigs,
+    homeDirectory,
+    usageOverrideFor(adapter.source, overrides),
+  );
+  const selected = await collectAdapterFiles(
+    placements,
     cutoffTime,
     maxFiles,
     signal,
@@ -2594,9 +2845,7 @@ async function scanStructuredAdapter(
       source: adapter.source,
       available: events.length > 0,
       detected: selected.detected,
-      paths: pathConfigs.map((pathConfig) =>
-        join(homeDirectory, pathConfig.root),
-      ),
+      paths: placements.map((placement) => placement.root),
       filesConsidered: selected.files.length,
       filesRead,
       filesReused,
@@ -2623,11 +2872,16 @@ async function scanDshUsageAdapter(
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
   signal?: AbortSignal,
+  overrides?: UsageOverrideMap,
 ): Promise<SourceScanResult> {
   const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
-  const selected = await collectAdapterFiles(
-    homeDirectory,
+  const placements = rebaseUsagePathConfigs(
     pathConfigs,
+    homeDirectory,
+    usageOverrideFor(adapter.source, overrides),
+  );
+  const selected = await collectAdapterFiles(
+    placements,
     cutoffTime,
     maxFiles,
     signal,
@@ -2729,9 +2983,7 @@ async function scanDshUsageAdapter(
       source: "dsh",
       available: events.length > 0,
       detected: selected.detected,
-      paths: pathConfigs.map((pathConfig) =>
-        join(homeDirectory, pathConfig.root),
-      ),
+      paths: placements.map((placement) => placement.root),
       filesConsidered: selected.files.length,
       filesRead,
       filesReused,
@@ -2931,6 +3183,7 @@ async function runBoundedGenericAdapters(
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
   signal?: AbortSignal,
+  overrides?: UsageOverrideMap,
 ): Promise<SourceScanResult[]> {
   const results: SourceScanResult[] = new Array(adapters.length);
   let cursor = 0;
@@ -2951,6 +3204,7 @@ async function runBoundedGenericAdapters(
           maxFiles,
           cachedFiles,
           signal,
+          overrides,
         ).catch((error) => sourceFailure(adapter.source, error));
       }
     },
@@ -2968,11 +3222,16 @@ async function scanGenericAdapter(
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
   signal?: AbortSignal,
+  overrides?: UsageOverrideMap,
 ): Promise<SourceScanResult> {
   const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
-  const selected = await collectAdapterFiles(
-    homeDirectory,
+  const placements = rebaseUsagePathConfigs(
     pathConfigs,
+    homeDirectory,
+    usageOverrideFor(adapter.source, overrides),
+  );
+  const selected = await collectAdapterFiles(
+    placements,
     cutoffTime,
     maxFiles,
     signal,
@@ -3054,9 +3313,7 @@ async function scanGenericAdapter(
       source: adapter.source,
       available: events.length > 0,
       detected: selected.detected,
-      paths: pathConfigs.map((pathConfig) =>
-        join(homeDirectory, pathConfig.root),
-      ),
+      paths: placements.map((placement) => placement.root),
       filesConsidered: selected.files.length,
       filesRead,
       filesReused,
@@ -3262,7 +3519,9 @@ export async function scanLocalUsage(
       | "grok-turn-v1"
       | "openclaw-session-v1"
       | "antigravity-transcript-v1"
-      | "dsh-session-v1",
+      | "dsh-session-v1"
+      | "pi-session-v1"
+      | "omp-session-v1",
     parser: StructuredParser,
     mergeMode: "unique" | "multiset",
   ) => {
@@ -3283,6 +3542,7 @@ export async function scanLocalUsage(
       maxFiles,
       cachedFiles,
       options.signal,
+      options.toolDataRoots,
     );
   };
   const [
@@ -3294,6 +3554,8 @@ export async function scanLocalUsage(
     openclaw,
     antigravity,
     dsh,
+    pi,
+    omp,
     ...genericResults
   ] = await Promise.all([
     scanClaude(
@@ -3338,6 +3600,12 @@ export async function scanLocalUsage(
       parseAntigravityUsageFile,
       "unique",
     ).catch((error) => sourceFailure("antigravity", error)),
+    structuredReader("pi-session-v1", parsePiUsageFile, "unique").catch(
+      (error) => sourceFailure("pi", error),
+    ),
+    structuredReader("omp-session-v1", parseOmpUsageFile, "unique").catch(
+      (error) => sourceFailure("omp", error),
+    ),
     scanDshUsageAdapter(
       BUILTIN_USAGE_ADAPTERS.find(
         (candidate) => candidate.reader === "dsh-session-v1",
@@ -3349,6 +3617,7 @@ export async function scanLocalUsage(
       maxFiles,
       cachedFiles,
       options.signal,
+      options.toolDataRoots,
     ).catch((error) => sourceFailure("dsh", error)),
     ...(await runBoundedGenericAdapters(
       genericAdapters,
@@ -3359,6 +3628,7 @@ export async function scanLocalUsage(
       maxFiles,
       cachedFiles,
       options.signal,
+      options.toolDataRoots,
     )),
   ]);
 
@@ -3372,6 +3642,8 @@ export async function scanLocalUsage(
     ...openclaw.cacheEntries,
     ...antigravity.cacheEntries,
     ...dsh.cacheEntries,
+    ...pi.cacheEntries,
+    ...omp.cacheEntries,
     ...genericResults.flatMap((result) => result.cacheEntries),
   ].sort((left, right) => left.path.localeCompare(right.path));
   const shouldWritePersistentIndex =
@@ -3385,6 +3657,8 @@ export async function scanLocalUsage(
       openclaw.summary.filesParsed > 0 ||
       antigravity.summary.filesParsed > 0 ||
       dsh.summary.filesParsed > 0 ||
+      pi.summary.filesParsed > 0 ||
+      omp.summary.filesParsed > 0 ||
       genericResults.some((result) => result.summary.filesParsed > 0) ||
       persistentIndex.files.length !== currentCacheEntries.length);
   if (shouldWritePersistentIndex) {
@@ -3400,6 +3674,8 @@ export async function scanLocalUsage(
     ...openclaw.events,
     ...antigravity.events,
     ...dsh.events,
+    ...pi.events,
+    ...omp.events,
     ...genericResults.flatMap((result) => result.events),
   ];
   const canonicalProjectPaths = new Map<string, Promise<string>>();
@@ -3427,6 +3703,8 @@ export async function scanLocalUsage(
     openclaw.summary,
     antigravity.summary,
     dsh.summary,
+    pi.summary,
+    omp.summary,
     ...genericResults.map((result) => result.summary),
   ]) {
     if (summary.events > 0 || !summaryBySource.has(summary.source)) {

@@ -255,13 +255,15 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
     weeklyReports: { count: null, available: false },
     monthlyReports: { count: null, available: false },
   });
+  // Hermes Agent gained a usage adapter (issue #31 companion work), so the
+  // supported count grows by one.
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport !== "unsupported").length,
-    20,
+    21,
   );
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport === "unsupported").length,
-    16,
+    15,
   );
 });
 

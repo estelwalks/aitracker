@@ -111,6 +111,8 @@ const READER_DEFAULT_ROOTS: Readonly<Record<string, readonly string[]>> = {
   "codex-session-v1": [".codex"],
   "grok-session-v1": [".grok"],
   "dsh-session-v1": [".dsh"],
+  "pi-session-v1": [".pi"],
+  "omp-session-v1": [".omp", ".oh-my-pi"],
 };
 
 function asObject(value: unknown): JsonObject | undefined {
@@ -962,6 +964,168 @@ async function readDshTranscript(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Pi (earendil-works/pi coding agent) — ~/.pi/agent/sessions/<--cwd-->/*.jsonl
+// ---------------------------------------------------------------------------
+
+/** First JSON record of a file (storage header), read without decoding more. */
+async function readPiLogHeaderId(
+  filePath: string,
+): Promise<string | undefined> {
+  const size = await readFileSize(filePath);
+  if (size < 0 || size > MAX_FILE_BYTES) return undefined;
+  const input = createReadStream(filePath, {
+    encoding: "utf8",
+    highWaterMark: 64 * 1024,
+  });
+  try {
+    const lines = createInterface({ input, crlfDelay: Infinity });
+    for await (const line of lines) {
+      if (line.trim().length === 0) continue;
+      try {
+        const record = asObject(JSON.parse(line)) ?? {};
+        const kind = stringValue(record.kind);
+        const type = stringValue(record.type);
+        if (kind === "header" || type === "session") {
+          const id = stringValue(record.id);
+          return id == null || id.length === 0 ? undefined : id;
+        }
+        return undefined;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  } finally {
+    input.destroy();
+  }
+}
+
+/** Session id encoded in a pi file name `<createdAt>_<id>.jsonl`. */
+function piLogFileNameId(fileName: string): string | undefined {
+  const base = fileName.endsWith(".jsonl")
+    ? fileName.slice(0, -".jsonl".length)
+    : fileName;
+  const separator = base.indexOf("_");
+  const encoded = separator >= 0 ? base.slice(separator + 1) : base;
+  if (encoded.length === 0) return undefined;
+  try {
+    const decoded = decodeURIComponent(encoded);
+    return decoded.length > 0 ? decoded : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Extract user/assistant conversation text from one pi session log. */
+async function readPiLogMessages(
+  filePath: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const size = await readFileSize(filePath);
+  if (size < 0 || size > MAX_FILE_BYTES) return;
+  let content: string;
+  try {
+    content = await readFile(filePath, "utf8");
+  } catch {
+    return;
+  }
+  const byId = new Map<string, CollectedMessage>();
+  let sequence = 0;
+  const pending: Array<{ id: string | undefined; entry: CollectedMessage }> =
+    [];
+  const lines = content.split("\n");
+  const tornTail = !content.endsWith("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (line.trim().length === 0) continue;
+    let record: JsonObject;
+    try {
+      record = asObject(JSON.parse(line)) ?? {};
+    } catch {
+      // Tolerate the trailing partial line of an in-flight writer.
+      continue;
+    }
+    if (stringValue(record.type) !== "message") continue;
+    const message = asObject(record.message);
+    if (message == null) continue;
+    const role = stringValue(message.role);
+    if (role !== "user" && role !== "assistant") continue;
+    const { text, thinking } = extractContent(message.content);
+    if (text.length === 0 && thinking.length === 0) continue;
+    const messageId = stringValue(record.id) ?? stringValue(message.id);
+    const ts = parseTimestampMs(
+      message.timestamp ?? record.timestamp ?? tornTail,
+    );
+    const entry: CollectedMessage = {
+      ts,
+      seq: sequence++,
+      message: {
+        role,
+        text,
+        ...(thinking.length > 0 ? { thinking } : {}),
+      },
+    };
+    if (messageId != null) {
+      // Pi may append multiple writes for one message id — keep the last.
+      pending.push({ id: messageId, entry });
+    } else {
+      pending.push({ id: undefined, entry });
+    }
+  }
+  for (const item of pending) {
+    if (item.id == null) continue;
+    byId.set(item.id, item.entry);
+  }
+  const ordered = [
+    ...[...byId.values()],
+    ...pending.filter((item) => item.id == null).map((item) => item.entry),
+  ];
+  ordered.sort((left, right) =>
+    left.ts === right.ts ? left.seq - right.seq : left.ts - right.ts,
+  );
+  for (const entry of ordered) {
+    pushMessage(
+      out,
+      entry.message.role,
+      entry.message.text,
+      entry.message.thinking,
+      entry.ts,
+      limits,
+    );
+  }
+}
+
+async function readPiTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const files = await collectJsonlFiles(
+    [join(root, "agent", "sessions")],
+    (_relativePath, name) => name.endsWith(".jsonl"),
+    limits.maxFiles,
+  );
+  const matched = files.filter(
+    (file) => piLogFileNameId(basename(file.path)) === sessionId,
+  );
+  if (matched.length === 0) {
+    for (const file of files) {
+      if (out.length >= limits.maxMessages) break;
+      const headerId = await readPiLogHeaderId(file.path);
+      if (headerId === sessionId) matched.push(file);
+    }
+  }
+  for (const file of matched) {
+    if (out.length >= limits.maxMessages) break;
+    await readPiLogMessages(file.path, out, limits);
+  }
+}
+
 /**
  * Load one session's transcript into memory (S-300). Returns an empty
  * transcript for unknown sources, unsafe ids, or missing logs — it never
@@ -1053,6 +1217,10 @@ async function readSourceTranscript(
       return readDshTranscript(root, sessionId, out, limits);
     case "aipy-session-v1":
       return readAipyTranscript(root, sessionId, out);
+    case "pi-session-v1":
+      return readPiTranscript(root, sessionId, out, limits);
+    case "omp-session-v1":
+      return readPiTranscript(root, sessionId, out, limits);
     default:
       // Unknown reader — no transcript extraction implemented for it yet.
       return;

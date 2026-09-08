@@ -99,6 +99,8 @@ export interface UsageCollectionRequest {
     readonly disablePersistentCache?: boolean;
     /** P3-T3-04: shared WSL topology injected by the refresh path. */
     readonly wslTopology?: import("../../lib/wsl-topology-types.ts").WslTopologyInput;
+    /** Per-tool user data-directory overrides (Sources page). */
+    readonly toolDataRoots?: ReadonlyMap<string, string>;
   };
 }
 

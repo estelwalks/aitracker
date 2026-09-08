@@ -1917,3 +1917,212 @@ test("AiPy: starts a session at its first USER message, not an earlier lifecycle
     assertPrivacyClean(session);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pi (earendil-works/pi coding agent) — ~/.pi/agent/sessions/<--cwd-->/*.jsonl
+// ---------------------------------------------------------------------------
+
+const PI_SESSION_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+const PI_TIME = new Date("2026-08-03T09:00:00.000Z").getTime();
+
+function piV4Header(cwd: string): string {
+  return JSON.stringify({
+    v: 4,
+    kind: "header",
+    id: PI_SESSION_ID,
+    storageVersion: 1,
+    createdAt: PI_TIME,
+    cwd,
+  });
+}
+
+function piV3Header(cwd: string): string {
+  return JSON.stringify({
+    type: "session",
+    version: 3,
+    id: PI_SESSION_ID,
+    timestamp: "2026-08-03T09:00:00.000Z",
+    cwd,
+  });
+}
+
+async function writePiSession(
+  home: string,
+  workspace: string,
+  header: string,
+  lines: string[],
+): Promise<string> {
+  const dir = join(home, ".pi", "agent", "sessions", `--Users-${workspace}--`);
+  await mkdir(dir, { recursive: true });
+  const file = join(
+    dir,
+    `${new Date(PI_TIME).toISOString().replace(/[:.]/g, "-")}_${encodeURIComponent(PI_SESSION_ID)}.jsonl`,
+  );
+  await writeFile(file, [header, ...lines].join("\n"));
+  return file;
+}
+
+test("Pi: v4 session logs become read-only session records with token totals", async () => {
+  await withTempHome(async (home) => {
+    const workspace = "pi-proj-a";
+    const cwd = join(home, workspace);
+    await writePiSession(home, workspace, piV4Header(cwd), [
+      JSON.stringify({
+        type: "message",
+        id: "user-1",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Fix login please" }],
+          timestamp: PI_TIME + 1000,
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        id: "asst-1",
+        message: {
+          role: "assistant",
+          model: "deepseek-v4-flash",
+          timestamp: PI_TIME + 2000,
+          content: [{ type: "text", text: "SECRET ANSWER" }],
+          usage: {
+            input: 100,
+            output: 20,
+            cacheRead: 50,
+            reasoningTokens: 5,
+          },
+        },
+      }),
+    ]);
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+    assert.equal(session.source, "pi");
+    assert.equal(session.sessionId, PI_SESSION_ID);
+    assert.equal(session.projectKey, workspace);
+    assert.equal(session.projectRef, `~/pi-proj-a`);
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.inputTokens, 100);
+    assert.equal(session.totals.cachedInputTokens, 50);
+    assert.equal(session.totals.outputTokens, 20);
+    assert.equal(session.totals.reasoningOutputTokens, 5);
+    assert.equal(session.totals.totalTokens, 175);
+    assert.equal(session.model, "deepseek-v4-flash");
+    assert.equal(session.title, "Fix login please");
+    assert.equal(session.startedAt, "2026-08-03T09:00:00.000Z");
+    // pi has no resume CLI surface here: sessions are read-only.
+    assert.equal(session.resumeSafe, false);
+    assert.equal(session.resumeCommand, null);
+    assert.equal(session.status, "available");
+    assertPrivacyClean(session);
+  });
+});
+
+test("Pi: legacy v3 session headers are recognized", async () => {
+  await withTempHome(async (home) => {
+    const workspace = "pi-proj-v3";
+    const cwd = join(home, workspace);
+    await writePiSession(home, workspace, piV3Header(cwd), [
+      JSON.stringify({
+        type: "message",
+        id: "user-1",
+        message: {
+          role: "user",
+          content: "Resume please",
+          timestamp: PI_TIME + 1000,
+        },
+      }),
+      JSON.stringify({
+        type: "message",
+        id: "asst-1",
+        message: {
+          role: "assistant",
+          model: "claude-3-7-sonnet",
+          timestamp: PI_TIME + 2000,
+          content: [],
+          usage: { input: 7, output: 2 },
+        },
+      }),
+    ]);
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+    assert.equal(session.source, "pi");
+    assert.equal(session.sessionId, PI_SESSION_ID);
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.totalTokens, 9);
+    assert.equal(session.model, "claude-3-7-sonnet");
+    assert.equal(session.title, "Resume please");
+    assert.equal(session.resumeSafe, false);
+    assertPrivacyClean(session);
+  });
+});
+
+test("Omp: main-agent sessions are listed under ~/.omp; nested subagents are not", async () => {
+  await withTempHome(async (home) => {
+    const cwd = join(home, "omp-proj");
+    const mainDir = join(home, ".omp", "agent", "sessions", "--omp-proj--");
+    await mkdir(mainDir, { recursive: true });
+    const mainFile = join(
+      mainDir,
+      `${new Date(PI_TIME).toISOString().replace(/[:.]/g, "-")}_${encodeURIComponent(PI_SESSION_ID)}.jsonl`,
+    );
+    await writeFile(
+      mainFile,
+      [
+        piV4Header(cwd),
+        JSON.stringify({
+          type: "message",
+          id: "user-1",
+          message: {
+            role: "user",
+            content: [{ type: "text", text: "Analyze this repo" }],
+            timestamp: PI_TIME + 1000,
+          },
+        }),
+        JSON.stringify({
+          type: "message",
+          id: "asst-1",
+          message: {
+            role: "assistant",
+            model: "deepseek-v4-pro",
+            timestamp: PI_TIME + 2000,
+            content: [],
+            usage: { input: 60, output: 12 },
+          },
+        }),
+      ].join("\n"),
+    );
+    // Nested subagent transcript below the cwd level must NOT become a session.
+    const subDir = join(mainDir, "task-1");
+    await mkdir(subDir, { recursive: true });
+    await writeFile(
+      join(subDir, "agent.jsonl"),
+      [
+        piV4Header(cwd),
+        JSON.stringify({
+          type: "message",
+          id: "sub-1",
+          message: {
+            role: "assistant",
+            timestamp: PI_TIME + 3000,
+            content: [],
+            usage: { input: 30, output: 6 },
+          },
+        }),
+      ].join("\n"),
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+    assert.equal(session.source, "omp");
+    assert.equal(session.sessionId, PI_SESSION_ID);
+    assert.equal(session.projectKey, "omp-proj");
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.inputTokens, 60);
+    assert.equal(session.totals.totalTokens, 72);
+    assert.equal(session.model, "deepseek-v4-pro");
+    assert.equal(session.title, "Analyze this repo");
+    assert.equal(session.resumeSafe, false);
+    assertPrivacyClean(session);
+  });
+});

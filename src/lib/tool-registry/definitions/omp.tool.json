@@ -57,19 +57,63 @@
       }
     ]
   },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "home",
+        "path": ".omp"
+      },
+      {
+        "base": "home",
+        "path": ".oh-my-pi"
+      }
+    ]
+  },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "native",
+      "reader": "omp-session-v1",
+      "paths": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".omp/agent/sessions",
+          "glob": "**/*.jsonl",
+          "format": "jsonl"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".oh-my-pi/agent/sessions",
+          "glob": "**/*.jsonl",
+          "format": "jsonl"
+        }
+      ],
+      "maxFileSizeBytes": 67108864
     },
     "skills": "unsupported",
     "agents": "unsupported",
     "sessions": {
-      "mode": "unsupported"
+      "mode": "read",
+      "reader": "omp-session-v1"
     },
     "market": "unsupported",
     "security": "unsupported"
   },
   "modelObservation": {
-    "modelField": "model"
+    "modelField": "model",
+    "tokenSemantics": {
+      "reasoningIncludedInOutput": false
+    }
   }
 }
