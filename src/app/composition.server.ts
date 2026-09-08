@@ -11,6 +11,14 @@ import type { SnapshotRefreshPort } from "../platform/snapshot-runtime/contracts
 import type { ExchangeRateSource } from "../platform/snapshot-runtime/exchange-rate.server.ts";
 import { RUNTIME_POLICY } from "./runtime-policy.generated.ts";
 import {
+  SKILL_AGENT_TOOL_IDS,
+  newlyInstalledToolIds,
+  sessionEvidenceToolIds,
+  shouldRequestInstallationProbe,
+  toolsMissingInstallationFact,
+  usageEvidenceToolIds,
+} from "../platform/discovery/discovery-sync.server.ts";
+import {
   desktopHeavyCollectorLimit,
   shouldAwaitDesktopStartupTask,
 } from "./desktop-startup-barrier.ts";
@@ -82,6 +90,10 @@ import { createSessionResumePort } from "../modules/sessions/infrastructure/sess
 import { createNodeResumeExecutor } from "../modules/sessions/infrastructure/node-resume-executor.server.ts";
 import { createUsageCollector } from "../modules/usage/infrastructure/usage-collector.server.ts";
 import { createUsageSnapshotRuntime } from "../modules/usage/infrastructure/usage-snapshot-runtime.server.ts";
+import {
+  loadEffectiveToolDataRoots,
+  setToolDataRootsProvider,
+} from "../lib/tool-data-root/tool-data-root.server.ts";
 import type { UsageSnapshotRuntime } from "../modules/usage/contracts.ts";
 import type { LocalUsageEvent } from "../lib/local-usage/types.ts";
 import type { MonitoringRuntime } from "../modules/monitoring/index.ts";
@@ -265,6 +277,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     performanceRollout,
   } = databaseRuntime.features;
 
+  // One process-wide source of per-tool data-directory overrides for the
+  // skill scanner/operations (which cannot import the composition root).
+  setToolDataRootsProvider(() =>
+    loadEffectiveToolDataRoots(databaseRuntime.features.toolDataRoots),
+  );
+
   // Migrate/synchronize the old single report schedule before the scheduler
   // can start. The app preference remains the renderer-safe authority; each
   // v2 plan receives its own task preference and the legacy task is disabled.
@@ -399,6 +417,9 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       failed: true,
       warningCodes: ["wsl-unavailable"],
     };
+    const toolDataRoots = await loadEffectiveToolDataRoots(
+      databaseRuntime.features.toolDataRoots,
+    );
     const result = await collector.collect({
       signal: request.signal,
       budget: {
@@ -410,6 +431,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
           enumeratedAt: wslTopology.enumeratedAt,
           failed: wslTopology.failed,
         },
+        toolDataRoots,
       },
     });
     // P2-18: refresh the skill-usage evidence from this collection. A
@@ -575,6 +597,8 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     repository: databaseRuntime.features.installationSnapshots,
     now: () => clock.now().getTime(),
     requestRefresh: deferredPort(() => refreshPorts.installation),
+    dataRootOverrides: () =>
+      loadEffectiveToolDataRoots(databaseRuntime.features.toolDataRoots),
   });
 
   // S-03 (T-03-03): search index service. The repository persists the safe
@@ -833,16 +857,66 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     },
   };
 
+  // Agent-discovery sync: parsed usage/session evidence of a tool the
+  // installation snapshot does not (yet) mark installed queues one probe
+  // instead of waiting out the hourly installation cadence, and a probe that
+  // newly installs a skill-capable agent queues a skills rescan (half-hour
+  // cadence) so Sources, Agent overview and the skill catalog converge with
+  // the session/usage pages. Requests are enqueued fire-and-forget through
+  // the shared task runtime — a nudge must never block the collector that
+  // discovered the evidence, and the heavy-collector budget serializes the
+  // queued probe after the current run releases its permit. The runtime is
+  // bound below once the task API exists; executors run only after the
+  // composition root is fully built.
+  let enqueueDiscoveryRefresh: (taskId: string) => void = () => {};
+
+  const maybeQueueInstallationProbe = (
+    evidenceToolIds: readonly string[],
+  ): void => {
+    if (evidenceToolIds.length === 0) return;
+    const installView = installationSnapshot.readLatest();
+    const missing = toolsMissingInstallationFact(
+      evidenceToolIds,
+      installView.data?.facts ?? [],
+    );
+    const lastProbe = installView.lastSuccessAt;
+    const lastProbeSuccessAtMs =
+      lastProbe == null ? null : Date.parse(lastProbe);
+    if (
+      !shouldRequestInstallationProbe({
+        missingToolIds: missing,
+        lastProbeSuccessAtMs:
+          lastProbeSuccessAtMs != null && Number.isFinite(lastProbeSuccessAtMs)
+            ? lastProbeSuccessAtMs
+            : null,
+        nowMs: clock.now().getTime(),
+      })
+    ) {
+      return;
+    }
+    enqueueDiscoveryRefresh("installation.refresh");
+  };
+
   const executorRegistry = createExecutorRegistry({
     usage: {
       async refresh({ signal }) {
         if (signal.aborted) throw new Error("errors.tasks.cancelled");
         await usageSnapshot.refreshNow(signal);
+        if (signal.aborted) return;
+        maybeQueueInstallationProbe(
+          usageEvidenceToolIds(usageSnapshot.readLatest().data?.sources ?? []),
+        );
       },
     },
     sessions: {
       async refresh({ signal }) {
         await sessionSnapshot.refreshNow(signal);
+        if (signal.aborted) return;
+        maybeQueueInstallationProbe(
+          sessionEvidenceToolIds(
+            sessionSnapshot.readLatest().data?.sessions ?? [],
+          ),
+        );
       },
     },
     insights: refreshInsightsInBackground,
@@ -869,11 +943,21 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       },
     },
     // P3-T3-03: installation refresh runs through the shared snapshot
-    // coordinator (6h freshness, single-flight, timeout from the policy).
+    // coordinator (hourly freshness, single-flight, timeout from the policy).
     installation: {
       async refresh({ signal }) {
         if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        const previousFacts =
+          installationSnapshot.readLatest().data?.facts ?? null;
         await installationSnapshot.refreshNow(signal);
+        if (signal.aborted) return;
+        // A probe that newly installs a skill-capable agent queues one skills
+        // rescan so the skill catalog does not wait out its half-hour cadence.
+        const nextFacts = installationSnapshot.readLatest().data?.facts ?? [];
+        const newAgents = newlyInstalledToolIds(previousFacts, nextFacts);
+        if (newAgents.some((id) => SKILL_AGENT_TOOL_IDS.has(id))) {
+          enqueueDiscoveryRefresh("skills.refresh");
+        }
       },
     },
     retention: {
@@ -1030,6 +1114,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   });
 
   const taskApi = createTaskApi({ scheduler, preferences, runs });
+
+  // Bind the discovery-sync nudge to the task runtime (see the helper notes
+  // above: fire-and-forget, single-flighted by the scheduler).
+  enqueueDiscoveryRefresh = (taskId: string) => {
+    void taskApi.runNow({ taskId }).catch(() => {});
+  };
 
   // P3-T3-11: bind the snapshot refresh ports to the unified task runtime so
   // page-triggered refreshes (empty/stale/manual/mutation) are single-flighted
