@@ -1,3 +1,4 @@
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
@@ -349,6 +350,110 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // hand it to the Skill collector so `lastUsedAt` works in production.
   let latestSkillUsageEvents: LocalUsageEvent[] = [];
 
+  // The usage scan index (per-file parsed events) is an in-process rebuildable
+  // cache. Persist it next to the SQLite database so a restart reuses
+  // unchanged logs instead of re-decoding the full DSH history; the scanner
+  // module itself never writes files (composition owns this storage).
+  const usageScanIndexFile = join(
+    dataRoot,
+    APP_DATA_DIR,
+    "data",
+    "usage-scan-index.v1.json",
+  );
+  const usageScanIndexStore = {
+    async load(): Promise<unknown | null> {
+      try {
+        return JSON.parse(await readFile(usageScanIndexFile, "utf8"));
+      } catch {
+        return null;
+      }
+    },
+    async save(state: unknown): Promise<void> {
+      const temporaryPath = `${usageScanIndexFile}.tmp`;
+      await writeFile(temporaryPath, JSON.stringify(state));
+      await rename(temporaryPath, usageScanIndexFile);
+    },
+  };
+  let usageIndexHydrated = false;
+  let persistedUsageIndexText: string | null = null;
+
+  const usageCollect = async (
+    request: Parameters<
+      NonNullable<Parameters<typeof createUsageSnapshotRuntime>[0]["collect"]>
+    >[0],
+  ) => {
+    const collector = createUsageCollector();
+    // P3-T3-04: reuse the shared WSL topology snapshot instead of re-running
+    // `wsl.exe` on every usage refresh. The coordinator hydrates the
+    // persisted topology once; a missing/stale snapshot triggers exactly one
+    // bounded enumeration (with cancellation) and the result is injected
+    // into the scan and shared by every provider.
+    await wslSnapshot.ensureHydrated();
+    let latest = wslSnapshot.readLatest();
+    if (latest.data == null || latest.status === "stale") {
+      latest = await wslSnapshot.refreshNow(request.signal);
+    }
+    const wslTopology = latest.data ?? {
+      distros: [],
+      enumeratedAt: null,
+      failed: true,
+      warningCodes: ["wsl-unavailable"],
+    };
+    const result = await collector.collect({
+      signal: request.signal,
+      budget: {
+        maxDurationMs: RUNTIME_POLICY.snapshotPolicies.usage.timeoutMs,
+      },
+      scannerOptions: {
+        wslTopology: {
+          distros: wslTopology.distros,
+          enumeratedAt: wslTopology.enumeratedAt,
+          failed: wslTopology.failed,
+        },
+      },
+    });
+    // P2-18: refresh the skill-usage evidence from this collection. A
+    // budget-exhausted/unhealthy result may carry a compacted previous
+    // snapshot (empty details) — keep the last good evidence in that case.
+    if (result.snapshot.details.length > 0) {
+      latestSkillUsageEvents = result.snapshot.details.filter(
+        (event) => (event.context?.skills?.length ?? 0) > 0,
+      );
+    }
+    // P2-3: budget exhaustion / cancellation must keep the last-known-good
+    // and mark the commit stale — never replace good data with an empty
+    // snapshot stamped as freshly collected.
+    if (result.budgetExhausted || result.cancelled) {
+      const previous = request.previous?.data;
+      if (previous == null) {
+        if (result.cancelled) throw new Error("usage:cancelled");
+        return {
+          data: result.snapshot,
+          sourceFingerprint: result.snapshot.generatedAt,
+          scannedItems: 0,
+        };
+      }
+      return {
+        data: previous,
+        sourceFingerprint: request.previous?.sourceFingerprint ?? undefined,
+        scannedItems: 0,
+        reusedItems: 0,
+        staleRefreshed: true,
+      };
+    }
+    const refs = result.snapshot.details.map((event) => event.project);
+    if (refs.length > 0) {
+      await classificationService
+        .classifyIncrementally(refs, request.signal)
+        .catch(() => {});
+    }
+    return {
+      data: result.snapshot,
+      sourceFingerprint: result.snapshot.generatedAt,
+      scannedItems: result.snapshot.events,
+    };
+  };
+
   const usageSnapshot = createUsageSnapshotRuntime({
     repository: databaseRuntime.features.usageSnapshots,
     now: () => clock.now().getTime(),
@@ -357,76 +462,32 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     // incremental classifier so the index stays fresh without blocking the
     // query path.
     collect: async (request) => {
-      const collector = createUsageCollector();
-      // P3-T3-04: reuse the shared WSL topology snapshot instead of re-running
-      // `wsl.exe` on every usage refresh. The coordinator hydrates the
-      // persisted topology once; a missing/stale snapshot triggers exactly one
-      // bounded enumeration (with cancellation) and the result is injected
-      // into the scan and shared by every provider.
-      await wslSnapshot.ensureHydrated();
-      let latest = wslSnapshot.readLatest();
-      if (latest.data == null || latest.status === "stale") {
-        latest = await wslSnapshot.refreshNow(request.signal);
+      if (!usageIndexHydrated) {
+        const { hydrateUsageScanIndex } =
+          await import("../lib/local-usage/scanner.server.ts");
+        hydrateUsageScanIndex(await usageScanIndexStore.load());
+        usageIndexHydrated = true;
       }
-      const wslTopology = latest.data ?? {
-        distros: [],
-        enumeratedAt: null,
-        failed: true,
-        warningCodes: ["wsl-unavailable"],
-      };
-      const result = await collector.collect({
-        signal: request.signal,
-        budget: {
-          maxDurationMs: RUNTIME_POLICY.snapshotPolicies.usage.timeoutMs,
-        },
-        scannerOptions: {
-          wslTopology: {
-            distros: wslTopology.distros,
-            enumeratedAt: wslTopology.enumeratedAt,
-            failed: wslTopology.failed,
-          },
-        },
-      });
-      // P2-18: refresh the skill-usage evidence from this collection. A
-      // budget-exhausted/unhealthy result may carry a compacted previous
-      // snapshot (empty details) — keep the last good evidence in that case.
-      if (result.snapshot.details.length > 0) {
-        latestSkillUsageEvents = result.snapshot.details.filter(
-          (event) => (event.context?.skills?.length ?? 0) > 0,
-        );
-      }
-      // P2-3: budget exhaustion / cancellation must keep the last-known-good
-      // and mark the commit stale — never replace good data with an empty
-      // snapshot stamped as freshly collected.
-      if (result.budgetExhausted || result.cancelled) {
-        const previous = request.previous?.data;
-        if (previous == null) {
-          if (result.cancelled) throw new Error("usage:cancelled");
-          return {
-            data: result.snapshot,
-            sourceFingerprint: result.snapshot.generatedAt,
-            scannedItems: 0,
-          };
+      try {
+        return await usageCollect(request);
+      } finally {
+        // Write through on success AND abort: per-file entries finished
+        // before a cancellation are persisted, so the next run converges.
+        const { snapshotUsageScanIndex } =
+          await import("../lib/local-usage/scanner.server.ts");
+        const snapshot = snapshotUsageScanIndex();
+        if (snapshot != null) {
+          const serialized = JSON.stringify(snapshot);
+          if (serialized !== persistedUsageIndexText) {
+            try {
+              await usageScanIndexStore.save(snapshot);
+              persistedUsageIndexText = serialized;
+            } catch {
+              // Best-effort: a failed cache write only costs the next cold scan.
+            }
+          }
         }
-        return {
-          data: previous,
-          sourceFingerprint: request.previous?.sourceFingerprint ?? undefined,
-          scannedItems: 0,
-          reusedItems: 0,
-          staleRefreshed: true,
-        };
       }
-      const refs = result.snapshot.details.map((event) => event.project);
-      if (refs.length > 0) {
-        await classificationService
-          .classifyIncrementally(refs, request.signal)
-          .catch(() => {});
-      }
-      return {
-        data: result.snapshot,
-        sourceFingerprint: result.snapshot.generatedAt,
-        scannedItems: result.snapshot.events,
-      };
     },
   });
 
@@ -450,10 +511,33 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     data: null,
     diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
   };
+  // The DSH per-file scan cache is persisted next to the SQLite database so a
+  // restart does not re-decode the full DSH session history (the scanner stays
+  // read-only; this composition owns the only write). Writes are atomic.
+  const dshScanCacheFile = join(
+    dataRoot,
+    APP_DATA_DIR,
+    "data",
+    "dsh-scan-cache.v1.json",
+  );
   const sessionSnapshot = createSessionSnapshotRuntime({
     repository: databaseRuntime.features.sessionSnapshots,
     now: () => clock.now().getTime(),
     requestRefresh: deferredPort(() => refreshPorts.sessions),
+    scanCacheStore: {
+      async load() {
+        try {
+          return JSON.parse(await readFile(dshScanCacheFile, "utf8"));
+        } catch {
+          return null;
+        }
+      },
+      async save(state) {
+        const temporaryPath = `${dshScanCacheFile}.tmp`;
+        await writeFile(temporaryPath, JSON.stringify(state));
+        await rename(temporaryPath, dshScanCacheFile);
+      },
+    },
   });
 
   const emptySkillEnvelope: Envelope<
@@ -937,6 +1021,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
             });
           }
         : undefined,
+    // The UI always reads last-known-good snapshots, and the sessions
+    // collector now has a persisted per-file cache, so non-barrier startup
+    // refreshes can wait out a quiet boot window instead of competing with
+    // the first page loads. Barrier-awaited startup tasks (first run on an
+    // empty workspace) are never delayed by this option.
+    startupSweepDelayMs: 60_000,
   });
 
   const taskApi = createTaskApi({ scheduler, preferences, runs });

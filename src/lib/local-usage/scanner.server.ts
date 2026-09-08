@@ -19,7 +19,11 @@ import {
   consumeCodexPendingContext,
   createCodexPendingContext,
 } from "./codex-context.ts";
-import { readDshSessionLog } from "./dsh-zstd.ts";
+import {
+  decodeZstdSessionLogWithBounds,
+  scanZstdFrames,
+  ZSTD_MAGIC_BYTES,
+} from "./dsh-zstd.ts";
 import { canonicalizeProjectPath } from "./project-path.server.ts";
 import { normalizeProjectPath } from "./project-path.ts";
 import {
@@ -74,8 +78,10 @@ const FUTURE_TIMESTAMP_TOLERANCE_MS =
   SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
 // Antigravity's estimated transcript events were added in v14. Rebuild once so cached Claude
 // events gain the new privacy-safe output aggregate instead of retaining a
-// stale "unobserved" capability.
-const PERSISTENT_CACHE_VERSION = 16;
+// stale "unobserved" capability. v17 adds per-file DSH append state
+// (prefixEnd/prefixHash/endsWithNewline/parserState) so appended frames of a
+// growing session log can be decoded without re-decoding the prefix.
+const PERSISTENT_CACHE_VERSION = 17;
 /**
  * Fingerprint of the tool-registry config that produced this cache. A config
  * change (paths, reader, command, pricing-rule set, or any JSON definition)
@@ -167,6 +173,32 @@ interface PersistentStructuredFileEntry extends PersistentFileEntryBase {
   source: "gemini-cli" | "grok" | "openclaw" | "antigravity" | "dsh";
   identifiedEvents: CachedIdentifiedEvent[];
   diagnostics: LocalUsageDiagnostic[];
+  /**
+   * DSH append-only decode state (present on entries parsed by the current
+   * scanner version): the byte extent already decoded, its prefix hash, and
+   * the parser state at the prefix end. A file that only grew can then be
+   * updated by decoding the appended frames instead of the whole log.
+   */
+  dsh?: DshPersistentFileFields;
+}
+
+/** Parser state at the end of a parsed DSH log prefix (tail parsing resumes). */
+interface DshUsageParserState {
+  sessionId: string;
+  project: string;
+  model: string;
+  /** Number of records consumed so far (header offset + seq fallback). */
+  recordIndex: number;
+}
+
+interface DshPersistentFileFields {
+  /** Byte offset of the end of the last fully parsed zstd frame (the prefix). */
+  prefixEnd: number;
+  /** sha256 hex of the container bytes [0, prefixEnd) — proves append-only. */
+  prefixHash: string;
+  /** Whether the decoded prefix text ended at a line boundary ('\n'). */
+  endsWithNewline: boolean;
+  state: DshUsageParserState;
 }
 
 interface PersistentGenericFileEntry extends PersistentFileEntryBase {
@@ -415,8 +447,8 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
       }
       identifiedEvents.push({ identity, event: cached.event });
     }
-    return {
-      source,
+    const base: PersistentStructuredFileEntry = {
+      source: source as PersistentStructuredFileEntry["source"],
       path,
       mtimeMs: entry.mtimeMs,
       size: entry.size,
@@ -425,6 +457,39 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
       diagnostics: Array.isArray(entry.diagnostics)
         ? entry.diagnostics.filter(isCachedDiagnostic)
         : [],
+    };
+    if (source !== "dsh") return base;
+    // Optional DSH append state: absent on legacy/foreign entries, in which
+    // case a changed file is simply re-parsed in full on the next scan.
+    const dsh = asObject(entry.dsh);
+    if (dsh == null) return base;
+    const state = asObject(dsh.state);
+    if (
+      !nonNegativeNumber(dsh.prefixEnd) ||
+      typeof dsh.prefixHash !== "string" ||
+      dsh.prefixHash.length !== 64 ||
+      typeof dsh.endsWithNewline !== "boolean" ||
+      state == null ||
+      typeof state.sessionId !== "string" ||
+      typeof state.project !== "string" ||
+      typeof state.model !== "string" ||
+      !nonNegativeNumber(state.recordIndex)
+    ) {
+      return base;
+    }
+    return {
+      ...base,
+      dsh: {
+        prefixEnd: dsh.prefixEnd,
+        prefixHash: dsh.prefixHash,
+        endsWithNewline: dsh.endsWithNewline,
+        state: {
+          sessionId: state.sessionId,
+          project: state.project,
+          model: state.model,
+          recordIndex: state.recordIndex,
+        },
+      },
     };
   }
 
@@ -501,6 +566,78 @@ function writeProcessIndex(
     registryFingerprint: REGISTRY_FINGERPRINT,
     files,
   });
+}
+
+/**
+ * Serializable snapshot of the in-memory usage scan index, for persistence
+ * across processes. The scanner module never touches the disk itself — the
+ * caller (composition) owns where the snapshot is stored and atomically
+ * replaces it after each scan. Restoring is done via `hydrateUsageScanIndex`
+ * before the next scan of a fresh process.
+ */
+export interface UsageScanIndexSnapshotFile {
+  readonly version: 1;
+  readonly indexes: ReadonlyArray<{
+    readonly cacheKey: string;
+    readonly index: PersistentUsageIndex;
+  }>;
+}
+
+export function snapshotUsageScanIndex(): UsageScanIndexSnapshotFile | null {
+  if (processUsageIndexes.size === 0) return null;
+  return {
+    version: 1,
+    indexes: [...processUsageIndexes].map(([cacheKey, index]) => ({
+      cacheKey,
+      index: {
+        version: index.version,
+        registryFingerprint: index.registryFingerprint,
+        files: index.files,
+      },
+    })),
+  };
+}
+
+/**
+ * Restore a persisted usage scan index into this process. Entries whose cache
+ * version or registry fingerprint no longer matches are discarded (the next
+ * scan rebuilds them); malformed entries are validated away individually.
+ */
+export function hydrateUsageScanIndex(state: unknown): void {
+  if (state == null || typeof state !== "object" || Array.isArray(state)) {
+    return;
+  }
+  const file = state as { version?: unknown; indexes?: unknown };
+  if (file.version !== 1 || !Array.isArray(file.indexes)) return;
+  for (const item of file.indexes) {
+    const candidate = asObject(item);
+    if (candidate == null) continue;
+    const cacheKey = stringValue(candidate.cacheKey);
+    const index = asObject(candidate.index);
+    if (cacheKey == null || index == null) continue;
+    if (
+      index.version !== PERSISTENT_CACHE_VERSION ||
+      index.registryFingerprint !== REGISTRY_FINGERPRINT ||
+      !Array.isArray(index.files)
+    ) {
+      continue;
+    }
+    const files: PersistentFileEntry[] = [];
+    for (const raw of index.files) {
+      const entry = persistentFileEntry(raw);
+      if (entry != null) files.push(entry);
+    }
+    processUsageIndexes.set(cacheKey, {
+      version: PERSISTENT_CACHE_VERSION,
+      registryFingerprint: REGISTRY_FINGERPRINT,
+      files,
+    });
+  }
+}
+
+/** Test seam: clears the module-level index (simulates a fresh process). */
+export function __resetUsageScanIndexForTests(): void {
+  processUsageIndexes.clear();
 }
 
 function fileSignatureMatches(
@@ -2030,116 +2167,303 @@ async function parseAntigravityUsageFile(
  * final usage sample per turn/step. Only stats are extracted: message content,
  * system prompts and tool payloads are read transiently and never cached.
  */
-async function parseDshUsageFile(
-  file: FileCandidate & { format: UsageAdapterPath["format"] },
-  fallbackSessionId: string,
+// ---------------------------------------------------------------------------
+// DSH (DeepSeek Harness) native reader — append-incremental.
+//
+// DSH session logs are concatenated-zstd JSONL containers with one tiny frame
+// per append batch, so decoding a whole log costs per-frame calls. A changed
+// file whose cached parse proves a byte-identical prefix that ended on a line
+// boundary is updated by decoding only the appended frames and merging their
+// usage events into the cached events; rewritten/compacted logs fail the
+// prefix hash check and fall back to a full parse. Only stats are extracted —
+// message content is read transiently and never retained.
+// ---------------------------------------------------------------------------
+
+function dshUsageInitialState(fallbackSessionId: string): DshUsageParserState {
+  return {
+    sessionId: fallbackSessionId,
+    project: "unknown",
+    model: "unknown",
+    recordIndex: 0,
+  };
+}
+
+/**
+ * Apply one JSONL line's record to the parser state. Returns true when the
+ * line was malformed (mirrors the uncached whole-file parse). The header
+ * record (position 1) is recognized only on a from-scratch parse — appended
+ * tails resume from the cached state and never re-process it.
+ */
+function applyDshUsageLine(
+  state: DshUsageParserState,
+  line: string,
+  events: CachedIdentifiedEvent[],
   signal?: AbortSignal,
-): Promise<{
+): boolean {
+  signal?.throwIfAborted();
+  if (line.trim().length === 0) return false;
+  let record: JsonObject;
+  try {
+    record = asObject(JSON.parse(line) as unknown) ?? {};
+  } catch {
+    return true;
+  }
+  state.recordIndex += 1;
+  if (state.recordIndex === 1) {
+    // Header record: {"type":"session","id":...,"createdAt":...,"cwd":...}
+    const headerId = stringValue(record.id);
+    if (record.type === "session" && headerId != null) {
+      state.sessionId =
+        sessionIdFromStructuredValue("dsh", headerId) ?? state.sessionId;
+      state.project = stringValue(record.cwd) ?? state.project;
+    }
+    return false;
+  }
+  if (record.type === "request/header") {
+    const header = asObject(asObject(record.data)?.header);
+    state.model = stringValue(asObject(header?.config)?.model) ?? state.model;
+    return false;
+  }
+  if (record.type === "request/context") {
+    state.model = stringValue(asObject(record.data)?.model) ?? state.model;
+    return false;
+  }
+  if (record.type !== "assistant/message") return false;
+  const usage = asObject(asObject(record.data)?.usage);
+  if (usage == null) return false;
+  const inputTokens = tokenValue(
+    usage.inputTokens ?? usage.uncachedInputTokens,
+  );
+  const cachedInputTokens = tokenValue(
+    usage.cacheReadTokens ?? usage.cachedInputTokens,
+  );
+  const cacheCreationInputTokens = tokenValue(
+    usage.cacheWriteTokens ??
+      usage.cacheCreationInputTokens ??
+      usage.cache_creation_input_tokens,
+  );
+  const outputTokens = tokenValue(usage.outputTokens);
+  const reasoningOutputTokens = tokenValue(
+    usage.reasoningTokens ?? usage.reasoningOutputTokens,
+  );
+  const totalTokens =
+    inputTokens +
+    cachedInputTokens +
+    cacheCreationInputTokens +
+    outputTokens +
+    reasoningOutputTokens;
+  const timestamp = timestampValue(record.time);
+  const seq = typeof record.seq === "number" ? record.seq : state.recordIndex;
+  if (timestamp == null || totalTokens === 0) return false;
+  events.push({
+    identity: privacyFingerprint("dsh", [state.sessionId, seq]),
+    event: {
+      source: "dsh",
+      timestamp: timestamp.toISOString(),
+      sessionId: state.sessionId,
+      model: state.model,
+      project: state.project,
+      inputTokens,
+      cachedInputTokens,
+      cacheCreationInputTokens,
+      outputTokens,
+      reasoningOutputTokens,
+      totalTokens,
+    },
+  });
+  return false;
+}
+
+/** Parse an already-decoded text region, mutating the parser state. */
+function parseDshUsageText(
+  text: string,
+  state: DshUsageParserState,
+  signal?: AbortSignal,
+): { events: CachedIdentifiedEvent[]; malformedLines: number } {
+  const events: CachedIdentifiedEvent[] = [];
+  let malformedLines = 0;
+  for (const line of text.split("\n")) {
+    if (applyDshUsageLine(state, line, events, signal)) malformedLines += 1;
+  }
+  return { events, malformedLines };
+}
+
+function isDshZstdBuffer(buffer: Buffer): boolean {
+  return (
+    buffer.length >= ZSTD_MAGIC_BYTES.length &&
+    buffer.subarray(0, ZSTD_MAGIC_BYTES.length).equals(ZSTD_MAGIC_BYTES)
+  );
+}
+
+function usageSha256Hex(input: Uint8Array): string {
+  return createHash("sha256").update(input).digest("hex");
+}
+
+interface DshParsedLogEntry {
   identifiedEvents: CachedIdentifiedEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
-}> {
-  signal?.throwIfAborted();
-  const identifiedEvents: CachedIdentifiedEvent[] = [];
-  let content: string;
+  prefixEnd: number;
+  prefixHash: string;
+  endsWithNewline: boolean;
+  state: DshUsageParserState;
+}
+
+/**
+ * Parse one dsh log, reusing the cached prefix when the file only grew:
+ * decode just the appended frames and merge their events into the cached
+ * events (parser state carries across the boundary). Returns null when the
+ * log is unreadable/undecodable.
+ */
+async function parseDshUsageLogForFile(
+  file: FileCandidate,
+  fallbackSessionId: string,
+  cached: PersistentStructuredFileEntry | undefined,
+  signal?: AbortSignal,
+): Promise<DshParsedLogEntry | null> {
+  let buffer: Buffer;
   try {
-    content = await readDshSessionLog(file.path);
+    buffer = await readFile(file.path);
   } catch {
-    return {
-      identifiedEvents,
-      malformedLines: 1,
-      diagnostics: [
-        {
-          source: "dsh",
-          code: "malformed-json",
-          path: file.path,
-          count: 1,
-          message: "DSH 会话日志无法解码，已跳过。",
-        },
-      ],
-    };
+    return null;
   }
-  signal?.throwIfAborted();
-  let sessionId = fallbackSessionId;
-  let project = "unknown";
-  let model = "unknown";
-  let malformedLines = 0;
-  let recordIndex = 0;
-  for (const line of content.split("\n")) {
-    signal?.throwIfAborted();
-    if (line.trim().length === 0) continue;
-    let record: JsonObject;
+  const isZstd = isDshZstdBuffer(buffer);
+  const cachedDshEntry =
+    cached?.source === "dsh"
+      ? (cached as PersistentStructuredFileEntry)
+      : undefined;
+  const cachedDsh = cachedDshEntry?.dsh;
+
+  // Append-only incremental path: the parsed prefix is byte-identical and
+  // ended on a line boundary, so only the bytes after prefixEnd need
+  // decoding. A prefix that ended mid-line (not produced by the DSH writer)
+  // or any rewrite/compaction is re-parsed in full below.
+  if (
+    cachedDshEntry != null &&
+    cachedDsh != null &&
+    cachedDsh.endsWithNewline &&
+    buffer.length >= cachedDsh.prefixEnd &&
+    usageSha256Hex(buffer.subarray(0, cachedDsh.prefixEnd)) ===
+      cachedDsh.prefixHash
+  ) {
+    const state = { ...cachedDsh.state };
+    if (buffer.length === cachedDsh.prefixEnd) {
+      // Touch only — content unchanged, refresh the entry signature.
+      return {
+        identifiedEvents: cachedDshEntry.identifiedEvents,
+        malformedLines: cachedDshEntry.malformedLines,
+        diagnostics: cachedDshEntry.diagnostics,
+        prefixEnd: cachedDsh.prefixEnd,
+        prefixHash: cachedDsh.prefixHash,
+        endsWithNewline: cachedDsh.endsWithNewline,
+        state,
+      };
+    }
     try {
-      record = asObject(JSON.parse(line) as unknown) ?? {};
-    } catch {
-      malformedLines += 1;
-      continue;
-    }
-    recordIndex += 1;
-    if (recordIndex === 1) {
-      // Header record: {"type":"session","id":...,"createdAt":...,"cwd":...}
-      const headerId = stringValue(record.id);
-      if (record.type === "session" && headerId != null) {
-        sessionId =
-          sessionIdFromStructuredValue("dsh", headerId) ?? fallbackSessionId;
-        project = stringValue(record.cwd) ?? project;
+      if (isZstd) {
+        const decoded = decodeZstdSessionLogWithBounds(
+          buffer.subarray(cachedDsh.prefixEnd),
+        );
+        if (decoded.completeEnd === 0) {
+          // Torn tail extended but no complete frame yet.
+          return {
+            identifiedEvents: cachedDshEntry.identifiedEvents,
+            malformedLines: cachedDshEntry.malformedLines,
+            diagnostics: cachedDshEntry.diagnostics,
+            prefixEnd: cachedDsh.prefixEnd,
+            prefixHash: cachedDsh.prefixHash,
+            endsWithNewline: cachedDsh.endsWithNewline,
+            state,
+          };
+        }
+        const newPrefixEnd = cachedDsh.prefixEnd + decoded.completeEnd;
+        const parsed = parseDshUsageText(decoded.text, state, signal);
+        return {
+          identifiedEvents: [
+            ...cachedDshEntry.identifiedEvents,
+            ...parsed.events,
+          ],
+          malformedLines: cachedDshEntry.malformedLines + parsed.malformedLines,
+          diagnostics: cachedDshEntry.diagnostics,
+          prefixEnd: newPrefixEnd,
+          prefixHash: usageSha256Hex(buffer.subarray(0, newPrefixEnd)),
+          endsWithNewline: decoded.text.endsWith("\n"),
+          state,
+        };
       }
-      continue;
+      // Plaintext append (compression "none").
+      const text = buffer.toString("utf8", cachedDsh.prefixEnd);
+      const parsed = parseDshUsageText(text, state, signal);
+      return {
+        identifiedEvents: [
+          ...cachedDshEntry.identifiedEvents,
+          ...parsed.events,
+        ],
+        malformedLines: cachedDshEntry.malformedLines + parsed.malformedLines,
+        diagnostics: cachedDshEntry.diagnostics,
+        prefixEnd: buffer.length,
+        prefixHash: usageSha256Hex(buffer),
+        endsWithNewline: text.endsWith("\n"),
+        state,
+      };
+    } catch {
+      // Structural change (rewrite/compaction/corruption): full reparse below.
     }
-    if (record.type === "request/header") {
-      const header = asObject(asObject(record.data)?.header);
-      model = stringValue(asObject(header?.config)?.model) ?? model;
-      continue;
-    }
-    if (record.type === "request/context") {
-      model = stringValue(asObject(record.data)?.model) ?? model;
-      continue;
-    }
-    if (record.type !== "assistant/message") continue;
-    const usage = asObject(asObject(record.data)?.usage);
-    if (usage == null) continue;
-    const inputTokens = tokenValue(
-      usage.inputTokens ?? usage.uncachedInputTokens,
-    );
-    const cachedInputTokens = tokenValue(
-      usage.cacheReadTokens ?? usage.cachedInputTokens,
-    );
-    const cacheCreationInputTokens = tokenValue(
-      usage.cacheWriteTokens ??
-        usage.cacheCreationInputTokens ??
-        usage.cache_creation_input_tokens,
-    );
-    const outputTokens = tokenValue(usage.outputTokens);
-    const reasoningOutputTokens = tokenValue(
-      usage.reasoningTokens ?? usage.reasoningOutputTokens,
-    );
-    const totalTokens =
-      inputTokens +
-      cachedInputTokens +
-      cacheCreationInputTokens +
-      outputTokens +
-      reasoningOutputTokens;
-    const timestamp = timestampValue(record.time);
-    const seq = typeof record.seq === "number" ? record.seq : recordIndex;
-    if (timestamp == null || totalTokens === 0) continue;
-    identifiedEvents.push({
-      identity: privacyFingerprint("dsh", [sessionId, seq]),
-      event: {
-        source: "dsh",
-        timestamp: timestamp.toISOString(),
-        sessionId,
-        model,
-        project,
-        inputTokens,
-        cachedInputTokens,
-        cacheCreationInputTokens,
-        outputTokens,
-        reasoningOutputTokens,
-        totalTokens,
-      },
-    });
   }
-  return { identifiedEvents, malformedLines, diagnostics: [] };
+
+  // Full parse.
+  const state = dshUsageInitialState(fallbackSessionId);
+  let text: string;
+  let prefixEnd = buffer.length;
+  try {
+    if (isZstd) {
+      const decoded = decodeZstdSessionLogWithBounds(buffer);
+      text = decoded.text;
+      prefixEnd = decoded.completeEnd;
+    } else {
+      text = buffer.toString("utf8");
+    }
+  } catch {
+    return null;
+  }
+  const parsed = parseDshUsageText(text, state, signal);
+  return {
+    identifiedEvents: parsed.events,
+    malformedLines: parsed.malformedLines,
+    diagnostics: [],
+    prefixEnd,
+    prefixHash: usageSha256Hex(buffer.subarray(0, prefixEnd)),
+    endsWithNewline: text.endsWith("\n"),
+    state,
+  };
+}
+
+/**
+ * Shared 'unique' merge for structured readers: events are deduplicated by
+ * their identity (session+seq fingerprints) and time-range filtered, so a
+ * cached prefix plus appended events never double-count.
+ */
+function mergeUniqueIdentifiedEvents(
+  cacheEntries: readonly PersistentStructuredFileEntry[],
+  cutoffTime: number,
+  nowTime: number,
+): LocalUsageEvent[] {
+  const byIdentity = new Map<string, LocalUsageEvent>();
+  for (const entry of cacheEntries) {
+    for (const identified of entry.identifiedEvents) {
+      if (
+        isTimestampInRange(
+          new Date(identified.event.timestamp),
+          cutoffTime,
+          nowTime,
+        ) &&
+        !byIdentity.has(identified.identity)
+      ) {
+        byIdentity.set(identified.identity, identified.event);
+      }
+    }
+  }
+  return [...byIdentity.values()];
 }
 
 type StructuredParser = typeof parseGeminiUsageFile;
@@ -2224,22 +2548,9 @@ async function scanStructuredAdapter(
 
   const events: LocalUsageEvent[] = [];
   if (mergeMode === "unique") {
-    const byIdentity = new Map<string, LocalUsageEvent>();
-    for (const entry of cacheEntries) {
-      for (const identified of entry.identifiedEvents) {
-        if (
-          isTimestampInRange(
-            new Date(identified.event.timestamp),
-            cutoffTime,
-            nowTime,
-          ) &&
-          !byIdentity.has(identified.identity)
-        ) {
-          byIdentity.set(identified.identity, identified.event);
-        }
-      }
-    }
-    events.push(...byIdentity.values());
+    events.push(
+      ...mergeUniqueIdentifiedEvents(cacheEntries, cutoffTime, nowTime),
+    );
   } else {
     const maximumCount = new Map<string, number>();
     const representative = new Map<string, LocalUsageEvent>();
@@ -2281,6 +2592,141 @@ async function scanStructuredAdapter(
     events,
     summary: {
       source: adapter.source,
+      available: events.length > 0,
+      detected: selected.detected,
+      paths: pathConfigs.map((pathConfig) =>
+        join(homeDirectory, pathConfig.root),
+      ),
+      filesConsidered: selected.files.length,
+      filesRead,
+      filesReused,
+      filesParsed,
+      malformedLines,
+      events: events.length,
+      diagnostics,
+    },
+    cacheEntries,
+  };
+}
+/**
+ * DSH native scan: same per-file cache contract as the other structured
+ * readers, but changed logs are parsed append-incrementally (only the frames
+ * after the last parsed prefix are decoded and merged) instead of being
+ * re-decoded in full.
+ */
+async function scanDshUsageAdapter(
+  adapter: UsageAdapterContract,
+  platformOs: PlatformOs,
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
+): Promise<SourceScanResult> {
+  const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
+  const selected = await collectAdapterFiles(
+    homeDirectory,
+    pathConfigs,
+    cutoffTime,
+    maxFiles,
+    signal,
+  );
+  const cacheEntries: PersistentStructuredFileEntry[] = [];
+  const diagnostics: LocalUsageDiagnostic[] = [];
+  let filesRead = 0;
+  let filesReused = 0;
+  let filesParsed = 0;
+  let malformedLines = 0;
+
+  for (const file of selected.files) {
+    signal?.throwIfAborted();
+    const cached = cachedFiles.get(file.path);
+    const cachedDsh =
+      cached?.source === "dsh"
+        ? (cached as PersistentStructuredFileEntry)
+        : undefined;
+    let entry: PersistentStructuredFileEntry;
+    if (cachedDsh != null && fileSignatureMatches(file, cachedDsh, "dsh")) {
+      entry = cachedDsh;
+      filesReused += 1;
+    } else if (file.size > adapter.maxFileSizeBytes) {
+      entry = {
+        source: "dsh",
+        path: file.path,
+        mtimeMs: file.modifiedAt,
+        size: file.size,
+        malformedLines: 0,
+        identifiedEvents: [],
+        diagnostics: [
+          diagnostic(
+            adapter,
+            "file-too-large",
+            file.path,
+            `日志超过 ${adapter.maxFileSizeBytes} 字节读取上限，已跳过。`,
+          ),
+        ],
+      };
+      filesParsed += 1;
+    } else {
+      const fallbackSessionId = sessionIdFromRelativeFile(
+        "dsh",
+        relative(homeDirectory, file.path),
+      );
+      const parsed = await parseDshUsageLogForFile(
+        file,
+        fallbackSessionId,
+        cachedDsh,
+        signal,
+      );
+      if (parsed == null) {
+        entry = {
+          source: "dsh",
+          path: file.path,
+          mtimeMs: file.modifiedAt,
+          size: file.size,
+          malformedLines: 1,
+          identifiedEvents: [],
+          diagnostics: [
+            {
+              source: "dsh",
+              code: "malformed-json",
+              path: file.path,
+              count: 1,
+              message: "DSH 会话日志无法解码，已跳过。",
+            },
+          ],
+        };
+      } else {
+        entry = {
+          source: "dsh",
+          path: file.path,
+          mtimeMs: file.modifiedAt,
+          size: file.size,
+          malformedLines: parsed.malformedLines,
+          identifiedEvents: parsed.identifiedEvents,
+          diagnostics: parsed.diagnostics,
+          dsh: {
+            prefixEnd: parsed.prefixEnd,
+            prefixHash: parsed.prefixHash,
+            endsWithNewline: parsed.endsWithNewline,
+            state: parsed.state,
+          },
+        };
+      }
+      filesParsed += 1;
+    }
+    cacheEntries.push(entry);
+    diagnostics.push(...entry.diagnostics);
+    malformedLines += entry.malformedLines;
+    filesRead += 1;
+  }
+
+  const events = mergeUniqueIdentifiedEvents(cacheEntries, cutoffTime, nowTime);
+  return {
+    events,
+    summary: {
+      source: "dsh",
       available: events.length > 0,
       detected: selected.detected,
       paths: pathConfigs.map((pathConfig) =>
@@ -2786,8 +3232,9 @@ export async function scanLocalUsage(
     join(root, "archived_sessions"),
   ]);
   const cutoffTime = nowTime - lookbackDays * DAY_IN_MS;
-  // This is a rebuildable performance index only. It is deliberately scoped
-  // to this process and never persisted as application-owned files.
+  // Rebuildable performance index. The scanner itself never writes files;
+  // callers that want fast restarts may persist `snapshotUsageScanIndex()` and
+  // restore it with `hydrateUsageScanIndex()` (composition owns that storage).
   const cacheKey = options.cacheDirectory ?? homeDirectory;
   const cachedIndex = options.disablePersistentCache
     ? undefined
@@ -2891,9 +3338,18 @@ export async function scanLocalUsage(
       parseAntigravityUsageFile,
       "unique",
     ).catch((error) => sourceFailure("antigravity", error)),
-    structuredReader("dsh-session-v1", parseDshUsageFile, "unique").catch(
-      (error) => sourceFailure("dsh", error),
-    ),
+    scanDshUsageAdapter(
+      BUILTIN_USAGE_ADAPTERS.find(
+        (candidate) => candidate.reader === "dsh-session-v1",
+      )!,
+      osFromProcess(platform),
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+      options.signal,
+    ).catch((error) => sourceFailure("dsh", error)),
     ...(await runBoundedGenericAdapters(
       genericAdapters,
       osFromProcess(platform),

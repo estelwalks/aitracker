@@ -43,8 +43,13 @@ export function SessionIdCopyButton({
       variant="ghost"
       onClick={() => void copySessionId()}
       title={t(copied ? "sessions.row.copiedHash" : "sessions.row.copyHash")}
+      className="shrink-0 whitespace-nowrap"
     >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      {copied ? (
+        <Check className="size-3.5 shrink-0" />
+      ) : (
+        <Copy className="size-3.5 shrink-0" />
+      )}
       {copied ? t("sessions.row.copiedHash") : t("sessions.row.copyHash")}
     </AITrackerButton>
   );

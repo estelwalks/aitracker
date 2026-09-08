@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { constants, zstdCompressSync } from "node:zlib";
@@ -16,7 +16,11 @@ import {
 import type { ToolDefinition } from "../tool-registry/contracts.ts";
 import { estimateSessionCost } from "./cost.ts";
 import { isResumeSafeId } from "./resume-id.ts";
-import { scanLocalSessions } from "./scanner.server.ts";
+import {
+  __resetDshScanCache,
+  scanLocalSessions,
+  snapshotDshScanCache,
+} from "./scanner.server.ts";
 import type {
   SessionRecord,
   SessionSource,
@@ -1494,6 +1498,258 @@ test("DSH: session summary counts all sessions across workspaces", async () => {
       new Set(summary.sessions.map((session) => session.projectKey)),
       new Set(["project-a", "project-b"]),
     );
+  });
+});
+
+/** One zstd frame from plaintext (checksummed like the DSH writer). */
+function dshFrame(text: string): Buffer {
+  return zstdCompressSync(Buffer.from(text, "utf8"), {
+    params: { [constants.ZSTD_c_checksumFlag]: 1 },
+  });
+}
+
+function dshSessionFile(home: string, workspace: string): string {
+  return join(
+    home,
+    ".dsh",
+    "sessions",
+    workspace,
+    DSH_SESSION_ID,
+    "session.jsonl.zstd",
+  );
+}
+
+test("DSH: appended frames are picked up incrementally without losing totals", async () => {
+  await withTempHome(async (home) => {
+    const cwd = join(home, "project-append");
+    const file = dshSessionFile(home, "project-append");
+    await mkdir(dirname(file), { recursive: true });
+    const [header, ...events] = dshRecords(cwd);
+    await writeFile(
+      file,
+      Buffer.concat([
+        dshFrame(`${JSON.stringify(header)}\n`),
+        dshFrame(
+          `${events.map((record) => JSON.stringify(record)).join("\n")}\n`,
+        ),
+      ]),
+    );
+
+    const firstScan = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+    });
+    const first = soleSession(firstScan.sessions);
+    assert.equal(first.turns, 1);
+    assert.equal(first.totals.totalTokens, 218);
+
+    // The DSH writer appends new frames for new events; the second scan must
+    // merge them into the cached metadata (no full re-decode).
+    const extra = [
+      {
+        type: "turn/start",
+        seq: 100,
+        time: "2026-08-03T09:01:00.000Z",
+        data: { turn: 2 },
+      },
+      {
+        type: "assistant/message",
+        seq: 101,
+        time: "2026-08-03T09:01:01.000Z",
+        data: {
+          turn: 2,
+          step: 1,
+          message: { role: "assistant", content: "SECRET MESSAGE" },
+          usage: { inputTokens: 10, outputTokens: 4, cacheReadTokens: 0 },
+        },
+      },
+      {
+        type: "tool/call",
+        seq: 102,
+        time: "2026-08-03T09:01:02.000Z",
+        data: {
+          turn: 2,
+          step: 1,
+          callId: "call-3",
+          name: "subagent",
+          arguments: "SECRET ARGS",
+        },
+      },
+    ] as const;
+    const appended = await readFile(file);
+    // Ensure the file stamp advances past the first write's millisecond.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await writeFile(
+      file,
+      Buffer.concat([
+        appended,
+        dshFrame(
+          `${extra.map((record) => JSON.stringify(record)).join("\n")}\n`,
+        ),
+      ]),
+    );
+
+    const secondScan = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+    });
+    const second = soleSession(secondScan.sessions);
+    assert.equal(second.sessionId, DSH_SESSION_ID);
+    assert.equal(second.turns, 2);
+    assert.equal(second.totals.inputTokens, 150);
+    assert.equal(second.totals.cachedInputTokens, 50);
+    assert.equal(second.totals.outputTokens, 27);
+    assert.equal(second.totals.totalTokens, 232);
+    assert.equal(second.subagentCalls, 2);
+    assert.equal(second.editTurns, 1);
+
+    // An unchanged file must replay from the cache with identical results.
+    const thirdScan = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+    });
+    const third = soleSession(thirdScan.sessions);
+    assert.deepEqual(
+      { turns: third.turns, totals: third.totals, editTurns: third.editTurns },
+      {
+        turns: second.turns,
+        totals: second.totals,
+        editTurns: second.editTurns,
+      },
+    );
+    assertPrivacyClean(third);
+  });
+});
+
+test("DSH: rewritten logs are re-parsed instead of served stale from cache", async () => {
+  await withTempHome(async (home) => {
+    const cwd = join(home, "project-rewrite");
+    const file = dshSessionFile(home, "project-rewrite");
+    await mkdir(dirname(file), { recursive: true });
+    const records = dshRecords(cwd);
+    await writeFile(
+      file,
+      Buffer.concat([
+        dshFrame(
+          `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+        ),
+      ]),
+    );
+
+    const first = soleSession(
+      (await scanLocalSessions({ homeDirectory: home, now: NOW })).sessions,
+    );
+    assert.equal(first.totals.inputTokens, 140);
+    assert.equal(first.subagentCalls, 1);
+
+    // Rewrite the log IN PLACE with the same total byte length (100 -> 111):
+    // a size-identical rewrite must not fool the append-only cache guard.
+    const rewritten = structuredClone(records) as Array<
+      Record<string, unknown>
+    >;
+    const firstAssistant = rewritten[4] as {
+      data: { usage: { inputTokens: number } };
+    };
+    firstAssistant.data.usage.inputTokens = 111;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await writeFile(
+      file,
+      Buffer.concat([
+        dshFrame(
+          `${rewritten.map((record) => JSON.stringify(record)).join("\n")}\n`,
+        ),
+      ]),
+    );
+
+    const second = soleSession(
+      (await scanLocalSessions({ homeDirectory: home, now: NOW })).sessions,
+    );
+    assert.equal(second.totals.inputTokens, 151);
+    assert.equal(second.totals.outputTokens, 23);
+    assert.equal(second.totals.totalTokens, 229);
+    assert.equal(second.turns, 1);
+    assert.equal(second.editTurns, 1);
+    assert.equal(second.subagentCalls, 1);
+    assertPrivacyClean(second);
+  });
+});
+
+test("DSH: persisted scan cache hydrates a fresh process without re-decoding", async () => {
+  await withTempHome(async (home) => {
+    const secondSessionId = "99999999-aaaa-bbbb-cccc-dddddddddddd";
+    const files: string[] = [];
+    for (const [workspace, sessionId] of [
+      ["project-a", DSH_SESSION_ID],
+      ["project-b", secondSessionId],
+    ] as const) {
+      const file = dshSessionFile(home, workspace);
+      await mkdir(dirname(file), { recursive: true });
+      const records = dshRecords(join(home, workspace));
+      const recordsForId =
+        sessionId === DSH_SESSION_ID
+          ? records
+          : [{ ...records[0]!, id: sessionId }, ...records.slice(1)];
+      await writeFile(
+        file,
+        `${recordsForId.map((record) => JSON.stringify(record)).join("\n")}\n`,
+      );
+      files.push(file);
+    }
+
+    const first = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    assert.equal(first.total, 2);
+
+    // Simulate a process restart: snapshot the cache, drop it from memory,
+    // delete one session log, and scan again with only the persisted state.
+    const snapshot = snapshotDshScanCache();
+    assert.ok(snapshot != null);
+    __resetDshScanCache();
+    await rm(files[0]!, { force: true });
+
+    const second = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      dshCacheState: snapshot,
+    });
+    assert.equal(second.total, 1);
+    const survivor = soleSession(second.sessions);
+    assert.equal(survivor.sessionId, secondSessionId);
+    assert.equal(survivor.turns, 1);
+    assert.equal(survivor.totals.inputTokens, 140);
+    assert.equal(survivor.totals.totalTokens, 218);
+    assertPrivacyClean(survivor);
+
+    // The hydrated root is pruned of vanished files and still snapshots.
+    const resnapshot = snapshotDshScanCache();
+    assert.ok(resnapshot != null);
+    assert.equal(
+      Object.values(resnapshot.roots).reduce(
+        (sum, entries) => sum + Object.keys(entries).length,
+        0,
+      ),
+      1,
+    );
+  });
+});
+
+test("DSH: corrupt persisted cache state is ignored safely", async () => {
+  await withTempHome(async (home) => {
+    const file = dshSessionFile(home, "project-c");
+    await mkdir(dirname(file), { recursive: true });
+    const records = dshRecords(join(home, "project-c"));
+    await writeFile(
+      file,
+      `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+    );
+
+    const summary = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      dshCacheState: { version: 99, garbage: [1, 2] },
+    });
+    assert.equal(summary.total, 1);
+    const session = soleSession(summary.sessions);
+    assert.equal(session.totals.inputTokens, 140);
   });
 });
 

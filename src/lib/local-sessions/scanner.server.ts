@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { opendir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -7,7 +8,10 @@ import { DatabaseSync } from "node:sqlite";
 
 import { ENV } from "../app-config";
 import { osFromProcess } from "../tools/detection.server.ts";
-import { readDshSessionLog } from "../local-usage/dsh-zstd.ts";
+import {
+  decodeZstdSessionLogWithBounds,
+  ZSTD_MAGIC_BYTES,
+} from "../local-usage/dsh-zstd.ts";
 import { canonicalizeProjectIdentity } from "../local-usage/project-path.server.ts";
 import {
   findNearestGitRepositoryRoot,
@@ -69,6 +73,13 @@ export interface ScanLocalSessionsOptions {
   signal?: AbortSignal;
   /** Test seam for Windows-only deep cancellation behavior. */
   platform?: NodeJS.Platform;
+  /**
+   * Persisted DSH scan cache from a previous process (see
+   * `snapshotDshScanCache`). Hydrated once per scan root on first use so a
+   * restart does not re-decode the full DSH history; files changed since the
+   * snapshot was written are still re-parsed via their stamps.
+   */
+  dshCacheState?: unknown;
 }
 
 interface JsonObject {
@@ -1283,7 +1294,7 @@ async function scanGrokSessions(
 // session header (id/cwd/createdAt); `assistant/message` records carry the
 // per-step usage, `tool/call` records carry tool names (metadata only), and
 // `turn/start` marks each user turn. Physical decoding is shared with the
-// usage chain via `readDshSessionLog`; only metadata is extracted here.
+// usage chain via the shared zstd decoder; only metadata is extracted here.
 //
 // turns = `turn/start` records (a DSH "step" is one model round inside a
 // turn, so steps are intentionally not counted as turns). editTurns /
@@ -1368,164 +1379,672 @@ async function collectDshSessionFiles(
   return [...byDirectory.values()].map((path) => ({ path }));
 }
 
+// ---------------------------------------------------------------------------
+// DSH per-file metadata cache.
+//
+// DSH persists every agent session as a CONCATENATED zstd container with one
+// tiny frame per append batch, so a single session log can hold tens of
+// thousands of frames and decoding every session on every periodic refresh
+// costs minutes of main-thread CPU. Session metadata of an unchanged file can
+// never change, so the reader keeps an in-process per-scan-root cache of the
+// metadata extracted per file, keyed by (size, mtime, ctime) plus a prefix
+// hash. Unchanged files are replayed from the cache without touching the log;
+// files that only GREW (active sessions) are decoded from the last parsed
+// frame boundary onward and merged into the cached aggregate; files that were
+// rewritten (compaction) or are new are decoded in full. Only metadata is
+// retained — never conversation text. Entries are written through per file,
+// so an aborted cold scan still converges on the next attempt.
+// ---------------------------------------------------------------------------
+
+/** Bump when DSH per-file parse semantics change (invalidates cached entries). */
+const DSH_SESSION_PARSE_VERSION = 1;
+
+interface DshFileStamp {
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly ctimeMs: number;
+}
+
+/**
+ * Raw per-file aggregate produced by the DSH record reducer. Keeping the
+ * uncounted inputs (turn starts, key sets, assistant messages) lets appended
+ * tail records merge into the aggregate and derive the same per-file summary
+ * a from-scratch parse of the whole log would produce.
+ */
+interface DshRawAggregate {
+  /** Header id; resolved to the session-directory name once parsing completes. */
+  sessionId: string | null;
+  title: string;
+  model: string | null;
+  projectRef: string | null;
+  /** Epoch ms only; the display ISO is re-derived at merge time. */
+  timestampsMs: number[];
+  totals: SessionTokenCounts;
+  turnStarts: number;
+  assistantMessages: number;
+  observedTurnKeys: Set<string>;
+  editTurnKeys: Set<string>;
+  unattributedEditTurns: number;
+  subagentCalls: number;
+}
+
+/**
+ * Per-file summary derived from a raw aggregate — mirrors the per-file
+ * aggregation of the uncached parse exactly.
+ */
+interface DshParsedFile {
+  /** Resolved session id: header id, else the session directory name. */
+  readonly sessionId: string;
+  readonly title: string;
+  readonly model: string | null;
+  readonly projectRef: string | null;
+  readonly timestampsMs: number[];
+  readonly totals: SessionTokenCounts;
+  readonly turns: number;
+  readonly editTurns: number;
+  readonly subagentCalls: number;
+}
+
+interface DshCacheEntry {
+  readonly parseVersion: number;
+  readonly stamp: DshFileStamp;
+  /** Byte offset of the end of the last fully parsed frame (the prefix). */
+  readonly prefixEnd: number;
+  /** sha256 hex of bytes [0, prefixEnd) — proves growth was append-only. */
+  readonly prefixHash: string;
+  /** Whether the decoded prefix text ended at a line boundary ('\n'). */
+  readonly endsWithNewline: boolean;
+  readonly aggregate: DshRawAggregate;
+}
+
+/** dsh sessions root (absolute) -> session log path -> cached metadata. */
+const dshScanCache = new Map<string, Map<string, DshCacheEntry>>();
+
+/**
+ * Serializable form of the DSH scan cache. Root keys are sha256 hashes of the
+ * absolute sessions root and entry keys are ROOT-RELATIVE log paths, so the
+ * file never stores an absolute local path. Entries hold metadata only.
+ */
+export interface DshScanCacheSnapshot {
+  readonly version: 1;
+  readonly roots: Record<string, Record<string, unknown>>;
+}
+
+function serializeDshCacheEntry(entry: DshCacheEntry): unknown {
+  return {
+    parseVersion: entry.parseVersion,
+    stamp: entry.stamp,
+    prefixEnd: entry.prefixEnd,
+    prefixHash: entry.prefixHash,
+    endsWithNewline: entry.endsWithNewline,
+    aggregate: {
+      ...entry.aggregate,
+      observedTurnKeys: [...entry.aggregate.observedTurnKeys].sort(),
+      editTurnKeys: [...entry.aggregate.editTurnKeys].sort(),
+    },
+  };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function finiteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function stringArray(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((item) => typeof item === "string")
+    ? (value as string[])
+    : null;
+}
+
+function hydratedDshCacheEntry(value: unknown): DshCacheEntry | null {
+  try {
+    if (!isPlainObject(value)) return null;
+    const stamp = value.stamp;
+    if (
+      !isPlainObject(stamp) ||
+      !finiteNumber(stamp.size) ||
+      !finiteNumber(stamp.mtimeMs) ||
+      !finiteNumber(stamp.ctimeMs)
+    ) {
+      return null;
+    }
+    const aggregate = value.aggregate;
+    const observed = stringArray(
+      isPlainObject(aggregate) ? aggregate.observedTurnKeys : null,
+    );
+    const edits = stringArray(
+      isPlainObject(aggregate) ? aggregate.editTurnKeys : null,
+    );
+    if (
+      !isPlainObject(aggregate) ||
+      typeof aggregate.sessionId !== "string" ||
+      typeof aggregate.title !== "string" ||
+      (aggregate.model != null && typeof aggregate.model !== "string") ||
+      (aggregate.projectRef != null &&
+        typeof aggregate.projectRef !== "string") ||
+      !Array.isArray(aggregate.timestampsMs) ||
+      !aggregate.timestampsMs.every(finiteNumber) ||
+      !isPlainObject(aggregate.totals) ||
+      !Object.values(aggregate.totals).every(finiteNumber) ||
+      !finiteNumber(aggregate.turnStarts) ||
+      !finiteNumber(aggregate.assistantMessages) ||
+      observed == null ||
+      edits == null ||
+      !finiteNumber(aggregate.unattributedEditTurns) ||
+      !finiteNumber(aggregate.subagentCalls)
+    ) {
+      return null;
+    }
+    if (
+      value.parseVersion !== DSH_SESSION_PARSE_VERSION ||
+      !finiteNumber(value.prefixEnd) ||
+      typeof value.prefixHash !== "string" ||
+      typeof value.endsWithNewline !== "boolean"
+    ) {
+      return null;
+    }
+    const parsedAggregate: DshRawAggregate = {
+      sessionId: aggregate.sessionId,
+      title: aggregate.title,
+      model: aggregate.model == null ? null : aggregate.model,
+      projectRef: aggregate.projectRef == null ? null : aggregate.projectRef,
+      timestampsMs: [...(aggregate.timestampsMs as number[])],
+      totals: { ...(aggregate.totals as unknown as SessionTokenCounts) },
+      turnStarts: aggregate.turnStarts,
+      assistantMessages: aggregate.assistantMessages,
+      observedTurnKeys: new Set(observed),
+      editTurnKeys: new Set(edits),
+      unattributedEditTurns: aggregate.unattributedEditTurns,
+      subagentCalls: aggregate.subagentCalls,
+    };
+    return {
+      parseVersion: DSH_SESSION_PARSE_VERSION,
+      stamp: {
+        size: stamp.size,
+        mtimeMs: stamp.mtimeMs,
+        ctimeMs: stamp.ctimeMs,
+      },
+      prefixEnd: value.prefixEnd,
+      prefixHash: value.prefixHash,
+      endsWithNewline: value.endsWithNewline,
+      aggregate: parsedAggregate,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function hydrateDshScanRoot(
+  sessionsRoot: string,
+  state: unknown,
+): Map<string, DshCacheEntry> {
+  const hydrated = new Map<string, DshCacheEntry>();
+  if (!isPlainObject(state)) return hydrated;
+  if (state.version !== 1 || !isPlainObject(state.roots)) return hydrated;
+  const rootEntries = state.roots[sha256Hex(Buffer.from(sessionsRoot, "utf8"))];
+  if (!isPlainObject(rootEntries)) return hydrated;
+  for (const [relativePath, raw] of Object.entries(rootEntries)) {
+    const entry = hydratedDshCacheEntry(raw);
+    if (entry == null) continue;
+    const absolutePath = join(sessionsRoot, relativePath.split("/").join(sep));
+    hydrated.set(absolutePath, entry);
+  }
+  return hydrated;
+}
+
+/**
+ * Snapshot of the in-memory DSH scan cache for persistence across processes.
+ * Returns null when nothing is cached yet. The caller owns writing this to
+ * its own storage; a later process passes it back through
+ * `ScanLocalSessionsOptions.dshCacheState`.
+ */
+export function snapshotDshScanCache(): DshScanCacheSnapshot | null {
+  const roots: Record<string, Record<string, unknown>> = {};
+  for (const [sessionsRoot, files] of dshScanCache) {
+    if (files.size === 0) continue;
+    const serialized: Record<string, unknown> = {};
+    for (const [absolutePath, entry] of files) {
+      serialized[relative(sessionsRoot, absolutePath).split(sep).join("/")] =
+        serializeDshCacheEntry(entry);
+    }
+    roots[sha256Hex(Buffer.from(sessionsRoot, "utf8"))] = serialized;
+  }
+  if (Object.keys(roots).length === 0) return null;
+  return { version: 1, roots };
+}
+
+/** Test seam: clears the module-level cache (simulates a fresh process). */
+export function __resetDshScanCache(): void {
+  dshScanCache.clear();
+}
+
+function dshStampsMatch(left: DshFileStamp, right: DshFileStamp): boolean {
+  return (
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
+}
+
+function emptyDshAggregate(): DshRawAggregate {
+  return {
+    sessionId: null,
+    title: "",
+    model: null,
+    projectRef: null,
+    timestampsMs: [],
+    totals: emptyTokenCounts(),
+    turnStarts: 0,
+    assistantMessages: 0,
+    observedTurnKeys: new Set(),
+    editTurnKeys: new Set(),
+    unattributedEditTurns: 0,
+    subagentCalls: 0,
+  };
+}
+
+function cloneDshAggregate(source: DshRawAggregate): DshRawAggregate {
+  return {
+    sessionId: source.sessionId,
+    title: source.title,
+    model: source.model,
+    projectRef: source.projectRef,
+    timestampsMs: [...source.timestampsMs],
+    totals: { ...source.totals },
+    turnStarts: source.turnStarts,
+    assistantMessages: source.assistantMessages,
+    observedTurnKeys: new Set(source.observedTurnKeys),
+    editTurnKeys: new Set(source.editTurnKeys),
+    unattributedEditTurns: source.unattributedEditTurns,
+    subagentCalls: source.subagentCalls,
+  };
+}
+
+function dshParsedFromAggregate(
+  aggregate: DshRawAggregate,
+): DshParsedFile | null {
+  if (aggregate.sessionId == null || aggregate.sessionId === "") return null;
+  return {
+    sessionId: aggregate.sessionId,
+    title: aggregate.title,
+    model: aggregate.model,
+    projectRef: aggregate.projectRef,
+    timestampsMs: aggregate.timestampsMs,
+    totals: aggregate.totals,
+    turns:
+      aggregate.turnStarts > 0
+        ? aggregate.turnStarts
+        : aggregate.observedTurnKeys.size > 0
+          ? aggregate.observedTurnKeys.size
+          : aggregate.assistantMessages,
+    editTurns: aggregate.editTurnKeys.size + aggregate.unattributedEditTurns,
+    subagentCalls: aggregate.subagentCalls,
+  };
+}
+
+function sha256Hex(input: Uint8Array): string {
+  return createHash("sha256").update(input).digest("hex");
+}
+
+/**
+ * Apply the metadata semantics of ONE parsed dsh record to the aggregate.
+ * Field handling mirrors the uncached whole-file parse exactly (same guards,
+ * same last-wins rules, same token field fallbacks).
+ */
+function applyDshRecord(aggregate: DshRawAggregate, record: JsonObject): void {
+  const recordType = stringValue(record.type);
+  const data = asObject(record.data);
+  const time = parseTimestampValue(record.time);
+  if (time != null) aggregate.timestampsMs.push(time.ms);
+
+  if (recordType === "session") {
+    const headerId = stringValue(record.id);
+    if (headerId != null) aggregate.sessionId = headerId;
+    const cwd = stringValue(record.cwd);
+    if (cwd != null) aggregate.projectRef = cwd;
+    const createdAt = parseTimestampValue(record.createdAt);
+    if (createdAt != null) aggregate.timestampsMs.push(createdAt.ms);
+    return;
+  }
+  if (recordType === "session/title") {
+    const sessionTitle = stringValue(data?.title);
+    if (sessionTitle != null && aggregate.title === "") {
+      aggregate.title = sessionTitle;
+    }
+    return;
+  }
+  if (recordType === "request/context") {
+    const contextModel = stringValue(data?.model);
+    if (contextModel != null) aggregate.model = contextModel;
+    return;
+  }
+  if (recordType === "request/header") {
+    const headerModel = stringValue(
+      asObject(asObject(data?.header)?.config)?.model,
+    );
+    if (headerModel != null) aggregate.model = headerModel;
+    return;
+  }
+  if (recordType === "turn/start") {
+    aggregate.turnStarts += 1;
+    return;
+  }
+  if (recordType === "assistant/message") {
+    aggregate.assistantMessages += 1;
+    const turn = data?.turn;
+    if (turn !== undefined && turn !== null) {
+      aggregate.observedTurnKeys.add(String(turn));
+    }
+    const usage = asObject(data?.usage);
+    if (usage != null) {
+      const inputTokens = tokenValue(
+        usage.inputTokens ?? usage.uncachedInputTokens,
+      );
+      const cachedInputTokens = tokenValue(
+        usage.cacheReadTokens ?? usage.cachedInputTokens,
+      );
+      const cacheCreationInputTokens = tokenValue(
+        usage.cacheWriteTokens ??
+          usage.cacheCreationInputTokens ??
+          usage.cache_creation_input_tokens,
+      );
+      const outputTokens = tokenValue(usage.outputTokens);
+      const reasoningOutputTokens = tokenValue(
+        usage.reasoningTokens ?? usage.reasoningOutputTokens,
+      );
+      const totalTokens =
+        inputTokens +
+        cachedInputTokens +
+        cacheCreationInputTokens +
+        outputTokens +
+        reasoningOutputTokens;
+      if (totalTokens > 0) {
+        aggregate.totals.inputTokens += inputTokens;
+        aggregate.totals.cachedInputTokens += cachedInputTokens;
+        aggregate.totals.cacheCreationInputTokens += cacheCreationInputTokens;
+        aggregate.totals.outputTokens += outputTokens;
+        aggregate.totals.reasoningOutputTokens += reasoningOutputTokens;
+        aggregate.totals.totalTokens += totalTokens;
+      }
+    }
+    return;
+  }
+  if (recordType === "tool/call") {
+    const name = stringValue(data?.name) ?? "";
+    if (name === "") return;
+    if (isDshEditTool(name)) {
+      const turn = data?.turn;
+      if (turn === undefined || turn === null) {
+        aggregate.unattributedEditTurns += 1;
+      } else {
+        aggregate.editTurnKeys.add(String(turn));
+      }
+    }
+    if (isDshSubagentTool(name)) {
+      aggregate.subagentCalls += 1;
+    }
+    return;
+  }
+}
+
+/** Parse one JSONL line's record into the aggregate; malformed lines are skipped. */
+function applyDshJsonlLine(
+  aggregate: DshRawAggregate,
+  line: string,
+  signal?: AbortSignal,
+): void {
+  signal?.throwIfAborted();
+  if (line.trim().length === 0) return;
+  let record: JsonObject;
+  try {
+    record = asObject(JSON.parse(line)) ?? {};
+  } catch {
+    return;
+  }
+  applyDshRecord(aggregate, record);
+}
+
+/** Apply every line of an already-decoded text region (whole-file semantics). */
+function applyDshJsonlText(
+  aggregate: DshRawAggregate,
+  text: string,
+  signal?: AbortSignal,
+): void {
+  for (const line of text.split("\n")) {
+    applyDshJsonlLine(aggregate, line, signal);
+  }
+}
+
+/**
+ * Apply records from a newly decoded appended text region. The region is only
+ * entered when the previously parsed text ended at a line boundary, so every
+ * split line is a complete record; torn/partial fragments are skipped exactly
+ * like whole-text parsing skips them.
+ */
+function applyDshAppendedText(
+  aggregate: DshRawAggregate,
+  text: string,
+  signal?: AbortSignal,
+): void {
+  for (const line of text.split("\n")) {
+    applyDshJsonlLine(aggregate, line, signal);
+  }
+}
+
+/** Full parse of one dsh session log. Returns null for unreadable logs. */
+async function parseDshSessionFileFull(
+  file: FileCandidate,
+  signal?: AbortSignal,
+): Promise<{
+  aggregate: DshRawAggregate;
+  prefixEnd: number;
+  endsWithNewline: boolean;
+} | null> {
+  let buffer: Buffer;
+  try {
+    buffer = await readFile(file.path);
+  } catch {
+    return null;
+  }
+  if (buffer.length > MAX_FILE_BYTES) return null;
+  const aggregate = emptyDshAggregate();
+  const isZstd =
+    buffer.length >= ZSTD_MAGIC_BYTES.length &&
+    buffer.subarray(0, ZSTD_MAGIC_BYTES.length).equals(ZSTD_MAGIC_BYTES);
+  let prefixEnd = buffer.length;
+  let endsWithNewline = false;
+  try {
+    if (isZstd) {
+      const decoded = decodeZstdSessionLogWithBounds(buffer);
+      applyDshJsonlText(aggregate, decoded.text, signal);
+      prefixEnd = decoded.completeEnd;
+      endsWithNewline = decoded.text.endsWith("\n");
+    } else {
+      const text = buffer.toString("utf8");
+      applyDshJsonlText(aggregate, text, signal);
+      endsWithNewline = text.endsWith("\n");
+    }
+  } catch {
+    return null;
+  }
+  const resolvedId = aggregate.sessionId ?? basename(dirname(file.path));
+  if (resolvedId === "") return null;
+  aggregate.sessionId = resolvedId;
+  return { aggregate, prefixEnd, endsWithNewline };
+}
+
+/**
+ * Per-file parse with cache: unchanged logs are replayed from the cache,
+ * appended logs are decoded from the last parsed frame boundary onward, and
+ * only new/rewritten logs are decoded in full. Entries are written through
+ * immediately so an aborted scan still leaves finished files cached.
+ */
+async function dshParsedFileFor(
+  file: FileCandidate,
+  signal: AbortSignal | undefined,
+  cache: Map<string, DshCacheEntry>,
+): Promise<DshParsedFile | null> {
+  let info;
+  try {
+    info = await stat(file.path);
+  } catch {
+    return null;
+  }
+  if (!info.isFile() || info.size < 0 || info.size > MAX_FILE_BYTES) {
+    return null;
+  }
+  const stamp: DshFileStamp = {
+    size: info.size,
+    mtimeMs: info.mtimeMs,
+    ctimeMs: info.ctimeMs,
+  };
+  const existing = cache.get(file.path);
+  if (
+    existing != null &&
+    existing.parseVersion === DSH_SESSION_PARSE_VERSION &&
+    dshStampsMatch(existing.stamp, stamp)
+  ) {
+    return dshParsedFromAggregate(existing.aggregate);
+  }
+
+  let buffer: Buffer;
+  try {
+    buffer = await readFile(file.path);
+  } catch {
+    return null;
+  }
+  if (buffer.length > MAX_FILE_BYTES) return null;
+  const isZstd =
+    buffer.length >= ZSTD_MAGIC_BYTES.length &&
+    buffer.subarray(0, ZSTD_MAGIC_BYTES.length).equals(ZSTD_MAGIC_BYTES);
+
+  // Append-only incremental path: the parsed prefix is byte-identical and
+  // ended on a line boundary, so only the bytes after prefixEnd need decoding
+  // and merging. A prefix that ended mid-line (or any rewrite/compaction) is
+  // re-parsed in full — the DSH writer does not produce mid-line frames.
+  if (
+    existing != null &&
+    existing.parseVersion === DSH_SESSION_PARSE_VERSION &&
+    existing.endsWithNewline &&
+    buffer.length >= existing.prefixEnd &&
+    sha256Hex(buffer.subarray(0, existing.prefixEnd)) === existing.prefixHash
+  ) {
+    if (buffer.length === existing.prefixEnd) {
+      // Metadata-only change (touch) — content unchanged, refresh the stamp.
+      cache.set(file.path, { ...existing, stamp });
+      return dshParsedFromAggregate(existing.aggregate);
+    }
+    try {
+      if (isZstd) {
+        const decoded = decodeZstdSessionLogWithBounds(
+          buffer.subarray(existing.prefixEnd),
+        );
+        if (decoded.completeEnd > 0) {
+          const regionEnd = existing.prefixEnd + decoded.completeEnd;
+          const aggregate = cloneDshAggregate(existing.aggregate);
+          applyDshAppendedText(aggregate, decoded.text, signal);
+          cache.set(file.path, {
+            parseVersion: DSH_SESSION_PARSE_VERSION,
+            stamp,
+            prefixEnd: regionEnd,
+            prefixHash: sha256Hex(buffer.subarray(0, regionEnd)),
+            endsWithNewline: decoded.text.endsWith("\n"),
+            aggregate,
+          });
+          return dshParsedFromAggregate(aggregate);
+        }
+      } else if (buffer.length > existing.prefixEnd) {
+        // Plaintext append (compression "none").
+        const tailText = buffer.toString("utf8", existing.prefixEnd);
+        const aggregate = cloneDshAggregate(existing.aggregate);
+        applyDshAppendedText(aggregate, tailText, signal);
+        cache.set(file.path, {
+          parseVersion: DSH_SESSION_PARSE_VERSION,
+          stamp,
+          prefixEnd: buffer.length,
+          prefixHash: sha256Hex(buffer),
+          endsWithNewline: tailText.endsWith("\n"),
+          aggregate,
+        });
+        return dshParsedFromAggregate(aggregate);
+      }
+      // Torn tail extended but no complete frame yet — content unchanged.
+      cache.set(file.path, { ...existing, stamp });
+      return dshParsedFromAggregate(existing.aggregate);
+    } catch {
+      // Structural change (rewrite/compaction/corruption): full reparse below.
+    }
+  }
+
+  const full = await parseDshSessionFileFull(file, signal);
+  if (full == null) {
+    // A log that can no longer be parsed must not shadow future repairs.
+    cache.delete(file.path);
+    return null;
+  }
+  cache.set(file.path, {
+    parseVersion: DSH_SESSION_PARSE_VERSION,
+    stamp,
+    prefixEnd: full.prefixEnd,
+    prefixHash: sha256Hex(buffer.subarray(0, full.prefixEnd)),
+    endsWithNewline: full.endsWithNewline,
+    aggregate: full.aggregate,
+  });
+  return dshParsedFromAggregate(full.aggregate);
+}
+
 async function scanDshSessions(
   dshDirectory: string,
   signal?: AbortSignal,
+  persistedCacheState?: unknown,
 ): Promise<SessionRecord[]> {
   const sessionsRoot = join(dshDirectory, "sessions");
   const files = await collectDshSessionFiles(sessionsRoot, signal);
+  let rootCache = dshScanCache.get(sessionsRoot);
+  if (rootCache == null) {
+    // Fresh process: seed this root from the persisted cache of the previous
+    // process so unchanged logs are never re-decoded after a restart. Entries
+    // are still stamp/hash validated per file, and files that disappeared are
+    // pruned at the end of this scan.
+    rootCache = hydrateDshScanRoot(sessionsRoot, persistedCacheState);
+    dshScanCache.set(sessionsRoot, rootCache);
+  }
   const fragments = new Map<string, SessionFragment>();
 
   for (const file of files) {
     signal?.throwIfAborted();
-    const fallbackSessionId = basename(dirname(file.path));
-    let content: string;
-    try {
-      const size = await readFileSize(file.path);
-      if (size < 0 || size > MAX_FILE_BYTES) continue;
-      content = await readDshSessionLog(file.path);
-    } catch {
-      continue;
-    }
-
-    let sessionId: string | undefined;
-    let title = "";
-    let model: string | null = null;
-    let projectRef: string | null = null;
-    const timestamps: RecordTimestamp[] = [];
-    const totals = emptyTokenCounts();
-    let turnStarts = 0;
-    let assistantMessages = 0;
-    const observedTurnKeys = new Set<string>();
-    const editTurnKeys = new Set<string>();
-    let unattributedEditTurns = 0;
-    let subagentCalls = 0;
-
-    for (const line of content.split("\n")) {
-      signal?.throwIfAborted();
-      if (line.trim().length === 0) continue;
-      let record: JsonObject;
-      try {
-        record = asObject(JSON.parse(line)) ?? {};
-      } catch {
-        continue;
-      }
-      const recordType = stringValue(record.type);
-      const data = asObject(record.data);
-      const time = parseTimestampValue(record.time);
-      if (time != null) timestamps.push(time);
-
-      if (recordType === "session") {
-        const headerId = stringValue(record.id);
-        if (headerId != null) sessionId = headerId;
-        const cwd = stringValue(record.cwd);
-        if (cwd != null) projectRef = cwd;
-        const createdAt = parseTimestampValue(record.createdAt);
-        if (createdAt != null) timestamps.push(createdAt);
-        continue;
-      }
-      if (recordType === "session/title") {
-        const sessionTitle = stringValue(data?.title);
-        if (sessionTitle != null && title === "") title = sessionTitle;
-        continue;
-      }
-      if (recordType === "request/context") {
-        const contextModel = stringValue(data?.model);
-        if (contextModel != null) model = contextModel;
-        continue;
-      }
-      if (recordType === "request/header") {
-        const headerModel = stringValue(
-          asObject(asObject(data?.header)?.config)?.model,
-        );
-        if (headerModel != null) model = headerModel;
-        continue;
-      }
-      if (recordType === "turn/start") {
-        turnStarts += 1;
-        continue;
-      }
-      if (recordType === "assistant/message") {
-        assistantMessages += 1;
-        const turn = data?.turn;
-        if (turn !== undefined && turn !== null) {
-          observedTurnKeys.add(String(turn));
-        }
-        const usage = asObject(data?.usage);
-        if (usage != null) {
-          const inputTokens = tokenValue(
-            usage.inputTokens ?? usage.uncachedInputTokens,
-          );
-          const cachedInputTokens = tokenValue(
-            usage.cacheReadTokens ?? usage.cachedInputTokens,
-          );
-          const cacheCreationInputTokens = tokenValue(
-            usage.cacheWriteTokens ??
-              usage.cacheCreationInputTokens ??
-              usage.cache_creation_input_tokens,
-          );
-          const outputTokens = tokenValue(usage.outputTokens);
-          const reasoningOutputTokens = tokenValue(
-            usage.reasoningTokens ?? usage.reasoningOutputTokens,
-          );
-          const totalTokens =
-            inputTokens +
-            cachedInputTokens +
-            cacheCreationInputTokens +
-            outputTokens +
-            reasoningOutputTokens;
-          if (totalTokens > 0) {
-            totals.inputTokens += inputTokens;
-            totals.cachedInputTokens += cachedInputTokens;
-            totals.cacheCreationInputTokens += cacheCreationInputTokens;
-            totals.outputTokens += outputTokens;
-            totals.reasoningOutputTokens += reasoningOutputTokens;
-            totals.totalTokens += totalTokens;
-          }
-        }
-        continue;
-      }
-      if (recordType === "tool/call") {
-        const name = stringValue(data?.name) ?? "";
-        if (name === "") continue;
-        if (isDshEditTool(name)) {
-          const turn = data?.turn;
-          if (turn === undefined || turn === null) {
-            unattributedEditTurns += 1;
-          } else {
-            editTurnKeys.add(String(turn));
-          }
-        }
-        if (isDshSubagentTool(name)) {
-          subagentCalls += 1;
-        }
-        continue;
-      }
-    }
-
-    const resolvedId = sessionId ?? fallbackSessionId;
-    if (resolvedId === "") continue;
+    const parsed = await dshParsedFileFor(file, signal, rootCache);
+    if (parsed == null) continue;
 
     const fragment =
-      fragments.get(resolvedId) ?? createEmptyFragment("dsh", resolvedId);
-    if (fragment.title === "" && title !== "") fragment.title = title;
-    if (model != null) fragment.model = model;
-    if (fragment.projectRef == null && projectRef != null) {
-      fragment.projectRef = projectRef;
+      fragments.get(parsed.sessionId) ??
+      createEmptyFragment("dsh", parsed.sessionId);
+    if (fragment.title === "" && parsed.title !== "") {
+      fragment.title = parsed.title;
     }
-    fragment.timestamps.push(...timestamps);
-    addTokenCounts(fragment.totals, totals);
-    fragment.turns +=
-      turnStarts > 0
-        ? turnStarts
-        : observedTurnKeys.size > 0
-          ? observedTurnKeys.size
-          : assistantMessages;
-    fragment.editTurns += editTurnKeys.size + unattributedEditTurns;
-    fragment.subagentCalls += subagentCalls;
-    fragments.set(resolvedId, fragment);
+    if (parsed.model != null) fragment.model = parsed.model;
+    if (fragment.projectRef == null && parsed.projectRef != null) {
+      fragment.projectRef = parsed.projectRef;
+    }
+    for (const ms of parsed.timestampsMs) {
+      fragment.timestamps.push(timestampFromMs(ms));
+    }
+    addTokenCounts(fragment.totals, parsed.totals);
+    fragment.turns += parsed.turns;
+    fragment.editTurns += parsed.editTurns;
+    fragment.subagentCalls += parsed.subagentCalls;
+    fragments.set(parsed.sessionId, fragment);
   }
 
+  // Drop entries whose session log disappeared, keeping the map bounded by
+  // the current file set (collectDshSessionFiles caps at MAX_FILES_PER_SOURCE).
+  const current = new Set(files.map((file) => file.path));
+  for (const path of [...rootCache.keys()]) {
+    if (!current.has(path)) rootCache.delete(path);
+  }
   return Promise.all(
     [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
   );
@@ -1835,12 +2354,18 @@ export async function scanLocalSessions(
             )
           : reader.defaultRoots.map((root) => join(homeDirectory, root));
       const scanned = await Promise.all(
-        roots.map((root) =>
-          reader.scan(root, traversalSignal).catch(() => {
+        roots.map((root) => {
+          // The DSH reader keeps its own persisted per-file cache (restart
+          // fast-path); all other readers are stateless registry readers.
+          const scan =
+            toolId === "dsh"
+              ? scanDshSessions(root, traversalSignal, options.dshCacheState)
+              : reader.scan(root, traversalSignal);
+          return scan.catch(() => {
             traversalSignal?.throwIfAborted();
             return [] as SessionRecord[];
-          }),
-        ),
+          });
+        }),
       );
       return scanned.flat();
     }),

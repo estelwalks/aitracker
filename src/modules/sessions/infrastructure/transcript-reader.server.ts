@@ -1,10 +1,16 @@
 import { createReadStream } from "node:fs";
 import { opendir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, relative, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { createInterface } from "node:readline";
+import { zstdDecompressSync } from "node:zlib";
 
 import { ENV } from "../../../lib/app-config.ts";
+import {
+  decodeZstdSessionLogWithBounds,
+  scanZstdFrames,
+  ZSTD_MAGIC_BYTES,
+} from "../../../lib/local-usage/dsh-zstd.ts";
 import {
   getDefaultRegistry,
   getSessionPlanFor,
@@ -104,6 +110,7 @@ const READER_DEFAULT_ROOTS: Readonly<Record<string, readonly string[]>> = {
   "claude-session-v1": [".claude"],
   "codex-session-v1": [".codex"],
   "grok-session-v1": [".grok"],
+  "dsh-session-v1": [".dsh"],
 };
 
 function asObject(value: unknown): JsonObject | undefined {
@@ -719,6 +726,242 @@ async function readAipyTranscript(
   }
 }
 
+// ---------------------------------------------------------------------------
+// DSH (DeepSeek Harness) — ~/.dsh/sessions/<workspace>/<session-id>/
+// session.jsonl[.zstd]. The container is a concatenated-zstd JSONL log where
+// every record is one event; conversation text lives in `user/message`
+// (data.content blocks) and `assistant/message` (data.message.content blocks,
+// reasoning included) records. Streamed `assistant/chunk` / `reasoning-chunks`
+// / `text-chunks` events are deliberately ignored — the complete message
+// records already carry the final text, so no stream merging is needed.
+// ---------------------------------------------------------------------------
+
+const DSH_LOG_FILE_NAMES = ["session.jsonl", "session.jsonl.zstd"] as const;
+
+/**
+ * Collect one session-log container per dsh session directory (zstd preferred
+ * when both forms exist), mirroring the metadata scanner's layout rules.
+ */
+async function collectDshSessionLogs(
+  sessionsRoot: string,
+  maxFiles: number,
+): Promise<FileCandidate[]> {
+  if (!(await directoryAvailable(sessionsRoot))) return [];
+  const candidates: FileCandidate[] = [];
+  let discoveredEntries = 0;
+  const pending = [sessionsRoot];
+  while (pending.length > 0 && discoveredEntries < MAX_DIRECTORY_ENTRIES) {
+    const directoryPath = pending.pop();
+    if (directoryPath == null) break;
+    let directory;
+    try {
+      directory = await opendir(directoryPath);
+    } catch {
+      continue;
+    }
+    for await (const entry of directory) {
+      discoveredEntries += 1;
+      if (discoveredEntries >= MAX_DIRECTORY_ENTRIES) break;
+      const entryPath = join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(entryPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (!DSH_LOG_FILE_NAMES.includes(entry.name as never)) continue;
+      candidates.push({ path: entryPath });
+      if (candidates.length >= maxFiles) return candidates;
+    }
+  }
+  // A session dir holds one container; prefer zstd when both forms exist.
+  const byDirectory = new Map<string, string>();
+  for (const candidate of candidates) {
+    const directory = dirname(candidate.path);
+    const existing = byDirectory.get(directory);
+    if (
+      existing == null ||
+      (!existing.endsWith(".zstd") && candidate.path.endsWith(".zstd"))
+    ) {
+      byDirectory.set(directory, candidate.path);
+    }
+  }
+  return [...byDirectory.values()].map((path) => ({ path }));
+}
+
+/** Read one dsh log (zstd container or plaintext JSONL) into UTF-8 text. */
+async function readDshLogText(filePath: string): Promise<string | undefined> {
+  const size = await readFileSize(filePath);
+  if (size < 0 || size > MAX_FILE_BYTES) return undefined;
+  let buffer: Buffer;
+  try {
+    buffer = await readFile(filePath);
+  } catch {
+    return undefined;
+  }
+  if (
+    buffer.length >= ZSTD_MAGIC_BYTES.length &&
+    buffer.subarray(0, ZSTD_MAGIC_BYTES.length).equals(ZSTD_MAGIC_BYTES)
+  ) {
+    try {
+      return decodeZstdSessionLogWithBounds(buffer).text;
+    } catch {
+      return undefined;
+    }
+  }
+  return buffer.toString("utf8");
+}
+
+/**
+ * The session header is the first record of the first frame; read only that
+ * frame to learn the authoritative session id without decoding the whole log.
+ * Returns the raw first line when the log is plaintext.
+ */
+async function dshLogHeaderId(filePath: string): Promise<string | undefined> {
+  let buffer: Buffer;
+  try {
+    buffer = await readFile(filePath);
+  } catch {
+    return undefined;
+  }
+  if (
+    buffer.length < ZSTD_MAGIC_BYTES.length ||
+    !buffer.subarray(0, ZSTD_MAGIC_BYTES.length).equals(ZSTD_MAGIC_BYTES)
+  ) {
+    const firstLine = buffer.toString("utf8").split("\n", 1)[0] ?? "";
+    return dshRecordHeaderId(firstLine);
+  }
+  let frames;
+  try {
+    frames = scanZstdFrames(buffer).frames;
+  } catch {
+    return undefined;
+  }
+  const first = frames[0];
+  if (first == null) return undefined;
+  try {
+    const text = zstdDecompressSync(buffer.subarray(first.start, first.end));
+    return dshRecordHeaderId(text.toString("utf8").split("\n", 1)[0] ?? "");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Session header id from the container's first JSON line, when present. */
+function dshRecordHeaderId(line: string): string | undefined {
+  if (line.trim().length === 0) return undefined;
+  try {
+    const record = JSON.parse(line) as { type?: unknown; id?: unknown };
+    if (record.type !== "session") return undefined;
+    return typeof record.id === "string" && record.id.length > 0
+      ? record.id
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+interface DshTranscriptRecord {
+  role: "user" | "assistant";
+  text: string;
+  thinking: string | undefined;
+  ts: number;
+  seq: number;
+}
+
+/** Extract conversation text records from one dsh log into `out` (capped). */
+async function readDshLogMessages(
+  filePath: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const text = await readDshLogText(filePath);
+  if (text == null) return;
+  const collected: DshTranscriptRecord[] = [];
+  const seenIds = new Map<string, number>();
+  let sequence = 0;
+  for (const line of text.split("\n")) {
+    if (line.trim().length === 0) continue;
+    let record: JsonObject;
+    try {
+      record = asObject(JSON.parse(line)) ?? {};
+    } catch {
+      continue;
+    }
+    const recordType = stringValue(record.type);
+    if (recordType !== "user/message" && recordType !== "assistant/message") {
+      continue;
+    }
+    const data = asObject(record.data);
+    const message = asObject(data?.message);
+    const roleValue = stringValue(data?.role) ?? stringValue(message?.role);
+    const role =
+      roleValue === "user"
+        ? "user"
+        : roleValue === "assistant"
+          ? "assistant"
+          : null;
+    if (role == null) continue;
+    const { text: body, thinking } = extractContent(
+      data?.content ?? message?.content,
+    );
+    if (body.length === 0 && thinking.length === 0) continue;
+    const messageId =
+      stringValue(message?.id) ?? stringValue(data?.id) ?? undefined;
+    const entry: DshTranscriptRecord = {
+      role,
+      text: body,
+      thinking: thinking.length > 0 ? thinking : undefined,
+      ts: parseTimestampMs(record.time),
+      seq: sequence++,
+    };
+    if (messageId != null) {
+      const existing = seenIds.get(messageId);
+      if (existing != null) {
+        // Retried generations can repeat a message id — keep the last attempt.
+        collected[existing] = entry;
+        continue;
+      }
+      seenIds.set(messageId, collected.length);
+    }
+    collected.push(entry);
+  }
+  collected.sort((left, right) =>
+    left.ts === right.ts ? left.seq - right.seq : left.ts - right.ts,
+  );
+  for (const entry of collected) {
+    pushMessage(out, entry.role, entry.text, entry.thinking, entry.ts, limits);
+  }
+}
+
+async function readDshTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const logs = await collectDshSessionLogs(
+    join(root, "sessions"),
+    limits.maxFiles,
+  );
+  // Modern layouts name the session directory with the session id; older logs
+  // may live under a uuid directory whose header carries the id, so probe the
+  // first frame header when no directory match exists.
+  const matched = logs.filter(
+    (log) => basename(dirname(log.path)) === sessionId,
+  );
+  if (matched.length === 0) {
+    for (const log of logs) {
+      if (out.length >= limits.maxMessages) break;
+      const headerId = await dshLogHeaderId(log.path);
+      if (headerId === sessionId) matched.push(log);
+    }
+  }
+  for (const log of matched) {
+    if (out.length >= limits.maxMessages) break;
+    await readDshLogMessages(log.path, out, limits);
+  }
+}
+
 /**
  * Load one session's transcript into memory (S-300). Returns an empty
  * transcript for unknown sources, unsafe ids, or missing logs — it never
@@ -806,6 +1049,8 @@ async function readSourceTranscript(
       return readCodexTranscript(root, sessionId, out, limits);
     case "grok-session-v1":
       return readGrokTranscript(root, sessionId, out, limits);
+    case "dsh-session-v1":
+      return readDshTranscript(root, sessionId, out, limits);
     case "aipy-session-v1":
       return readAipyTranscript(root, sessionId, out);
     default:

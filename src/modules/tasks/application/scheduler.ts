@@ -81,6 +81,15 @@ export interface SchedulerOptions {
     definition: JobTypeDefinition,
   ) => boolean | Promise<boolean>;
   /**
+   * Grace period before the non-barrier startup sweep begins. When a startup
+   * task is NOT awaited by the native startup barrier (its snapshot already
+   * exists on disk), it refreshes stale data that the UI can keep reading, so
+   * the collectors may start this many milliseconds after the scheduler
+   * starts instead of competing with the first page loads. Barrier-awaited
+   * startup tasks (first-run/empty workspaces) are never delayed.
+   */
+  readonly startupSweepDelayMs?: number;
+  /**
    * Durable cursor store for calendar schedules. When present, the scheduler
    * persists each armed occurrence and catches up overdue ones after a
    * restart (same contract the security scan scheduler uses).
@@ -278,15 +287,17 @@ const DEFAULT_ENABLED_TASK_IDS = new Set([
 ]);
 
 /**
- * The first run competes for one shared heavy-collector permit.  Keep the
- * locally visible workspace data ahead of opportunistic network work so the
- * native startup screen can finish meaningful initialization before the
- * dashboard is shown.  Normal scheduled/manual runs still use their declared
- * queue priority; this order only applies to the startup sweep.
+ * The first run competes for one shared heavy-collector permit. The sessions
+ * collector runs first: it is the only startup collector that benefits from
+ * the persisted DSH per-file scan cache (seconds instead of minutes) and its
+ * snapshot backs the session-history pages, so committing it early keeps the
+ * app responsive while the slower usage collector refreshes behind it.
+ * Opportunity-free network work (exchange) stays last; this order only
+ * applies to the startup sweep.
  */
 const STARTUP_TASK_ORDER = new Map<string, number>([
-  ["usage.refresh", 0],
-  ["sessions.refresh", 1],
+  ["sessions.refresh", 0],
+  ["usage.refresh", 1],
   ["skills.refresh", 2],
   ["installation.refresh", 3],
   ["exchange.refresh", 4],
@@ -335,6 +346,8 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
   const activeExecutions = new Set<Promise<void>>();
   let sequence = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  /** One-shot timer for the deferred (non-barrier) startup sweep. */
+  let delayedStartupTimer: ReturnType<typeof setTimeout> | undefined;
   let started = false;
   let startPromise: Promise<void> | undefined;
   let lifecycle = 0;
@@ -890,6 +903,15 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         definition: JobTypeDefinition;
         run: JobRun;
       }> = [];
+      // Tasks whose refresh is not part of the native startup barrier (their
+      // snapshot already exists and stays readable while stale) can wait out
+      // the grace period so the first page loads do not compete with the
+      // heavy collectors. Barrier-awaited tasks always run immediately.
+      const delayedStartup: Array<{
+        definition: JobTypeDefinition;
+        taskId: TaskId;
+      }> = [];
+      const startupSweepDelayMs = options.startupSweepDelayMs ?? 0;
       for (const definition of prioritizeStartupDefinitions(catalog)) {
         assertCurrentStart();
         if (definition.startupPolicy !== "if-stale") continue;
@@ -903,6 +925,18 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
             (options.shouldAwaitStartupTask == null ||
               (await options.shouldAwaitStartupTask(definition)));
           assertCurrentStart();
+          if (!shouldAwaitStartupTask && startupSweepDelayMs > 0) {
+            // Claim the schedule slot now so the shared tick does not re-fire
+            // the overdue task immediately after start; the grace timer runs
+            // it instead (and advances the slot again when it fires).
+            scheduledByThisStart.set(taskId, {
+              previous: lastScheduledAt.get(taskId),
+              scheduled: now,
+            });
+            lastScheduledAt.set(taskId, now);
+            delayedStartup.push({ definition, taskId });
+            continue;
+          }
           scheduledByThisStart.set(definition.id, {
             previous: lastScheduledAt.get(definition.id),
             scheduled: now,
@@ -922,8 +956,34 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       }
       await awaitStartupBarrier(startupRuns);
       assertCurrentStart();
+      if (delayedStartup.length > 0) {
+        // Fire the delayed sweep after the grace period. The lifecycle guard
+        // makes a stale timer a no-op after stop()/restart.
+        const markScheduled = (taskId: TaskId, at: Date) => {
+          scheduledByThisStart.set(taskId, {
+            previous: lastScheduledAt.get(taskId),
+            scheduled: at,
+          });
+          lastScheduledAt.set(taskId, at);
+        };
+        delayedStartupTimer = setTimer(() => {
+          void (async () => {
+            const fireAt = clock.now();
+            for (const { taskId } of delayedStartup) {
+              assertCurrentStart();
+              markScheduled(taskId, fireAt);
+              const run = await runNow(
+                { taskId, reason: "startup" },
+                expectedLifecycle,
+              );
+              startupCompletions.delete(run.runId);
+              assertCurrentStart();
+            }
+          })().catch(() => undefined);
+        }, startupSweepDelayMs);
+      }
       await scheduleNext(expectedLifecycle);
-    } catch {
+    } catch (cause) {
       for (const [taskId, entry] of scheduledByThisStart) {
         if (lastScheduledAt.get(taskId) !== entry.scheduled) continue;
         if (entry.previous) lastScheduledAt.set(taskId, entry.previous);
@@ -936,6 +996,10 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       }
       for (const retryTimer of retryTimers) clearTimer(retryTimer);
       retryTimers.clear();
+      if (delayedStartupTimer !== undefined) {
+        clearTimer(delayedStartupTimer);
+        delayedStartupTimer = undefined;
+      }
       throw new TaskSchedulerStartupError();
     }
   };
@@ -962,6 +1026,10 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       if (timer !== undefined) {
         clearTimer(timer);
         timer = undefined;
+      }
+      if (delayedStartupTimer !== undefined) {
+        clearTimer(delayedStartupTimer);
+        delayedStartupTimer = undefined;
       }
       for (const retryTimer of retryTimers) clearTimer(retryTimer);
       retryTimers.clear();

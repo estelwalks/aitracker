@@ -1,3 +1,4 @@
+import { constants, zstdCompressSync } from "node:zlib";
 import assert from "node:assert/strict";
 import {
   mkdir,
@@ -343,6 +344,194 @@ test("stops at the record cap without erroring", async () => {
       { homeDirectory: home, limits: { maxRecordsPerFile: 2 } },
     );
     assert.ok(transcript.messages.length <= 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DeepSeek Harness (DSH) — ~/.dsh/sessions/<workspace>/<session-id>/
+// ---------------------------------------------------------------------------
+
+const DSH_TEST_SESSION_ID = "22222222-3333-4444-5555-666666666666";
+
+function dshTranscriptLines(sessionId: string): string {
+  const record = (value: unknown) => JSON.stringify(value);
+  const lines = [
+    {
+      type: "session",
+      version: 0,
+      id: sessionId,
+      createdAt: "2026-08-03T09:00:00.000Z",
+      cwd: "/Users/demo/proj",
+    },
+    {
+      type: "session/title",
+      seq: 1,
+      time: "2026-08-03T09:00:00.100Z",
+      data: { title: "Fix login" },
+    },
+    {
+      type: "turn/start",
+      seq: 2,
+      time: "2026-08-03T09:00:00.200Z",
+      data: { turn: 1 },
+    },
+    {
+      type: "user/message",
+      seq: 3,
+      time: 1788333960442,
+      data: {
+        content: [{ type: "text", text: "修复登录问题" }],
+        source: { kind: "user" },
+        role: "user",
+        id: "user-msg-1",
+      },
+    },
+    {
+      type: "assistant/message",
+      seq: 4,
+      time: 1788333961442,
+      data: {
+        turn: 1,
+        step: 1,
+        message: {
+          role: "assistant",
+          content: [
+            { type: "reasoning", text: "先检查 auth 模块" },
+            { type: "text", text: "我来修复认证流程。" },
+          ],
+          source: {
+            kind: "model",
+            provider: "deepseek-official",
+            model: "deepseek-v4-pro",
+          },
+          id: "asst-msg-1",
+        },
+        usage: { inputTokens: 100, outputTokens: 20 },
+      },
+    },
+    {
+      type: "tool/call",
+      seq: 5,
+      time: 1788333962442,
+      data: {
+        turn: 1,
+        step: 1,
+        callId: "call-1",
+        name: "edit",
+        arguments: "SECRET ARGS",
+      },
+    },
+    {
+      type: "assistant/chunk",
+      seq: 6,
+      time: 1788333963442,
+      data: { messageId: "asst-msg-1", text: "partial" },
+    },
+    // Retry re-emits the SAME assistant message id with the final text — the
+    // reader must keep the last attempt, not the earlier one.
+    {
+      type: "assistant/message",
+      seq: 7,
+      time: 1788333964442,
+      data: {
+        turn: 1,
+        step: 1,
+        message: {
+          role: "assistant",
+          content: [
+            { type: "reasoning", text: "最终确认 auth 模块" },
+            { type: "text", text: "修复完成（重试后的最终结果）" },
+          ],
+          source: { kind: "model", model: "deepseek-v4-pro" },
+          id: "asst-msg-1",
+        },
+        usage: { inputTokens: 120, outputTokens: 25 },
+      },
+    },
+    {
+      type: "user/message",
+      seq: 8,
+      time: 1788333965442,
+      data: {
+        content: "再检查一下边界情况",
+        source: { kind: "user" },
+        role: "user",
+        id: "user-msg-2",
+      },
+    },
+  ] as const;
+  return `${lines.map((value) => record(value)).join("\n")}\n`;
+}
+
+test("DSH: extracts user/assistant text and reasoning from session.jsonl", async () => {
+  await withTempHome(async (home) => {
+    const sessionDir = join(
+      home,
+      ".dsh",
+      "sessions",
+      "aitracker_webapp",
+      DSH_TEST_SESSION_ID,
+    );
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, "session.jsonl"),
+      dshTranscriptLines(DSH_TEST_SESSION_ID),
+    );
+
+    const transcript = await loadSessionTranscript(
+      { source: "dsh", sessionId: DSH_TEST_SESSION_ID },
+      { homeDirectory: home },
+    );
+
+    assert.equal(transcript.sessionId, DSH_TEST_SESSION_ID);
+    assert.equal(transcript.source, "dsh");
+    assert.deepEqual(
+      transcript.messages.map((message) => message.role),
+      ["user", "assistant", "user"],
+    );
+    assert.equal(transcript.messages[0]?.text, "修复登录问题");
+    assert.equal(transcript.messages[0]?.thinking, undefined);
+    assert.equal(transcript.messages[1]?.text, "修复完成（重试后的最终结果）");
+    assert.equal(transcript.messages[1]?.thinking, "最终确认 auth 模块");
+    assert.equal(transcript.messages[2]?.text, "再检查一下边界情况");
+  });
+});
+
+test("DSH: reads a zstd session log whose directory predates header ids", async () => {
+  await withTempHome(async (home) => {
+    // Directory uses an opaque uuid; the authoritative id lives in the first
+    // frame's session header.
+    const sessionDir = join(
+      home,
+      ".dsh",
+      "sessions",
+      "legacy-workspace",
+      "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    );
+    await mkdir(sessionDir, { recursive: true });
+    const frame = (text: string) =>
+      zstdCompressSync(Buffer.from(text, "utf8"), {
+        params: { [constants.ZSTD_c_checksumFlag]: 1 },
+      });
+    const lines = dshTranscriptLines(DSH_TEST_SESSION_ID).split("\n");
+    const header = lines[0] ?? "";
+    const events = lines.slice(1).join("\n");
+    await writeFile(
+      join(sessionDir, "session.jsonl.zstd"),
+      Buffer.concat([frame(`${header}\n`), frame(events)]),
+    );
+
+    const transcript = await loadSessionTranscript(
+      { source: "dsh", sessionId: DSH_TEST_SESSION_ID },
+      { homeDirectory: home },
+    );
+
+    assert.deepEqual(
+      transcript.messages.map((message) => message.role),
+      ["user", "assistant", "user"],
+    );
+    assert.equal(transcript.messages[1]?.text, "修复完成（重试后的最终结果）");
+    assert.equal(transcript.messages[1]?.thinking, "最终确认 auth 模块");
   });
 });
 

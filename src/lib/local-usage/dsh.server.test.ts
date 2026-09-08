@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
-import { access, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { constants, zstdCompressSync } from "node:zlib";
 import { APP_DATA_DIR } from "../app-config";
 
-import { scanLocalUsage } from "./scanner.server.ts";
+import {
+  __resetUsageScanIndexForTests,
+  hydrateUsageScanIndex,
+  scanLocalUsage,
+  snapshotUsageScanIndex,
+} from "./scanner.server.ts";
 import { isPrivateSessionId } from "./session-id.ts";
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -303,6 +308,229 @@ test("DSH reader reports a diagnostic for undecodable logs without failing the s
       summary.diagnostics?.some((d) => d.code === "malformed-json"),
       "expected a malformed-json diagnostic for the corrupt log",
     );
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("DSH appended frames are merged incrementally without re-decoding the prefix", async () => {
+  const f = await fixture();
+  const project = join(f.homeDirectory, "project-inc");
+  const sessionDir = join(
+    f.homeDirectory,
+    ".dsh",
+    "sessions",
+    "project-inc",
+    "session-44444444-4444-4444-4444-444444444444",
+  );
+  const file = join(sessionDir, "session.jsonl.zstd");
+  await mkdir(sessionDir, { recursive: true });
+  const usage = (
+    seq: number,
+    inputTokens: number,
+    outputTokens: number,
+    model: string,
+  ) =>
+    JSON.stringify({
+      type: "request/header",
+      seq: seq + 100,
+      time: TIME + seq * 1000,
+      data: { header: { config: { provider: "deepseek-official", model } } },
+    }) +
+    `\n` +
+    JSON.stringify({
+      type: "assistant/message",
+      seq,
+      time: TIME + seq * 1000,
+      data: {
+        turn: 1,
+        step: seq,
+        message: { role: "assistant", content: [] },
+        usage: { inputTokens, outputTokens, cacheReadTokens: 0 },
+      },
+    });
+  // First batch: one usage event (model flash).
+  await writeFile(
+    file,
+    sessionLog(HEADER(project), [usage(1, 100, 20, "deepseek-v4-flash")]),
+  );
+
+  try {
+    const first = await scanLocalUsage({
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    });
+    const firstEvents = first.details.filter((e) => e.source === "dsh");
+    assert.equal(firstEvents.length, 1);
+    assert.equal(firstEvents[0].inputTokens, 100);
+    assert.equal(firstEvents[0].model, "deepseek-v4-flash");
+
+    // Append a second batch (model switches to v4-pro for the new event).
+    const appended = await readFile(file);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await writeFile(
+      file,
+      Buffer.concat([
+        appended,
+        sessionLog("", [usage(2, 40, 3, "deepseek-v4-pro")]),
+      ]),
+    );
+
+    const second = await scanLocalUsage({
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    });
+    const secondEvents = second.details.filter((e) => e.source === "dsh");
+    assert.equal(secondEvents.length, 2);
+    const byInput = new Map(secondEvents.map((e) => [e.inputTokens, e]));
+    assert.equal(byInput.get(100)?.model, "deepseek-v4-flash");
+    assert.equal(byInput.get(100)?.outputTokens, 20);
+    // The tail event must carry the model that the appended request/header set.
+    assert.equal(byInput.get(40)?.model, "deepseek-v4-pro");
+    assert.equal(byInput.get(40)?.outputTokens, 3);
+    const dshTotals = second.bySource.find((b) => b.key === "dsh");
+    assert.equal(dshTotals?.inputTokens, 140);
+    assert.equal(dshTotals?.outputTokens, 23);
+    assert.equal(dshTotals?.events, 2);
+    const secondSummary = second.sources.find((s) => s.source === "dsh");
+    assert.equal(secondSummary?.filesParsed, 1);
+    assert.equal(secondSummary?.filesReused, 0);
+
+    // A third scan with an unchanged file reuses the merged entry.
+    const third = await scanLocalUsage({
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    });
+    const thirdSummary = third.sources.find((s) => s.source === "dsh");
+    assert.equal(thirdSummary?.filesParsed, 0);
+    assert.equal(thirdSummary?.filesReused, 1);
+    assert.equal(third.details.filter((e) => e.source === "dsh").length, 2);
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("DSH same-length rewrites are re-parsed in full instead of merged as appends", async () => {
+  const f = await fixture();
+  const project = join(f.homeDirectory, "project-rewrite");
+  const sessionDir = join(
+    f.homeDirectory,
+    ".dsh",
+    "sessions",
+    "project-rewrite",
+    "session-55555555-5555-5555-5555-555555555555",
+  );
+  const file = join(sessionDir, "session.jsonl.zstd");
+  await mkdir(sessionDir, { recursive: true });
+  const event = (inputTokens: number) =>
+    JSON.stringify({
+      type: "assistant/message",
+      seq: 3,
+      time: TIME + 1000,
+      data: {
+        turn: 1,
+        step: 1,
+        message: { role: "assistant", content: [] },
+        usage: { inputTokens, outputTokens: 20, cacheReadTokens: 0 },
+      },
+    });
+
+  try {
+    await writeFile(file, sessionLog(HEADER(project), [event(100)]));
+    const first = await scanLocalUsage({
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(
+      first.details.filter((e) => e.source === "dsh")[0]?.inputTokens,
+      100,
+    );
+
+    // Rewrite with the same total byte length (100 -> 111): the prefix hash
+    // must fail and trigger a full re-parse, replacing the cached event.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    await writeFile(file, sessionLog(HEADER(project), [event(111)]));
+    const second = await scanLocalUsage({
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    });
+    const events = second.details.filter((e) => e.source === "dsh");
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.inputTokens, 111);
+    assert.equal(events[0]?.outputTokens, 20);
+    const totals = second.bySource.find((b) => b.key === "dsh");
+    assert.equal(totals?.inputTokens, 111);
+    assert.equal(totals?.events, 1);
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("DSH usage scan index survives a simulated restart via snapshot/hydrate", async () => {
+  const f = await fixture();
+  const project = join(f.homeDirectory, "project-restart");
+  const sessionDir = join(
+    f.homeDirectory,
+    ".dsh",
+    "sessions",
+    "project-restart",
+    "session-66666666-6666-6666-6666-666666666666",
+  );
+  await mkdir(sessionDir, { recursive: true });
+  await writeFile(
+    join(sessionDir, "session.jsonl.zstd"),
+    sessionLog(HEADER(project), [
+      JSON.stringify({
+        type: "assistant/message",
+        seq: 3,
+        time: TIME + 1000,
+        data: {
+          turn: 1,
+          step: 1,
+          message: { role: "assistant", content: [] },
+          usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0 },
+        },
+      }),
+    ]),
+  );
+
+  try {
+    const options = {
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    };
+    await scanLocalUsage(options);
+    const snapshot = snapshotUsageScanIndex();
+    assert.ok(snapshot != null);
+    assert.ok(Object.keys(snapshot).length > 0);
+
+    // Simulate a fresh process: clear the module index and scan again —
+    // without the persisted state the file is parsed from scratch.
+    __resetUsageScanIndexForTests();
+    const cold = await scanLocalUsage(options);
+    assert.equal(cold.sources.find((s) => s.source === "dsh")?.filesParsed, 1);
+
+    // Restoring the snapshot makes the next scan reuse every file.
+    hydrateUsageScanIndex(snapshot);
+    const warm = await scanLocalUsage(options);
+    const summary = warm.sources.find((s) => s.source === "dsh");
+    assert.ok(summary);
+    assert.equal(summary.filesParsed, 0);
+    assert.equal(summary.filesReused, 1);
+    assert.equal(summary.events, 1);
+    const totals = warm.bySource.find((b) => b.key === "dsh");
+    assert.equal(totals?.inputTokens, 100);
+    assert.equal(totals?.events, 1);
+
+    // Garbage state is ignored without side effects.
+    hydrateUsageScanIndex({ version: 99, indexes: [] });
+    assert.ok(snapshotUsageScanIndex() != null);
   } finally {
     await rm(f.root, { recursive: true, force: true });
   }

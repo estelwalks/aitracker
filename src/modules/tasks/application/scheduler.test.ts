@@ -442,13 +442,50 @@ test("startup executes collectors in the existing startup priority order", async
 
   await scheduler.start();
   assert.deepEqual(order, [
-    "usage.refresh",
     "sessions.refresh",
+    "usage.refresh",
     "skills.refresh",
     "installation.refresh",
     "exchange.refresh",
   ]);
   await scheduler.stop();
+});
+
+test("startupSweepDelayMs defers non-barrier startup collectors past the grace window", async () => {
+  const h = harness();
+  const order: string[] = [];
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: startupCatalog(),
+    startupSweepDelayMs: 120,
+    // Snapshots exist: no startup task belongs to the native barrier.
+    shouldAwaitStartupTask: () => false,
+    executors: successfulStartupExecutors((taskId) => order.push(taskId)),
+  });
+
+  try {
+    await scheduler.start();
+    // Inside the grace window no collector may compete with first page loads.
+    assert.deepEqual(order, []);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert.deepEqual(order, [
+      "sessions.refresh",
+      "usage.refresh",
+      "skills.refresh",
+      "installation.refresh",
+      "exchange.refresh",
+    ]);
+  } finally {
+    await scheduler.stop();
+  }
+  assert.deepEqual(order, [
+    "sessions.refresh",
+    "usage.refresh",
+    "skills.refresh",
+    "installation.refresh",
+    "exchange.refresh",
+  ]);
 });
 
 test("calculates interval, daily, weekly and monthly schedules in local time", () => {
@@ -696,8 +733,8 @@ test("startup prioritizes local workspace snapshots ahead of exchange refresh", 
     .map((definition) => definition.id);
 
   assert.deepEqual(startupIds.slice(0, 5), [
-    "usage.refresh",
     "sessions.refresh",
+    "usage.refresh",
     "skills.refresh",
     "installation.refresh",
     "exchange.refresh",
@@ -849,7 +886,7 @@ test("heavy collector timeout starts only after its permit is acquired", async (
   });
   await new Promise<void>((resolve) => setImmediate(resolve));
 
-  assert.deepEqual(armedTimeouts, [120_000]);
+  assert.deepEqual(armedTimeouts, [900_000]);
   releaseUsage();
   for (
     let attempt = 0;
@@ -858,7 +895,7 @@ test("heavy collector timeout starts only after its permit is acquired", async (
   ) {
     await new Promise<void>((resolve) => setTimeout(resolve, 1));
   }
-  assert.deepEqual(armedTimeouts, [120_000, 60_000]);
+  assert.deepEqual(armedTimeouts, [900_000, 60_000]);
   assert.equal(
     h.runs.some(
       (run) =>

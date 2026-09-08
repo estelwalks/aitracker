@@ -18,10 +18,24 @@ export const SESSION_COLLECTOR_VERSION = "sessions-v7";
  * so no page query re-scans the local session logs.
  */
 
+export interface SessionScanCacheStore {
+  /** Loads the persisted DSH scan cache snapshot, or null when absent. */
+  load(): Promise<unknown | null>;
+  /** Persists a DSH scan cache snapshot (replaces the previous one). */
+  save(state: unknown): Promise<void>;
+}
+
 export interface SessionSnapshotRuntimeOptions {
   readonly repository: SnapshotRepository<SessionSnapshotData>;
   readonly requestRefresh?: SnapshotRefreshPort;
   readonly now?: () => number;
+  /**
+   * Persistence for the DSH per-file scan cache. When provided, the collector
+   * restores the previous process's cache before scanning and writes the
+   * updated snapshot back after each run, so restarts skip re-decoding the
+   * full DSH history (see scanner.server.ts `snapshotDshScanCache`).
+   */
+  readonly scanCacheStore?: SessionScanCacheStore;
   readonly collect?: (request: {
     readonly signal: AbortSignal;
     readonly previous: SnapshotEnvelope<SessionSnapshotData> | null;
@@ -64,6 +78,30 @@ export function createSessionSnapshotRuntime(
   options: SessionSnapshotRuntimeOptions,
 ): SessionSnapshotRuntime {
   let collectorVersionChecked = false;
+  // The persisted DSH scan cache is loaded at most once per process and
+  // restored into the scanner before the first collection of each run.
+  let loadedScanCache: Promise<unknown | null> | null = null;
+  let persistedScanCacheText: string | null = null;
+  const scanCacheState = (): Promise<unknown | null> => {
+    if (options.scanCacheStore == null) return Promise.resolve(null);
+    loadedScanCache ??= options.scanCacheStore.load().catch(() => null);
+    return loadedScanCache;
+  };
+  const persistScanCache = async (): Promise<void> => {
+    if (options.scanCacheStore == null) return;
+    try {
+      const { snapshotDshScanCache } =
+        await import("../../../lib/local-sessions/scanner.server.ts");
+      const snapshot = snapshotDshScanCache();
+      if (snapshot == null) return;
+      const serialized = JSON.stringify(snapshot);
+      if (serialized === persistedScanCacheText) return;
+      await options.scanCacheStore.save(snapshot);
+      persistedScanCacheText = serialized;
+    } catch {
+      // Best-effort: a failed cache write only costs the next cold scan.
+    }
+  };
   const collectSource =
     options.collect ??
     (async ({ signal }) => {
@@ -82,7 +120,17 @@ export function createSessionSnapshotRuntime(
       const { scanLocalSessions } =
         await import("../../../lib/local-sessions/scanner.server.ts");
       const { toPublicSession } = await import("./session-adapter.server.ts");
-      const summary = await scanLocalSessions({ signal });
+      let summary;
+      try {
+        summary = await scanLocalSessions({
+          signal,
+          dshCacheState: await scanCacheState(),
+        });
+      } finally {
+        // Write-through even on abort: per-file entries finished before the
+        // cancellation are persisted, so the next run converges faster.
+        await persistScanCache();
+      }
       // Public summary + server-only raw cwd. The dashboard adapter classifies
       // sessions into the same project labels as usage events; every browser
       // boundary (snapshot-session-repository, dashboard aggregates) strips

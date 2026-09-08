@@ -120,13 +120,24 @@ export function scanZstdFrames(buffer: Buffer): ZstdFrameScan {
   return { frames };
 }
 
+export interface ZstdDecodedSessionLog {
+  /** Plaintext of every complete frame. */
+  readonly text: string;
+  /** Byte offset of the end of the last complete frame (torn tail excluded). */
+  readonly completeEnd: number;
+}
+
 /**
- * Decode a complete DSH zstd session log (concatenated frames) to UTF-8 text.
- * A trailing incomplete frame (torn tail) is dropped, matching the writer's
- * committed-prefix semantics; structurally corrupt complete frames throw.
+ * Decode a complete DSH zstd session log (concatenated frames) to UTF-8 text
+ * plus the byte extent of the decoded frames. A trailing incomplete frame
+ * (torn tail) is dropped, matching the writer's committed-prefix semantics;
+ * structurally corrupt complete frames throw. The bounds let callers resume
+ * from `completeEnd` on a later append without re-decoding the prefix.
  */
-export function decodeZstdSessionLog(buffer: Buffer): string {
-  const { frames, tornStart } = scanZstdFrames(buffer);
+export function decodeZstdSessionLogWithBounds(
+  buffer: Buffer,
+): ZstdDecodedSessionLog {
+  const { frames } = scanZstdFrames(buffer);
   if (frames.length === 0) {
     throw new Error("zstd session log is empty or header-less");
   }
@@ -152,7 +163,19 @@ export function decodeZstdSessionLog(buffer: Buffer): string {
     }
     parts.push(plaintext.toString("utf8"));
   }
-  return parts.join("");
+  return {
+    text: parts.join(""),
+    completeEnd: frames[frames.length - 1]!.end,
+  };
+}
+
+/**
+ * Decode a complete DSH zstd session log (concatenated frames) to UTF-8 text.
+ * A trailing incomplete frame (torn tail) is dropped, matching the writer's
+ * committed-prefix semantics; structurally corrupt complete frames throw.
+ */
+export function decodeZstdSessionLog(buffer: Buffer): string {
+  return decodeZstdSessionLogWithBounds(buffer).text;
 }
 
 /**
