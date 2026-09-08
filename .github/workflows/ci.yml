@@ -1,9 +1,17 @@
 name: CI
 
 on:
-  push:
-    branches: ["**"]
   pull_request:
+  # The protect-main ruleset requires checks named exactly "CI / verify" and
+  # "CI / e2e". Triggering CI on pushes to feature branches would produce a
+  # second set of same-named check runs (push + pull_request) per commit;
+  # GitHub then disambiguates them as "(push)"/"(pull_request)" and the
+  # unsuffixed required-check contexts are never satisfied. Feature-branch CI
+  # still runs via the pull_request trigger; push is kept only for main so
+  # post-merge commits keep a green run.
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
