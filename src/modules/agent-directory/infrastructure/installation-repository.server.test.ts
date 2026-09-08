@@ -71,7 +71,7 @@ test("windows 10 and windows 11 use the same registry parity group", async () =>
   );
 });
 
-test("linux planned status never probes and is represented as unsupported", async () => {
+test("linux probes only linux-supported tools; planned tools are unsupported", async () => {
   let calls = 0;
   const repository = createAgentInstallationRepository({
     homeDirectory: HOME,
@@ -83,11 +83,25 @@ test("linux planned status never probes and is represented as unsupported", asyn
     },
   });
   const snapshot = await repository.inspect({ platform: "linux" });
-  assert.equal(calls, 0);
-  assert.ok(
-    snapshot.installations.every((item) => item.status === "unsupported"),
+  // pi ships a linux build (registry declares linux supported) and is the
+  // only catalog tool probed there; every other tool stays linux-planned.
+  assert.equal(calls, 1);
+  const pi = snapshot.installations.find((item) => item.agentId === "pi");
+  assert.equal(pi?.status, "installed");
+  assert.equal(
+    snapshot.health.find((item) => item.agentId === "pi")?.status,
+    "healthy",
   );
-  assert.ok(snapshot.health.every((item) => item.status === "unavailable"));
+  assert.ok(
+    snapshot.installations
+      .filter((item) => item.agentId !== "pi")
+      .every((item) => item.status === "unsupported"),
+  );
+  assert.ok(
+    snapshot.health
+      .filter((item) => item.agentId !== "pi")
+      .every((item) => item.status === "unavailable"),
+  );
 });
 
 test("permission failures become unknown/degraded without leaking the path", async () => {

@@ -92,9 +92,20 @@ describe("P4-T1 platform-aware probing", () => {
     }
   });
 
-  it("linux planned produces no probe roots (never scanned)", () => {
+  it("linux probes supported tools only; planned tools never get roots", () => {
     const roots = detectRootsForOs(AI_TOOLS, "linux");
     for (const [id, paths] of roots) {
+      if (id === "pi") {
+        // Expected diff (pi linux support): pi ships a linux build, so its
+        // ~/.pi roots are probed on linux; every other catalog tool remains
+        // linux-planned and must never be probed.
+        assert.deepEqual(
+          [...paths],
+          [".pi", ".pi/agent/sessions"],
+          `${id} linux roots`,
+        );
+        continue;
+      }
       assert.deepEqual(paths, [], `${id} must not be probed on linux`);
     }
   });
