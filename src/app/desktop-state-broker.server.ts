@@ -18,6 +18,8 @@ import {
   startupFailureCode,
 } from "./startup-diagnostics.server.ts";
 
+import { loadEffectiveToolDataRoots } from "../lib/tool-data-root/tool-data-root.server.ts";
+
 export const DESKTOP_STATE_API_PREFIX = "/api/desktop-state";
 export const DESKTOP_HISTORY_KEY = `${STORAGE_KEY_PREFIX}security.desktop-history.v1`;
 export const DESKTOP_SCHEDULE_KEY = `${STORAGE_KEY_PREFIX}security.scan-schedule.v1`;
@@ -593,6 +595,15 @@ export async function handleDesktopStateBrokerRequest(
           preferences.list().map((item) => [item.key, item.value]),
         ),
       );
+    }
+    // Per-tool data-directory overrides (Sources page) for the desktop
+    // security scanner. Values are the user's own absolute directories; they
+    // travel main-process only (never the renderer).
+    if (request.method === "GET" && route === "/tool-data-roots") {
+      const map = await loadEffectiveToolDataRoots(
+        root.database.features.toolDataRoots,
+      );
+      return json(Object.fromEntries(map));
     }
     if (request.method === "POST" && route === "/preference") {
       const input = await body(request);

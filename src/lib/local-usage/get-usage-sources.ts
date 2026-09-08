@@ -33,6 +33,16 @@ export interface UsageSourceEntry {
   filesConsidered: number;
   /** Capability, not a claim that a usable log was found. */
   usageLogParsing: UsageLogParsing;
+  /** Whether the Sources page may offer a data-directory override. */
+  dataDirSupported: boolean;
+  /** Whether the user configured a custom data directory for this tool. */
+  dataDirConfigured: boolean;
+}
+
+/** Per-tool data-directory state consumed by the Sources projection. */
+export interface ToolDataDirState {
+  supported: boolean;
+  configured: boolean;
 }
 
 export interface UsageSourcesTotals {
@@ -80,6 +90,7 @@ export function deriveUsageSources(
   generatedAt: string,
   homeDir: string,
   fallbackPathsBySource: ReadonlyMap<string, readonly string[]> = new Map(),
+  dataDirStateByTool: ReadonlyMap<string, ToolDataDirState> = new Map(),
 ): UsageSourcesSummary {
   const bySource = new Map<string, LocalUsageSourceSummary>();
   for (const summary of sourceSummaries) {
@@ -101,13 +112,16 @@ export function deriveUsageSources(
     const events = summary?.events ?? 0;
     const malformedLines = summary?.malformedLines ?? 0;
     // A persisted usage snapshot can outlive the installation snapshot (for
-    // example after a restart before the first installation probe completes).
-    // A source with parsed events is definitive evidence that the tool was
-    // installed when the snapshot was written, so do not regress it to
-    // "not-installed" while the second snapshot is still empty.
+    // example after a restart before the first installation probe completes),
+    // and the reverse skew exists too: an explicit `installed: false` fact can
+    // be stale because the probe ran before the tool was installed while the
+    // installation snapshot stays fresh for up to an hour afterwards. Parsed
+    // usage evidence is definitive — logs can only exist under a real
+    // installation — so it must never be regressed to "not-installed" by a
+    // missing fact or by a stale not-installed fact.
     const inferredInstalled =
       summary?.detected === true || (summary?.available === true && events > 0);
-    const installed = installation?.installed ?? inferredInstalled;
+    const installed = inferredInstalled || installation?.installed === true;
 
     // Path display: prefer the concrete paths reported by the usage scanner;
     // fall back to the platform-specific registry projection when a scan has
@@ -147,6 +161,7 @@ export function deriveUsageSources(
     }
     malformedCount += malformedLines;
 
+    const dataDirState = dataDirStateByTool.get(tool.id);
     return {
       id: tool.id,
       name: tool.nameZh,
@@ -160,6 +175,8 @@ export function deriveUsageSources(
       filesRead: summary?.filesRead ?? 0,
       filesConsidered: summary?.filesConsidered ?? 0,
       usageLogParsing: usageLogParsingFor(tool.id),
+      dataDirSupported: dataDirState?.supported ?? false,
+      dataDirConfigured: dataDirState?.configured ?? false,
     };
   });
 

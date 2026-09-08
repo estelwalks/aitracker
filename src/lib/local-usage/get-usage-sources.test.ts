@@ -101,6 +101,41 @@ test("has-data: persisted usage evidence survives an empty installation snapshot
   assert.equal(out.totals.connectedCount, 1);
 });
 
+test("has-data: parsed usage evidence beats a stale not-installed fact", () => {
+  // The installation probe can run before the tool is installed and its 6h
+  // freshness window keeps the page from re-probing; the explicit
+  // installed=false fact must never regress a source that already parsed
+  // events or detected its log root.
+  const staleFacts = deriveToolInstallationFacts(
+    AI_TOOLS,
+    new Set(), // no probe root existed at probe time
+    HOME,
+    "macos",
+  );
+  const stalePi = staleFacts.find((f) => f.id === "pi")!;
+  assert.equal(stalePi.installed, false);
+
+  const out = deriveUsageSources(
+    AI_TOOLS,
+    [
+      summary({
+        source: "pi",
+        detected: true,
+        available: true,
+        events: 21,
+      }),
+    ],
+    staleFacts,
+    "2026-08-03T00:00:00.000Z",
+    HOME,
+  );
+  const pi = out.entries.find((entry) => entry.id === "pi")!;
+  assert.equal(pi.status, "has-data");
+  assert.equal(pi.events, 21);
+  assert.equal(out.totals.connectedCount, 1);
+  assert.equal(out.totals.notInstalledCount, AI_TOOLS.length - 1);
+});
+
 test("not-installed: tool absent from summaries", () => {
   const out = deriveUsageSources(AI_TOOLS, [], installations(), "t", HOME);
   const cursor = out.entries.find((e) => e.id === "cursor")!;

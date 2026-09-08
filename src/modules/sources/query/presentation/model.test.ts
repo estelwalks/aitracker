@@ -16,6 +16,8 @@ test("sources query projection keeps only HOME-relative display paths", () => {
         lastScannedAt: "2026-08-07T00:00:00.000Z",
         usageLogParsing: "native",
         paths: ["~/.codex", "/Users/alice/.codex"],
+        dataDirSupported: true,
+        dataDirConfigured: true,
         toolSurface: "cli",
         officialDownloadUrl: "https://developers.openai.com/codex/cli/",
         filesRead: 2,

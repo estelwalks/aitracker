@@ -223,6 +223,11 @@ export class DesktopStateBroker {
     return this.#request("/preferences");
   }
 
+  /** Per-tool data-directory overrides (Sources page), main-process only. */
+  readToolDataRoots(): Promise<Record<string, string>> {
+    return this.#request("/tool-data-roots");
+  }
+
   async setPreference(key: string, value: unknown): Promise<void> {
     await this.#request("/preference", {
       method: "POST",

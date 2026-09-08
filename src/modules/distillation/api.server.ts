@@ -389,7 +389,13 @@ export async function saveCandidateAsSkill(
   // `AITRACKER_USAGE_HOME` mirrors the composition root's data-root override
   // (and keeps the write testable in isolation); unset → the real home.
   const home = process.env[ENV.USAGE_HOME] ?? homedir();
-  const roots = resolveAgentRoots(home, process.env);
+  const { registeredToolDataRoots } =
+    await import("../../lib/tool-data-root/tool-data-root.server.ts");
+  const roots = resolveAgentRoots(
+    home,
+    process.env,
+    await registeredToolDataRoots(),
+  );
   const agentRoot = roots[input.targetAgent]?.[0];
   if (!agentRoot)
     return { ok: false, errorCode: "errors.distillation.invalidAgent" };

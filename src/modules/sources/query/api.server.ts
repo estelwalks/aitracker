@@ -4,6 +4,11 @@ import { SKILL_AGENTS } from "../../../lib/local-skills/types";
 import { AI_TOOLS } from "../../../lib/tools/catalog";
 import { osFromProcess } from "../../../lib/tools/detection.server";
 import { sourcePathsForPlatform } from "../../../lib/local-usage/source-paths";
+import { getTool } from "../../../lib/tool-registry/registry";
+import {
+  isToolDataRootConfigurable,
+  loadEffectiveToolDataRoots,
+} from "../../../lib/tool-data-root/tool-data-root.server";
 import {
   toSourcesQuerySummary,
   type SourcesQuerySummary,
@@ -173,6 +178,20 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
     installed: fact.installed,
     detectedPaths: [...fact.paths],
   }));
+  // Per-tool data-directory state: which tools may be rebased (registry shape)
+  // and which already carry a user override (DB + env seam).
+  const dataDirStateByTool = new Map<string, unknown>();
+  const overrides = await loadEffectiveToolDataRoots(
+    (await getCompositionRoot()).database.features.toolDataRoots,
+  );
+  for (const tool of AI_TOOLS) {
+    const def = getTool(tool.id);
+    if (def == null) continue;
+    dataDirStateByTool.set(tool.id, {
+      supported: isToolDataRootConfigurable(def, platformOs),
+      configured: overrides.has(tool.id),
+    });
+  }
   return deriveUsageSources(
     AI_TOOLS,
     latest.data?.sources ?? [],
@@ -185,6 +204,10 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
     ),
     homeDirectory,
     platformSourcePaths,
+    dataDirStateByTool as ReadonlyMap<
+      string,
+      { supported: boolean; configured: boolean }
+    >,
   );
 }
 

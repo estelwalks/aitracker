@@ -874,6 +874,17 @@ function registerIpcHandlers(): void {
     if (result.canceled || !selected) return null;
     return securityScanner.registerSelectedDirectory(selected);
   });
+  ipcMain.handle(desktopIpc.selectToolDataDirectory, async (event) => {
+    assertTrustedSender(event);
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, {
+          properties: ["openDirectory"],
+        })
+      : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+    const selected = result.filePaths[0];
+    if (result.canceled || !selected) return null;
+    return selected;
+  });
   ipcMain.handle(
     desktopIpc.startSecurityScan,
     async (event, request: unknown) => {
@@ -1257,6 +1268,17 @@ if (!hasSingleInstanceLock) {
       securityScanner = new SecurityScannerService({
         homeDirectory: process.env[ENV.USAGE_HOME] || app.getPath("home"),
         locale: () => currentPreferences.locale,
+        // GUI-configured per-tool data directories come from the server DB
+        // through the desktop broker; a broker failure degrades to defaults.
+        toolDataRoots: async () => {
+          try {
+            return new Map(
+              Object.entries(await desktopStateBroker!.readToolDataRoots()),
+            );
+          } catch {
+            return new Map<string, string>();
+          }
+        },
         env: process.env,
         secretStorage: {
           isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),

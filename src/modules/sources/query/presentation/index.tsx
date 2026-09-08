@@ -5,6 +5,7 @@ import {
   ExternalLink,
   FolderOpen,
   Search,
+  Settings2,
   TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +19,8 @@ import {
   MetricGrid,
 } from "../../../../components/aitracker";
 import { useI18n } from "../../../../lib/i18n/context";
+import type { DesktopApi } from "../../../../../electron/contracts";
+import { DataDirectoryModal } from "./DataDirectoryModal";
 import { toUiError } from "../../../../lib/errors";
 import type { MessageKey } from "../../../../lib/i18n/messages";
 import { getSourcesQuery, refreshSourcesQuery } from "../server-fns";
@@ -64,6 +67,11 @@ const STATUS_FILTERS: Array<{
   { key: "not-installed", labelKey: "sources.status.notInstalled" },
 ];
 
+function hasDesktopDirectorySelection(): boolean {
+  if (typeof window === "undefined") return false;
+  return (window as Window & { desktopApi?: DesktopApi }).desktopApi != null;
+}
+
 const SURFACE_LABEL: Record<SourcesQueryEntry["toolSurface"], MessageKey> = {
   cli: "sources.type.cli",
   ide: "sources.type.ide",
@@ -87,6 +95,9 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
   const mountedRef = useRef(true);
   const [migrationSource, setMigrationSource] =
     useState<MigrationSourceSelection | null>(null);
+  const [dataDirEntry, setDataDirEntry] = useState<SourcesQueryEntry | null>(
+    null,
+  );
   const [statusFilter, setStatusFilter] = useState<SourcesQueryStatus | "all">(
     "all",
   );
@@ -266,6 +277,7 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
                       installedTargetAgents,
                     })
                   }
+                  onConfigureDataDir={() => setDataDirEntry(entry)}
                 />
               );
             })}
@@ -281,6 +293,13 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
           onDone={handleRefresh}
         />
       )}
+      {dataDirEntry !== null && (
+        <DataDirectoryModal
+          entry={dataDirEntry}
+          onClose={() => setDataDirEntry(null)}
+          onSaved={handleRefresh}
+        />
+      )}
     </div>
   );
 }
@@ -289,10 +308,12 @@ function SourceCard({
   entry,
   hasInstalledTargets,
   onMigrate,
+  onConfigureDataDir,
 }: {
   entry: SourcesQueryEntry;
   hasInstalledTargets: boolean;
   onMigrate: () => void;
+  onConfigureDataDir: () => void;
 }) {
   const { t, format } = useI18n();
   const meta = STATUS_META[entry.status];
@@ -318,6 +339,11 @@ function SourceCard({
           <span className="shrink-0 rounded-sm border border-border px-1.5 py-px text-[10px] text-muted-foreground">
             {t(SURFACE_LABEL[entry.toolSurface])}
           </span>
+          {entry.dataDirConfigured && (
+            <span className="shrink-0 rounded-sm border border-primary/40 bg-primary/10 px-1.5 py-px text-[10px] text-primary">
+              {t("sources.dataDir.badge")}
+            </span>
+          )}
         </div>
         <span className={`shrink-0 text-[11px] ${meta.color}`}>
           {t(meta.labelKey)}
@@ -384,6 +410,16 @@ function SourceCard({
           <ArrowLeftRight className="size-3.5" strokeWidth={2} />
           {t("sources.migrate.button")}
         </button>
+        {entry.dataDirSupported && hasDesktopDirectorySelection() && (
+          <button
+            type="button"
+            onClick={onConfigureDataDir}
+            className="inline-flex items-center gap-1.5 rounded-sm border border-border px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Settings2 className="size-3.5" strokeWidth={2} />
+            {t("sources.dataDir.button")}
+          </button>
+        )}
         {entry.officialDownloadUrl ? (
           <a
             href={entry.officialDownloadUrl}

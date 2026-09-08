@@ -9,6 +9,7 @@ import {
   INITIAL_SCHEMA_SQL,
   LATEST_MIGRATION_VERSION,
   MIGRATIONS,
+  TOOL_DATA_ROOTS_SQL,
 } from "../src/platform/database/migrations/index.ts";
 
 const migrationsDirectory = join(
@@ -35,6 +36,7 @@ const REQUIRED_TABLES = [
   "insight_refresh_items",
   "insight_generation_reservations",
   "task_preferences",
+  "tool_data_roots",
   "task_runs",
   "monitoring_state",
   "monitoring_collectors",
@@ -108,6 +110,7 @@ const files = readdirSync(migrationsDirectory).sort();
 assert.deepEqual(files, [
   "0001_initial_schema.ts",
   "0002_drop_legacy_usage_tables.ts",
+  "0003_tool_data_roots.ts",
   "index.ts",
 ]);
 assert.ok(MIGRATIONS.length >= 1, "at least the baseline migration must exist");
@@ -138,6 +141,7 @@ try {
   database.exec("PRAGMA foreign_keys = ON;");
   database.exec(INITIAL_SCHEMA_SQL);
   database.exec(DROP_LEGACY_USAGE_TABLES_SQL);
+  database.exec(TOOL_DATA_ROOTS_SQL);
 
   const objects = database
     .prepare(

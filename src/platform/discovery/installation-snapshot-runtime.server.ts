@@ -20,6 +20,13 @@ export interface InstallationSnapshotRuntimeOptions {
   readonly requestRefresh?: SnapshotRefreshPort;
   readonly now?: () => number;
   readonly homeDirectory?: () => string;
+  /**
+   * Per-tool user data-directory overrides (toolId -> absolute directory).
+   * When resolved, the default collector probes the rebased HOME roots under
+   * the override instead of the stale ~/.<tool> locations.
+   */
+  readonly dataRootOverrides?: () =>
+    ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>;
   readonly collect?: (request: {
     readonly signal: AbortSignal;
     readonly previous: SnapshotEnvelope<InstallationSnapshotData> | null;
@@ -70,6 +77,8 @@ export function createInstallationSnapshotRuntime(
       const { detectToolInstallations } =
         await import("../../lib/tools/detection.server.ts");
       const homeDirectory = options.homeDirectory?.() ?? homedir();
+      const dataRootOverrides =
+        (await options.dataRootOverrides?.()) ?? new Map<string, string>();
       // P5-T5-03: the signal travels into the probe loop so a cancelled
       // refresh stops starting new PATH/root probes.
       const facts = await detectToolInstallations(
@@ -77,6 +86,7 @@ export function createInstallationSnapshotRuntime(
         homeDirectory,
         undefined,
         signal,
+        dataRootOverrides,
       );
       return {
         data: {

@@ -30,6 +30,7 @@ export const desktopIpc = {
   windowMaximizedChanged: "desktop:window-maximized-changed",
   listSecuritySkills: "security:list-skills",
   selectSecuritySkillDirectory: "security:select-skill-directory",
+  selectToolDataDirectory: "sources:select-tool-data-directory",
   startSecurityScan: "security:start-scan",
   getSecurityScanStatus: "security:get-scan-status",
   getSecurityScanHistory: "security:get-scan-history",
@@ -453,6 +454,8 @@ export interface DesktopApi {
   ): () => void;
   listSecuritySkills(): Promise<SecuritySkillTarget[]>;
   selectSecuritySkillDirectory(): Promise<SecuritySkillTarget | null>;
+  /** Native folder picker for the Sources "设置数据目录" configuration. */
+  selectToolDataDirectory(): Promise<string | null>;
   startSecurityScan(
     request: SecurityScanStartRequest,
   ): Promise<SecurityScanState>;

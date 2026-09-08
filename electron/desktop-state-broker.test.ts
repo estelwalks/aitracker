@@ -318,3 +318,30 @@ test("desktop model config preserves the explicit Responses protocol for upgrade
     else process.env[ENV.DESKTOP_BROKER_TOKEN] = previous;
   }
 });
+
+test("broker reads per-tool data-directory overrides from the server", async () => {
+  const previous = process.env[ENV.DESKTOP_BROKER_TOKEN];
+  process.env[ENV.DESKTOP_BROKER_TOKEN] = "test-broker-token";
+  let request: Request | undefined;
+  try {
+    const broker = new DesktopStateBroker({
+      origin: () => "http://127.0.0.1:3210",
+      capabilityToken: () => "capability-token",
+      fetchFn: async (input, init) => {
+        request = new Request(input, init);
+        return Response.json({ hermes: "D:/hermes", "claude-code": "/d/c" });
+      },
+    });
+    assert.deepEqual(await broker.readToolDataRoots(), {
+      hermes: "D:/hermes",
+      "claude-code": "/d/c",
+    });
+    assert.equal(
+      request?.url,
+      "http://127.0.0.1:3210/api/desktop-state/tool-data-roots",
+    );
+  } finally {
+    if (previous == null) delete process.env[ENV.DESKTOP_BROKER_TOKEN];
+    else process.env[ENV.DESKTOP_BROKER_TOKEN] = previous;
+  }
+});

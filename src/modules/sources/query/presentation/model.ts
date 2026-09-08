@@ -14,6 +14,10 @@ export interface SourcesQueryEntry {
   readonly usageLogParsing: UsageLogParsing;
   /** Only ~/ relative paths are allowed in this browser-safe projection. */
   readonly paths: readonly string[];
+  /** Whether the Sources page may offer a data-directory override. */
+  readonly dataDirSupported: boolean;
+  /** Whether the user configured a custom data directory for this tool. */
+  readonly dataDirConfigured: boolean;
   readonly toolSurface: ToolSurface;
   readonly officialDownloadUrl: string | null;
   readonly filesRead: number;

@@ -5,9 +5,15 @@ import { delimiter, join, posix } from "node:path";
 import type { AiTool } from "./catalog.ts";
 import {
   getTool,
+  osTargets,
   resolvePlatformPlan,
   type PlatformOs,
 } from "../tool-registry/registry.ts";
+import {
+  isHomeFlattenedRoot,
+  rebaseRoot,
+  uniformDataSegment,
+} from "../tool-data-root/placement.server.ts";
 
 /** A filesystem fact, intentionally independent of any log parser result. */
 export interface ToolInstallationFact {
@@ -52,6 +58,46 @@ export function detectRootsForOs(
 }
 
 /**
+ * Absolute probe candidates for one tool. Without a user data-directory
+ * override this is the historic home-joined set of registry probe roots; with
+ * an override the tool's HOME-anchored detection roots are rebased under the
+ * chosen directory (the chosen directory itself always counts as evidence).
+ */
+export function detectionCandidatesForTool(
+  tool: AiTool,
+  os: PlatformOs,
+  homeDirectory: string,
+  dataRootOverrides: ReadonlyMap<string, string> = new Map(),
+): readonly string[] {
+  const overrideDir = dataRootOverrides.get(tool.id)?.trim();
+  if (!overrideDir) {
+    const plan = resolvePlatformPlan(tool.id, "detection", os);
+    if (!plan || plan.status !== "supported") return [];
+    return plan.paths.map((root) => joinHomeRoot(homeDirectory, root));
+  }
+  const plan = resolvePlatformPlan(tool.id, "detection", os);
+  if (!plan || plan.status !== "supported") return [];
+  const def = getTool(tool.id);
+  const targets = osTargets(os);
+  const homePaths: string[] = [];
+  for (const location of def?.detection.locations ?? []) {
+    if (location.base !== "home") continue;
+    if (!location.targets.some((target) => targets.includes(target))) continue;
+    homePaths.push(location.path);
+  }
+  const segment = uniformDataSegment(homePaths.filter(isHomeFlattenedRoot));
+  const probes: string[] = [overrideDir];
+  if (segment != null) {
+    for (const path of homePaths) {
+      if (!isHomeFlattenedRoot(path)) continue;
+      const rebased = rebaseRoot(path, segment, overrideDir);
+      if (rebased != null && rebased !== overrideDir) probes.push(rebased);
+    }
+  }
+  return [...new Set(probes)];
+}
+
+/**
  * Pure projection used by tests and callers that already have probe results.
  * A tool is installed when at least one declared probe root exists.
  */
@@ -61,12 +107,15 @@ export function deriveToolInstallationFacts(
   homeDirectory: string,
   os: PlatformOs = osFromProcess(process.platform),
   executablePathsByTool: ReadonlyMap<string, readonly string[]> = new Map(),
+  dataRootOverrides: ReadonlyMap<string, string> = new Map(),
 ): ToolInstallationFact[] {
-  const rootsByTool = detectRootsForOs(tools, os);
   return tools.map((tool) => {
-    const detectedPaths = (rootsByTool.get(tool.id) ?? [])
-      .map((root) => joinHomeRoot(homeDirectory, root))
-      .filter((path) => existingPaths.has(path));
+    const detectedPaths = detectionCandidatesForTool(
+      tool,
+      os,
+      homeDirectory,
+      dataRootOverrides,
+    ).filter((path) => existingPaths.has(path));
     const executablePaths = executablePathsByTool.get(tool.id) ?? [];
     const allEvidence = [...new Set([...detectedPaths, ...executablePaths])];
     return {
@@ -132,12 +181,16 @@ export async function detectToolInstallations(
   homeDirectory: string,
   os: PlatformOs = osFromProcess(process.platform),
   signal?: AbortSignal,
+  dataRootOverrides: ReadonlyMap<string, string> = new Map(),
 ): Promise<ToolInstallationFact[]> {
   signal?.throwIfAborted();
-  const rootsByTool = detectRootsForOs(tools, os);
-  const candidatePaths = tools.flatMap((tool) =>
-    (rootsByTool.get(tool.id) ?? []).map((root) => join(homeDirectory, root)),
-  );
+  const candidatePaths = [
+    ...new Set(
+      tools.flatMap((tool) =>
+        detectionCandidatesForTool(tool, os, homeDirectory, dataRootOverrides),
+      ),
+    ),
+  ];
   const inspected = (
     await Promise.all(
       candidatePaths.map(async (path) => {
@@ -158,6 +211,7 @@ export async function detectToolInstallations(
     homeDirectory,
     os,
     executables,
+    dataRootOverrides,
   );
 }
 

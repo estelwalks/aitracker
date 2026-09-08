@@ -63,11 +63,12 @@ import {
 export { SKILL_ROOT_SUFFIXES };
 
 /**
- * Resolve each agent's skill roots against a home directory. When a rule has
- * `envHome` and the corresponding env var is a non-empty string, the env value
- * replaces the directory part of each root (the tool's home directory) while
- * keeping the last path segment: `join(envValue, basename(suffix))`. Empty
- * strings are treated as unset and fall back to `join(home, suffix)`.
+ * Resolve each agent's skill roots against a home directory. When the user
+ * configured a data-directory override for the tool, that directory replaces
+ * the tool home (`join(overrideDir, basename(suffix))`, e.g. `.hermes/skills`
+ * under the chosen Hermes directory). Otherwise an `envHome` rule whose env
+ * var is set behaves identically; empty strings are unset and fall back to
+ * `join(home, suffix)`. Override precedence: per-tool override > envHome env.
  *
  * Server-only (node:path); lives here so the shared `agent-rules.ts` stays
  * importable in the browser bundle.
@@ -75,17 +76,38 @@ export { SKILL_ROOT_SUFFIXES };
 export function resolveAgentRoots(
   home: string,
   env: Record<string, string | undefined>,
+  dataRootOverrides: ReadonlyMap<string, string> = new Map(),
 ): Record<string, string[]> {
   const roots: Record<string, string[]> = {};
   // SKILL_AGENTS mirrors SKILL_AGENT_RULES order, so index alignment holds.
   for (const [i, rule] of SKILL_AGENT_RULES.entries()) {
-    const envValue = rule.envHome == null ? undefined : env[rule.envHome];
-    const overridden = envValue !== undefined && envValue !== "";
+    const overrideDir = dataRootOverrides.get(rule.toolId)?.trim();
+    const envValue =
+      overrideDir == null && rule.envHome != null
+        ? env[rule.envHome]
+        : undefined;
+    const overridden =
+      overrideDir ??
+      (envValue !== undefined && envValue !== "" ? envValue : null);
     roots[SKILL_AGENTS[i]] = rule.roots.map((suffix) =>
-      overridden ? join(envValue, basename(suffix)) : join(home, suffix),
+      overridden ? join(overridden, basename(suffix)) : join(home, suffix),
     );
   }
   return roots;
+}
+
+/**
+ * Resolve the override map for skill operations: an explicit per-call map
+ * wins, otherwise the process-wide provider registered by the composition
+ * root (empty when none - pure tests and pre-registration behaviour).
+ */
+async function currentToolDataRoots(options: {
+  dataRootOverrides?: ReadonlyMap<string, string>;
+}): Promise<ReadonlyMap<string, string>> {
+  if (options.dataRootOverrides != null) return options.dataRootOverrides;
+  const { registeredToolDataRoots } =
+    await import("../tool-data-root/tool-data-root.server.ts");
+  return registeredToolDataRoots();
 }
 
 const MARKET_API = `${MARKET_API_BASE}/external-api/v1/skills`;
@@ -305,6 +327,8 @@ interface ScanOptions {
   /** Test seam for Windows-only deep cancellation behavior. */
   platform?: NodeJS.Platform;
   stateRepository?: SkillStateRepository;
+  /** Per-tool data-directory overrides (toolId -> absolute directory). */
+  dataRootOverrides?: ReadonlyMap<string, string>;
 }
 
 function agentInstallationFacts(
@@ -627,6 +651,8 @@ interface SkillOpOptions {
   homeDirectory?: string;
   dataDirectory?: string;
   stateRepository?: SkillStateRepository;
+  /** Per-tool data-directory overrides (toolId -> absolute directory). */
+  dataRootOverrides?: ReadonlyMap<string, string>;
   /**
    * Test seam: pin the platform whose executable probe runs. IDE tools like
    * Cursor are "planned" (not "supported") on Linux, so a PATH-based
@@ -931,7 +957,12 @@ export async function scanLocalSkills(
       : undefined;
   const homeDirectory = options.homeDirectory ?? homedir();
   const now = options.now ?? new Date();
-  const roots = resolveAgentRoots(homeDirectory, options.env ?? process.env);
+  const dataRootOverrides = await currentToolDataRoots(options);
+  const roots = resolveAgentRoots(
+    homeDirectory,
+    options.env ?? process.env,
+    dataRootOverrides,
+  );
   const state = await skillState(options);
   const [origins, blacklist, installationFacts] = await Promise.all([
     state.readOrigins(),
@@ -1151,9 +1182,11 @@ async function copySkillToAgent(
   // When using Cursor, explicitly prompt that the tool is not installed instead of pretending to be successful).
   await assertTargetToolInstalled(input.targetAgent, options);
 
+  const dataRootOverrides = await currentToolDataRoots(options);
   const roots = resolveAgentRoots(
     options.homeDirectory ?? homedir(),
     process.env,
+    dataRootOverrides,
   );
   const name = safeSkillName(basename(input.sourcePath).replace(/\.md$/i, ""));
   if ((await (await skillState(options)).readBlacklist()).includes(name))
@@ -1202,9 +1235,11 @@ export async function installLocalSkill(
   },
   options: SkillOpOptions = {},
 ): Promise<void> {
+  const dataRootOverrides = await currentToolDataRoots(options);
   const roots = resolveAgentRoots(
     options.homeDirectory ?? homedir(),
     process.env,
+    dataRootOverrides,
   );
   await assertManagedSkillPath(input.sourcePath, roots);
   const targetPath = await copySkillToAgent(input, options);
@@ -1383,9 +1418,11 @@ export async function uninstallLocalSkill(
   path: string,
   options: SkillOpOptions = {},
 ): Promise<{ path: string }> {
+  const dataRootOverrides = await currentToolDataRoots(options);
   const roots = resolveAgentRoots(
     options.homeDirectory ?? homedir(),
     process.env,
+    dataRootOverrides,
   );
   await assertManagedSkillPath(path, roots);
   const target = resolve(path);
@@ -1430,9 +1467,11 @@ export async function syncLocalSkill(
   },
   options: SkillOpOptions = {},
 ): Promise<SkillSyncResult> {
+  const dataRootOverrides = await currentToolDataRoots(options);
   const roots = resolveAgentRoots(
     options.homeDirectory ?? homedir(),
     process.env,
+    dataRootOverrides,
   );
   await assertManagedSkillPath(input.sourcePath, roots);
 

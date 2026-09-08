@@ -49,25 +49,106 @@ interface SkillFile {
 
 interface ManagedSkillRoot {
   agent: string;
+  /** Registry tool id used to look up per-tool data-directory overrides. */
+  toolId: string;
   suffixes: readonly string[];
   envHome?: string;
 }
 
-const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
-  { agent: "Claude Code", suffixes: [".claude/skills"] },
-  { agent: "Codex", suffixes: [".codex/skills"], envHome: "CODEX_HOME" },
-  { agent: "Gemini CLI", suffixes: [".gemini/skills"] },
-  { agent: "Cursor", suffixes: [".cursor/skills"] },
+/**
+ * Desktop-mirrored copy of the registry's skill agents (see
+ * src/lib/local-skills/skill-rules.server.ts). The Electron tsconfig boundary
+ * forbids a cross-import, so this list is kept in sync by
+ * electron/security-skill-roots.test.ts parity assertions.
+ */
+export const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
+  { agent: "Claude Code", toolId: "claude-code", suffixes: [".claude/skills"] },
+  {
+    agent: "Codex",
+    toolId: "codex",
+    suffixes: [".codex/skills"],
+    envHome: "CODEX_HOME",
+  },
+  { agent: "Gemini CLI", toolId: "gemini-cli", suffixes: [".gemini/skills"] },
+  { agent: "Cursor", toolId: "cursor", suffixes: [".cursor/skills"] },
   {
     agent: "Antigravity",
+    toolId: "antigravity",
     suffixes: [".gemini/antigravity/skills", ".gemini/antigravity-ide/skills"],
   },
-  { agent: "OpenClaw", suffixes: [".openclaw/workspace/skills"] },
-  { agent: "OpenCode", suffixes: [".config/opencode/skills"] },
-  { agent: "Grok Build", suffixes: [".grok/skills"], envHome: "GROK_HOME" },
-  { agent: "Hermes Agent", suffixes: [".hermes/skills"] },
-  { agent: "AiPy", suffixes: [".aipyapp/skills"] },
+  {
+    agent: "OpenClaw",
+    toolId: "openclaw",
+    suffixes: [".openclaw/workspace/skills"],
+  },
+  {
+    agent: "OpenCode",
+    toolId: "opencode",
+    suffixes: [".config/opencode/skills"],
+  },
+  {
+    agent: "Grok Build",
+    toolId: "grok",
+    suffixes: [".grok/skills"],
+    envHome: "GROK_HOME",
+  },
+  { agent: "Hermes Agent", toolId: "hermes", suffixes: [".hermes/skills"] },
+  { agent: "AiPy", toolId: "aipy", suffixes: [".aipyapp/skills"] },
 ];
+
+const TOOL_DATA_ROOTS_ENV = "AITRACKER_TOOL_DATA_DIRS";
+
+/**
+ * Mirror of `parseToolDataRootsEnv` in src/lib/tool-data-root (env/test seam,
+ * duplicated for the Electron tsconfig boundary): "toolId=/abs/path" pairs.
+ */
+export function parseToolDataRootsEnvForSecurity(
+  raw: string | undefined,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  if (raw == null) return map;
+  for (const part of raw.split(",")) {
+    const separator = part.indexOf("=");
+    if (separator <= 0) continue;
+    const toolId = part.slice(0, separator).trim();
+    const dir = part.slice(separator + 1).trim();
+    if (!/^[a-z][a-z0-9-]*$/.test(toolId)) continue;
+    const absolute = dir.startsWith("/") || /^[A-Za-z]:[\\/]/.test(dir);
+    if (!absolute) continue;
+    map.set(toolId, dir);
+  }
+  return map;
+}
+
+/**
+ * Resolve every managed skill root to an absolute directory. Precedence per
+ * tool: injected `toolDataRoots` (future desktop bridge) > env seam
+ * (`AITRACKER_TOOL_DATA_DIRS`) > `envHome` env var > home-joined default.
+ */
+export function resolveManagedSkillRoots(
+  homeDirectory: string,
+  env: Record<string, string | undefined>,
+  toolDataRoots: ReadonlyMap<string, string> = new Map(),
+): Array<{ agent: string; root: string }> {
+  const merged = parseToolDataRootsEnvForSecurity(env[TOOL_DATA_ROOTS_ENV]);
+  for (const [toolId, dir] of toolDataRoots) merged.set(toolId, dir);
+  const entries: Array<{ agent: string; root: string }> = [];
+  for (const definition of MANAGED_SKILL_ROOTS) {
+    for (const suffix of definition.suffixes) {
+      const overrideDir = merged.get(definition.toolId);
+      const override =
+        overrideDir ??
+        (definition.envHome == null ? undefined : env[definition.envHome]);
+      entries.push({
+        agent: definition.agent,
+        root: override
+          ? join(override, basename(suffix))
+          : join(homeDirectory, suffix),
+      });
+    }
+  }
+  return entries;
+}
 
 interface TrustedSkill {
   readonly target: SecuritySkillTarget;
@@ -89,6 +170,14 @@ export interface SecretStoragePort {
 
 export interface SecurityScannerServiceOptions {
   readonly homeDirectory: string;
+  /**
+   * Per-tool data-directory overrides (toolId -> absolute directory) or a
+   * provider resolving them lazily (desktop bridge into the server DB).
+   */
+  readonly toolDataRoots?:
+    | ReadonlyMap<string, string>
+    | (() =>
+        ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>);
   readonly locale: () => DesktopLocale;
   readonly secretStorage: SecretStoragePort;
   readonly persistence?: SecurityScannerPersistence;
@@ -601,17 +690,17 @@ export class SecurityScannerService {
     readonly additionalRoots?: readonly string[];
   }): Promise<SecuritySkillTarget[]> {
     const grouped = new Map<string, TrustedSkill>();
-    for (const definition of MANAGED_SKILL_ROOTS) {
-      for (const suffix of definition.suffixes) {
-        const override =
-          definition.envHome == null
-            ? undefined
-            : this.#options.env?.[definition.envHome];
-        const root = override
-          ? join(override, basename(suffix))
-          : join(this.#options.homeDirectory, suffix);
-        await this.#discoverRoot(root, definition.agent, grouped);
-      }
+    const rawToolDataRoots = this.#options.toolDataRoots;
+    const toolDataRoots =
+      typeof rawToolDataRoots === "function"
+        ? ((await rawToolDataRoots()) ?? new Map<string, string>())
+        : (rawToolDataRoots ?? new Map<string, string>());
+    for (const { agent, root } of resolveManagedSkillRoots(
+      this.#options.homeDirectory,
+      this.#options.env ?? {},
+      toolDataRoots,
+    )) {
+      await this.#discoverRoot(root, agent, grouped);
     }
     for (const root of options?.additionalRoots ?? []) {
       if (typeof root !== "string" || root.trim() === "") continue;

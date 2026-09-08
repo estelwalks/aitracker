@@ -140,6 +140,10 @@ const desktopApi: DesktopApi = Object.freeze({
     ipcRenderer.invoke(
       desktopIpc.selectSecuritySkillDirectory,
     ) as Promise<SecuritySkillTarget | null>,
+  selectToolDataDirectory: () =>
+    ipcRenderer.invoke(
+      desktopIpc.selectToolDataDirectory,
+    ) as Promise<string | null>,
   startSecurityScan: (request: SecurityScanStartRequest) =>
     ipcRenderer.invoke(
       desktopIpc.startSecurityScan,

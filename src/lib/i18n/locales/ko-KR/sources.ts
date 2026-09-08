@@ -84,4 +84,26 @@ export const sources = {
       "백그라운드 재검사를 시작했습니다. 완료되면 자동으로 갱신됩니다",
     rescanDone: "다시 검사가 완료되었습니다",
   },
+  dataDir: {
+    button: "데이터 디렉터리",
+    badge: "사용자 지정 디렉터리",
+    modalTitle: "{name} · 데이터 디렉터리",
+    modalDesc:
+      "이 도구의 데이터와 로그가 저장된 디렉터리를 선택하세요. 경로를 직접 입력하거나(~ 는 홈으로 확장, 예: ~/.hermes) 디렉터리 선택기를 사용할 수 있습니다. 설정 후에는 선택한 디렉터리만 스캔하며 기본 위치는 탐지하지 않습니다.",
+    current: "현재 디렉터리",
+    none: "미설정: 기본 위치 사용",
+    manual: "경로 직접 입력",
+    placeholder: "예: ~/.hermes 또는 /Users/name/.hermes",
+    manualHint:
+      "앞의 ~ 는 홈 디렉터리로 확장됩니다. macOS 대화상자에서 ⌘⇧. 을 누르면 숨김 폴더가 표시됩니다.",
+    apply: "경로 적용",
+    choose: "디렉터리 선택…",
+    unavailable: "이 환경에서는 디렉터리 선택을 사용할 수 없습니다",
+    save: "저장",
+    cancel: "취소",
+    clear: "기본값 복원",
+    saved: "데이터 디렉터리를 업데이트했으며 다시 스캔합니다",
+    cleared: "기본 위치로 복원했으며 다시 스캔합니다",
+    invalid: "선택한 디렉터리가 올바르지 않습니다",
+  },
 } as const;

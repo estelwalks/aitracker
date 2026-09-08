@@ -85,4 +85,26 @@ export const sources = {
       "Background rescan started; the list refreshes when it finishes",
     rescanDone: "Rescan complete",
   },
+  dataDir: {
+    button: "Data directory",
+    badge: "Custom directory",
+    modalTitle: "{name} · data directory",
+    modalDesc:
+      "Choose the directory where this tool keeps its data and logs. Enter a path directly (~ expands to your home, e.g. ~/.hermes) or use the folder picker; once set, scanning reads only that directory and stops probing the default location.",
+    current: "Current directory",
+    none: "Not set: uses the default location",
+    manual: "Enter a path",
+    placeholder: "e.g. ~/.hermes or /Users/name/.hermes",
+    manualHint:
+      "Leading ~ expands to your home directory; press ⌘⇧. inside the macOS dialog to reveal hidden folders.",
+    apply: "Apply path",
+    choose: "Choose directory…",
+    unavailable: "Directory selection is unavailable in this environment",
+    save: "Save",
+    cancel: "Cancel",
+    clear: "Restore default",
+    saved: "Data directory updated; rescan started",
+    cleared: "Default location restored; rescan started",
+    invalid: "The selected directory is invalid",
+  },
 } as const;

@@ -13,6 +13,13 @@ configuration/Skill directories so they can calculate aggregate usage and
 discover assets. The scanner stores normalized metadata and aggregates; raw
 conversation content is not part of the renderer read models.
 
+On the Sources page you can configure a **data directory** for a tool (chosen
+through the native folder dialog). That value is stored locally in the
+`tool_data_roots` table and used only to point the local scanners at the
+directory you chose. It is never included in summaries, snapshots, exports,
+insights or any network request, and it is only ever shown back to you in the
+same configuration dialog.
+
 ## When data leaves the computer
 
 Network access is feature-driven rather than required for local analytics:
@@ -26,7 +33,7 @@ Network access is feature-driven rather than required for local analytics:
   locally collected usage data, Skills or knowledge content, or account or
   session identifiers are included. These requests are identified with the
   User-Agent header `AITracker/<version> (Electron;
-  +https://github.com/estelwalks/aitracker)`;
++https://github.com/estelwalks/aitracker)`;
 - when that service is unreachable or the machine is offline, AITracker
   falls back to local data: exchange-rate display keeps the last cached
   snapshot (a stale cache is still used while a background refresh runs, and
