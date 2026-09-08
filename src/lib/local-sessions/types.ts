@@ -18,11 +18,11 @@
 export const SESSION_TOOL_IDS = [
   "claude-code",
   "codex",
+  "omp",
   "grok",
+  "pi",
   "dsh",
   "aipy",
-  "pi",
-  "omp",
 ] as const;
 
 export type SessionSource = (typeof SESSION_TOOL_IDS)[number] | (string & {});
