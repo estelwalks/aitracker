@@ -1,7 +1,7 @@
 # AITracker
 
 <p align="center">
-  <img src="../public/favicon-dark.svg" alt="AITracker ロゴ" width="180" />
+  <img src="./assets/ja/01-ai-tools-overview.png" alt="AIツールのエコシステム" width="600" />
 </p>
 
 <p align="center">
@@ -68,6 +68,17 @@ npm run dev:desktop
 ブラウザ開発サーバーだけを起動する場合は、`npm run dev`を実行します。
 
 ### インストール
+
+最新リリースのインストーラーを直接ダウンロードすることもできます：
+
+- macOS（Apple Silicon）：
+  [AITracker-1.0.0-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-1.0.0-arm64.dmg)
+- macOS（Intel）：
+  [AITracker-1.0.0-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-1.0.0-x64.dmg)
+- Windows（x64）：
+  [AITracker-Setup-1.0.0-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-Setup-1.0.0-x64.exe)
+
+すべてのリリースは [Releases ページ](https://github.com/estelwalks/aitracker/releases/latest) で確認できます。
 
 以下のコマンドはmacOSまたはWindowsの正式版をインストールするためのものです。
 正式版と各パッケージマネージャーのメタデータが公開された後に利用できます。
@@ -159,8 +170,6 @@ AITrackerは、コンピューター上のAIコーディングツールの利用
 ## AIの能力を管理する
 
 本当に管理が難しくなっているのは、AIツールそのものだけではありません。異なるツールに散在する設定や能力も、管理すべき対象です。
-
-![AIツールのエコシステム](./assets/ja/01-ai-tools-overview.png)
 
 AITrackerは、こうした設定を自動的に見つけ、統一された管理画面を提供します。
 

@@ -1,7 +1,7 @@
 # AITracker
 
 <p align="center">
-  <img src="../public/favicon-dark.svg" alt="AITracker 로고" width="180" />
+  <img src="./assets/ko/01-ai-tools-network.png" alt="AI 도구 네트워크" width="600" />
 </p>
 
 <p align="center">
@@ -68,6 +68,17 @@ npm run dev:desktop
 브라우저 개발 서버만 실행하려면 `npm run dev`를 사용하세요.
 
 ### 설치
+
+최신 릴리스의 설치 파일을 직접 다운로드할 수도 있습니다:
+
+- macOS(Apple Silicon):
+  [AITracker-1.0.0-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-1.0.0-arm64.dmg)
+- macOS(Intel):
+  [AITracker-1.0.0-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-1.0.0-x64.dmg)
+- Windows(x64):
+  [AITracker-Setup-1.0.0-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-Setup-1.0.0-x64.exe)
+
+모든 버전은 [Releases 페이지](https://github.com/estelwalks/aitracker/releases/latest)에서 확인할 수 있습니다.
 
 다음 명령은 macOS 또는 Windows 정식 버전을 설치합니다. 정식 버전과 각 패키지
 관리자의 메타데이터가 공개된 후 사용할 수 있습니다.
@@ -159,8 +170,6 @@ AITracker는 로컬 AI 코딩 도구의 사용 데이터를 자동으로 수집�
 ## AI 역량 관리
 
 점점 관리하기 어려워지는 것은 AI 도구 자체만이 아닙니다. 여러 도구에 흩어진 설정과 역량도 함께 관리해야 합니다.
-
-![AI 도구 네트워크](./assets/ko/01-ai-tools-network.png)
 
 AITracker는 이러한 설정을 자동으로 발견하고 통합 관리 기능을 제공합니다.
 

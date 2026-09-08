@@ -1,7 +1,7 @@
 # AITracker
 
 <p align="center">
-  <img src="../public/favicon-dark.svg" alt="AITracker Logo" width="180" />
+  <img src="./assets/cn/01-ai-tools-network.png" alt="AI 工具网络" width="600" />
 </p>
 
 <p align="center">
@@ -66,6 +66,17 @@ npm run dev:desktop
 仅启动浏览器开发服务器时，运行 `npm run dev`。
 
 ### 安装
+
+也可以直接下载最新 Release 的安装包：
+
+- macOS（Apple Silicon）：
+  [AITracker-1.0.0-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-1.0.0-arm64.dmg)
+- macOS（Intel）：
+  [AITracker-1.0.0-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-1.0.0-x64.dmg)
+- Windows（x64）：
+  [AITracker-Setup-1.0.0-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-Setup-1.0.0-x64.exe)
+
+所有版本可以在 [Releases 页面](https://github.com/estelwalks/aitracker/releases/latest) 查看。
 
 以下命令用于安装 macOS 或 Windows 正式版。正式版发布并完成对应的包管理器元数据
 发布后，这些安装入口即可使用。
@@ -157,8 +168,6 @@ AITracker 自动采集本机 AI 编码工具的使用数据，把分散的数据
 ## 管理你的 AI 能力
 
 真正越来越难管理的，不只是 AI 工具本身，还有散落在不同工具里的配置和能力。
-
-![](./assets/cn/01-ai-tools-network.png)
 
 AITracker 自动发现这些配置，并提供统一的管理入口。
 

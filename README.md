@@ -1,7 +1,7 @@
 # AITracker
 
 <p align="center">
-  <img src="public/favicon-dark.svg" alt="AITracker logo" width="180" />
+  <img src="docs/assets/en/01-ai-tools-network.png" alt="AI tool network" width="600" />
 </p>
 
 <p align="center">
@@ -71,6 +71,18 @@ npm run dev:desktop
 To run the browser development server only, use `npm run dev`.
 
 ### Install
+
+You can download the installer of the latest release directly:
+
+- macOS (Apple Silicon):
+  [AITracker-1.0.0-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-1.0.0-arm64.dmg)
+- macOS (Intel):
+  [AITracker-1.0.0-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-1.0.0-x64.dmg)
+- Windows (x64):
+  [AITracker-Setup-1.0.0-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-Setup-1.0.0-x64.exe)
+
+All releases are listed on the
+[Releases page](https://github.com/estelwalks/aitracker/releases/latest).
 
 The following commands install the official stable release on macOS or
 Windows. The package-manager entries become available after the stable release
@@ -174,8 +186,6 @@ No more guessing how much AI you use.
 ## Manage Your AI Capabilities
 
 What is becoming difficult to manage is not just the AI tools themselves, but also the configurations and capabilities scattered across them.
-
-![AI tool network](docs/assets/en/01-ai-tools-network.png)
 
 AITracker automatically discovers these configurations and provides a unified management entry point.
 
