@@ -29,8 +29,8 @@
       "network": "forbidden"
     },
     "skills": {
-      "freshForMinutes": 60,
-      "defaultRefreshMinutes": 60,
+      "freshForMinutes": 30,
+      "defaultRefreshMinutes": 30,
       "startupPolicy": "if-stale",
       "staleReadable": true,
       "manualRefresh": true,
@@ -38,8 +38,8 @@
       "network": "forbidden"
     },
     "toolInstallations": {
-      "freshForMinutes": 360,
-      "defaultRefreshMinutes": 360,
+      "freshForMinutes": 60,
+      "defaultRefreshMinutes": 60,
       "startupPolicy": "if-stale",
       "staleReadable": true,
       "manualRefresh": true,
@@ -134,7 +134,7 @@
         "category": "collection",
         "defaultSchedule": {
           "kind": "interval",
-          "minutes": 60
+          "minutes": 30
         },
         "constraints": {
           "minMinutes": 15,
@@ -193,10 +193,10 @@
         "category": "collection",
         "defaultSchedule": {
           "kind": "interval",
-          "minutes": 360
+          "minutes": 60
         },
         "constraints": {
-          "minMinutes": 60,
+          "minMinutes": 15,
           "maxMinutes": 10080,
           "singleFlight": true
         },
