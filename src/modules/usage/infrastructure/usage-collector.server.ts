@@ -12,6 +12,7 @@ import {
   toPublicUsageSnapshot,
   type UsageScanner,
 } from "./usage-adapter.server.ts";
+import { retainSourceEvidence } from "../application/retain-source-evidence.ts";
 import { isCancellation } from "../../../platform/runtime/abort.ts";
 
 export interface UsageCollectorOptions {
@@ -186,23 +187,37 @@ export function createUsageCollector(
         }
         const snapshot = toPublicUsageSnapshot(outcome.value);
         const currentHealth = health(snapshot);
-        if (currentHealth.status !== "healthy" && options.repository != null) {
-          const previous = await options.repository.load();
-          if (previous != null) {
-            return {
-              snapshot: previous,
-              health: currentHealth,
-              durationMs: Math.max(0, now() - startedAt),
-              budgetExhausted: false,
-              cancelled: false,
-              retainedPreviousSnapshot: true,
-            };
-          }
+        const previous =
+          options.repository == null
+            ? undefined
+            : await options.repository.load();
+        if (currentHealth.status !== "healthy" && previous != null) {
+          return {
+            snapshot: previous,
+            health: currentHealth,
+            durationMs: Math.max(0, now() - startedAt),
+            budgetExhausted: false,
+            cancelled: false,
+            retainedPreviousSnapshot: true,
+          };
         }
-        await options.repository?.save(snapshot);
+        // Issue #35: per-source protection. A whole-snapshot "healthy" guard
+        // (above) only protects against a fully empty scan. When the scan is
+        // healthy overall but one previously-working source came back lifeless
+        // (e.g. a data-directory override whose rebased layout does not exist,
+        // or a transiently failing enumeration), the previous evidence for
+        // exactly those sources is merged into the committed snapshot instead
+        // of being silently replaced with zeros.
+        let committed = snapshot;
+        if (previous != null) {
+          const retention = retainSourceEvidence(previous, committed);
+          if (retention != null) committed = retention.snapshot;
+        }
+        const committedHealth = health(committed);
+        await options.repository?.save(committed);
         return {
-          snapshot,
-          health: currentHealth,
+          snapshot: committed,
+          health: committedHealth,
           durationMs: Math.max(0, now() - startedAt),
           budgetExhausted: false,
           cancelled: false,

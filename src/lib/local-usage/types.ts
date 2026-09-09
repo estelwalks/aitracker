@@ -31,7 +31,14 @@ export type LocalUsageDiagnosticCode =
   | "field-mismatch"
   | "malformed-json"
   | "query-failed"
-  | "read-failed";
+  | "read-failed"
+  /**
+   * Emitted by the usage collector when a source that previously reported
+   * data (or readable files) came back empty in this scan. The previous
+   * per-source evidence is retained in the committed snapshot so a single
+   * transiently failing scan can never silently zero a working source.
+   */
+  | "retained-previous";
 
 export interface LocalUsageDiagnostic {
   code: LocalUsageDiagnosticCode;
