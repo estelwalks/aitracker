@@ -400,7 +400,25 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       NonNullable<Parameters<typeof createUsageSnapshotRuntime>[0]["collect"]>
     >[0],
   ) => {
-    const collector = createUsageCollector();
+    // P2-3 + issue #35: the collector needs the last committed snapshot to (a)
+    // keep last-known-good when the whole scan is unhealthy and (b) retain
+    // per-source evidence for sources that previously had data but scanned
+    // empty this round. Persistence itself stays with the coordinator, so the
+    // collector's Dto-level `save` is deliberately a no-op here.
+    const collector = createUsageCollector({
+      repository: {
+        load: async () => {
+          try {
+            const hydrated =
+              await databaseRuntime.features.usageSnapshots.load();
+            return hydrated.envelope.data ?? undefined;
+          } catch {
+            return undefined;
+          }
+        },
+        save: async () => {},
+      },
+    });
     // P3-T3-04: reuse the shared WSL topology snapshot instead of re-running
     // `wsl.exe` on every usage refresh. The coordinator hydrates the
     // persisted topology once; a missing/stale snapshot triggers exactly one
@@ -449,6 +467,27 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       const previous = request.previous?.data;
       if (previous == null) {
         if (result.cancelled) throw new Error("usage:cancelled");
+        return {
+          data: result.snapshot,
+          sourceFingerprint: result.snapshot.generatedAt,
+          scannedItems: 0,
+        };
+      }
+      return {
+        data: previous,
+        sourceFingerprint: request.previous?.sourceFingerprint ?? undefined,
+        scannedItems: 0,
+        reusedItems: 0,
+        staleRefreshed: true,
+      };
+    }
+    // Whole-snapshot unhealthy (all sources failed): the collector returned
+    // the last committed snapshot. Commit it as a stale-refreshed generation
+    // so its original generatedAt is preserved instead of being re-stamped
+    // fresh over data that was never recollected.
+    if (result.retainedPreviousSnapshot) {
+      const previous = request.previous?.data;
+      if (previous == null) {
         return {
           data: result.snapshot,
           sourceFingerprint: result.snapshot.generatedAt,
