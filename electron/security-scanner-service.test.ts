@@ -1430,3 +1430,141 @@ test("projects binary, size, depth and unreadable-directory limits as stable rea
   if (process.platform !== "win32")
     assert.equal(codes.has("unavailable"), true);
 });
+
+async function addDiscoveredSkill(
+  home: string,
+  skillsDirRelativeToHome: string,
+  dirName: string,
+): Promise<void> {
+  const dir = join(home, skillsDirRelativeToHome, dirName);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "SKILL.md"), `# ${dirName}\n`, "utf8");
+}
+
+/** Scanner seam whose every call blocks until released; tracks concurrency. */
+function createGatedScanner() {
+  let active = 0;
+  let maxActive = 0;
+  let totalCalls = 0;
+  const waiters: Array<() => void> = [];
+  const waitForCallCount = async (count: number): Promise<void> => {
+    for (let index = 0; index < 200; index += 1) {
+      if (totalCalls >= count) return;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    throw new Error(`scanner call count never reached ${count}`);
+  };
+  return {
+    scanner: (async () => {
+      totalCalls += 1;
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((resolve) => {
+        waiters.push(resolve);
+      });
+      active -= 1;
+      return report();
+    }) as never,
+    active: (): number => active,
+    maxActive: (): number => maxActive,
+    totalCalls: (): number => totalCalls,
+    waitForCallCount,
+    /** Release every blocked call in reverse arrival order (worst-case commit order). */
+    releaseAll: (): void => {
+      for (let index = waiters.length - 1; index >= 0; index -= 1)
+        waiters[index]!();
+      waiters.length = 0;
+    },
+  };
+}
+
+test("scans all Skills concurrently through a bounded pool with deterministic ordering", async () => {
+  const { home } = await fixture();
+  for (const name of ["alpha", "beta", "gamma", "delta"])
+    await addDiscoveredSkill(home, ".codex/skills", name);
+  const gated = createGatedScanner();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+    scanConcurrency: 2,
+    scanner: gated.scanner,
+  });
+  const targets = await service.listSkills();
+  assert.equal(targets.length, 5);
+
+  const state = await service.start({ scope: "all", mode: "quick" });
+  assert.equal(state.status, "running");
+  // First pool round: two workers scan two Skills at once and block.
+  await gated.waitForCallCount(2);
+  assert.equal(gated.active(), 2);
+  assert.equal(gated.maxActive(), 2);
+  gated.releaseAll();
+  // Second round takes the next two targets; concurrency stays bounded.
+  await gated.waitForCallCount(4);
+  assert.equal(gated.active(), 2);
+  assert.equal(gated.maxActive(), 2);
+  gated.releaseAll();
+  // Third round has a single remaining target.
+  await gated.waitForCallCount(5);
+  gated.releaseAll();
+  await waitForTerminal(service);
+  assert.equal(gated.maxActive(), 2);
+
+  const status = service.getStatus();
+  assert.equal(status.status, "complete");
+  assert.equal(status.progress.completed, 5);
+  assert.equal(status.progress.failed, 0);
+  assert.equal(status.progress.skipped, 0);
+  // History is newest-first; entries commit in discovery order regardless of
+  // the completion race the gated scanner produced.
+  const history = await service.history();
+  assert.deepEqual(
+    history.map((entry) => entry.skillName),
+    [...targets].map((target) => target.name).reverse(),
+  );
+  assert.deepEqual(
+    status.resultIds,
+    [...history].reverse().map((entry) => entry.id),
+  );
+});
+
+test("cancellation stops the pool between Skills and counts the rest as skipped", async () => {
+  const { home } = await fixture();
+  await addDiscoveredSkill(home, ".codex/skills", "extra-one");
+  await addDiscoveredSkill(home, ".codex/skills", "extra-two");
+  const gated = createGatedScanner();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+    scanConcurrency: 2,
+    scanner: gated.scanner,
+  });
+  const targets = await service.listSkills();
+  assert.equal(targets.length, 3);
+
+  await service.start({ scope: "all", mode: "quick" });
+  await gated.waitForCallCount(2);
+  assert.deepEqual(service.cancel(), { cancelled: true });
+  // In-flight Skills finish; the worker pool never starts the remaining one.
+  gated.releaseAll();
+  await waitForTerminal(service);
+
+  const status = service.getStatus();
+  assert.equal(status.status, "cancelled");
+  assert.equal(status.progress.completed, 2);
+  assert.equal(status.progress.failed, 0);
+  assert.equal(status.progress.skipped, 1);
+  const history = await service.history();
+  assert.deepEqual(
+    history.map((entry) => entry.skillName),
+    [targets[1]?.name, targets[0]?.name],
+  );
+  assert.deepEqual(
+    status.resultIds,
+    [...history].reverse().map((entry) => entry.id),
+  );
+});

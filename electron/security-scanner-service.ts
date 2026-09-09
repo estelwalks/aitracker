@@ -39,6 +39,10 @@ const MAX_FILE_BYTES = 1_000_000;
 const MAX_TOTAL_BYTES = 20_000_000;
 const MAX_HISTORY = 200;
 const HISTORY_VERSION = 1;
+/** Default width of the per-run Skill scan worker pool (see `scanConcurrency`). */
+const DEFAULT_SCAN_CONCURRENCY = 4;
+/** Upper clamp for `scanConcurrency`; the pool never starts more workers than targets. */
+const MAX_SCAN_CONCURRENCY = 16;
 
 interface SkillFile {
   path: string;
@@ -189,6 +193,15 @@ export interface SecurityScannerServiceOptions {
   ) => void | Promise<void>;
   /** Deterministic TOCTOU test hook; production never supplies it. */
   readonly beforeOpenFile?: (path: string) => Promise<void>;
+  /**
+   * Width of the bounded worker pool that scans discovered Skill targets
+   * concurrently inside one run (default 4, clamped to 1..16). A full-model
+   * scan issues several sequential LLM requests per Skill, so an all-skills
+   * run is network-bound and parallel targets divide its wall-clock time by
+   * roughly the pool width. Keep the value modest to respect provider rate
+   * limits; cancellation semantics stay unchanged ("between skills").
+   */
+  readonly scanConcurrency?: number;
 }
 
 export interface SecurityScannerPersistence {
@@ -651,6 +664,7 @@ function cloneState(state: SecurityScanState): SecurityScanState {
 
 export class SecurityScannerService {
   readonly #options: SecurityScannerServiceOptions;
+  readonly #scanConcurrency: number;
   readonly #persistence: SecurityScannerPersistence;
   readonly #trusted = new Map<string, TrustedSkill>();
   #state = emptyState();
@@ -673,6 +687,10 @@ export class SecurityScannerService {
     if (!persistence)
       throw new Error("SQLite security scanner persistence is required");
     this.#persistence = persistence;
+    this.#scanConcurrency = Math.min(
+      MAX_SCAN_CONCURRENCY,
+      Math.max(1, options.scanConcurrency ?? DEFAULT_SCAN_CONCURRENCY),
+    );
   }
 
   getRuntimeCapability(): SecurityRuntimeCapability {
@@ -1089,31 +1107,88 @@ export class SecurityScannerService {
       lastFinishedAt.set(entry.skillRef, timestamp);
       lastContentHash.set(entry.skillRef, entry.report.contentHash);
     }
-    for (const target of targets) {
-      if (!this.#isActive(id, epoch)) return;
-      if (this.#cancelRequested) {
-        this.#state.progress.skipped +=
-          targets.length - this.#state.progress.started;
-        break;
-      }
-      const trusted = this.#trusted.get(target.skillRef);
-      if (!trusted) continue;
-      const itemStartedAt = this.#now();
-      this.#state.progress.started += 1;
-      this.#state.currentSkill = {
-        skillRef: target.skillRef,
-        name: target.name,
-      };
-      try {
-        const collected = await this.#collect(trusted.root);
+    // Bounded worker pool: a full-model scan of one Skill issues several
+    // sequential LLM requests, so an all-skills run is network-bound. Scanning
+    // up to `scanConcurrency` targets in parallel divides wall-clock time by
+    // roughly the pool width while leaving observable ordering intact: each
+    // worker finishes its current Skill before picking another (cancellation
+    // stays "between skills") and completed entries are committed in discovery
+    // order below, independent of completion races.
+    const results: Array<{ index: number; entry: SecurityScanHistoryEntry }> =
+      [];
+    let cursor = 0;
+    const workerCount = Math.min(this.#scanConcurrency, targets.length);
+    const runWorker = async (): Promise<void> => {
+      for (;;) {
         if (!this.#isActive(id, epoch)) return;
-        // Unchanged since the last complete automatic scan: skip re-analysis to
-        // avoid wasting model tokens/time (manual runs always re-scan).
-        if (
-          request.trigger === "automatic" &&
-          lastContentHash.get(target.skillRef) ===
-            contentHashOf(collected.files)
-        ) {
+        if (this.#cancelRequested) return;
+        const index = cursor;
+        cursor += 1;
+        if (index >= targets.length) return;
+        const target = targets[index];
+        const trusted = this.#trusted.get(target.skillRef);
+        if (!trusted) continue;
+        const itemStartedAt = this.#now();
+        this.#state.progress.started += 1;
+        this.#state.currentSkill = {
+          skillRef: target.skillRef,
+          name: target.name,
+        };
+        try {
+          const collected = await this.#collect(trusted.root);
+          if (!this.#isActive(id, epoch)) return;
+          // Unchanged since the last complete automatic scan: skip re-analysis to
+          // avoid wasting model tokens/time (manual runs always re-scan).
+          if (
+            request.trigger === "automatic" &&
+            lastContentHash.get(target.skillRef) ===
+              contentHashOf(collected.files)
+          ) {
+            const entry: SecurityScanHistoryEntry = {
+              id: `${id}:${target.skillRef.slice("skill:".length, "skill:".length + 16)}`,
+              scanId: id,
+              skillRef: target.skillRef,
+              skillName: target.name,
+              mode: request.mode,
+              trigger: request.trigger,
+              locale,
+              status: "skipped",
+              startedAt: itemStartedAt,
+              finishedAt: this.#now(),
+              errorCode: "security.scan.unchanged",
+            };
+            results.push({ index, entry });
+            this.#state.progress.skipped += 1;
+            continue;
+          }
+          const scanRequest = {
+            mode: request.mode,
+            locale,
+            files: collected.files,
+            ...(config == null ? {} : { model: config }),
+          };
+          const scanner = this.#options.scanner ?? scanSkill;
+          const report = await scanner(scanRequest, {
+            fetch: createSecurityScannerFetch(),
+          });
+          if (!this.#isActive(id, epoch)) return;
+          const dto = sanitizeReport(
+            report,
+            config?.apiKey ? [config.apiKey] : [],
+          );
+          if (collected.hostSkipped.length > 0) {
+            dto.status = "partial";
+            const hostPaths = new Set(
+              collected.hostSkipped.map((item) => item.path),
+            );
+            dto.skippedFiles = [
+              ...dto.skippedFiles.filter((item) => !hostPaths.has(item.path)),
+              ...collected.hostSkipped,
+            ];
+            if (dto.findings.length === 0) dto.verdict = "unknown";
+          }
+          finalizeTerminalPartialReport(dto);
+          const status = dto.status;
           const entry: SecurityScanHistoryEntry = {
             id: `${id}:${target.skillRef.slice("skill:".length, "skill:".length + 16)}`,
             scanId: id,
@@ -1122,84 +1197,56 @@ export class SecurityScannerService {
             mode: request.mode,
             trigger: request.trigger,
             locale,
-            status: "skipped",
+            status,
             startedAt: itemStartedAt,
             finishedAt: this.#now(),
-            errorCode: "security.scan.unchanged",
+            report: dto,
           };
-          newEntries.push(entry);
-          this.#state.progress.skipped += 1;
-          this.#state.resultIds.push(entry.id);
-          continue;
+          results.push({ index, entry });
+          this.#state.progress.completed += 1;
+        } catch {
+          if (!this.#isActive(id, epoch)) return;
+          const entry: SecurityScanHistoryEntry = {
+            id: `${id}:${target.skillRef.slice("skill:".length, "skill:".length + 16)}`,
+            scanId: id,
+            skillRef: target.skillRef,
+            skillName: target.name,
+            mode: request.mode,
+            trigger: request.trigger,
+            locale,
+            status: "failed",
+            startedAt: itemStartedAt,
+            finishedAt: this.#now(),
+            errorCode: "security.scanFailed",
+          };
+          results.push({ index, entry });
+          this.#state.progress.failed += 1;
         }
-        const scanRequest = {
-          mode: request.mode,
-          locale,
-          files: collected.files,
-          ...(config == null ? {} : { model: config }),
-        };
-        const scanner = this.#options.scanner ?? scanSkill;
-        const report = await scanner(scanRequest, {
-          fetch: createSecurityScannerFetch(),
-        });
-        if (!this.#isActive(id, epoch)) return;
-        const dto = sanitizeReport(
-          report,
-          config?.apiKey ? [config.apiKey] : [],
+        const done =
+          this.#state.progress.completed +
+          this.#state.progress.failed +
+          this.#state.progress.skipped;
+        this.#state.progress.percent = Math.floor(
+          (done / targets.length) * 100,
         );
-        if (collected.hostSkipped.length > 0) {
-          dto.status = "partial";
-          const hostPaths = new Set(
-            collected.hostSkipped.map((item) => item.path),
-          );
-          dto.skippedFiles = [
-            ...dto.skippedFiles.filter((item) => !hostPaths.has(item.path)),
-            ...collected.hostSkipped,
-          ];
-          if (dto.findings.length === 0) dto.verdict = "unknown";
-        }
-        finalizeTerminalPartialReport(dto);
-        const status = dto.status;
-        const entry: SecurityScanHistoryEntry = {
-          id: `${id}:${target.skillRef.slice("skill:".length, "skill:".length + 16)}`,
-          scanId: id,
-          skillRef: target.skillRef,
-          skillName: target.name,
-          mode: request.mode,
-          trigger: request.trigger,
-          locale,
-          status,
-          startedAt: itemStartedAt,
-          finishedAt: this.#now(),
-          report: dto,
-        };
-        newEntries.push(entry);
-        this.#state.progress.completed += 1;
-        this.#state.resultIds.push(entry.id);
-      } catch {
-        if (!this.#isActive(id, epoch)) return;
-        const entry: SecurityScanHistoryEntry = {
-          id: `${id}:${target.skillRef.slice("skill:".length, "skill:".length + 16)}`,
-          scanId: id,
-          skillRef: target.skillRef,
-          skillName: target.name,
-          mode: request.mode,
-          trigger: request.trigger,
-          locale,
-          status: "failed",
-          startedAt: itemStartedAt,
-          finishedAt: this.#now(),
-          errorCode: "security.scanFailed",
-        };
-        newEntries.push(entry);
-        this.#state.progress.failed += 1;
-        this.#state.resultIds.push(entry.id);
       }
-      const done =
-        this.#state.progress.completed +
-        this.#state.progress.failed +
-        this.#state.progress.skipped;
-      this.#state.progress.percent = Math.floor((done / targets.length) * 100);
+    };
+    await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+    if (!this.#isActive(id, epoch)) return;
+    // A cancellation request only stops workers from picking new targets;
+    // Skills that never started are counted as skipped once in-flight work
+    // has drained, exactly like a cancelled sequential run.
+    if (this.#cancelRequested) {
+      this.#state.progress.skipped +=
+        targets.length - this.#state.progress.started;
+    }
+    // Deterministic commit order: completion races must not reshuffle history
+    // or resultIds, so entries are committed in discovery order — the same
+    // order a sequential run would have produced.
+    results.sort((left, right) => left.index - right.index);
+    for (const { entry } of results) {
+      newEntries.push(entry);
+      this.#state.resultIds.push(entry.id);
     }
     if (!this.#isActive(id, epoch)) return;
     if (newEntries.length > 0)

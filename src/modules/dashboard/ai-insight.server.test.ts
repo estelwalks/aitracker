@@ -401,13 +401,17 @@ test("TTL cache is read-only and concurrent refreshes are deduplicated", async (
 });
 
 test("allowlist projection strips an unexpected path-like project label", () => {
+  // createDashboardV2View resolves the "30d" preset against the live clock,
+  // so a fixed absolute timestamp would silently roll out of the rolling
+  // window as real time passes. Anchor the fixture a few days in the past.
+  const liveTimestamp = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
   const snapshot = {
-    generatedAt: "2026-08-10T00:00:00.000Z",
+    generatedAt: liveTimestamp.toISOString(),
     mode: "real",
     events: [
       {
         source: "codex",
-        timestamp: "2026-08-10T00:00:00.000Z",
+        timestamp: liveTimestamp.toISOString(),
         model: "gpt-5",
         project: "/Users/alice/private-project",
         inputTokens: 50,
