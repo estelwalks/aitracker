@@ -40,6 +40,12 @@ function fixture(channel = "stable") {
         sha256: INTEL_SHA,
         size: 123457,
       },
+      "win32-arm64": {
+        name: `AITracker-Setup-${version}-arm64.exe`,
+        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-${version}-arm64.exe`,
+        sha256: "d".repeat(64),
+        size: 123459,
+      },
       "win32-x64": {
         name: `AITracker-Setup-${version}-x64.exe`,
         url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-${version}-x64.exe`,

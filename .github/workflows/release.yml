@@ -58,6 +58,16 @@ jobs:
             command: npm run dist:win:x64
             artifact_glob: release/*.exe
             artifact_name: release-windows-x64
+          # Windows on ARM is cross-built on the x64 runner: electron-builder
+          # downloads the win32-arm64 Electron payload and NSIS emits a
+          # separate AITracker-Setup-<version>-arm64.exe. No ARM64 runner is
+          # required to produce the installer.
+          - name: Windows arm64
+            os: windows-latest
+            platform: win32-arm64
+            command: npm run dist:win:arm64
+            artifact_glob: release/*.exe
+            artifact_name: release-windows-arm64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
@@ -134,7 +144,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Download the three installers
+      - name: Download the four installers
         uses: actions/download-artifact@v4
         with:
           pattern: release-*
@@ -204,7 +214,7 @@ jobs:
 
           ## Release assets
 
-          This release includes unsigned macOS arm64/x64 DMG installers, a Windows x64 NSIS installer, `release-metadata.json`, and `checksums.txt`. Verify the published SHA-256 checksums before installation.
+          This release includes unsigned macOS arm64/x64 DMG installers, Windows x64 and Windows arm64 NSIS installers, `release-metadata.json`, and `checksums.txt`. Verify the published SHA-256 checksums before installation.
 
           macOS Gatekeeper or Windows SmartScreen may show a warning because these installers are not signed or notarized. Follow the operating system's normal per-file confirmation flow and do not disable global security settings.
 

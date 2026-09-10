@@ -34,6 +34,7 @@ export const ERROR_CODES = Object.freeze({
 export const RELEASE_PLATFORMS = Object.freeze([
   "darwin-arm64",
   "darwin-x64",
+  "win32-arm64",
   "win32-x64",
 ]);
 
@@ -122,6 +123,10 @@ export function expectedReleaseArtifacts(version, platform) {
     Object.freeze({
       platform: "darwin-x64",
       name: `AITracker-${version}-x64.dmg`,
+    }),
+    Object.freeze({
+      platform: "win32-arm64",
+      name: `AITracker-Setup-${version}-arm64.exe`,
     }),
     Object.freeze({
       platform: "win32-x64",
@@ -290,7 +295,14 @@ function printSuccess(contract) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Path comparison instead of `file://${process.argv[1]}`: on Windows
+// import.meta.url is `file:///D:/...` while the naive interpolation produces
+// `file://D:\...`, so the CLI gate in the Windows release job would exit 0
+// without verifying anything.
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+) {
   try {
     const options = parseReleaseContractArgs(process.argv.slice(2));
     printSuccess(await verifyReleaseContract(options));

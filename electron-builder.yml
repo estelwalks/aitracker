@@ -56,13 +56,37 @@ win:
     - target: nsis
       arch:
         - x64
+        # Windows on ARM. Cross-built from an x64 host: the app payload is the
+        # native win32-arm64 Electron build, while the NSIS installer stub
+        # itself stays x86 and runs under Windows' x86 emulation (the bundled
+        # NSIS 3.0.4.1 emits no ARM64 stub; its templates pick app-64 or
+        # app-arm64 at install time via ${IsNativeARM64}).
+        #
+        # These entries only apply when no target/arch is named on the command
+        # line. `npm run dist:win` (bare `--win`) then emits a combined
+        # AITracker-Setup-<version>.exe carrying both payloads plus one
+        # installer per architecture, while `npm run dist:win:x64` and
+        # `npm run dist:win:arm64` pass an explicit arch (which overrides this
+        # list) and emit exactly one installer each — that is what the release
+        # workflow builds.
+        - arm64
   # Keep the EXE and pinned shortcut transparent, like the running window.
   # The three light trails remain part of the artwork at every icon size.
   icon: build/native-icons/icon.ico
 nsis:
   artifactName: "${productName}-Setup-${version}-${arch}.${ext}"
   oneClick: false
-  # Install for all users; the NSIS default becomes C:\Program Files\AITracker.
+  # Install for all users. Note the default directory, which comes from
+  # electron-builder's multiUser.nsh: it only promotes $PROGRAMFILES to
+  # $PROGRAMFILES64 inside `!ifdef APP_64`, and a 32-bit NSIS process resolves
+  # $PROGRAMFILES to the x86 view (verified with a probe built by the bundled
+  # makensis: $PROGRAMFILES=C:\Program Files (x86),
+  # $PROGRAMFILES64=C:\Program Files). So the x64 installer lands in
+  # C:\Program Files\AITracker, while the arm64-only installer — which defines
+  # APP_ARM64 but not APP_64 — lands in C:\Program Files (x86)\AITracker.
+  # The "Apps & features" entry is unaffected either way (check64BitAndSetRegView
+  # sets the 64-bit registry view for APP_ARM64), and users can still choose a
+  # directory because allowToChangeInstallationDirectory is enabled.
   perMachine: true
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true

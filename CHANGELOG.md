@@ -3,6 +3,19 @@
 All notable changes to AITracker will be documented in this file. The project
 uses semantic versioning for published releases.
 
+## [Unreleased]
+
+- The tag-triggered release workflow now publishes a Windows arm64 NSIS
+  installer alongside the existing macOS arm64/x64 and Windows x64 ones
+  (`AITracker-Setup-<version>-arm64.exe`). The Windows arm64 build is
+  cross-built on the x64 runner: NSIS embeds the native win32-arm64 Electron
+  payload while the installer stub itself stays x86 and runs under Windows'
+  x86 emulation, so no ARM64 runner is required.
+- `win32-arm64` joined the release contract: `release-metadata.json`, the
+  `release-metadata.schema.json` artifact map, and the `npx` installer
+  launcher now resolve Windows on ARM to its own installer instead of falling
+  back to the x64 one.
+
 ## [1.0.1] - 2026-09-08
 
 - Added pi and oh-my-pi (omp) session and usage readers over their `~/.pi`

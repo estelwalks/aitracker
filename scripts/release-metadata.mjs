@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   assertAllowedDownloadUrl,
   assertValidChannel,
@@ -15,6 +16,7 @@ import {
 const TARGET_FILES = Object.freeze([
   ["darwin-arm64", (version) => `AITracker-${version}-arm64.dmg`],
   ["darwin-x64", (version) => `AITracker-${version}-x64.dmg`],
+  ["win32-arm64", (version) => `AITracker-Setup-${version}-arm64.exe`],
   ["win32-x64", (version) => `AITracker-Setup-${version}-x64.exe`],
 ]);
 
@@ -128,7 +130,14 @@ export async function generateReleaseMetadata(options) {
   return metadata;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Path comparison instead of `file://${process.argv[1]}`: on Windows
+// import.meta.url is `file:///D:/...` while the naive interpolation produces
+// `file://D:\...`, so the entry block would never run and the CLI would exit 0
+// without generating anything.
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+) {
   try {
     const options = parseReleaseMetadataArgs(process.argv.slice(2));
     await generateReleaseMetadata(options);

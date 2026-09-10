@@ -26,10 +26,15 @@ function validMetadata() {
     artifacts: {
       "darwin-arm64": artifact("darwin-arm64", 1),
       "darwin-x64": artifact("darwin-x64", 2),
-      "win32-x64": {
-        ...artifact("win32-x64", 3),
+      "win32-arm64": {
+        ...artifact("win32-arm64", 3),
         name: "file-3.exe",
         url: goodUrl.replace("file.dmg", "file-3.exe"),
+      },
+      "win32-x64": {
+        ...artifact("win32-x64", 4),
+        name: "file-4.exe",
+        url: goodUrl.replace("file.dmg", "file-4.exe"),
       },
     },
   };
@@ -39,6 +44,11 @@ test("validates the shared metadata contract and selects a platform", () => {
   const metadata = validateReleaseMetadata(validMetadata());
   assert.equal(findArtifact(metadata, "darwin", "arm64").name, "file-1.dmg");
   assert.equal(platformKey("win32", "x64"), "win32-x64");
+  assert.equal(
+    findArtifact(metadata, "win32", "arm64").name,
+    "file-3.exe",
+    "Windows on ARM resolves to the arm64 NSIS installer",
+  );
 });
 
 test("rejects duplicate/missing platforms, invalid versions, hashes, sizes and channels", () => {
@@ -109,6 +119,9 @@ test("rejects unsafe artifact names and platform-mismatched extensions", () => {
     },
     (value) => {
       value.artifacts["win32-x64"].name = "installer.dmg";
+    },
+    (value) => {
+      value.artifacts["win32-arm64"].name = "installer.dmg";
     },
   ]) {
     const invalid = validMetadata();

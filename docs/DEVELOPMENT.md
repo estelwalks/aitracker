@@ -5,18 +5,18 @@ checkout.
 
 ## Repository layout
 
-| Path                            | Purpose                                                         |
-| ------------------------------- | --------------------------------------------------------------- |
-| `src/`                          | TanStack Start application and shared product modules           |
-| `electron/`                     | Desktop process, preload bridge, tray, and native integration   |
+| Path                               | Purpose                                                         |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `src/`                             | TanStack Start application and shared product modules           |
+| `electron/`                        | Desktop process, preload bridge, tray, and native integration   |
 | `@estelwalks/agent-threat-scanner` | Published npm package used by security scanning                 |
-| `scripts/`                      | Code generation, validation, packaging, and performance tooling |
-| `tests/e2e/`                    | Playwright end-to-end scenarios                                 |
-| `tests/fixtures/`               | Versioned deterministic test fixtures                           |
-| `tests/performance/`            | Performance budgets and scenarios                               |
-| `build/`                        | Electron packaging inputs plus ignored generated bundles        |
-| `public/`                       | Static assets copied into the web application                   |
-| `.github/`                      | CI and collaboration templates                                  |
+| `scripts/`                         | Code generation, validation, packaging, and performance tooling |
+| `tests/e2e/`                       | Playwright end-to-end scenarios                                 |
+| `tests/fixtures/`                  | Versioned deterministic test fixtures                           |
+| `tests/performance/`               | Performance budgets and scenarios                               |
+| `build/`                           | Electron packaging inputs plus ignored generated bundles        |
+| `public/`                          | Static assets copied into the web application                   |
+| `.github/`                         | CI and collaboration templates                                  |
 
 ## Install
 
@@ -112,8 +112,14 @@ npm run verify:release-contract -- --tag v1.0.0-beta.1 --channel beta \
 ```
 
 The tag-triggered [unsigned beta release workflow](../.github/workflows/release.yml)
-uses Node 24 and `npm ci` to build macOS arm64/x64 and Windows x64 installers.
-It runs the same gate before packaging, assembles the installers, and creates
+uses Node 24 and `npm ci` to build macOS arm64/x64 and Windows x64/arm64
+installers. The Windows arm64 installer is cross-built on the x64 runner: NSIS
+embeds the native win32-arm64 Electron payload, while the installer stub itself
+stays x86 and runs under Windows' x86 emulation. That emulated stub also means
+the arm64 package defaults to `C:\Program Files (x86)\AITracker` instead of
+`C:\Program Files\AITracker` — see the `perMachine` note in
+[electron-builder.yml](../electron-builder.yml). It runs the same gate before
+packaging, assembles the installers, and creates
 only a GitHub draft prerelease with metadata and checksums. It does not sign or
 notarize artifacts, publish npm packages, or update a Homebrew Tap. A
 maintainer must inspect the draft, installers, metadata, and checksums before
@@ -121,7 +127,7 @@ manually publishing it; a failed workflow does not publish a formal/stable
 release channel.
 
 Unsigned local packages are suitable for testing. Phase 1 is limited to an
-unsigned beta for macOS x64/arm64 and Windows x64. The CLI tarball, release
+unsigned beta for macOS x64/arm64 and Windows x64/arm64. The CLI tarball, release
 metadata, and Cask generator are release-tooling inputs and are not yet
 published to npm or a Tap by this checkout. When those local tools are
 available, the expected dry-run sequence is:
@@ -130,6 +136,7 @@ available, the expected dry-run sequence is:
 # Build local installers, then generate one local source of release metadata.
 npm run dist:mac
 npm run dist:win:x64
+npm run dist:win:arm64
 node scripts/release-metadata.mjs --release-dir release \
   --version 1.0.0-beta.1 --channel beta \
   --output release/release-metadata.json

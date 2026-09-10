@@ -10,6 +10,7 @@ const RELEASE_REDIRECT_HOSTS = new Set([
 export const SUPPORTED_PLATFORMS = Object.freeze([
   "darwin-arm64",
   "darwin-x64",
+  "win32-arm64",
   "win32-x64",
 ]);
 
@@ -47,7 +48,7 @@ export function platformKey(platform, arch) {
   if (!SUPPORTED_PLATFORMS.includes(key)) {
     throw new Error(
       `Unsupported platform/architecture: ${platform}/${arch}. ` +
-        "Supported targets are macOS arm64, macOS x64, and Windows x64.",
+        "Supported targets are macOS arm64, macOS x64, Windows x64, and Windows arm64.",
     );
   }
   return key;
@@ -138,7 +139,7 @@ function assertArtifact(artifact, key, appVersion) {
       throw new Error(`${prefix} has unknown field: ${field}`);
     }
   }
-  const expectedExtension = key === "win32-x64" ? ".exe" : ".dmg";
+  const expectedExtension = key.startsWith("win32-") ? ".exe" : ".dmg";
   if (
     typeof artifact.name !== "string" ||
     artifact.name.length === 0 ||
