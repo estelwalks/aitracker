@@ -1,4 +1,4 @@
-import packageJson from "../../package.json";
+import packageJson from "../../package.json" with { type: "json" };
 
 /**
  * Central application configuration — the single source of truth for the

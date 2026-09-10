@@ -206,10 +206,17 @@ test("the macOS script installs in place and only falls back on failure", () => 
     processId: 4321,
     currentVersion: "1.0.0",
   });
-  // Mounts without browsing, resolves the mount point, and respects an image
-  // that is already mounted (which lands on "AITracker 1").
+  // Mounts without browsing at a mount point the script chooses. The volume
+  // name must never be guessed: electron-builder names the image after its
+  // release, so v1.0.1 mounts as "AITracker 1.0.1".
   assert.ok(script.includes("hdiutil attach -nobrowse"));
-  assert.ok(script.includes('"/Volumes/AITracker 1"'));
+  assert.ok(script.includes('-mountpoint "$MOUNT_POINT"'));
+  assert.ok(
+    script.includes(
+      'MOUNT_POINT="/var/folders/xy/T/aitracker-AITracker-x64.dmg.mnt"',
+    ),
+  );
+  assert.ok(!script.includes("/Volumes/AITracker"));
   // Waits for this app to exit before touching the bundle: macOS refuses to
   // replace a running app.
   assert.ok(script.includes('kill -0 "$PID"'));

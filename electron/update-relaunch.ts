@@ -167,6 +167,8 @@ export function buildMacHandoffCommand(options: {
     ? numericVersion(options.currentVersion)
     : null;
   const appName = appBundlePath.split("/").pop() ?? "AITracker.app";
+  /** Mount point this script owns: a sibling of the downloaded image. */
+  const mountPoint = `${installerPath}.mnt`;
   const appParent = appBundlePath.replace(/\/[^/]+$/u, "");
   const executableName = appName.replace(/\.app$/u, "");
   return (
@@ -182,6 +184,8 @@ APP_NAME="$X_APP_NAME"
 EXECUTABLE_NAME="$X_EXECUTABLE_NAME"
 PID="$X_PROCESS_ID"
 TARGET_NUMERIC="$X_TARGET_NUMERIC"
+MOUNT_POINT="$X_MOUNT_POINT"
+MOUNTED=0
 
 log() { printf '[%s] %s\\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >>"$LOG" 2>/dev/null || true; }
 
@@ -205,43 +209,43 @@ compare_versions() {
   printf '0'
 }
 
+# Fallback used by every failure path: detach what we mounted, then hand the
+# image to the user so the update can still be finished by hand.
 open_image() {
   log "falling back to the manual install flow"
+  if [ "$MOUNTED" = "1" ]; then
+    /usr/bin/hdiutil detach "$MOUNT_POINT" >>"$LOG" 2>&1 || true
+    /bin/rmdir "$MOUNT_POINT" >>"$LOG" 2>&1 || true
+  fi
   /usr/bin/open "$DMG" >>"$LOG" 2>&1 || true
 }
 
 # --- 1. mount -------------------------------------------------------------
 log "handoff started (pid=$PID, dmg=$DMG)"
-MOUNT=""
-ATTACH_PLIST="$(/usr/bin/hdiutil attach -nobrowse -noverify -noautoopen -plist "$DMG" 2>>"$LOG")" || true
-# The plist holds one entity per attached device and only the volume carries a
-# mount-point, so take the last one. plutil cannot walk that array,
-# and reading the XML keeps this independent of the system locale.
-MOUNT="$(printf '%s' "$ATTACH_PLIST" | /usr/bin/awk '
-  /[<]key[>]mount-point[<][/]key[>]/ { grab = 1; next }
-  grab {
-    line = $0
-    sub(/^[ \t]*[<]string[>]/, "", line)
-    sub(/[<][/]string[>][ \t]*$/, "", line)
-    if (line != "") value = line
-    grab = 0
-  }
-  END { if (value != "") print value }
-' 2>/dev/null || true)"
-# The volume is mounted by name, so poll for it: the image may still be
-# attaching, and an already mounted copy lands on "AITracker 1"/"AITracker 2".
-if [ -z "$MOUNT" ] || [ ! -d "$MOUNT/$APP_NAME" ]; then
-  MOUNT=""
-  for _ in $(/usr/bin/seq 1 40); do
-    for CANDIDATE in "/Volumes/AITracker" "/Volumes/AITracker 1" "/Volumes/AITracker 2"; do
-      if [ -d "$CANDIDATE/$APP_NAME" ]; then MOUNT="$CANDIDATE"; break; fi
-    done
-    [ -n "$MOUNT" ] && break
-    /bin/sleep 1
-  done
+# Mount at a path we choose. hdiutil attach returns before the volume is usable
+# and electron-builder names the image after its release, so v1.0.1 mounts as
+# "AITracker 1.0.1": neither the volume name nor the -plist output can be
+# trusted here. An occupied mount point makes the attach fail, which falls back
+# to the manual flow instead of installing a stale image.
+/bin/rmdir "$MOUNT_POINT" >>"$LOG" 2>&1 || true
+if ! /usr/bin/hdiutil attach -nobrowse -noverify -noautoopen -mountpoint "$MOUNT_POINT" "$DMG" >>"$LOG" 2>&1; then
+  log "could not attach the image at $MOUNT_POINT"
+  /bin/rmdir "$MOUNT_POINT" >>"$LOG" 2>&1 || true
+  open_image
+  exit 0
 fi
-if [ -z "$MOUNT" ] || [ ! -d "$MOUNT/$APP_NAME" ]; then
+MOUNTED=1
+MOUNT="$MOUNT_POINT"
+# hdiutil returns once the device is attached; the volume still needs a moment
+# before its contents are readable.
+for _ in $(/usr/bin/seq 1 20); do
+  [ -d "$MOUNT/$APP_NAME" ] && break
+  /bin/sleep 1
+done
+if [ ! -d "$MOUNT/$APP_NAME" ]; then
   log "no usable bundle at $MOUNT/$APP_NAME"
+  /usr/bin/hdiutil detach "$MOUNT_POINT" >>"$LOG" 2>&1 || true
+  /bin/rmdir "$MOUNT_POINT" >>"$LOG" 2>&1 || true
   open_image
   exit 0
 fi
@@ -345,6 +349,7 @@ exit 0
       .replaceAll("$X_APP_NAME", shellQuote(appName).slice(1, -1))
       .replaceAll("$X_EXECUTABLE_NAME", shellQuote(executableName).slice(1, -1))
       .replaceAll("$X_APP_PARENT", shellQuote(appParent).slice(1, -1))
+      .replaceAll("$X_MOUNT_POINT", shellQuote(mountPoint).slice(1, -1))
       .replaceAll("$X_PROCESS_ID", String(processId))
       .replaceAll(
         "$X_TARGET_NUMERIC",
