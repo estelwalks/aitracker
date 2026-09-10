@@ -3717,7 +3717,7 @@ async function droidModelFromSidecarJsonl(
     signal?.throwIfAborted();
     const marker = lines[index].indexOf("Model:");
     if (marker < 0) continue;
-    let tail = lines[index].slice(marker + "Model:".length);
+    const tail = lines[index].slice(marker + "Model:".length);
     let cut = tail.length;
     for (const character of ['"', "\\", "["]) {
       const position = tail.indexOf(character);
