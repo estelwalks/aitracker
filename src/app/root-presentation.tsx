@@ -6,7 +6,14 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, useRef, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Toaster } from "sonner";
 
 import {
@@ -18,10 +25,21 @@ import {
 import { useI18n } from "../lib/i18n/context";
 import { useTheme } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
-import { DesktopUpdateDialogs } from "../components/DesktopUpdateDialogs";
 import { AppProviders } from "./providers";
 import type { QueryClient } from "@tanstack/react-query";
 import type { RootLoaderData } from "./root-route-config";
+
+/**
+ * Desktop-only overlay that prompts a restart once a verified installer has
+ * been downloaded. It is dynamically imported so its UI kit (dialog, buttons,
+ * pagination) stays out of the initial shared bundle: it renders nothing at
+ * all outside the Electron shell.
+ */
+const DesktopUpdateDialogs = lazy(async () => {
+  const { DesktopUpdateDialogs: Component } =
+    await import("../components/DesktopUpdateDialogs");
+  return { default: Component };
+});
 
 export function RootShell({
   locale,
@@ -74,13 +92,30 @@ function RootAppContent() {
       <AppShell>
         <Outlet />
       </AppShell>
-      <DesktopUpdateDialogs />
+      <DesktopUpdateDialogsGate />
       <Toaster
         position="top-right"
         theme={theme}
         toastOptions={{ duration: 3000 }}
       />
     </>
+  );
+}
+
+/**
+ * Renders the update overlay only inside the Electron shell, and only after
+ * its chunk has been requested. The browser build never downloads it.
+ */
+function DesktopUpdateDialogsGate() {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    setIsDesktop(typeof window !== "undefined" && Boolean(window.desktopApi));
+  }, []);
+  if (!isDesktop) return null;
+  return (
+    <Suspense fallback={null}>
+      <DesktopUpdateDialogs />
+    </Suspense>
   );
 }
 
