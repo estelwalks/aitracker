@@ -2,6 +2,9 @@
 # this directory to estelwalks/homebrew-aitracker.
 cask "aitracker" do
   # Template only. Replace every placeholder by running the metadata generator.
+  # The __*_IMMUTABLE_GITHUB_RELEASE_URL__ placeholders are expected to be
+  # versionless releases/latest/download/<name> links: installer names carry no
+  # version, which is what keeps those URLs valid across releases.
   download_url = on_arch_conditional(
     arm:   "__ARM64_IMMUTABLE_GITHUB_RELEASE_URL__",
     intel: "__X64_IMMUTABLE_GITHUB_RELEASE_URL__",
@@ -15,6 +18,10 @@ cask "aitracker" do
   name "AITracker"
   desc "Local-first AI development asset dashboard"
   homepage "https://github.com/estelwalks/aitracker"
+
+  livecheck do
+    skip "Version comes from the release metadata that generated this cask"
+  end
 
   depends_on macos: :big_sur
 

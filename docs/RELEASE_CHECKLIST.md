@@ -79,6 +79,9 @@ npm run test:e2e:offline
   `node scripts/release-metadata.mjs --release-dir release --version
 <version> --channel <stable|beta> --output release/release-metadata.json`. This
   is a local generation step, not evidence that metadata has been published.
+  The artifact URLs it records are versionless
+  (`releases/latest/download/<name>`), so the record pins the build through
+  `appVersion`/`gitTag` plus sha256 and size rather than through the URL.
 - Inspect and create the CLI tarball locally with `npm pack ./packages/cli
 --dry-run --pack-destination release/cli` and, after review, `npm pack
 ./packages/cli --pack-destination release/cli`. Do not publish it from this
@@ -88,7 +91,9 @@ npm run test:e2e:offline
 release/release-metadata.json --channel <stable|beta> --token
 <aitracker|aitracker-beta> --output release/<aitracker|aitracker-beta>.rb`,
   then run `brew style` and `brew audit --cask` on the generated file when the
-  local Tap checkout is available. Never hand-copy a URL or hash.
+  local Tap checkout is available. Never hand-copy a URL or hash. The generated
+  Cask pins `version` and both `sha256` values and skips livecheck, because a
+  livecheck reading the versionless URL could never find the current version.
 - Run the CLI resolver in dry-run mode:
   `npx --no-install @estelwalks/aitracker@<channel> --dry-run`; confirm it
   offers only that channel's installers and does not download or open an

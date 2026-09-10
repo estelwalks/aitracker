@@ -451,12 +451,10 @@ function metadataArtifactOf(
       typeof artifact.name !== "string" ||
       !isSafeAssetName(artifact.name) ||
       typeof artifact.url !== "string" ||
-      // The name and URL are pinned to the release tag instead of being
-      // derived from the version, because installer names no longer carry one.
-      // The byte-level guarantees stay here: the URL must be a trusted
-      // releases/latest or releases/download/<tag> URL for this repository, and
-      // the name/URL pair below must match a real asset of the selected
-      // release, whose sha256 is re-verified after the download.
+      // The URL cannot be derived from a version any more, so it only has to
+      // be a trusted releases/latest or releases/download/<tag> URL for this
+      // repository. The name below ties it to a real asset of the selected
+      // release, and the sha256 is re-verified against the downloaded bytes.
       !trustedDownloadUrl(artifact.url) ||
       typeof artifact.sha256 !== "string" ||
       !/^[a-f0-9]{64}$/.test(artifact.sha256) ||
@@ -466,14 +464,10 @@ function metadataArtifactOf(
       artifact.size > maxDownloadBytes
     )
       return null;
-    if (
-      !assets.some(
-        (asset) =>
-          asset.name === artifact.name &&
-          asset.browser_download_url === artifact.url,
-      )
-    )
-      return null;
+    // Match by name only: a release lists its assets under the tag's own
+    // download path, while the metadata records the versionless
+    // releases/latest/download/<name> URL, so the two legitimately differ.
+    if (!assets.some((asset) => asset.name === artifact.name)) return null;
   }
 
   const rawArtifact = artifactMap[platformArtifactKey(platform, arch)];
@@ -494,21 +488,21 @@ function metadataArtifactOf(
     return null;
   }
 
-  const releaseAsset = assets.find(
-    (asset) =>
-      asset.name === artifact.name &&
-      asset.browser_download_url === artifact.url,
-  );
-  if (
-    !releaseAsset ||
-    artifact.name !== selectedAsset.name ||
-    artifact.url !== selectedAsset.url
-  ) {
+  const releaseAsset = assets.find((asset) => asset.name === artifact.name);
+  if (!releaseAsset || artifact.name !== selectedAsset.name) {
     return null;
   }
+  // Always download the URL the release itself advertises for this asset: for a
+  // tag-addressed asset that is the immutable per-release URL, which is what
+  // its sha256 was computed from.
+  const downloadUrl =
+    typeof releaseAsset.browser_download_url === "string" &&
+    trustedDownloadUrl(releaseAsset.browser_download_url)
+      ? releaseAsset.browser_download_url
+      : artifact.url;
   return {
     name: artifact.name,
-    url: artifact.url,
+    url: downloadUrl,
     sha256: artifact.sha256.toLowerCase(),
     size: artifact.size,
   };

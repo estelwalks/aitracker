@@ -238,6 +238,98 @@ test("automatic checks use the GitHub tag and download its installer", async () 
   assert.deepEqual([...written[0]!.data], [...downloadedBytes]);
 });
 
+test("metadata may use the versionless URL while the release lists its tag URL", async () => {
+  // The released release-metadata.json records releases/latest/download/<name>
+  // (that is the point of dropping the version from the names), but GitHub
+  // lists a release's assets under its own tag. The updater must accept the
+  // mismatch and download the tag-addressed asset the release advertises, so
+  // the bytes stay those its sha256 was computed from.
+  const latestBase =
+    "https://github.com/estelwalks/aitracker/releases/latest/download";
+  const tagBase =
+    "https://github.com/estelwalks/aitracker/releases/download/v2.0.0";
+  const written: Array<{ path: string; data: Uint8Array }> = [];
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) {
+        return response([
+          {
+            tag_name: "v2.0.0",
+            published_at: "2026-08-31T12:34:56Z",
+            assets: [
+              {
+                name: "AITracker-arm64.dmg",
+                browser_download_url: `${tagBase}/AITracker-arm64.dmg`,
+              },
+              {
+                name: "AITracker-x64.dmg",
+                browser_download_url: `${tagBase}/AITracker-x64.dmg`,
+              },
+              {
+                name: "AITracker-Setup-x64.exe",
+                browser_download_url: `${tagBase}/AITracker-Setup-x64.exe`,
+              },
+              {
+                name: "release-metadata.json",
+                browser_download_url: `${tagBase}/release-metadata.json`,
+              },
+            ],
+          },
+        ]);
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response({
+          schemaVersion: 1,
+          appVersion: "2.0.0",
+          channel: "stable",
+          repository: "estelwalks/aitracker",
+          gitTag: "v2.0.0",
+          artifacts: {
+            "darwin-arm64": {
+              name: "AITracker-arm64.dmg",
+              url: `${latestBase}/AITracker-arm64.dmg`,
+              sha256: downloadedSha256,
+              size: downloadedBytes.byteLength,
+            },
+            "darwin-x64": {
+              name: "AITracker-x64.dmg",
+              url: `${latestBase}/AITracker-x64.dmg`,
+              sha256: downloadedSha256,
+              size: downloadedBytes.byteLength,
+            },
+            "win32-x64": {
+              name: "AITracker-Setup-x64.exe",
+              url: `${latestBase}/AITracker-Setup-x64.exe`,
+              sha256: downloadedSha256,
+              size: downloadedBytes.byteLength,
+            },
+          },
+        });
+      }
+      return new Response(downloadedBytes, { status: 200 });
+    },
+    mkdirFn: async () => undefined,
+    writeFileFn: async (path, data) => {
+      written.push({ path, data });
+    },
+  });
+
+  const state = await manager.startAutomaticCheck();
+  assert.equal(state.status, "downloaded");
+  assert.equal(state.assetName, "AITracker-x64.dmg");
+  assert.equal(state.downloadUrl, `${tagBase}/AITracker-x64.dmg`);
+  assert.equal(written.length, 1);
+  assert.equal(
+    written[0]!.path,
+    "/tmp/aitracker-updates/aitracker-AITracker-x64.dmg",
+  );
+});
+
 test("release selection rejects tags that are not strict semver", async () => {
   const manager = new UpdateManager({
     currentVersion: "1.0.0",

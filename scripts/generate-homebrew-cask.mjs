@@ -122,6 +122,15 @@ export function renderCask(metadata, { token, channel } = {}) {
       `  desc ${rubyString(desc)}`,
       `  homepage ${rubyString(homepage)}`,
       "",
+      // Installer names carry no version, so `url` is a versionless
+      // releases/latest/download/<name> link. Homebrew's default livecheck
+      // reads the cask URL, which can no longer yield a version and would
+      // report a permanent false upgrade; the pinned `version`/`sha256` above
+      // are refreshed from release-metadata.json on every release instead.
+      "  livecheck do",
+      `    skip ${rubyString("Version comes from the release metadata that generated this cask")}`,
+      "  end",
+      "",
       "  depends_on macos: :big_sur",
       "",
       `  app ${rubyString("AITracker.app")}`,

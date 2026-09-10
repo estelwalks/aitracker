@@ -8,7 +8,7 @@ import {
   assertAllowedDownloadUrl,
   assertValidChannel,
   assertValidVersion,
-  metadataUrlForRelease,
+  LATEST_DOWNLOAD_BASE_URL,
   REPOSITORY,
   validateReleaseMetadata,
 } from "../packages/cli/src/release-metadata.mjs";
@@ -90,7 +90,11 @@ export async function buildReleaseMetadata({
     const path = join(directory, name);
     const info = await requiredFile(path);
     const bytes = await readFile(path);
-    const url = metadataUrlForRelease(version, name);
+    // Versionless, matching the installer name: the record pins the exact
+    // build through appVersion/gitTag plus sha256 and size, not through the
+    // URL. A tag-addressed URL would undo the point of dropping the version
+    // from the file names, because every consumer would need the tag first.
+    const url = `${LATEST_DOWNLOAD_BASE_URL}${name}`;
     assertAllowedDownloadUrl(url);
     artifacts[platform] = {
       name,

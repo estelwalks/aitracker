@@ -101,6 +101,12 @@ test("renders stable Cask with distinct arm/intel URL and SHA mappings", () => {
     new RegExp(`sha256 arm:\\s+"${ARM_SHA}",\\n\\s+intel: "${INTEL_SHA}"`),
   );
   assert.match(output, /app "AITracker\.app"/u);
+  // The URL is versionless, so a livecheck reading it could never find a
+  // version; the Cask pins its own version/sha256 and skips the check.
+  assert.match(
+    output,
+    /livecheck do\n\s+skip "Version comes from the release metadata that generated this cask"\n\s+end/u,
+  );
   assert.doesNotMatch(output, /secret|token|password/u);
 });
 
