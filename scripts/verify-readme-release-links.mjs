@@ -35,9 +35,30 @@ const LATEST_DOWNLOAD_PREFIX =
 const PINNED_DOWNLOAD_PATTERN =
   /https:\/\/github\.com\/estelwalks\/aitracker\/releases\/download\/[^\s)"']+/gu;
 
+/**
+ * Documented install commands must not pin a version: the READMEs are the
+ * release documentation, and `npx @<version>` silently stops following
+ * releases. `latest` (stable) and `beta` are npm dist-tags, and the same
+ * applies to the `@estelwalks/aitracker` package name.
+ *
+ * Only code that a reader may paste is checked. A version inside inline code
+ * is prose ("pin `@estelwalks/aitracker@1.0.2` for an exact build") and is
+ * removed before scanning.
+ */
+const PINNED_NPX_PATTERN =
+  /@estelwalks\/aitracker@(?!latest\b|beta\b)[^\s)`]+/gu;
+const INLINE_CODE_PATTERN = /`[^`]*`/gu;
+
 export function inspectReadme({ path, text }) {
   const problems = [];
   for (const [index, line] of text.split(/\r?\n/u).entries()) {
+    const commands = line.replace(INLINE_CODE_PATTERN, "``");
+    for (const match of commands.matchAll(PINNED_NPX_PATTERN)) {
+      problems.push(
+        `${path}:${index + 1} pins a CLI version (${match[0]}); use ` +
+          `@estelwalks/aitracker@latest (or @beta) so the command keeps working`,
+      );
+    }
     const lineNumber = index + 1;
     for (const match of line.matchAll(PINNED_DOWNLOAD_PATTERN)) {
       problems.push(

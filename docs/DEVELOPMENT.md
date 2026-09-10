@@ -155,10 +155,13 @@ node scripts/generate-homebrew-cask.mjs \
   --token <aitracker|aitracker-beta> --output release/<aitracker|aitracker-beta>.rb
 
 # Validate CLI selection without downloading or opening an installer.
-npx --no-install @estelwalks/aitracker@<channel> --dry-run
+# `latest` is the stable dist-tag, `beta` the prerelease one; the CLI derives
+# its channel from the installed package when --channel is omitted.
+npx --no-install @estelwalks/aitracker@latest --dry-run
+npx --no-install @estelwalks/aitracker@beta --dry-run
 
 # Download and verify without opening; the directory is retained.
-npx --no-install @estelwalks/aitracker@<channel> --download-only release/downloads
+npx --no-install @estelwalks/aitracker@latest --download-only release/downloads
 ```
 
 `--download-only` without a directory remains the legacy temporary-directory
@@ -169,7 +172,10 @@ files; failed downloads clean up only files created by that invocation.
 
 The metadata and Cask commands above are local-only and do not publish
 anything. The CLI package and release artifacts must exist before running the
-tarball and resolver checks. A local Homebrew validation, when the generated
+tarball and resolver checks, and no workflow publishes the CLI: a release is
+only complete once `npm publish` has moved the `latest` (or `beta`) dist-tag,
+because the documented `npx --yes @estelwalks/aitracker@latest` resolves
+through that tag. A local Homebrew validation, when the generated
 Cask and Tap checkout are present, is
 `brew style release/aitracker-beta.rb` followed by
 `brew audit --cask release/aitracker-beta.rb`. No npm/GitHub publication or CI

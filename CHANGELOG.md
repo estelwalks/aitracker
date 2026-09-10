@@ -60,6 +60,12 @@ uses semantic versioning for published releases.
 - GitHub release notes are now extracted from this changelog, so the published
   notes for a tag are that version's `CHANGELOG.md` section rather than a
   hard-coded template.
+- The documented install commands no longer pin a version: the READMEs and the
+  release notes use `npx --yes @estelwalks/aitracker@latest`, which resolves
+  through the npm `latest` dist-tag and therefore needs no edit per release.
+  Beta builds stay on `@beta`, and pinning a version is documented for
+  reproducing an exact build. `verify-readme-release-links` now fails CI when a
+  documented command pins a CLI version again.
 - The macOS app icon is now a dedicated white rounded tile for the Dock,
   Finder and the mounted installer volume, while the menu-bar template icon,
   the Windows icon set and the web favicons keep their transparent artwork

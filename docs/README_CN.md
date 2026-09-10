@@ -93,15 +93,17 @@ Release：安装包文件名不带版本号，每次发布变化的只有 tag。
 如果已安装 Node.js 和 npm，可以运行：
 
 ```bash
-npx --yes @estelwalks/aitracker@1.0.2
+npx --yes @estelwalks/aitracker@latest
 ```
 
-此命令会下载并打开桌面安装程序。
+此命令会下载并打开桌面安装程序。`@latest` 始终跟随最新的正式版，因此不需要随版本修改；
+需要精确复现某个构建时请固定版本号（`@estelwalks/aitracker@1.0.2`）。beta 版本发布在
+`@beta` 下。
 
 如果 npm 配置使用的镜像中没有这个包，可以显式使用官方 npm registry：
 
 ```bash
-npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.2
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@latest
 ```
 
 #### Homebrew（macOS）

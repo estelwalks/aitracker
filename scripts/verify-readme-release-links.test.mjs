@@ -79,6 +79,27 @@ test("an unknown latest-release asset name is reported", () => {
   );
 });
 
+test("a pinned CLI version in a command is reported", () => {
+  const problems = inspectReadme({
+    path: "README.md",
+    text: `${installerReadme()}\n\`\`\`bash\nnpx --yes @estelwalks/aitracker@1.0.2\n\`\`\`\n`,
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /pins a CLI version/u);
+});
+
+test("the dist-tags and a prose pin are both allowed", () => {
+  const problems = inspectReadme({
+    path: "README.md",
+    text:
+      `${installerReadme()}\n` +
+      "```bash\nnpx --yes @estelwalks/aitracker@latest\n```\n" +
+      "```bash\nnpx --yes @estelwalks/aitracker@beta\n```\n" +
+      "Pin a version (`@estelwalks/aitracker@1.0.2`) for an exact build.\n",
+  });
+  assert.deepEqual(problems, []);
+});
+
 test("a README without any latest-release download link is reported", () => {
   const problems = inspectReadme({
     path: "README.md",

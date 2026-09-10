@@ -197,8 +197,16 @@ jobs:
           ### npx (macOS and Windows)
 
           \`\`\`bash
-          npx --yes @estelwalks/aitracker@${version}
+          npx --yes @estelwalks/aitracker@latest
           \`\`\`
+
+          EOF
+            # Quoted heredoc: the inline code in this paragraph must survive
+            # without backticks being read as command substitution.
+            cat >> release-notes.md <<'EOF'
+          The dist-tag install follows the newest stable release; beta builds are published under `@beta`.
+          EOF
+            cat >> release-notes.md <<EOF
 
           ### Homebrew (macOS)
 

@@ -96,15 +96,18 @@ npm run dev:desktop
 Node.jsとnpmをインストール済みの場合は、次のコマンドを実行します。
 
 ```bash
-npx --yes @estelwalks/aitracker@1.0.2
+npx --yes @estelwalks/aitracker@latest
 ```
 
-このコマンドはデスクトップインストーラーをダウンロードして開きます。
+このコマンドはデスクトップインストーラーをダウンロードして開きます。`@latest` は常に
+最新の正式版に追従するため、書き換える必要はありません。特定のビルドを再現したい場合は
+バージョンを固定してください（`@estelwalks/aitracker@1.0.2`）。beta 版は `@beta` で
+公開されます。
 
 使用中のnpmミラーにこのパッケージがない場合は、公式npmレジストリを明示します。
 
 ```bash
-npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.2
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@latest
 ```
 
 #### Homebrew（macOS）
