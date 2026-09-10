@@ -36,9 +36,12 @@ uses semantic versioning for published releases.
   installer stub itself stays x86 and runs under Windows' x86 emulation, so no
   ARM64 runner is required.
 - `win32-arm64` joined the release contract: `release-metadata.json`, the
-  `release-metadata.schema.json` artifact map, and the `npx` installer
-  launcher now resolve Windows on ARM to its own installer instead of falling
-  back to the x64 one.
+  `release-metadata.schema.json` artifact map, the desktop updater and the
+  `npx` installer launcher now resolve Windows on ARM to its own installer
+  instead of falling back to the x64 one. The desktop updater only knew the
+  three platforms published before 1.0.2 and rejected any other artifact key,
+  which would have failed every update to this release with "invalid release
+  metadata"; it now expects exactly the four platforms the pipeline publishes.
 - Installer names no longer carry the version (`AITracker-arm64.dmg`,
   `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
   `AITracker-Setup-arm64.exe`). GitHub resolves

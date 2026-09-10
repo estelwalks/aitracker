@@ -427,7 +427,17 @@ function metadataArtifactOf(
   )
     return null;
   const artifactMap = artifacts as Record<string, unknown>;
-  const requiredKeys = ["darwin-arm64", "darwin-x64", "win32-x64"];
+  // Exactly the platforms the release pipeline publishes, and no others:
+  // release-metadata.json always carries all four (see
+  // scripts/release-metadata.mjs and schemas/release-metadata.schema.json), so
+  // an unknown key means the document is not ours. Windows on ARM joined the
+  // contract in 1.0.2; requiring only three keys rejected every 1.0.2 release.
+  const requiredKeys = [
+    "darwin-arm64",
+    "darwin-x64",
+    "win32-arm64",
+    "win32-x64",
+  ];
   if (
     Object.keys(artifactMap).some((key) => !requiredKeys.includes(key)) ||
     requiredKeys.some(
