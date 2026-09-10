@@ -219,18 +219,17 @@ async function main() {
   console.log("\n[4/5] Packaging cached macOS DMGs");
   await run(electronBuilder, builderArgs);
 
-  const version = JSON.parse(
-    await readFile(join(projectRoot, "package.json"), "utf8"),
-  ).version;
+  // Versionless, matching electron-builder's dmg artifactName: the release
+  // URLs resolve these names through releases/latest/download/<name>.
   const artifacts = [
     {
       arch: "x64",
-      dmg: join(releaseDirectory, `${appName}-${version}-x64.dmg`),
+      dmg: join(releaseDirectory, `${appName}-x64.dmg`),
       app: join(releaseDirectory, "mac", `${appName}.app`),
     },
     {
       arch: "arm64",
-      dmg: join(releaseDirectory, `${appName}-${version}-arm64.dmg`),
+      dmg: join(releaseDirectory, `${appName}-arm64.dmg`),
       app: join(releaseDirectory, "mac-arm64", `${appName}.app`),
     },
   ].filter((artifact) => packagedArchitectures.includes(artifact.arch));

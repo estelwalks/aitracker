@@ -72,17 +72,23 @@ To run the browser development server only, use `npm run dev`.
 
 ### Install
 
-You can download the installer of the latest release directly:
+You can download the installer of the latest release directly. These links stay
+valid across releases and always resolve to the newest published one: installer
+names carry no version, so the release tag is the only thing that changes.
 
 - macOS (Apple Silicon):
-  [AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)
+  [AITracker-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg)
 - macOS (Intel):
-  [AITracker-1.0.1-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-x64.dmg)
+  [AITracker-x64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg)
 - Windows (x64):
-  [AITracker-Setup-1.0.1-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.1-x64.exe)
-- Windows (ARM64): the ARM64 installer is published from the next tagged
-  release onward —
-  [Releases page](https://github.com/estelwalks/aitracker/releases/latest)
+  [AITracker-Setup-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe)
+- Windows (ARM64):
+  [AITracker-Setup-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe)
+
+Each release lists its own `release-metadata.json` and `checksums.txt`, which
+record the exact version and SHA-256 of the files in that release. For a
+byte-exact build, take the file from the release whose tag you need instead of
+from `latest`.
 
 All releases are listed on the
 [Releases page](https://github.com/estelwalks/aitracker/releases/latest).
@@ -96,16 +102,19 @@ and their corresponding distribution metadata have been published.
 With Node.js and npm installed, run:
 
 ```bash
-npx --yes @estelwalks/aitracker@1.0.1
+npx --yes @estelwalks/aitracker@latest
 ```
 
-This command downloads and opens the desktop installer.
+This command downloads and opens the desktop installer. `@latest` follows the
+newest stable release, so it never needs editing; pin a version
+(`@estelwalks/aitracker@1.0.2`) when you need to reproduce an exact build. Beta
+builds are published under `@beta`.
 
 If your npm configuration uses a mirror that does not contain the package, use
 the official npm registry explicitly:
 
 ```bash
-npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.1
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@latest
 ```
 
 #### Homebrew (macOS)

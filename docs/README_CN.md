@@ -67,16 +67,21 @@ npm run dev:desktop
 
 ### 安装
 
-也可以直接下载最新 Release 的安装包：
+也可以直接下载最新 Release 的安装包。以下链接不会随版本变化，始终指向最新发布的
+Release：安装包文件名不带版本号，每次发布变化的只有 tag。
 
 - macOS（Apple Silicon）：
-  [AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)
+  [AITracker-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg)
 - macOS（Intel）：
-  [AITracker-1.0.1-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-x64.dmg)
+  [AITracker-x64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg)
 - Windows（x64）：
-  [AITracker-Setup-1.0.1-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.1-x64.exe)
-- Windows（ARM64）：ARM64 安装包从下一个 tag 版本开始发布，见
-  [Releases 页面](https://github.com/estelwalks/aitracker/releases/latest)
+  [AITracker-Setup-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe)
+- Windows（ARM64）：
+  [AITracker-Setup-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe)
+
+每个 Release 都带有该版本的 `release-metadata.json` 和 `checksums.txt`，其中记录了
+该 Release 的准确版本号与 SHA-256。需要精确复现某个构建时，请到对应 tag 的 Release
+下载，而不要使用 `latest`。
 
 所有版本可以在 [Releases 页面](https://github.com/estelwalks/aitracker/releases/latest) 查看。
 
@@ -88,15 +93,17 @@ npm run dev:desktop
 如果已安装 Node.js 和 npm，可以运行：
 
 ```bash
-npx --yes @estelwalks/aitracker@1.0.1
+npx --yes @estelwalks/aitracker@latest
 ```
 
-此命令会下载并打开桌面安装程序。
+此命令会下载并打开桌面安装程序。`@latest` 始终跟随最新的正式版，因此不需要随版本修改；
+需要精确复现某个构建时请固定版本号（`@estelwalks/aitracker@1.0.2`）。beta 版本发布在
+`@beta` 下。
 
 如果 npm 配置使用的镜像中没有这个包，可以显式使用官方 npm registry：
 
 ```bash
-npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.1
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@latest
 ```
 
 #### Homebrew（macOS）

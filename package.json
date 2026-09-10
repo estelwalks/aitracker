@@ -1,6 +1,6 @@
 {
   "name": "aitracker-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AITracker local AI development asset dashboard",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
@@ -47,7 +47,7 @@
     "verify:release-contract": "node scripts/verify-release-contract.mjs",
     "release:metadata": "node scripts/release-metadata.mjs",
     "test:cli": "node --test packages/cli/test/*.test.mjs",
-    "test:release": "node --test scripts/release-metadata.test.mjs scripts/verify-release-contract.test.mjs packages/cli/test/*.test.mjs",
+    "test:release": "node --test scripts/release-metadata.test.mjs scripts/verify-release-contract.test.mjs scripts/changelog-release-notes.test.mjs scripts/verify-readme-release-links.test.mjs scripts/verify-release-artifact-names.test.mjs packages/cli/test/*.test.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:empty-home": "playwright test -c playwright.config.empty-home.ts",
@@ -89,6 +89,9 @@
     "verify:sqlite-only": "node scripts/verify-sqlite-only.mjs",
     "verify:bundle-budget": "node scripts/verify-bundle-budget.mjs",
     "verify:bundle-no-sqlite": "node scripts/verify-bundle-no-sqlite.mjs",
+    "verify:readme-release-links": "node scripts/verify-readme-release-links.mjs",
+    "verify:release-artifact-names": "node scripts/verify-release-artifact-names.mjs",
+    "release:notes": "node scripts/changelog-release-notes.mjs",
     "inspect:database": "node scripts/inspect-database.mts",
     "diagnose:model": "node --import tsx scripts/diagnose-active-model.mts",
     "check:opensource-hygiene": "node scripts/check-open-source-hygiene.mjs"

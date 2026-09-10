@@ -146,19 +146,19 @@ flowchart LR
   "publishedAt": "<ISO-8601>",
   "artifacts": {
     "darwin-arm64": {
-      "name": "AITracker-1.0.0-arm64.dmg",
-      "url": "https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-1.0.0-arm64.dmg",
+      "name": "AITracker-arm64.dmg",
+      "url": "https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-arm64.dmg",
       "sha256": "<hex>",
       "size": 0
     },
     "darwin-x64": {
-      "name": "AITracker-1.0.0-x64.dmg",
+      "name": "AITracker-x64.dmg",
       "url": "<immutable-url>",
       "sha256": "<hex>",
       "size": 0
     },
     "win32-arm64": {
-      "name": "AITracker-Setup-1.0.0-arm64.exe",
+      "name": "AITracker-Setup-arm64.exe",
       "url": "<immutable-url>",
       "sha256": "<hex>",
       "size": 0,
@@ -166,7 +166,7 @@ flowchart LR
       "scope": "machine"
     },
     "win32-x64": {
-      "name": "AITracker-Setup-1.0.0-x64.exe",
+      "name": "AITracker-Setup-x64.exe",
       "url": "<immutable-url>",
       "sha256": "<hex>",
       "size": 0,
@@ -177,7 +177,7 @@ flowchart LR
 }
 ```
 
-生成器必须校验：版本与文件名一致、URL host/repository 固定、每个必需平台恰好一个制品、hash 为 64 位小写十六进制、文件大小大于零。
+安装包文件名不带版本号（`AITracker-arm64.dmg`、`AITracker-Setup-x64.exe` 等），版本只记录在 `appVersion`/`gitTag` 中，这样 `releases/latest/download/<文件名>` 才能跨版本稳定指向最新发布，README 与 `npx` 入口无需每次发版修改。生成器必须校验：制品 URL 属于本仓库的 Release 下载地址、每个必需平台恰好一个制品、hash 为 64 位小写十六进制、文件大小大于零；`scripts/verify-release-artifact-names.mjs` 另外守住打包配置，禁止版本号重新进入文件名模板。
 
 ### 6.2 版本与频道契约
 

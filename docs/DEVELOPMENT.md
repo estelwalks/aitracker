@@ -100,14 +100,18 @@ npm run dist:win:x64
 
 Before packaging or tagging, run the release contract gate. It reads the root
 and CLI package manifests, requires matching strict semantic versions, and
-prints the three electron-builder artifact names. `--tag` and `--channel` are
-optional for local checks; `--release-dir` additionally requires all three
-installers to be present:
+prints the four electron-builder artifact names. Those names carry no version
+(`AITracker-arm64.dmg`, `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
+`AITracker-Setup-arm64.exe`) so that `releases/latest/download/<name>` keeps
+resolving to the newest release; `npm run verify:release-artifact-names` fails
+if a `${version}` placeholder returns to `electron-builder.yml`. `--tag` and
+`--channel` are optional for local checks; `--release-dir` additionally
+requires all four installers to be present:
 
 ```bash
 npm run verify:release-contract
-npm run verify:release-contract -- --tag v1.0.0-beta.1 --channel beta
-npm run verify:release-contract -- --tag v1.0.0-beta.1 --channel beta \
+npm run verify:release-contract -- --tag v<version> --channel <stable|beta>
+npm run verify:release-contract -- --tag v<version> --channel <stable|beta> \
   --release-dir release
 ```
 
@@ -138,7 +142,7 @@ npm run dist:mac
 npm run dist:win:x64
 npm run dist:win:arm64
 node scripts/release-metadata.mjs --release-dir release \
-  --version 1.0.0-beta.1 --channel beta \
+  --version <version> --channel <stable|beta> \
   --output release/release-metadata.json
 
 # Inspect/package the CLI without publishing it.
@@ -147,14 +151,17 @@ npm pack ./packages/cli --pack-destination release/cli
 
 # Generate the beta Cask from metadata; do not copy URLs or hashes by hand.
 node scripts/generate-homebrew-cask.mjs \
-  --metadata release/release-metadata.json --channel beta \
-  --token aitracker-beta --output release/aitracker-beta.rb
+  --metadata release/release-metadata.json --channel <stable|beta> \
+  --token <aitracker|aitracker-beta> --output release/<aitracker|aitracker-beta>.rb
 
 # Validate CLI selection without downloading or opening an installer.
+# `latest` is the stable dist-tag, `beta` the prerelease one; the CLI derives
+# its channel from the installed package when --channel is omitted.
+npx --no-install @estelwalks/aitracker@latest --dry-run
 npx --no-install @estelwalks/aitracker@beta --dry-run
 
 # Download and verify without opening; the directory is retained.
-npx --no-install @estelwalks/aitracker@beta --download-only release/downloads
+npx --no-install @estelwalks/aitracker@latest --download-only release/downloads
 ```
 
 `--download-only` without a directory remains the legacy temporary-directory
@@ -165,7 +172,10 @@ files; failed downloads clean up only files created by that invocation.
 
 The metadata and Cask commands above are local-only and do not publish
 anything. The CLI package and release artifacts must exist before running the
-tarball and resolver checks. A local Homebrew validation, when the generated
+tarball and resolver checks, and no workflow publishes the CLI: a release is
+only complete once `npm publish` has moved the `latest` (or `beta`) dist-tag,
+because the documented `npx --yes @estelwalks/aitracker@latest` resolves
+through that tag. A local Homebrew validation, when the generated
 Cask and Tap checkout are present, is
 `brew style release/aitracker-beta.rb` followed by
 `brew audit --cask release/aitracker-beta.rb`. No npm/GitHub publication or CI

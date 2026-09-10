@@ -13,7 +13,6 @@ import { APP_REPO_URL } from "./app-config.js";
 const githubRepository = new URL(APP_REPO_URL);
 const githubPath = githubRepository.pathname.replace(/\/$/u, "");
 const GITHUB_RELEASES_URL = `https://api.github.com/repos${githubPath}/releases?per_page=100`;
-const GITHUB_DOWNLOAD_PREFIX = `${APP_REPO_URL}/releases/download/`;
 const RELEASE_REPOSITORY = "estelwalks/aitracker";
 const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES = 1024 * 1024;
@@ -188,9 +187,7 @@ function releaseDateOf(release: GitHubRelease): string | null {
 }
 
 function trustedDownloadUrl(value: unknown): value is string {
-  if (typeof value !== "string" || !value.startsWith(GITHUB_DOWNLOAD_PREFIX)) {
-    return false;
-  }
+  if (typeof value !== "string") return false;
   try {
     const url = new URL(value);
     return (
@@ -201,17 +198,18 @@ function trustedDownloadUrl(value: unknown): value is string {
       !url.password &&
       !url.search &&
       !url.hash &&
-      /^\/estelwalks\/aitracker\/releases\/download\/[^/?#]+\/[^/?#]+$/u.test(
-        url.pathname,
+      // Installer and metadata names carry no version, so an asset is reached
+      // either through the `latest` alias release or through the tag of the
+      // release it was listed in. Only this repository's own release paths are
+      // accepted; the sha256 check covers the delivered bytes.
+      url.pathname.startsWith(`${githubPath}/releases/`) &&
+      /^\/releases\/(?:latest\/download|download\/[^/?#]+)\/[^/?#]+$/u.test(
+        url.pathname.slice(githubPath.length),
       )
     );
   } catch {
     return false;
   }
-}
-
-function canonicalDownloadUrl(version: string, name: string): string {
-  return `${GITHUB_DOWNLOAD_PREFIX}v${version}/${name}`;
 }
 
 function canonicalArch(arch: string): string {
@@ -429,7 +427,17 @@ function metadataArtifactOf(
   )
     return null;
   const artifactMap = artifacts as Record<string, unknown>;
-  const requiredKeys = ["darwin-arm64", "darwin-x64", "win32-x64"];
+  // Exactly the platforms the release pipeline publishes, and no others:
+  // release-metadata.json always carries all four (see
+  // scripts/release-metadata.mjs and schemas/release-metadata.schema.json), so
+  // an unknown key means the document is not ours. Windows on ARM joined the
+  // contract in 1.0.2; requiring only three keys rejected every 1.0.2 release.
+  const requiredKeys = [
+    "darwin-arm64",
+    "darwin-x64",
+    "win32-arm64",
+    "win32-x64",
+  ];
   if (
     Object.keys(artifactMap).some((key) => !requiredKeys.includes(key)) ||
     requiredKeys.some(
@@ -453,8 +461,10 @@ function metadataArtifactOf(
       typeof artifact.name !== "string" ||
       !isSafeAssetName(artifact.name) ||
       typeof artifact.url !== "string" ||
-      artifact.url !==
-        canonicalDownloadUrl(metadata.appVersion as string, artifact.name) ||
+      // The URL cannot be derived from a version any more, so it only has to
+      // be a trusted releases/latest or releases/download/<tag> URL for this
+      // repository. The name below ties it to a real asset of the selected
+      // release, and the sha256 is re-verified against the downloaded bytes.
       !trustedDownloadUrl(artifact.url) ||
       typeof artifact.sha256 !== "string" ||
       !/^[a-f0-9]{64}$/.test(artifact.sha256) ||
@@ -464,14 +474,10 @@ function metadataArtifactOf(
       artifact.size > maxDownloadBytes
     )
       return null;
-    if (
-      !assets.some(
-        (asset) =>
-          asset.name === artifact.name &&
-          asset.browser_download_url === artifact.url,
-      )
-    )
-      return null;
+    // Match by name only: a release lists its assets under the tag's own
+    // download path, while the metadata records the versionless
+    // releases/latest/download/<name> URL, so the two legitimately differ.
+    if (!assets.some((asset) => asset.name === artifact.name)) return null;
   }
 
   const rawArtifact = artifactMap[platformArtifactKey(platform, arch)];
@@ -492,21 +498,21 @@ function metadataArtifactOf(
     return null;
   }
 
-  const releaseAsset = assets.find(
-    (asset) =>
-      asset.name === artifact.name &&
-      asset.browser_download_url === artifact.url,
-  );
-  if (
-    !releaseAsset ||
-    artifact.name !== selectedAsset.name ||
-    artifact.url !== selectedAsset.url
-  ) {
+  const releaseAsset = assets.find((asset) => asset.name === artifact.name);
+  if (!releaseAsset || artifact.name !== selectedAsset.name) {
     return null;
   }
+  // Always download the URL the release itself advertises for this asset: for a
+  // tag-addressed asset that is the immutable per-release URL, which is what
+  // its sha256 was computed from.
+  const downloadUrl =
+    typeof releaseAsset.browser_download_url === "string" &&
+    trustedDownloadUrl(releaseAsset.browser_download_url)
+      ? releaseAsset.browser_download_url
+      : artifact.url;
   return {
     name: artifact.name,
-    url: artifact.url,
+    url: downloadUrl,
     sha256: artifact.sha256.toLowerCase(),
     size: artifact.size,
   };
@@ -750,9 +756,10 @@ export class UpdateManager {
       );
       if (
         !metadataAsset ||
-        typeof metadataAsset.browser_download_url !== "string" ||
-        metadataAsset.browser_download_url !==
-          canonicalDownloadUrl(latestVersion, RELEASE_METADATA_NAME)
+        // The metadata asset name is versionless like the installer names, so
+        // the URL is taken from this release's own asset list (already filtered
+        // to non-draft semver tags) rather than rebuilt from a version.
+        !trustedDownloadUrl(metadataAsset.browser_download_url)
       ) {
         this.reportIntegrityFailure("metadata-missing", latestVersion);
         return this.setState({

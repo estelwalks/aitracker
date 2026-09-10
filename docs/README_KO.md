@@ -69,16 +69,22 @@ npm run dev:desktop
 
 ### 설치
 
-최신 릴리스의 설치 파일을 직접 다운로드할 수도 있습니다:
+최신 릴리스의 설치 파일을 직접 다운로드할 수도 있습니다. 아래 링크는 릴리스마다
+바뀌지 않고 항상 최신 릴리스를 가리킵니다. 설치 파일 이름에는 버전이 들어가지 않으며,
+릴리스마다 달라지는 것은 태그뿐입니다.
 
 - macOS(Apple Silicon):
-  [AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)
+  [AITracker-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg)
 - macOS(Intel):
-  [AITracker-1.0.1-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-x64.dmg)
+  [AITracker-x64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg)
 - Windows(x64):
-  [AITracker-Setup-1.0.1-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.1-x64.exe)
-- Windows(ARM64): ARM64 설치 프로그램은 다음 태그 릴리스부터 제공됩니다.
-  [Releases 페이지](https://github.com/estelwalks/aitracker/releases/latest)를 확인하세요.
+  [AITracker-Setup-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe)
+- Windows(ARM64):
+  [AITracker-Setup-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe)
+
+각 릴리스에는 해당 버전의 `release-metadata.json`과 `checksums.txt`가 첨부되어 정확한
+버전과 SHA-256을 기록합니다. 특정 빌드를 재현해야 할 때는 `latest`가 아니라 해당 태그의
+릴리스에서 내려받으세요.
 
 모든 버전은 [Releases 페이지](https://github.com/estelwalks/aitracker/releases/latest)에서 확인할 수 있습니다.
 
@@ -90,15 +96,17 @@ npm run dev:desktop
 Node.js와 npm이 설치되어 있다면 다음 명령을 실행하세요.
 
 ```bash
-npx --yes @estelwalks/aitracker@1.0.1
+npx --yes @estelwalks/aitracker@latest
 ```
 
-이 명령은 데스크톱 설치 파일을 다운로드하여 엽니다.
+이 명령은 데스크톱 설치 파일을 다운로드하여 엽니다. `@latest`는 항상 최신 정식 버전을
+따르므로 수정할 필요가 없습니다. 특정 빌드를 재현하려면 버전을 고정하세요
+(`@estelwalks/aitracker@1.0.2`). 베타 버전은 `@beta`로 배포됩니다.
 
 사용 중인 npm 미러에 이 패키지가 없다면 공식 npm registry를 명시하세요.
 
 ```bash
-npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.1
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@latest
 ```
 
 #### Homebrew (macOS)

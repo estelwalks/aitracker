@@ -43,7 +43,9 @@ const outputNames = [
   "trayTemplate.png",
   "trayTemplate@2x.png",
   "icon.ico",
-  "icon.icns",
+  "mac-app.icns",
+  "mac-app-512.png",
+  "mac-app-1024.png",
   ...Object.keys(sources).flatMap((appearance) => [
     `favicon-${appearance}.png`,
     `favicon-${appearance}@2x.png`,
@@ -64,6 +66,18 @@ export function compactArtwork(source, { template = false } = {}) {
     throw new Error("Canonical SVG must define native-mark and its ink color");
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" color="${template ? "#000000" : color}">${mark}</svg>`;
+}
+
+/** A dedicated white tile for the Dock, Finder and mounted installer volume. */
+export function macAppArtwork(source) {
+  // Keep macOS app artwork separate from the transparent menu-bar, Windows
+  // and web assets. The outer margin aligns the tile with other Dock icons;
+  // the inset mark leaves breathing room inside the white rounded square.
+  const mark = compactArtwork(source).replace(
+    "<svg ",
+    '<svg x="176" y="176" width="672" height="672" ',
+  );
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect x="100" y="100" width="824" height="824" rx="184" fill="#ffffff"/>${mark}</svg>`;
 }
 
 /** Retain physical density as well as Electron's @2x filename convention. */
@@ -143,7 +157,7 @@ async function exists(path) {
 
 async function currentManifest() {
   return {
-    version: 4,
+    version: 5,
     generator: await sha256(fileURLToPath(import.meta.url)),
     windowsSizes: WINDOWS_ICON_SIZES,
     macTemplateSizes: [16, 32],
@@ -249,6 +263,8 @@ export async function generateNativeIcons() {
       ),
     );
     const template = compactArtwork(artworks.light, { template: true });
+    // Always use dark ink on white, independent of the application theme.
+    const macApp = macAppArtwork(artworks.light);
     await Promise.all([
       writeFile(
         join(stagingDirectory, "trayTemplate.png"),
@@ -258,7 +274,15 @@ export async function generateNativeIcons() {
         join(stagingDirectory, "trayTemplate@2x.png"),
         renderPng(template, 32, 144),
       ),
-      writeFile(join(stagingDirectory, "icon.icns"), packIcns(artworks.light)),
+      writeFile(join(stagingDirectory, "mac-app.icns"), packIcns(macApp)),
+      writeFile(
+        join(stagingDirectory, "mac-app-512.png"),
+        renderPng(macApp, 512),
+      ),
+      writeFile(
+        join(stagingDirectory, "mac-app-1024.png"),
+        renderPng(macApp, 1024, 144),
+      ),
       // Pinned shortcuts and the EXE use the same transparent artwork as the
       // running window. Never reintroduce a background during packaging.
       copyFile(
@@ -274,7 +298,7 @@ export async function generateNativeIcons() {
     await removeGeneratedDirectory(outputDirectory);
     await rename(stagingDirectory, outputDirectory);
     console.log(
-      "Generated native icons: macOS templates/ICNS and Windows multi-size ICOs.",
+      "Generated native icons: macOS white app tiles, transparent menu-bar templates and Windows multi-size ICOs.",
     );
   } catch (error) {
     await removeGeneratedDirectory(stagingDirectory);

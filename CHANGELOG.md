@@ -5,16 +5,74 @@ uses semantic versioning for published releases.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-10
+
+- In-app updates are now a complete workflow instead of a manual check: the
+  desktop client checks GitHub every six hours while it runs, downloads a
+  verified installer silently in the background, and offers restart-to-install
+  through a global "update ready" dialog. Downloads survive slow connections
+  (separate connect and stream-idle timeouts), resume from a package already on
+  disk instead of transferring the same release twice, and report throttled
+  progress with a percentage in Settings and in the manual update dialog.
+  A deferral is remembered per version, and the Windows hand-off runs the
+  installer with `/S --updated --force-run` so it closes the running app and
+  relaunches the new build.
+- macOS installs an update without the manual drag-and-drop step: "restart to
+  install" now quits the app, mounts the downloaded image at a mount point it
+  owns, replaces the app bundle and starts the new version again on its own.
+  The update is validated before anything moves (bundle structure, runnable
+  executable, no downgrade), the old bundle is kept aside until the new one
+  starts, and any failure falls back to the previous behaviour of opening the
+  image for a manual install. macOS still asks for the normal one-time
+  confirmation when the downloaded app first opens, because the packages remain
+  unsigned and the quarantine flag is never removed.
+- Added an update proxy setting (off by default, configured like model
+  profiles) that routes update traffic through a dedicated Electron session
+  for networks that cannot reach GitHub directly.
 - The tag-triggered release workflow now publishes a Windows arm64 NSIS
   installer alongside the existing macOS arm64/x64 and Windows x64 ones
-  (`AITracker-Setup-<version>-arm64.exe`). The Windows arm64 build is
-  cross-built on the x64 runner: NSIS embeds the native win32-arm64 Electron
-  payload while the installer stub itself stays x86 and runs under Windows'
-  x86 emulation, so no ARM64 runner is required.
+  (`AITracker-Setup-arm64.exe`). The Windows arm64 build is cross-built on the
+  x64 runner: NSIS embeds the native win32-arm64 Electron payload while the
+  installer stub itself stays x86 and runs under Windows' x86 emulation, so no
+  ARM64 runner is required.
 - `win32-arm64` joined the release contract: `release-metadata.json`, the
-  `release-metadata.schema.json` artifact map, and the `npx` installer
-  launcher now resolve Windows on ARM to its own installer instead of falling
-  back to the x64 one.
+  `release-metadata.schema.json` artifact map, the desktop updater and the
+  `npx` installer launcher now resolve Windows on ARM to its own installer
+  instead of falling back to the x64 one. The desktop updater only knew the
+  three platforms published before 1.0.2 and rejected any other artifact key,
+  which would have failed every update to this release with "invalid release
+  metadata"; it now expects exactly the four platforms the pipeline publishes.
+- Installer names no longer carry the version (`AITracker-arm64.dmg`,
+  `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
+  `AITracker-Setup-arm64.exe`). GitHub resolves
+  `/releases/latest/download/<name>` against the newest release, so the README
+  download links keep pointing at the current build without a documentation
+  edit per release, and the same names are reused by every release instead of
+  being duplicated as extra assets. The version still travels in the app bundle
+  and in `release-metadata.json` (`appVersion`, `gitTag`), and
+  `checksums.txt` covers the exact bytes of each release. The updater and the
+  `npx` launcher now take the metadata URL from the selected release's own
+  asset list, and `scripts/verify-release-artifact-names.mjs` fails CI if a
+  version placeholder or a renamed template ever returns to
+  `electron-builder.yml`. Clients older than 1.0.2 expect the version inside
+  the asset name and therefore cannot auto-update to this release; install it
+  manually once.
+- GitHub release notes are now extracted from this changelog, so the published
+  notes for a tag are that version's `CHANGELOG.md` section rather than a
+  hard-coded template.
+- The documented install commands no longer pin a version: the READMEs and the
+  release notes use `npx --yes @estelwalks/aitracker@latest`, which resolves
+  through the npm `latest` dist-tag and therefore needs no edit per release.
+  Beta builds stay on `@beta`, and pinning a version is documented for
+  reproducing an exact build. `verify-readme-release-links` now fails CI when a
+  documented command pins a CLI version again.
+- The macOS app icon is now a dedicated white rounded tile for the Dock,
+  Finder and the mounted installer volume, while the menu-bar template icon,
+  the Windows icon set and the web favicons keep their transparent artwork
+  (`icon.icns` became `mac-app.icns`).
+- Scanned every Skills directory concurrently with a bounded worker pool
+  instead of walking them serially, so the skill catalog refresh no longer
+  scales with the number of installed agents.
 
 ## [1.0.1] - 2026-09-08
 

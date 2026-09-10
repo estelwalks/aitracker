@@ -24,6 +24,9 @@ export const APP_ICON_FILENAMES = {
   dark: "favicon-dark-1024.png",
 } as const;
 
+/** The macOS Dock uses a white plate; the menu bar keeps its template mask. */
+export const MAC_APP_ICON_FILENAME = "mac-app-1024.png";
+
 /**
  * Windows taskbar/window icons are plate-free glyphs (no white/blue square
  * behind the mark). The ICO contains separately rasterized frames for the
@@ -83,7 +86,7 @@ export function findTrayRetinaIconPath(
   return findNativeIconPath(input, MAC_TRAY_ICON_FILENAMES.retina, fileExists);
 }
 
-/** Resolve the large runtime icon used by the macOS Dock and Windows windows. */
+/** Resolve each platform's app icon, keeping startup artwork theme-aware. */
 export function findAppIconPath(
   input: {
     readonly isPackaged: boolean;
@@ -95,6 +98,9 @@ export function findAppIconPath(
   appearance: NativeIconAppearance,
   fileExists: (path: string) => boolean = existsSync,
 ): string | null {
+  if (input.platform === "darwin" && input.surface !== "startup") {
+    return findNativeIconPath(input, MAC_APP_ICON_FILENAME, fileExists);
+  }
   const filenames =
     input.platform === "win32" && input.surface !== "startup"
       ? WINDOWS_APP_ICON_FILENAMES

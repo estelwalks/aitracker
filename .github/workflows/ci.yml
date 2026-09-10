@@ -36,6 +36,16 @@ jobs:
       - name: Release contract gate
         run: npm run verify:release-contract
 
+      # Installer names carry no version so /releases/latest/download/<name>
+      # keeps resolving across releases; both sides of that contract are pinned
+      # by these two gates (electron-builder.yml + the release scripts, and the
+      # four READMEs).
+      - name: Release artifact names
+        run: npm run verify:release-artifact-names
+
+      - name: README release links
+        run: npm run verify:readme-release-links
+
       - name: Typecheck (app + Electron + scanner)
         run: npm run typecheck
 

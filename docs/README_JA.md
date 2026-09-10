@@ -69,16 +69,22 @@ npm run dev:desktop
 
 ### インストール
 
-最新リリースのインストーラーを直接ダウンロードすることもできます：
+最新リリースのインストーラーを直接ダウンロードすることもできます。以下のリンクは
+リリースごとに変わることはなく、常に最新のリリースを指します。インストーラーの
+ファイル名にバージョンは含まれず、リリースごとに変わるのはタグだけです。
 
 - macOS（Apple Silicon）：
-  [AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)
+  [AITracker-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg)
 - macOS（Intel）：
-  [AITracker-1.0.1-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-x64.dmg)
+  [AITracker-x64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg)
 - Windows（x64）：
-  [AITracker-Setup-1.0.1-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.1-x64.exe)
-- Windows（ARM64）：ARM64 インストーラーは次のタグ付きリリースから公開されます。
-  [Releases ページ](https://github.com/estelwalks/aitracker/releases/latest) を参照してください。
+  [AITracker-Setup-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe)
+- Windows（ARM64）：
+  [AITracker-Setup-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe)
+
+各リリースにはそのバージョンの `release-metadata.json` と `checksums.txt` が添付され、
+正確なバージョンと SHA-256 が記録されています。特定のビルドを再現したい場合は、
+`latest` ではなく該当タグのリリースからダウンロードしてください。
 
 すべてのリリースは [Releases ページ](https://github.com/estelwalks/aitracker/releases/latest) で確認できます。
 
@@ -90,15 +96,18 @@ npm run dev:desktop
 Node.jsとnpmをインストール済みの場合は、次のコマンドを実行します。
 
 ```bash
-npx --yes @estelwalks/aitracker@1.0.1
+npx --yes @estelwalks/aitracker@latest
 ```
 
-このコマンドはデスクトップインストーラーをダウンロードして開きます。
+このコマンドはデスクトップインストーラーをダウンロードして開きます。`@latest` は常に
+最新の正式版に追従するため、書き換える必要はありません。特定のビルドを再現したい場合は
+バージョンを固定してください（`@estelwalks/aitracker@1.0.2`）。beta 版は `@beta` で
+公開されます。
 
 使用中のnpmミラーにこのパッケージがない場合は、公式npmレジストリを明示します。
 
 ```bash
-npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.1
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@latest
 ```
 
 #### Homebrew（macOS）

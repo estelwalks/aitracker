@@ -6,8 +6,10 @@ import test from "node:test";
 
 import { UpdateManager, selectUpdateAsset } from "./update-manager.ts";
 
+// Fixtures are tag-addressed: asset names carry no version, and the tag is
+// what identifies the release a name resolves to.
 const releaseUrl =
-  "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-2.0.0-x64.dmg";
+  "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-x64.dmg";
 const metadataUrl =
   "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/release-metadata.json";
 const downloadedBytes = new Uint8Array([1, 2, 3]);
@@ -25,27 +27,27 @@ function response(body: unknown, init?: ResponseInit): Response {
 test("selectUpdateAsset chooses the current architecture and rejects foreign assets", () => {
   const assets = [
     {
-      name: "AITracker-2.0.0-arm64.dmg",
+      name: "AITracker-arm64.dmg",
       browser_download_url:
-        "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-2.0.0-arm64.dmg",
+        "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-arm64.dmg",
     },
-    { name: "AITracker-2.0.0-x64.dmg", browser_download_url: releaseUrl },
+    { name: "AITracker-x64.dmg", browser_download_url: releaseUrl },
     {
-      name: "AITracker-2.0.0-x64.dmg.sig",
+      name: "AITracker-x64.dmg.sig",
       browser_download_url: `${releaseUrl}.sig`,
     },
   ];
   assert.deepEqual(selectUpdateAsset(assets, "darwin", "x64"), {
-    name: "AITracker-2.0.0-x64.dmg",
+    name: "AITracker-x64.dmg",
     url: releaseUrl,
   });
   assert.equal(
     selectUpdateAsset(
       [
         {
-          name: "AITracker-2.0.0-arm64.dmg",
+          name: "AITracker-arm64.dmg",
           browser_download_url:
-            "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-2.0.0-arm64.dmg",
+            "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-arm64.dmg",
         },
       ],
       "darwin",
@@ -53,6 +55,114 @@ test("selectUpdateAsset chooses the current architecture and rejects foreign ass
     ),
     null,
   );
+});
+
+test("both the versionless latest URL and a tag-addressed URL are accepted", async () => {
+  // Installer names carry no version, so `releases/latest/download/<name>` has
+  // to work end to end. A stable release resolves through `latest`; a beta
+  // release is still addressed through its own tag, and the stable channel
+  // never sees it.
+  const cases = [
+    {
+      base: "https://github.com/estelwalks/aitracker/releases/latest/download",
+      currentVersion: "1.0.0",
+      version: "1.1.0",
+      channel: "stable",
+      prerelease: false,
+    },
+    {
+      base: "https://github.com/estelwalks/aitracker/releases/download/v1.1.0-beta.1",
+      currentVersion: "1.0.0-beta.1",
+      version: "1.1.0-beta.1",
+      channel: "beta",
+      prerelease: true,
+    },
+  ];
+  for (const { base, currentVersion, version, channel, prerelease } of cases) {
+    const manager = new UpdateManager({
+      currentVersion,
+      isPackaged: true,
+      platform: "darwin",
+      arch: "x64",
+      tempDirectory: "/tmp/aitracker-updates",
+      fetchFn: async (url) => {
+        if (url.includes("api.github.com")) {
+          return response([
+            {
+              tag_name: `v${version}`,
+              prerelease,
+              assets: [
+                {
+                  name: "AITracker-x64.dmg",
+                  browser_download_url: `${base}/AITracker-x64.dmg`,
+                },
+                {
+                  name: "AITracker-arm64.dmg",
+                  browser_download_url: `${base}/AITracker-arm64.dmg`,
+                },
+                {
+                  name: "AITracker-Setup-x64.exe",
+                  browser_download_url: `${base}/AITracker-Setup-x64.exe`,
+                },
+                {
+                  name: "AITracker-Setup-arm64.exe",
+                  browser_download_url: `${base}/AITracker-Setup-arm64.exe`,
+                },
+                {
+                  name: "release-metadata.json",
+                  browser_download_url: `${base}/release-metadata.json`,
+                },
+              ],
+            },
+          ]);
+        }
+        if (url.endsWith("release-metadata.json")) {
+          return response({
+            schemaVersion: 1,
+            appVersion: version,
+            channel,
+            repository: "estelwalks/aitracker",
+            gitTag: `v${version}`,
+            artifacts: {
+              "darwin-arm64": {
+                name: "AITracker-arm64.dmg",
+                url: `${base}/AITracker-arm64.dmg`,
+                sha256: downloadedSha256,
+                size: downloadedBytes.byteLength,
+              },
+              "darwin-x64": {
+                name: "AITracker-x64.dmg",
+                url: `${base}/AITracker-x64.dmg`,
+                sha256: downloadedSha256,
+                size: downloadedBytes.byteLength,
+              },
+              "win32-x64": {
+                name: "AITracker-Setup-x64.exe",
+                url: `${base}/AITracker-Setup-x64.exe`,
+                sha256: downloadedSha256,
+                size: downloadedBytes.byteLength,
+              },
+              "win32-arm64": {
+                name: "AITracker-Setup-arm64.exe",
+                url: `${base}/AITracker-Setup-arm64.exe`,
+                sha256: downloadedSha256,
+                size: downloadedBytes.byteLength,
+              },
+            },
+          });
+        }
+        return new Response(downloadedBytes, { status: 200 });
+      },
+      mkdirFn: async () => undefined,
+      writeFileFn: async () => undefined,
+    });
+
+    const state = await manager.startAutomaticCheck();
+    assert.equal(state.status, "downloaded", `${base} must be accepted`);
+    assert.equal(state.latestVersion, version);
+    assert.equal(state.assetName, "AITracker-x64.dmg");
+    assert.equal(state.downloadUrl, `${base}/AITracker-x64.dmg`);
+  }
 });
 
 test("automatic checks use the GitHub tag and download its installer", async () => {
@@ -73,18 +183,23 @@ test("automatic checks use the GitHub tag and download its installer", async () 
               "https://github.com/estelwalks/aitracker/releases/tag/v2.0.0",
             assets: [
               {
-                name: "AITracker-2.0.0-arm64.dmg",
+                name: "AITracker-arm64.dmg",
                 browser_download_url:
-                  "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-2.0.0-arm64.dmg",
+                  "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-arm64.dmg",
               },
               {
-                name: "AITracker-2.0.0-x64.dmg",
+                name: "AITracker-x64.dmg",
                 browser_download_url: releaseUrl,
               },
               {
-                name: "AITracker-Setup-2.0.0-x64.exe",
+                name: "AITracker-Setup-x64.exe",
                 browser_download_url:
-                  "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-Setup-2.0.0-x64.exe",
+                  "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-Setup-x64.exe",
+              },
+              {
+                name: "AITracker-Setup-arm64.exe",
+                browser_download_url:
+                  "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-Setup-arm64.exe",
               },
               {
                 name: "release-metadata.json",
@@ -103,20 +218,26 @@ test("automatic checks use the GitHub tag and download its installer", async () 
           gitTag: "v2.0.0",
           artifacts: {
             "darwin-arm64": {
-              name: "AITracker-2.0.0-arm64.dmg",
-              url: "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-2.0.0-arm64.dmg",
+              name: "AITracker-arm64.dmg",
+              url: "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-arm64.dmg",
               sha256: downloadedSha256,
               size: downloadedBytes.byteLength,
             },
             "darwin-x64": {
-              name: "AITracker-2.0.0-x64.dmg",
+              name: "AITracker-x64.dmg",
               url: releaseUrl,
               sha256: downloadedSha256,
               size: downloadedBytes.byteLength,
             },
             "win32-x64": {
-              name: "AITracker-Setup-2.0.0-x64.exe",
-              url: "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-Setup-2.0.0-x64.exe",
+              name: "AITracker-Setup-x64.exe",
+              url: "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-Setup-x64.exe",
+              sha256: downloadedSha256,
+              size: downloadedBytes.byteLength,
+            },
+            "win32-arm64": {
+              name: "AITracker-Setup-arm64.exe",
+              url: "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-Setup-arm64.exe",
               sha256: downloadedSha256,
               size: downloadedBytes.byteLength,
             },
@@ -133,9 +254,188 @@ test("automatic checks use the GitHub tag and download its installer", async () 
   assert.equal(state.status, "downloaded");
   assert.equal(state.latestVersion, "2.0.0");
   assert.equal(state.releaseDate, "2026-08-31T12:34:56Z");
-  assert.equal(state.assetName, "AITracker-2.0.0-x64.dmg");
+  assert.equal(state.assetName, "AITracker-x64.dmg");
   assert.equal(written.length, 1);
   assert.deepEqual([...written[0]!.data], [...downloadedBytes]);
+});
+
+test("metadata may use the versionless URL while the release lists its tag URL", async () => {
+  // The released release-metadata.json records releases/latest/download/<name>
+  // (that is the point of dropping the version from the names), but GitHub
+  // lists a release's assets under its own tag. The updater must accept the
+  // mismatch and download the tag-addressed asset the release advertises, so
+  // the bytes stay those its sha256 was computed from.
+  const latestBase =
+    "https://github.com/estelwalks/aitracker/releases/latest/download";
+  const tagBase =
+    "https://github.com/estelwalks/aitracker/releases/download/v2.0.0";
+  const written: Array<{ path: string; data: Uint8Array }> = [];
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) {
+        return response([
+          {
+            tag_name: "v2.0.0",
+            published_at: "2026-08-31T12:34:56Z",
+            assets: [
+              {
+                name: "AITracker-arm64.dmg",
+                browser_download_url: `${tagBase}/AITracker-arm64.dmg`,
+              },
+              {
+                name: "AITracker-x64.dmg",
+                browser_download_url: `${tagBase}/AITracker-x64.dmg`,
+              },
+              {
+                name: "AITracker-Setup-x64.exe",
+                browser_download_url: `${tagBase}/AITracker-Setup-x64.exe`,
+              },
+              {
+                name: "AITracker-Setup-arm64.exe",
+                browser_download_url: `${tagBase}/AITracker-Setup-arm64.exe`,
+              },
+              {
+                name: "release-metadata.json",
+                browser_download_url: `${tagBase}/release-metadata.json`,
+              },
+            ],
+          },
+        ]);
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response({
+          schemaVersion: 1,
+          appVersion: "2.0.0",
+          channel: "stable",
+          repository: "estelwalks/aitracker",
+          gitTag: "v2.0.0",
+          artifacts: {
+            "darwin-arm64": {
+              name: "AITracker-arm64.dmg",
+              url: `${latestBase}/AITracker-arm64.dmg`,
+              sha256: downloadedSha256,
+              size: downloadedBytes.byteLength,
+            },
+            "darwin-x64": {
+              name: "AITracker-x64.dmg",
+              url: `${latestBase}/AITracker-x64.dmg`,
+              sha256: downloadedSha256,
+              size: downloadedBytes.byteLength,
+            },
+            "win32-x64": {
+              name: "AITracker-Setup-x64.exe",
+              url: `${latestBase}/AITracker-Setup-x64.exe`,
+              sha256: downloadedSha256,
+              size: downloadedBytes.byteLength,
+            },
+            "win32-arm64": {
+              name: "AITracker-Setup-arm64.exe",
+              url: `${latestBase}/AITracker-Setup-arm64.exe`,
+              sha256: downloadedSha256,
+              size: downloadedBytes.byteLength,
+            },
+          },
+        });
+      }
+      return new Response(downloadedBytes, { status: 200 });
+    },
+    mkdirFn: async () => undefined,
+    writeFileFn: async (path, data) => {
+      written.push({ path, data });
+    },
+  });
+
+  const state = await manager.startAutomaticCheck();
+  assert.equal(state.status, "downloaded");
+  assert.equal(state.assetName, "AITracker-x64.dmg");
+  assert.equal(state.downloadUrl, `${tagBase}/AITracker-x64.dmg`);
+  assert.equal(written.length, 1);
+  assert.equal(
+    written[0]!.path,
+    "/tmp/aitracker-updates/aitracker-AITracker-x64.dmg",
+  );
+});
+
+test("a 1.0.2 release listing all four platforms is accepted", async () => {
+  // release-metadata.json always carries all four platforms, so requiring only
+  // three keys rejected every 1.0.2 release: the fourth key (win32-arm64, which
+  // joined the contract in 1.0.2) made the document "unknown" and the update
+  // failed with metadata-invalid before a single byte was downloaded. This is
+  // the shape scripts/release-metadata.mjs produces for the tag.
+  const base =
+    "https://github.com/estelwalks/aitracker/releases/download/v1.0.2";
+  const payload = Buffer.from("installer-bytes-1.0.2");
+  const sha256 = createHash("sha256").update(payload).digest("hex");
+  const names: Record<string, string> = {
+    "darwin-arm64": "AITracker-arm64.dmg",
+    "darwin-x64": "AITracker-x64.dmg",
+    "win32-arm64": "AITracker-Setup-arm64.exe",
+    "win32-x64": "AITracker-Setup-x64.exe",
+  };
+  const artifacts = Object.fromEntries(
+    Object.entries(names).map(([key, name]) => [
+      key,
+      {
+        name,
+        // What the generator writes for a versionless installer name.
+        url: `https://github.com/estelwalks/aitracker/releases/latest/download/${name}`,
+        sha256,
+        size: payload.byteLength,
+      },
+    ]),
+  );
+  const manager = new UpdateManager({
+    currentVersion: "1.0.1",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) {
+        return response([
+          {
+            tag_name: "v1.0.2",
+            prerelease: false,
+            draft: false,
+            assets: [
+              ...Object.values(names).map((name) => ({
+                name,
+                browser_download_url: `${base}/${name}`,
+              })),
+              {
+                name: "release-metadata.json",
+                browser_download_url: `${base}/release-metadata.json`,
+              },
+            ],
+          },
+        ]);
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response({
+          schemaVersion: 1,
+          appVersion: "1.0.2",
+          channel: "stable",
+          repository: "estelwalks/aitracker",
+          gitTag: "v1.0.2",
+          artifacts,
+        });
+      }
+      return new Response(payload, { status: 200 });
+    },
+    mkdirFn: async () => undefined,
+    writeFileFn: async () => undefined,
+  });
+
+  const state = await manager.startAutomaticCheck();
+  assert.equal(state.status, "downloaded");
+  assert.equal(state.latestVersion, "1.0.2");
+  assert.equal(state.assetName, "AITracker-x64.dmg");
+  assert.equal(state.downloadUrl, `${base}/AITracker-x64.dmg`);
 });
 
 test("release selection rejects tags that are not strict semver", async () => {
@@ -167,27 +467,32 @@ function release(
   version: string,
   options: { prerelease?: boolean; assetUrl?: string } = {},
 ) {
-  const assetUrl =
-    options.assetUrl ??
-    `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-${version}-x64.dmg`;
-  const metadataUrlForVersion = `https://github.com/estelwalks/aitracker/releases/download/v${version}/release-metadata.json`;
+  // Asset names carry no version (the tag does), which is what keeps
+  // releases/latest/download/<name> valid across releases. The fixture keeps
+  // tag-addressed URLs so each case stays independent of `latest`.
+  const base = `https://github.com/estelwalks/aitracker/releases/download/v${version}`;
+  const assetUrl = options.assetUrl ?? `${base}/AITracker-x64.dmg`;
   return {
     tag_name: `v${version}`,
     prerelease: options.prerelease ?? version.includes("-"),
     html_url: `https://github.com/estelwalks/aitracker/releases/tag/v${version}`,
     assets: [
-      { name: `AITracker-${version}-x64.dmg`, browser_download_url: assetUrl },
+      { name: "AITracker-x64.dmg", browser_download_url: assetUrl },
       {
-        name: `AITracker-${version}-arm64.dmg`,
-        browser_download_url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-${version}-arm64.dmg`,
+        name: "AITracker-arm64.dmg",
+        browser_download_url: `${base}/AITracker-arm64.dmg`,
       },
       {
-        name: `AITracker-Setup-${version}-x64.exe`,
-        browser_download_url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-${version}-x64.exe`,
+        name: "AITracker-Setup-x64.exe",
+        browser_download_url: `${base}/AITracker-Setup-x64.exe`,
+      },
+      {
+        name: "AITracker-Setup-arm64.exe",
+        browser_download_url: `${base}/AITracker-Setup-arm64.exe`,
       },
       {
         name: "release-metadata.json",
-        browser_download_url: metadataUrlForVersion,
+        browser_download_url: `${base}/release-metadata.json`,
       },
     ],
   };
@@ -206,21 +511,29 @@ function metadataFor(
     gitTag: `v${version}`,
     artifacts: {
       "darwin-arm64": {
-        name: `AITracker-${version}-arm64.dmg`,
-        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-${version}-arm64.dmg`,
+        name: "AITracker-arm64.dmg",
+        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-arm64.dmg`,
         sha256: downloadedSha256,
         size: downloadedBytes.byteLength,
       },
       [`darwin-x64`]: {
-        name: `AITracker-${version}-x64.dmg`,
-        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-${version}-x64.dmg`,
+        name: "AITracker-x64.dmg",
+        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-x64.dmg`,
         sha256: downloadedSha256,
         size: downloadedBytes.byteLength,
         ...artifact,
       },
+      // Every published release lists all four platforms, so the fixture does
+      // too; a missing key is rejected by metadataArtifactOf.
+      "win32-arm64": {
+        name: "AITracker-Setup-arm64.exe",
+        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-arm64.exe`,
+        sha256: downloadedSha256,
+        size: downloadedBytes.byteLength,
+      },
       "win32-x64": {
-        name: `AITracker-Setup-${version}-x64.exe`,
-        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-${version}-x64.exe`,
+        name: "AITracker-Setup-x64.exe",
+        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-x64.exe`,
         sha256: downloadedSha256,
         size: downloadedBytes.byteLength,
       },
@@ -287,7 +600,7 @@ test("stable and beta channels isolate prereleases and allow beta stable fallbac
 
 test("metadata selects the exact platform artifact", async () => {
   const winUrl =
-    "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-2.0.0-x64.exe";
+    "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-x64.exe";
   const manager = new UpdateManager({
     currentVersion: "1.0.0",
     isPackaged: true,
@@ -301,15 +614,15 @@ test("metadata selects the exact platform artifact", async () => {
             ...release("2.0.0"),
             assets: [
               {
-                name: "AITracker-2.0.0-arm64.dmg",
+                name: "AITracker-arm64.dmg",
                 browser_download_url:
-                  "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-2.0.0-arm64.dmg",
+                  "https://github.com/estelwalks/aitracker/releases/download/v2.0.0/AITracker-arm64.dmg",
               },
               {
-                name: "AITracker-2.0.0-x64.dmg",
+                name: "AITracker-x64.dmg",
                 browser_download_url: releaseUrl,
               },
-              { name: "AITracker-2.0.0-x64.exe", browser_download_url: winUrl },
+              { name: "AITracker-x64.exe", browser_download_url: winUrl },
               {
                 name: "release-metadata.json",
                 browser_download_url: metadataUrl,
@@ -329,7 +642,7 @@ test("metadata selects the exact platform artifact", async () => {
               "darwin-x64"
             ],
             "win32-x64": {
-              name: "AITracker-2.0.0-x64.exe",
+              name: "AITracker-x64.exe",
               url: winUrl,
               sha256: downloadedSha256,
               size: downloadedBytes.byteLength,
@@ -341,7 +654,7 @@ test("metadata selects the exact platform artifact", async () => {
     },
   });
   const state = await manager.checkForUpdates();
-  assert.equal(state.assetName, "AITracker-2.0.0-x64.exe");
+  assert.equal(state.assetName, "AITracker-x64.exe");
   assert.equal(state.downloadUrl, winUrl);
 });
 
@@ -434,7 +747,7 @@ test("checksum and size limits reject downloads, and a write failure cleans up",
     "error",
   );
   assert.deepEqual(unlinked, [
-    join("/tmp/aitracker-updates", "aitracker-AITracker-2.0.0-x64.dmg"),
+    join("/tmp/aitracker-updates", "aitracker-AITracker-x64.dmg"),
   ]);
 });
 
@@ -480,7 +793,7 @@ test("production downloads stream chunks, hash them, and clean failed files", as
   );
   assert.ok(pulls > 1);
   assert.deepEqual(
-    [...(await readFile(`${directory}/aitracker-AITracker-2.0.0-x64.dmg`))],
+    [...(await readFile(`${directory}/aitracker-AITracker-x64.dmg`))],
     [...streamedBytes],
   );
 
@@ -622,7 +935,7 @@ test("manual re-check replaces a waiting installer when a newer release appears"
   assert.equal(state.status, "available");
   assert.equal(state.latestVersion, "2.1.0");
   assert.deepEqual(unlinked, [
-    join("/tmp/aitracker-updates", "aitracker-AITracker-2.0.0-x64.dmg"),
+    join("/tmp/aitracker-updates", "aitracker-AITracker-x64.dmg"),
   ]);
 
   const next = await manager.downloadUpdate();
@@ -633,7 +946,7 @@ test("manual re-check replaces a waiting installer when a newer release appears"
 
 test("re-download overwrites a stale installer file left in the temp directory", async () => {
   const directory = await mkdtemp("/tmp/aitracker-update-stale-");
-  const stalePath = join(directory, "aitracker-AITracker-2.0.0-x64.dmg");
+  const stalePath = join(directory, "aitracker-AITracker-x64.dmg");
   await writeFile(stalePath, new Uint8Array([9, 9, 9]));
   const manager = new UpdateManager({
     currentVersion: "1.0.0",
@@ -811,7 +1124,7 @@ test("an already verified installer on disk is reused instead of re-downloaded",
   });
   // A previous attempt left the exact package behind.
   await writeFile(
-    join(directory, "aitracker-AITracker-2.0.0-x64.dmg"),
+    join(directory, "aitracker-AITracker-x64.dmg"),
     downloadedBytes,
   );
   const state = await manager.startAutomaticCheck();
@@ -843,13 +1156,13 @@ test("a tampered file on disk is not reused", async () => {
     },
   });
   await writeFile(
-    join(directory, "aitracker-AITracker-2.0.0-x64.dmg"),
+    join(directory, "aitracker-AITracker-x64.dmg"),
     new Uint8Array([9, 9, 9]),
   );
   assert.equal((await manager.startAutomaticCheck()).status, "downloaded");
   assert.equal(installerRequests, 1, "a mismatching file must be replaced");
   assert.deepEqual(
-    [...(await readFile(join(directory, "aitracker-AITracker-2.0.0-x64.dmg")))],
+    [...(await readFile(join(directory, "aitracker-AITracker-x64.dmg")))],
     [...downloadedBytes],
   );
   await rm(directory, { recursive: true, force: true });

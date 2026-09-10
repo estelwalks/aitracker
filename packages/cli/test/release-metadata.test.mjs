@@ -8,7 +8,7 @@ import {
 } from "../src/release-metadata.mjs";
 
 const goodUrl =
-  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.1/file.dmg";
+  "https://github.com/estelwalks/aitracker/releases/latest/download/file.dmg";
 const artifact = (platform, index) => ({
   name: `file-${index}.dmg`,
   url: goodUrl.replace("file.dmg", `file-${index}.dmg`),

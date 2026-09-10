@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  appBundleFromExecutable,
+  buildMacHandoffCommand,
   buildWindowsHandoffCommand,
   handOffInstaller,
+  MACOS_HANDOFF_COMMAND_NAME,
   WINDOWS_HANDOFF_COMMAND_NAME,
 } from "./update-relaunch.ts";
 
@@ -178,23 +181,161 @@ test("Windows hand-off reports failures instead of throwing", async () => {
   assert.match(writeFailure.reason ?? "", /disk full/u);
 });
 
-test("macOS hand-off hands the downloaded image to open", async () => {
+const macInstallerPath = "/var/folders/xy/T/aitracker-AITracker-x64.dmg";
+const macAppExecutable = "/Applications/AITracker.app/Contents/MacOS/AITracker";
+
+test("appBundleFromExecutable finds the bundle and rejects foreign paths", () => {
+  assert.equal(
+    appBundleFromExecutable(macAppExecutable),
+    "/Applications/AITracker.app",
+  );
+  assert.equal(
+    appBundleFromExecutable(
+      "/Users/me/Apps/AITracker 2.app/Contents/MacOS/AITracker",
+    ),
+    "/Users/me/Apps/AITracker 2.app",
+  );
+  assert.equal(appBundleFromExecutable("/usr/local/bin/aitracker"), null);
+  assert.equal(appBundleFromExecutable("/Applications/AITracker.app"), null);
+});
+
+test("the macOS script installs in place and only falls back on failure", () => {
+  const script = buildMacHandoffCommand({
+    installerPath: macInstallerPath,
+    appBundlePath: "/Applications/AITracker.app",
+    processId: 4321,
+    currentVersion: "1.0.0",
+  });
+  // Mounts without browsing at a mount point the script chooses. The volume
+  // name must never be guessed: electron-builder names the image after its
+  // release, so v1.0.1 mounts as "AITracker 1.0.1".
+  assert.ok(script.includes("hdiutil attach -nobrowse"));
+  assert.ok(script.includes('-mountpoint "$MOUNT_POINT"'));
+  assert.ok(
+    script.includes(
+      'MOUNT_POINT="/var/folders/xy/T/aitracker-AITracker-x64.dmg.mnt"',
+    ),
+  );
+  assert.ok(!script.includes("/Volumes/AITracker"));
+  // Waits for this app to exit before touching the bundle: macOS refuses to
+  // replace a running app.
+  assert.ok(script.includes('kill -0 "$PID"'));
+  // Refuses a downgrade and validates the incoming bundle first.
+  assert.ok(script.includes("CFBundleShortVersionString"));
+  assert.ok(script.includes('TARGET_NUMERIC="1.0.0"'));
+  // Stages beside the target and keeps a backup, so a half-copied bundle can
+  // never replace a working install.
+  assert.ok(script.includes('STAGED="/Applications/.$APP_NAME.update"'));
+  assert.ok(script.includes('BACKUP="/Applications/.$APP_NAME.backup"'));
+  assert.ok(
+    script.indexOf("ditto") < script.indexOf('mv "$APP" "$BACKUP"'),
+    "the new bundle must be staged before the old one is moved aside",
+  );
+  assert.ok(
+    script.indexOf('mv "$APP" "$BACKUP"') <
+      script.indexOf('mv "$STAGED" "$APP"'),
+    "the old bundle must be moved aside before the new one takes its place",
+  );
+  assert.ok(
+    script.includes('mv "$BACKUP" "$APP"'),
+    "a failed install must restore the backup",
+  );
+  // Every failure path hands the image to the manual flow instead.
+  assert.ok(script.includes('/usr/bin/open "$DMG"'));
+  assert.ok(script.includes("aitracker-update-launch.log"));
+});
+
+test("the macOS script never disables Gatekeeper protections", () => {
+  const script = buildMacHandoffCommand({
+    installerPath: macInstallerPath,
+    appBundlePath: "/Applications/AITracker.app",
+    processId: 1,
+  });
+  assert.ok(!script.includes("com.apple.quarantine"));
+  assert.ok(!script.includes("spctl"));
+  assert.ok(!script.includes("xattr -d"));
+  assert.ok(!script.includes("sudo"));
+});
+
+test("a path that cannot be quoted safely is rejected instead of mangled", () => {
+  assert.throws(
+    () =>
+      buildMacHandoffCommand({
+        installerPath: "/tmp/it's here.dmg",
+        appBundlePath: "/Applications/AITracker.app",
+        processId: 1,
+      }),
+    /cannot quote for the shell/u,
+  );
+});
+
+test("macOS hand-off arms the auto-install script and reports how", async () => {
+  const written: Array<{ path: string; data: string; mode?: number }> = [];
   const { calls, spawnFn } = recordingSpawn();
   const result = await handOffInstaller({
     platform: "darwin",
-    installerPath: "/tmp/aitracker-2.0.0.dmg",
+    installerPath: macInstallerPath,
+    appExecutablePath: macAppExecutable,
+    processId: 99,
+    currentVersion: "1.0.0",
+    tempDirectory: "/tmp/handoff",
+    writeFileFn: async (path, data, options) => {
+      written.push({
+        path,
+        data,
+        ...(options?.mode === undefined ? {} : { mode: options.mode }),
+      });
+    },
     spawnFn,
   });
-  assert.deepEqual(result, { launched: true, method: "spawn" });
+  assert.deepEqual(result, { launched: true, method: "darwin-auto-install" });
+  assert.equal(written.length, 1);
+  assert.equal(written[0]!.path, `/tmp/handoff/${MACOS_HANDOFF_COMMAND_NAME}`);
+  assert.equal(written[0]!.mode, 0o755);
+  assert.ok(written[0]!.data.startsWith("#!/bin/bash"));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.command, "/bin/bash");
+  assert.deepEqual(
+    [...calls[0]!.args],
+    [`/tmp/handoff/${MACOS_HANDOFF_COMMAND_NAME}`],
+  );
+  assert.equal(calls[0]!.options?.detached, true);
+});
+
+test("macOS hand-off opens the image when the script cannot be armed", async () => {
+  const { calls, spawnFn } = recordingSpawn();
+  const result = await handOffInstaller({
+    platform: "darwin",
+    installerPath: macInstallerPath,
+    appExecutablePath: macAppExecutable,
+    tempDirectory: "/tmp/handoff",
+    writeFileFn: async () => {
+      throw new Error("read-only volume");
+    },
+    spawnFn,
+  });
+  assert.deepEqual(result, { launched: true, method: "darwin-open" });
   assert.equal(calls.length, 1);
   assert.equal(calls[0]!.command, "/usr/bin/open");
-  assert.deepEqual([...calls[0]!.args], ["/tmp/aitracker-2.0.0.dmg"]);
+  assert.deepEqual([...calls[0]!.args], [macInstallerPath]);
+});
+
+test("macOS hand-off opens the image when the app is not inside a bundle", async () => {
+  const { calls, spawnFn } = recordingSpawn();
+  const result = await handOffInstaller({
+    platform: "darwin",
+    installerPath: macInstallerPath,
+    appExecutablePath: "/usr/local/bin/aitracker",
+    spawnFn,
+  });
+  assert.deepEqual(result, { launched: true, method: "darwin-open" });
+  assert.equal(calls[0]!.command, "/usr/bin/open");
 });
 
 test("a spawning failure reports the reason without throwing", async () => {
   const result = await handOffInstaller({
-    platform: "darwin",
-    installerPath: "/tmp/aitracker.dmg",
+    platform: "linux",
+    installerPath: "/tmp/aitracker.AppImage",
     spawnFn: () => {
       throw new Error("ENOENT");
     },

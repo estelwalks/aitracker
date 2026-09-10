@@ -246,7 +246,7 @@ export const settings = {
   updateRestartBody:
     "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出，随后系统会弹出权限确认，请选择「是/继续」以完成安装；安装完成后应用会自动重新打开。",
   updateRestartBodyMac:
-    "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出并打开安装镜像，完成安装后请重新打开应用。",
+    "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出、自动完成安装并重新打开；首次启动时 macOS 会弹一次安全确认，选择「打开」即可。",
   updateRestartNow: "立即重启更新",
   updateInstallingShort: "安装中…",
   updateLater: "稍后",

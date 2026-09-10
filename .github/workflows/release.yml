@@ -33,6 +33,14 @@ jobs:
       - name: Verify tag and package versions
         run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel "$RELEASE_CHANNEL"
 
+      # Installer names are versionless so `releases/latest/download/<name>`
+      # stays valid across releases. Fail before four runners start if the
+      # packaging config, the release scripts or the READMEs have drifted.
+      - name: Verify versionless installer names and README download links
+        run: |
+          npm run verify:release-artifact-names
+          npm run verify:readme-release-links
+
   build:
     name: Build ${{ matrix.name }} installer
     needs: release-contract
@@ -170,65 +178,82 @@ jobs:
             exit 1
           fi
 
+      # Release notes are never maintained here: the script extracts the
+      # `## [<version>]` section of CHANGELOG.md and fails the job when that
+      # section is missing or empty, so a tag can no longer ship generic or
+      # stale notes.
       - name: Prepare release notes
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
           if [[ "$RELEASE_CHANNEL" == "stable" ]]; then
-            cat > release-notes.md <<'EOF'
-          # AITracker v1.0.0
+            cat > release-notes.md <<EOF
+          # AITracker v${version}
 
           AITracker is an open-source, local-first AI workspace for understanding AI usage, managing capabilities, distilling reusable Skills, and building long-term knowledge and memory.
-
-          ## Core capabilities
-
-          - **AI usage analytics** — Track tokens, input/output/cache usage, costs, models, projects, and trends across supported AI tools.
-          - **AI tool analytics** — Compare real usage and consumption patterns across tools and models to understand what works best for you.
-          - **Skills management** — Discover and centrally manage Skills scattered across AI tools.
-          - **Configuration management** — Organize frequently used Rules and other AI configurations in one place.
-          - **Skills distillation** — Turn proven methods, work history, and troubleshooting experience into reusable Skills.
-          - **Knowledge base and long-term memory** — Preserve project context, working habits, and valuable experience for future sessions.
-          - **Local-first privacy** — Keep core data and configuration on your computer; no account is required for core capabilities.
-          - **Security scanning** — Use the published `@estelwalks/agent-threat-scanner` package for agent-related security checks.
 
           ## Installation
 
           ### npx (macOS and Windows)
 
-          ```bash
-          npx --yes @estelwalks/aitracker@1.0.0
-          ```
+          \`\`\`bash
+          npx --yes @estelwalks/aitracker@latest
+          \`\`\`
+
+          EOF
+            # Quoted heredoc: the inline code in this paragraph must survive
+            # without backticks being read as command substitution.
+            cat >> release-notes.md <<'EOF'
+          The dist-tag install follows the newest stable release; beta builds are published under `@beta`.
+          EOF
+            cat >> release-notes.md <<EOF
 
           ### Homebrew (macOS)
 
-          ```bash
+          \`\`\`bash
           brew tap estelwalks/aitracker
           brew install --cask estelwalks/aitracker/aitracker
-          ```
+          \`\`\`
 
           ### WinGet (Windows)
 
-          ```powershell
+          \`\`\`powershell
           winget install --id estelwalks.AITracker -e
-          ```
+          \`\`\`
+
+          ### Direct downloads
+
+          Installer names carry no version, so these URLs always resolve to the newest release:
+
+          - macOS (Apple Silicon): https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg
+          - macOS (Intel): https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg
+          - Windows (x64): https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe
+          - Windows (ARM64): https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe
+
+          ## What's changed
+
+          EOF
+            echo "RELEASE_TITLE=AITracker $GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          else
+            cat > release-notes.md <<'EOF'
+          Unsigned beta release for manual verification. Review the release assets and checksums before using this prerelease.
+
+          ## What's changed
+
+          EOF
+            echo "RELEASE_TITLE=AITracker $GITHUB_REF_NAME (unsigned beta)" >> "$GITHUB_ENV"
+          fi
+          node scripts/changelog-release-notes.mjs --version "$version" --output - >> release-notes.md
+          cat >> release-notes.md <<'EOF'
 
           ## Release assets
 
-          This release includes unsigned macOS arm64/x64 DMG installers, Windows x64 and Windows arm64 NSIS installers, `release-metadata.json`, and `checksums.txt`. Verify the published SHA-256 checksums before installation.
+          This release includes unsigned macOS arm64/x64 DMG installers, Windows x64 and Windows arm64 NSIS installers, `release-metadata.json`, and `checksums.txt`. Installer names carry no version, so each URL keeps resolving to the newest release while `checksums.txt` covers the exact bytes of this one. Verify the published SHA-256 checksums before installation.
 
           macOS Gatekeeper or Windows SmartScreen may show a warning because these installers are not signed or notarized. Follow the operating system's normal per-file confirmation flow and do not disable global security settings.
 
           See the [README](https://github.com/estelwalks/aitracker#readme) for the full feature overview, development commands, privacy model, and language versions.
           EOF
-            sed -i "s/v1\.0\.0/v${version}/" release-notes.md
-            sed -i "s/@estelwalks\/aitracker@1\.0\.0/@estelwalks\/aitracker@${version}/" release-notes.md
-            echo "RELEASE_TITLE=AITracker $GITHUB_REF_NAME" >> "$GITHUB_ENV"
-          else
-            cat > release-notes.md <<'EOF'
-          Unsigned beta release for manual verification. Review the release assets and checksums before using this prerelease.
-          EOF
-            echo "RELEASE_TITLE=AITracker $GITHUB_REF_NAME (unsigned beta)" >> "$GITHUB_ENV"
-          fi
 
       - name: Create draft release
         env:
