@@ -2126,3 +2126,585 @@ test("Omp: main-agent sessions are listed under ~/.omp; nested subagents are not
     assertPrivacyClean(session);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Hermes Agent session reader — state.db (SQLite) default + profiles layouts.
+// ---------------------------------------------------------------------------
+
+const HERMES_EPOCH = Math.floor(
+  new Date("2026-09-09T00:00:00.000Z").getTime() / 1000,
+);
+
+function createHermesSessionDb(
+  databasePath: string,
+  rows: Array<{
+    id: string;
+    model?: string | null;
+    title?: string | null;
+    displayName?: string | null;
+    startedAt: number;
+    endedAt?: number | null;
+    lastActivityAt?: number | null;
+    cwd?: string | null;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+    reasoningTokens?: number;
+    users?: number;
+    firstUserContent?: string | null;
+    firstUserAtMs?: number;
+    lastMessageAtMs?: number;
+  }>,
+): void {
+  const db = new DatabaseSync(databasePath);
+  db.exec(`
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY, model TEXT, title TEXT, display_name TEXT,
+      started_at REAL, ended_at REAL, last_activity_at REAL, cwd TEXT,
+      input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+      cache_read_tokens INTEGER DEFAULT 0, cache_write_tokens INTEGER DEFAULT 0,
+      reasoning_tokens INTEGER DEFAULT 0
+    );
+    CREATE TABLE messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
+      role TEXT NOT NULL, content TEXT, timestamp REAL
+    );
+  `);
+  const insertSession = db.prepare(
+    `INSERT INTO sessions (
+       id, model, title, display_name, started_at, ended_at, last_activity_at,
+       cwd, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+       reasoning_tokens
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const insertMessage = db.prepare(
+    `INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)`,
+  );
+  for (const row of rows) {
+    insertSession.run(
+      row.id,
+      row.model ?? null,
+      row.title ?? null,
+      row.displayName ?? null,
+      row.startedAt,
+      row.endedAt ?? null,
+      row.lastActivityAt ?? null,
+      row.cwd ?? null,
+      row.inputTokens ?? 0,
+      row.outputTokens ?? 0,
+      row.cacheReadTokens ?? 0,
+      row.cacheWriteTokens ?? 0,
+      row.reasoningTokens ?? 0,
+    );
+    for (let index = 0; index < (row.users ?? 0); index += 1) {
+      const atMs =
+        row.firstUserAtMs != null
+          ? row.firstUserAtMs + index * 60_000
+          : (row.startedAt + 60 + index * 60) * 1000;
+      insertMessage.run(
+        row.id,
+        "user",
+        index === 0 && row.firstUserContent != null
+          ? row.firstUserContent
+          : `extra prompt ${index}`,
+        atMs / 1000,
+      );
+    }
+    if (row.lastMessageAtMs != null) {
+      insertMessage.run(row.id, "assistant", "ok", row.lastMessageAtMs / 1000);
+    }
+  }
+  db.close();
+}
+
+test("Hermes: reads sessions from default + profile state.db", async () => {
+  await withTempHome(async (home) => {
+    const hermesDir = join(home, ".hermes");
+    await mkdir(join(hermesDir, "profiles", "work"), { recursive: true });
+    const projectDir = join(home, "hermes-project");
+    await mkdir(projectDir, { recursive: true });
+    createHermesSessionDb(join(hermesDir, "state.db"), [
+      {
+        id: "hermes_done",
+        model: "deepseek-v4-flash",
+        // Hermes stores REAL epoch seconds with sub-millisecond precision;
+        // timestamps must round to whole milliseconds for INTEGER projections.
+        startedAt: HERMES_EPOCH - 7200 + 0.123456,
+        endedAt: HERMES_EPOCH - 3600 + 0.654321,
+        lastActivityAt: HERMES_EPOCH - 3700 + 0.5,
+        cwd: projectDir,
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheReadTokens: 200,
+        cacheWriteTokens: 50,
+        reasoningTokens: 100,
+        users: 2,
+        firstUserContent: "Build the login flow",
+        firstUserAtMs: (HERMES_EPOCH - 7150) * 1000 + 0.25,
+        lastMessageAtMs: (HERMES_EPOCH - 3650) * 1000 + 0.75,
+      },
+      {
+        id: "hermes_active",
+        model: "deepseek-r1",
+        startedAt: HERMES_EPOCH - 600 + 0.987654,
+        endedAt: null,
+        lastActivityAt: HERMES_EPOCH - 60 + 0.4,
+        cwd: projectDir,
+        inputTokens: 800,
+        outputTokens: 300,
+        users: 1,
+        firstUserContent: "Continue the refactor",
+        firstUserAtMs: (HERMES_EPOCH - 550) * 1000 + 0.1,
+        lastMessageAtMs: (HERMES_EPOCH - 80) * 1000 + 0.9,
+      },
+    ]);
+    createHermesSessionDb(join(hermesDir, "profiles", "work", "state.db"), [
+      {
+        id: "hermes_profile_1",
+        model: "claude-sonnet-4-5",
+        startedAt: HERMES_EPOCH - 86400 * 3,
+        endedAt: HERMES_EPOCH - 86400 * 3 + 900,
+        cwd: projectDir,
+        inputTokens: 2000,
+        outputTokens: 1000,
+        cacheReadTokens: 500,
+        cacheWriteTokens: 100,
+        reasoningTokens: 200,
+        users: 1,
+        firstUserContent: "Profile session prompt",
+      },
+    ]);
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const hermes = summary.sessions.filter(
+      (record) => record.source === "hermes",
+    );
+    assert.equal(hermes.length, 3);
+    const byId = new Map(hermes.map((record) => [record.sessionId, record]));
+    const done = byId.get("hermes_done");
+    assert.ok(done);
+    assert.equal(done.title, "Build the login flow");
+    assert.equal(done.model, "deepseek-v4-flash");
+    assert.equal(done.projectKey, "hermes-project");
+    assert.equal(done.projectRef, "~/hermes-project");
+    assert.equal(done.turns, 2);
+    assert.equal(done.totals.inputTokens, 1000);
+    assert.equal(done.totals.outputTokens, 500);
+    assert.equal(done.totals.cachedInputTokens, 200);
+    assert.equal(done.totals.cacheCreationInputTokens, 50);
+    assert.equal(done.totals.reasoningOutputTokens, 100);
+    assert.equal(done.totals.totalTokens, 1850);
+    assert.equal(done.resumeSafe, false);
+    assert.equal(done.resumeCommand, null);
+    assertPrivacyClean(done);
+
+    const active = byId.get("hermes_active");
+    assert.ok(active, "in-flight sessions (ended_at NULL) must be listed");
+    assert.equal(active.totals.totalTokens, 1100);
+    assert.equal(active.title, "Continue the refactor");
+
+    const profile = byId.get("hermes_profile_1");
+    assert.ok(profile, "profiles/<name>/state.db must be discovered");
+    assert.equal(profile.model, "claude-sonnet-4-5");
+    assert.equal(profile.totals.totalTokens, 3800);
+    for (const record of hermes) {
+      // Sub-millisecond REAL epochs must round to whole milliseconds so the
+      // INTEGER session projection (STRICT SQLite) accepts the records.
+      assert.equal(Number.isInteger(record.durationMs), true, record.sessionId);
+      assert.match(
+        record.startedAt,
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u,
+        record.sessionId,
+      );
+      assert.match(
+        record.endedAt,
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u,
+        record.sessionId,
+      );
+      assertPrivacyClean(record);
+    }
+  });
+});
+
+test("Hermes: Windows default install lives under AppData/Local/hermes", async () => {
+  await withTempHome(async (home) => {
+    const localHermes = join(home, "AppData", "Local", "hermes");
+    await mkdir(localHermes, { recursive: true });
+    const projectDir = join(home, "win-project");
+    await mkdir(projectDir, { recursive: true });
+    createHermesSessionDb(join(localHermes, "state.db"), [
+      {
+        id: "win_hermes_1",
+        model: "deepseek-v4-flash",
+        startedAt: HERMES_EPOCH - 3600,
+        endedAt: HERMES_EPOCH - 1800,
+        cwd: projectDir,
+        inputTokens: 300,
+        outputTokens: 100,
+        users: 1,
+        firstUserContent: "Windows session prompt",
+      },
+    ]);
+
+    const summary = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      platform: "win32",
+    });
+    const sessions = summary.sessions.filter(
+      (record) => record.source === "hermes",
+    );
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0]?.sessionId, "win_hermes_1");
+    assert.equal(sessions[0]?.projectRef, "~/win-project");
+    assertPrivacyClean(sessions[0]!);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WorkBuddy session reader — one JSONL conversation per session.
+// ---------------------------------------------------------------------------
+
+test("WorkBuddy: reads one conversation with ai-title, usage and dedupe", async () => {
+  await withTempHome(async (home) => {
+    const sessionDirectory = join(home, ".workbuddy", "projects", "demo");
+    const conversationId = "dffe8d5b-2436-4022-b549-d9c227385c19";
+    const projectDir = join(home, "wb-project");
+    await mkdir(sessionDirectory, { recursive: true });
+    await mkdir(projectDir, { recursive: true });
+    const base = new Date("2026-09-09T04:50:43.359Z").getTime();
+    await writeFile(
+      join(sessionDirectory, `${conversationId}.jsonl`),
+      [
+        JSON.stringify({
+          id: "u-1",
+          timestamp: base,
+          role: "user",
+          content: "Help me fix this bug",
+          sessionId: conversationId,
+          cwd: projectDir,
+        }),
+        JSON.stringify({
+          id: "title-1",
+          timestamp: base + 200,
+          type: "ai-title",
+          aiTitle: "Debug the login page",
+          sessionId: conversationId,
+          cwd: projectDir,
+        }),
+        JSON.stringify({
+          id: "resp-1",
+          timestamp: base + 1000,
+          type: "function_call",
+          sessionId: conversationId,
+          cwd: projectDir,
+          providerData: {
+            requestModelName: "deepseek-chat",
+            rawUsage: {
+              prompt_tokens: 1_000,
+              completion_tokens: 200,
+              cache_read_input_tokens: 300,
+              cache_creation_input_tokens: 100,
+              completion_tokens_details: { reasoning_tokens: 50 },
+            },
+          },
+        }),
+        // Duplicate response id (rotated/in-flight copy) must count once.
+        JSON.stringify({
+          id: "resp-1",
+          timestamp: base + 1000,
+          sessionId: conversationId,
+          cwd: projectDir,
+          providerData: {
+            rawUsage: { prompt_tokens: 1_000, completion_tokens: 200 },
+          },
+        }),
+        JSON.stringify({
+          id: "asst-1",
+          timestamp: base + 1500,
+          role: "assistant",
+          content: "Done",
+          sessionId: conversationId,
+          cwd: projectDir,
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+    assert.equal(session.source, "workbuddy");
+    assert.equal(session.sessionId, conversationId);
+    assert.equal(session.title, "Debug the login page");
+    assert.equal(session.model, "deepseek-chat");
+    assert.equal(session.projectKey, "wb-project");
+    assert.equal(session.projectRef, "~/wb-project");
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.inputTokens, 600);
+    assert.equal(session.totals.cachedInputTokens, 300);
+    assert.equal(session.totals.cacheCreationInputTokens, 100);
+    assert.equal(session.totals.outputTokens, 150);
+    assert.equal(session.totals.reasoningOutputTokens, 50);
+    assert.equal(session.totals.totalTokens, 1_200);
+    assert.equal(session.resumeSafe, false);
+    assertPrivacyClean(session);
+  });
+});
+
+test("WorkBuddy: user text is the fallback title without an ai-title record", async () => {
+  await withTempHome(async (home) => {
+    const sessionDirectory = join(home, ".workbuddy", "projects", "demo2");
+    await mkdir(sessionDirectory, { recursive: true });
+    const conversationId = "9a8b7c6d-1111-2222-3333-444455556666";
+    await writeFile(
+      join(sessionDirectory, `${conversationId}.jsonl`),
+      [
+        JSON.stringify({
+          id: "u-2",
+          timestamp: new Date("2026-09-09T05:00:00.000Z").getTime(),
+          role: "user",
+          content: "Summarize https://example.com/docs for me",
+          sessionId: conversationId,
+          cwd: join(home, "docs-project"),
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+    assert.equal(session.source, "workbuddy");
+    assert.equal(session.title, "Summarize [link] for me");
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.totalTokens, 0);
+    assert.equal(session.projectRef, "~/docs-project");
+    assertPrivacyClean(session);
+  });
+});
+
+// ZCode — ~/.zcode/cli/db/db.sqlite: one top-level session per conversation;
+// subagent children (session.parent_id) are folded into the parent record.
+function createZcodeSessionDb(
+  databasePath: string,
+  sessions: Array<{
+    id: string;
+    parentId?: string | null;
+    title?: string;
+    directory?: string;
+    timeCreated: number;
+    timeUpdated: number;
+  }>,
+  usage: Array<{
+    sessionId: string;
+    modelId: string;
+    startedAt: number;
+    completedAt: number;
+    input: number;
+    output: number;
+    reasoning: number;
+    cacheRead: number;
+    cacheCreation: number;
+  }>,
+  userMessages: Array<{ sessionId: string; atMs: number }>,
+): void {
+  const db = new DatabaseSync(databasePath);
+  db.exec(`
+    CREATE TABLE session (
+      id TEXT PRIMARY KEY, parent_id TEXT, title TEXT, directory TEXT,
+      time_created INTEGER, time_updated INTEGER
+    );
+    CREATE TABLE model_usage (
+      id TEXT PRIMARY KEY, session_id TEXT, model_id TEXT, started_at INTEGER,
+      completed_at INTEGER, input_tokens INTEGER, output_tokens INTEGER,
+      reasoning_tokens INTEGER, cache_creation_input_tokens INTEGER,
+      cache_read_input_tokens INTEGER
+    );
+    CREATE TABLE message (
+      id TEXT PRIMARY KEY, session_id TEXT, data TEXT, sequence INTEGER,
+      time_created INTEGER
+    );
+  `);
+  const insertSession = db.prepare(
+    `INSERT INTO session (id, parent_id, title, directory, time_created, time_updated)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  for (const row of sessions) {
+    insertSession.run(
+      row.id,
+      row.parentId ?? null,
+      row.title ?? null,
+      row.directory ?? null,
+      row.timeCreated,
+      row.timeUpdated,
+    );
+  }
+  const insertUsage = db.prepare(
+    `INSERT INTO model_usage (id, session_id, model_id, started_at, completed_at,
+       input_tokens, output_tokens, reasoning_tokens,
+       cache_creation_input_tokens, cache_read_input_tokens)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  usage.forEach((row, index) => {
+    insertUsage.run(
+      `usage-${index}`,
+      row.sessionId,
+      row.modelId,
+      row.startedAt,
+      row.completedAt,
+      row.input,
+      row.output,
+      row.reasoning,
+      row.cacheCreation,
+      row.cacheRead,
+    );
+  });
+  const insertMessage = db.prepare(
+    `INSERT INTO message (id, session_id, data, sequence, time_created)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  userMessages.forEach((row, index) => {
+    insertMessage.run(
+      `msg-${index}`,
+      row.sessionId,
+      JSON.stringify({
+        role: "user",
+        time: { created: row.atMs },
+        agent: "zcode-agent",
+      }),
+      index,
+      row.atMs,
+    );
+  });
+  db.close();
+}
+
+test("ZCode: one parent session with folded subagent usage and totals", async () => {
+  await withTempHome(async (home) => {
+    const dbDir = join(home, ".zcode", "cli", "db");
+    await mkdir(dbDir, { recursive: true });
+    const projectDir = join(home, "code", "zapp");
+    const parentAt = new Date("2026-09-08T02:00:00.000Z").getTime();
+    const childAt = new Date("2026-09-08T02:05:00.000Z").getTime();
+    createZcodeSessionDb(
+      join(dbDir, "db.sqlite"),
+      [
+        {
+          id: "sess-parent-abc123",
+          title: "修复登录流程",
+          directory: projectDir,
+          timeCreated: parentAt,
+          timeUpdated: childAt + 60_000,
+        },
+        {
+          id: "sess-child-xyz789",
+          parentId: "sess-parent-abc123",
+          title: "子代理分析",
+          directory: projectDir,
+          timeCreated: childAt,
+          timeUpdated: childAt + 60_000,
+        },
+        {
+          // Orphan child whose parent session was pruned must never surface.
+          id: "sess-orphan-000001",
+          parentId: "sess-missing-parent",
+          title: "孤儿会话",
+          directory: projectDir,
+          timeCreated: childAt,
+          timeUpdated: childAt,
+        },
+      ],
+      [
+        {
+          sessionId: "sess-parent-abc123",
+          modelId: "deepseek-v4-pro",
+          startedAt: parentAt + 1_000,
+          completedAt: parentAt + 20_000,
+          input: 30000,
+          output: 1000,
+          reasoning: 200,
+          cacheRead: 20000,
+          cacheCreation: 0,
+        },
+        {
+          sessionId: "sess-child-xyz789",
+          modelId: "zcode-Explore",
+          startedAt: childAt + 1_000,
+          completedAt: childAt + 40_000,
+          input: 5000,
+          output: 600,
+          reasoning: 100,
+          cacheRead: 0,
+          cacheCreation: 0,
+        },
+        {
+          sessionId: "sess-orphan-000001",
+          modelId: "deepseek-v4-pro",
+          startedAt: childAt,
+          completedAt: childAt + 5_000,
+          input: 999,
+          output: 999,
+          reasoning: 0,
+          cacheRead: 0,
+          cacheCreation: 0,
+        },
+      ],
+      [
+        { sessionId: "sess-parent-abc123", atMs: parentAt + 500 },
+        { sessionId: "sess-parent-abc123", atMs: childAt - 30_000 },
+        { sessionId: "sess-child-xyz789", atMs: childAt + 500 },
+        { sessionId: "sess-orphan-000001", atMs: childAt + 400 },
+      ],
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const zcode = summary.sessions.filter(
+      (record) => record.source === "zcode",
+    );
+    assert.equal(zcode.length, 1, "only the top-level session is listed");
+    const session = zcode[0]!;
+    assert.equal(session.sessionId, "sess-parent-abc123");
+    assert.equal(session.title, "修复登录流程");
+    assert.equal(session.model, "deepseek-v4-pro");
+    assert.equal(session.projectKey, "zapp");
+    assert.equal(session.projectRef, "~/code/zapp");
+    // Parent 31000 + child 5600; orphan usage never leaks into totals.
+    assert.equal(session.totals.inputTokens, 15000);
+    assert.equal(session.totals.cachedInputTokens, 20000);
+    assert.equal(session.totals.outputTokens, 1300);
+    assert.equal(session.totals.reasoningOutputTokens, 300);
+    assert.equal(session.totals.totalTokens, 36600);
+    assert.equal(session.turns, 3);
+    assert.equal(session.subagentCalls, 1);
+    assert.equal(session.resumeSafe, false);
+    assert.equal(session.resumeCommand, null);
+    assert.equal(session.status, "available");
+    assertPrivacyClean(session);
+  });
+});
+
+test("ZCode: a database with only orphaned child sessions lists nothing", async () => {
+  await withTempHome(async (home) => {
+    const dbDir = join(home, ".zcode", "cli", "db");
+    await mkdir(dbDir, { recursive: true });
+    const at = new Date("2026-09-08T02:00:00.000Z").getTime();
+    createZcodeSessionDb(
+      join(dbDir, "db.sqlite"),
+      [
+        {
+          id: "sess-child-only-1",
+          parentId: "sess-missing-parent",
+          title: "子会话",
+          timeCreated: at,
+          timeUpdated: at,
+        },
+      ],
+      [],
+      [],
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    assert.equal(
+      summary.sessions.filter((record) => record.source === "zcode").length,
+      0,
+    );
+  });
+});

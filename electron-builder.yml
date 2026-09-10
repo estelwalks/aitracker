@@ -21,8 +21,8 @@ files:
   - node_modules/@estelwalks/agent-threat-scanner/package.json
   - node_modules/zod/**/*
 extraResources:
-  # Native tray/window APIs require raster images. The build generates these
-  # light/dark derivatives from the two canonical SVG files.
+  # The build generates raster templates, DPI-specific ICO frames and ICNS
+  # from the two canonical SVG files, including their optical small-size mark.
   - from: build/native-icons
     to: native-icons
     filter:
@@ -38,7 +38,7 @@ mac:
       arch:
         - x64
         - arm64
-  icon: public/favicon.svg
+  icon: build/native-icons/icon.icns
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -56,7 +56,9 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: public/favicon.svg
+  # Keep the EXE and pinned shortcut transparent, like the running window.
+  # The three light trails remain part of the artwork at every icon size.
+  icon: build/native-icons/icon.ico
 nsis:
   artifactName: "${productName}-Setup-${version}-${arch}.${ext}"
   oneClick: false

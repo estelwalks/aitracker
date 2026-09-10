@@ -306,6 +306,80 @@ test("discovers AiPy Skills from its home directory", async () => {
   assert.deepEqual(target.agents, ["AiPy"]);
 });
 
+test("discovers WorkBuddy cached Skills nested below the default discovery depth", async () => {
+  const { home } = await fixture();
+  // The plugin cache nests cached Skills several levels below the agent root:
+  // depth 5 is unreachable with the default 3-level walk but must be found
+  // because WorkBuddy's registry rule allows depth 8.
+  const cacheRoot = join(home, ".workbuddy", "plugins", "cache");
+  const nested = join(cacheRoot, "market", "teams", "skills", "demo-wb");
+  await mkdir(nested, { recursive: true });
+  await writeFile(join(nested, "SKILL.md"), "# demo-wb\n", "utf8");
+  // Past the mirrored 8-level bound the walk stops, matching the workspace.
+  const tooDeep = join(
+    cacheRoot,
+    "a1",
+    "b1",
+    "c1",
+    "d1",
+    "e1",
+    "f1",
+    "g1",
+    "h1",
+    "demo-wb-deep",
+  );
+  await mkdir(tooDeep, { recursive: true });
+  await writeFile(join(tooDeep, "SKILL.md"), "# demo-wb-deep\n", "utf8");
+
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+
+  const targets = await service.listSkills();
+  const found = targets.find((candidate) => candidate.name === "demo-wb");
+  assert.ok(found, "deeply nested WorkBuddy Skills must be discovered");
+  assert.deepEqual(found.agents, ["WorkBuddy"]);
+  assert.equal(
+    targets.some((candidate) => candidate.name === "demo-wb-deep"),
+    false,
+    "Skills past the mirrored depth bound stay undiscovered",
+  );
+});
+
+test("keeps the default discovery depth of 3 for agents without a deeper rule", async () => {
+  const { home } = await fixture();
+  const codexRoot = join(home, ".codex", "skills");
+  // Depth 3 from the agent root: still visible with the default bound.
+  const shallow = join(codexRoot, "team", "shared", "demo-shallow");
+  await mkdir(shallow, { recursive: true });
+  await writeFile(join(shallow, "SKILL.md"), "# demo-shallow\n", "utf8");
+  // Depth 4: outside the default bound, so the scanner and the Skill
+  // management workspace both ignore it.
+  const deep = join(codexRoot, "a", "b", "c", "demo-hidden");
+  await mkdir(deep, { recursive: true });
+  await writeFile(join(deep, "SKILL.md"), "# demo-hidden\n", "utf8");
+
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+
+  const targets = await service.listSkills();
+  assert.ok(
+    targets.some((candidate) => candidate.name === "demo-shallow"),
+    "Codex Skills at the default depth remain discoverable",
+  );
+  assert.equal(
+    targets.some((candidate) => candidate.name === "demo-hidden"),
+    false,
+  );
+});
+
 test("deduplicates the same Skill installed for multiple agents", async () => {
   const { home } = await fixture();
   const duplicate = join(home, ".claude", "skills", "renamed-demo");
@@ -337,6 +411,36 @@ test("deduplicates the same Skill installed for multiple agents", async () => {
   await waitForTerminal(service);
   assert.equal(scanCalls, 1);
   assert.equal((await service.history()).length, 1);
+});
+
+test("two-tier dedupe separates same-layout Skills whose content differs", async () => {
+  const { home } = await fixture();
+  // Identical directory layout and file sizes on purpose: the cheap
+  // structural fingerprint collides, and only the content hash may split them.
+  const first = join(home, ".codex", "skills", "lookalike-a");
+  const second = join(home, ".claude", "skills", "lookalike-b");
+  await mkdir(first, { recursive: true });
+  await mkdir(second, { recursive: true });
+  await writeFile(join(first, "SKILL.md"), "A".repeat(128), "utf8");
+  await writeFile(join(second, "SKILL.md"), "B".repeat(128), "utf8");
+
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+
+  const skills = await service.listSkills();
+  assert.deepEqual(
+    skills.map((skill) => skill.name).sort(),
+    ["demo", "lookalike-a", "lookalike-b"].sort(),
+  );
+  const a = skills.find((skill) => skill.name === "lookalike-a");
+  const b = skills.find((skill) => skill.name === "lookalike-b");
+  assert.ok(a && b, "same-layout different-content Skills must stay separate");
+  assert.deepEqual(a.agents, ["Codex"]);
+  assert.deepEqual(b.agents, ["Claude Code"]);
 });
 
 test("rejects renderer paths and unknown opaque references", async () => {

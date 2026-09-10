@@ -16,50 +16,84 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11"],
         "base": "home",
         "path": ".zcode"
       },
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11"],
         "base": "home",
-        "path": ".zcode/projects"
+        "path": ".zcode/cli"
       },
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11"],
         "base": "home",
         "path": ".zcode/cli/db/db.sqlite"
       }
     ]
   },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "home",
+        "path": ".zcode"
+      }
+    ],
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "home",
+          "path": ".zcode/skills"
+        },
+        {
+          "base": "home",
+          "path": ".zcode/cli/plugins/cache"
+        }
+      ],
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 8
+    }
+  },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "adapter",
+      "reader": "generic-sqlite",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11"],
+          "base": "home",
+          "path": ".zcode/cli/db",
+          "glob": "db.sqlite",
+          "format": "sqlite"
+        }
+      ],
+      "mapping": {
+        "timestamp": ["timestamp"],
+        "sessionId": ["sessionId"],
+        "model": ["model"],
+        "project": ["project"],
+        "inputTokens": ["inputTokens"],
+        "cachedInputTokens": ["cachedInputTokens"],
+        "cacheCreationInputTokens": ["cacheCreationInputTokens"],
+        "outputTokens": ["outputTokens"],
+        "reasoningOutputTokens": ["reasoningOutputTokens"]
+      },
+      "maxFileSizeBytes": 536870912,
+      "query": "SELECT\n  mu.session_id AS sessionId,\n  COALESCE(mu.completed_at, mu.started_at) AS timestamp,\n  COALESCE(NULLIF(s.directory, ''), 'unknown') AS project,\n  COALESCE(NULLIF(mu.model_id, ''), 'unknown') AS model,\n  CAST(MAX(0, COALESCE(mu.input_tokens, 0) - COALESCE(mu.cache_read_input_tokens, 0) - COALESCE(mu.cache_creation_input_tokens, 0)) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(mu.cache_read_input_tokens, 0) AS INTEGER) AS cachedInputTokens,\n  CAST(COALESCE(mu.cache_creation_input_tokens, 0) AS INTEGER) AS cacheCreationInputTokens,\n  CAST(MAX(0, COALESCE(mu.output_tokens, 0) - COALESCE(mu.reasoning_tokens, 0)) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(mu.reasoning_tokens, 0) AS INTEGER) AS reasoningOutputTokens\nFROM model_usage mu\nLEFT JOIN session s ON s.id = mu.session_id\nWHERE mu.session_id IS NOT NULL AND mu.session_id <> ''"
     },
-    "skills": "unsupported",
+    "skills": "read-write",
     "agents": "unsupported",
     "sessions": {
-      "mode": "unsupported"
+      "mode": "read",
+      "reader": "zcode-session-v1"
     },
-    "market": "unsupported",
+    "market": "install-target",
     "security": "unsupported"
   },
   "modelObservation": {
-    "modelField": "model"
+    "modelField": "model",
+    "tokenSemantics": {
+      "reasoningIncludedInOutput": true
+    }
   }
 }

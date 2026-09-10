@@ -113,6 +113,9 @@ const READER_DEFAULT_ROOTS: Readonly<Record<string, readonly string[]>> = {
   "dsh-session-v1": [".dsh"],
   "pi-session-v1": [".pi"],
   "omp-session-v1": [".omp", ".oh-my-pi"],
+  "hermes-session-v1": [".hermes"],
+  "workbuddy-session-v1": [".workbuddy"],
+  "zcode-session-v1": [".zcode"],
 };
 
 function asObject(value: unknown): JsonObject | undefined {
@@ -1003,6 +1006,209 @@ async function readPiLogHeaderId(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Hermes Agent — state.db (SQLite) messages for the raw session id. Content
+// is stored as plain text; assistant thinking lives in `reasoning_content`
+// (mirrored by `reasoning`). Root may be the default profile or one of
+// `profiles/<name>/state.db`, matching the metadata scanner's layout.
+// ---------------------------------------------------------------------------
+
+async function collectHermesStateDatabases(
+  hermesDirectory: string,
+  maxDatabases: number,
+): Promise<string[]> {
+  const databases: string[] = [];
+  const pushIfFile = async (candidate: string): Promise<void> => {
+    try {
+      const info = await stat(candidate);
+      if (info.isFile()) databases.push(candidate);
+    } catch {
+      // Missing profile — skip.
+    }
+  };
+  await pushIfFile(join(hermesDirectory, "state.db"));
+  const profilesRoot = join(hermesDirectory, "profiles");
+  if (!(await directoryAvailable(profilesRoot))) return databases;
+  let directory;
+  try {
+    directory = await opendir(profilesRoot);
+  } catch {
+    return databases;
+  }
+  try {
+    for await (const entry of directory) {
+      if (databases.length >= maxDatabases) break;
+      if (!entry.isDirectory()) continue;
+      await pushIfFile(join(profilesRoot, entry.name, "state.db"));
+    }
+  } finally {
+    await directory.close().catch(() => undefined);
+  }
+  return databases;
+}
+
+/**
+ * Hermes message content can be a plain string or a serialized block array
+ * (older/other profiles); reduce both to display text.
+ */
+function hermesMessageText(value: unknown): string {
+  const raw = sqliteTextValue(value);
+  if (raw == null) return "";
+  const trimmed = raw.trim();
+  if (
+    trimmed.length > 0 &&
+    (trimmed.startsWith("[") || trimmed.startsWith("{"))
+  ) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed)) return extractContent(parsed).text;
+      if (typeof parsed === "string") return parsed;
+    } catch {
+      // Not JSON — fall through to the raw text.
+    }
+  }
+  return raw;
+}
+
+async function readHermesTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const databases = await collectHermesStateDatabases(root, limits.maxFiles);
+  for (const databasePath of databases) {
+    if (out.length >= limits.maxMessages) break;
+    let database: ReturnType<typeof openReadOnlySqlite> | undefined;
+    try {
+      database = openReadOnlySqlite(databasePath);
+      const rows = database.queryRows(
+        `SELECT role, content, reasoning_content, reasoning, timestamp
+         FROM messages
+         WHERE session_id = ? AND role IN ('user', 'assistant')
+         ORDER BY timestamp ASC, id ASC`,
+        sessionId,
+      );
+      for (const row of rows) {
+        if (out.length >= limits.maxMessages) break;
+        const role =
+          row.role === "user"
+            ? ("user" as const)
+            : row.role === "assistant"
+              ? ("assistant" as const)
+              : null;
+        if (role == null) continue;
+        const text = hermesMessageText(row.content);
+        const thinking =
+          hermesMessageText(row.reasoning_content) ||
+          hermesMessageText(row.reasoning);
+        pushMessage(
+          out,
+          role,
+          text,
+          thinking.length > 0 ? thinking : undefined,
+          parseTimestampMs(row.timestamp),
+          limits,
+        );
+      }
+    } catch {
+      // Missing/incompatible databases degrade to an empty transcript.
+    } finally {
+      database?.close();
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// WorkBuddy — ~/.workbuddy/projects/<project>/<conversation>.jsonl
+// ---------------------------------------------------------------------------
+
+/** Session id derived from a WorkBuddy conversation file name (`<uuid>.jsonl`). */
+function workbuddyFileNameId(fileName: string): string | undefined {
+  const base = fileName.endsWith(".jsonl")
+    ? fileName.slice(0, -".jsonl".length)
+    : fileName;
+  return base.length > 0 ? base : undefined;
+}
+
+/** True when any record in the file carries the requested conversation id. */
+async function workbuddyFileHasSession(
+  filePath: string,
+  sessionId: string,
+  limits: Limits,
+): Promise<boolean> {
+  let found = false;
+  await readJsonLines(
+    filePath,
+    (record) => {
+      if (found) return;
+      if (stringValue(record.sessionId) === sessionId) found = true;
+    },
+    limits,
+  );
+  return found;
+}
+
+async function readWorkbuddyLogMessages(
+  filePath: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  await readJsonLines(
+    filePath,
+    (record) => {
+      if (out.length >= limits.maxMessages) return;
+      const recordSessionId = stringValue(record.sessionId);
+      if (recordSessionId != null && recordSessionId !== sessionId) return;
+      const role = stringValue(record.role);
+      if (role !== "user" && role !== "assistant") return;
+      // Real WorkBuddy logs store content as a block array
+      // (`[{ type: "text", text: "..." }]`); older rows may be plain text.
+      const content = extractContent(record.content).text;
+      if (content.length === 0) return;
+      pushMessage(
+        out,
+        role,
+        content,
+        undefined,
+        parseTimestampMs(record.timestamp),
+        limits,
+      );
+    },
+    limits,
+  );
+}
+
+async function readWorkbuddyTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const projectsRoot = join(root, "projects");
+  const files = await collectJsonlFiles(
+    [projectsRoot],
+    (_relativePath, name) => name.endsWith(".jsonl"),
+    limits.maxFiles,
+  );
+  const matched = files.filter(
+    (file) => workbuddyFileNameId(basename(file.path)) === sessionId,
+  );
+  if (matched.length === 0) {
+    for (const file of files) {
+      if (matched.length >= limits.maxFiles) break;
+      if (await workbuddyFileHasSession(file.path, sessionId, limits)) {
+        matched.push(file);
+      }
+    }
+  }
+  for (const file of matched) {
+    if (out.length >= limits.maxMessages) break;
+    await readWorkbuddyLogMessages(file.path, sessionId, out, limits);
+  }
+}
+
 /** Session id encoded in a pi file name `<createdAt>_<id>.jsonl`. */
 function piLogFileNameId(fileName: string): string | undefined {
   const base = fileName.endsWith(".jsonl")
@@ -1126,6 +1332,87 @@ async function readPiTranscript(
   }
 }
 
+// ---------------------------------------------------------------------------
+// ZCode — ~/.zcode/cli/db/db.sqlite (SQLite). Every conversation row in
+// `message` carries JSON metadata (role in `data`); its parts live in `part`
+// (`type`: text | reasoning | step-* | tool_* ...). Only text and reasoning
+// parts are surfaced as chat messages — everything else is execution metadata.
+// ---------------------------------------------------------------------------
+
+async function readZcodeTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const databasePath = join(root, "cli", "db", "db.sqlite");
+  let database: ReturnType<typeof openReadOnlySqlite> | undefined;
+  try {
+    database = openReadOnlySqlite(databasePath);
+    const messageRows = database.queryRows(
+      `SELECT id, data, time_created
+       FROM message
+       WHERE session_id = ?
+       ORDER BY sequence ASC`,
+      sessionId,
+    );
+    for (const row of messageRows) {
+      if (out.length >= limits.maxMessages) return;
+      let meta: JsonObject | undefined;
+      try {
+        meta = asObject(JSON.parse(sqliteTextValue(row.data) ?? "{}"));
+      } catch {
+        meta = undefined;
+      }
+      const role = stringValue(meta?.role);
+      if (role !== "user" && role !== "assistant") continue;
+      const messageId = stringValue(row.id);
+      let text = "";
+      let thinking = "";
+      if (messageId != null) {
+        const partRows = database.queryRows(
+          `SELECT data
+           FROM part
+           WHERE message_id = ?
+           ORDER BY sequence ASC`,
+          messageId,
+        );
+        for (const partRow of partRows) {
+          let part: JsonObject | undefined;
+          try {
+            part = asObject(JSON.parse(sqliteTextValue(partRow.data) ?? "{}"));
+          } catch {
+            part = undefined;
+          }
+          const type = stringValue(part?.type);
+          const partText = stringValue(part?.text);
+          if (partText == null) continue;
+          if (type === "text") {
+            text += text ? "\n" : "";
+            text += partText;
+          } else if (type === "reasoning") {
+            thinking += thinking ? "\n" : "";
+            thinking += partText;
+          }
+        }
+      }
+      if (!text && !thinking) continue;
+      pushMessage(
+        out,
+        role,
+        text,
+        thinking || undefined,
+        parseTimestampMs(row.time_created),
+        limits,
+      );
+    }
+  } catch {
+    // Missing/incompatible ZCode databases degrade to an empty transcript.
+  } finally {
+    database?.close();
+  }
+}
+
 /**
  * Load one session's transcript into memory (S-300). Returns an empty
  * transcript for unknown sources, unsafe ids, or missing logs — it never
@@ -1221,6 +1508,12 @@ async function readSourceTranscript(
       return readPiTranscript(root, sessionId, out, limits);
     case "omp-session-v1":
       return readPiTranscript(root, sessionId, out, limits);
+    case "hermes-session-v1":
+      return readHermesTranscript(root, sessionId, out, limits);
+    case "workbuddy-session-v1":
+      return readWorkbuddyTranscript(root, sessionId, out, limits);
+    case "zcode-session-v1":
+      return readZcodeTranscript(root, sessionId, out, limits);
     default:
       // Unknown reader — no transcript extraction implemented for it yet.
       return;

@@ -18,11 +18,11 @@ import {
 test("expandTildePath expands ~ and leaves absolute paths unchanged", () => {
   assert.equal(
     expandTildePath("~/.hermes", "/home/alice"),
-    "/home/alice/.hermes",
+    join("/home/alice", ".hermes"),
   );
   assert.equal(
     expandTildePath("~/state.db", "/home/alice"),
-    "/home/alice/state.db",
+    join("/home/alice", "state.db"),
   );
   assert.equal(expandTildePath("~", "/home/alice"), "/home/alice");
   assert.equal(expandTildePath("/data/hermes", "/home/alice"), "/data/hermes");

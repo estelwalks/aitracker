@@ -11,8 +11,8 @@ import {
 } from "../read-model";
 import { getMemoryAssets } from "../../knowledge";
 import {
-  useSecurityScanOverview,
-  type SecurityScanOverview,
+  getSecurityOverview,
+  type SecurityOverviewReadModel,
 } from "../../security-assessment";
 import {
   readCachedWidgetReadModel,
@@ -60,18 +60,26 @@ export interface WidgetDataModel {
      */
     readonly memory: number | null;
   };
-  readonly security: SecurityScanOverview;
+  readonly security: SecurityOverviewReadModel;
   /** Manually re-pull (status + model + memory invalid). */
   readonly refresh: () => void;
 }
 
 export type WidgetMood = "idle" | "live" | "warn" | "danger";
 
+const EMPTY_SECURITY_OVERVIEW: SecurityOverviewReadModel = {
+  available: false,
+  coverage: 0,
+  runCount: 0,
+  totalSkills: 0,
+  summary: null,
+  resolvedAt: null,
+};
+
 export function resolveWidgetMood(
   hasData: boolean,
-  security: SecurityScanOverview,
+  security: SecurityOverviewReadModel,
 ): WidgetMood {
-  if (security.loading) return "idle";
   const danger = security.summary?.dangerousCount ?? 0;
   if (danger > 0) return "danger";
   if ((security.summary?.suspiciousCount ?? 0) > 0) return "warn";
@@ -111,7 +119,13 @@ const MEMORY_KEY = ["widget-memory"] as const;
 export function useWidgetData(): WidgetDataModel {
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
-  const security = useSecurityScanOverview();
+  const securityQuery = useQuery({
+    queryKey: ["security-overview"],
+    queryFn: () => getSecurityOverview({}),
+    staleTime: 30_000,
+    refetchInterval: STATUS_INTERVAL_MS,
+    refetchOnWindowFocus: false,
+  });
 
   const statusQuery = useQuery({
     queryKey: STATUS_KEY(locale),
@@ -216,6 +230,7 @@ export function useWidgetData(): WidgetDataModel {
     void queryClient.invalidateQueries({ queryKey: ["widget-status"] });
     void queryClient.invalidateQueries({ queryKey: ["widget-model"] });
     void queryClient.invalidateQueries({ queryKey: ["widget-memory"] });
+    void queryClient.invalidateQueries({ queryKey: ["security-overview"] });
   };
 
   return {
@@ -224,7 +239,7 @@ export function useWidgetData(): WidgetDataModel {
       modelQuery.isError || (statusQuery.isError && modelQuery.data == null)
         ? t("widget.loadFailed")
         : null,
-    security,
+    security: securityQuery.data ?? EMPTY_SECURITY_OVERVIEW,
     refresh,
     ...view,
   };

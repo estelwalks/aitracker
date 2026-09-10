@@ -9,9 +9,11 @@
     "opencode",
     "grok",
     "hermes",
+    "workbuddy",
     "openclaw",
     "antigravity",
-    "aipy"
+    "aipy",
+    "zcode"
   ],
   "defaultMarkers": ["SKILL.md", "skill.md"],
   "defaultMaxDepth": 3,

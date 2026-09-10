@@ -30,7 +30,22 @@ test("baseline tools remain present in the expanded AI_TOOLS catalog", () => {
     assert.ok(live, `baseline tool "${expected.id}" missing from AI_TOOLS`);
     assert.equal(live.nameZh, expected.nameZh);
     const expectedRoots =
-      expected.id === "gemini-cli" ? [".gemini/tmp"] : expected.detectRoots;
+      expected.id === "gemini-cli"
+        ? [".gemini/tmp"]
+        : expected.id === "codebuddy"
+          ? [
+              // Expected diff (CodeBuddy detection tightened): the legacy
+              // ~/.codebuddy home is created and actively written by the
+              // WorkBuddy family's shared CLI core (cli-memwatch logs under
+              // ~/.codebuddy/logs/memwatch, plus CodeBuddyExtension auth data
+              // such as Local/CodeBuddyExtension/Data/Public/auth), so its
+              // bare existence can no longer prove a CodeBuddy install.
+              // Detection now requires CodeBuddyExtension/Logs artifacts or a
+              // `codebuddy` executable on PATH.
+              "AppData/Local/CodeBuddyExtension/Logs",
+              "Library/Application Support/CodeBuddyExtension/Logs",
+            ]
+          : expected.detectRoots;
     for (const root of expectedRoots) {
       assert.ok(
         live.detectRoots.includes(root),
@@ -67,10 +82,52 @@ test("baseline usage parsing matches usageLogParsingFor for every tool", () => {
       assert.equal(usageLogParsingFor(tool.id), "native");
       continue;
     }
+    if (tool.id === "every-code" || tool.id === "kilocode") {
+      // Expected diff (Every Code usage support, TokenTracker-sourced):
+      // shares the Codex rollout family (~/.code/sessions) with a native reader.
+      assert.equal(usageLogParsingFor(tool.id), "native");
+      continue;
+    }
+    if (tool.id === "zed") {
+      // Expected diff (Zed Agent usage support, TokenTracker-sourced): the
+      // frozen baseline predates Zed log parsing; the registry now declares a
+      // native reader over its threads.db (json / zstd thread blobs).
+      assert.equal(usageLogParsingFor(tool.id), "native");
+      continue;
+    }
+    if (tool.id === "droid" || tool.id === "codebuddy") {
+      // Expected diff (Droid/CodeBuddy usage support, TokenTracker-sourced):
+      // native readers over ~/.factory/sessions settings.json (mtime
+      // timestamps) and ~/.codebuddy/projects usage JSONL respectively.
+      assert.equal(usageLogParsingFor(tool.id), "native");
+      continue;
+    }
     if (tool.id === "hermes") {
       // Expected diff (Hermes usage support, milestone v1.0.1): the frozen
       // baseline predates Hermes log parsing; the registry now declares a
       // generic-sqlite adapter over state.db sessions (default + profiles).
+      assert.equal(usageLogParsingFor(tool.id), "adapter");
+      continue;
+    }
+    if (tool.id === "zcode") {
+      // Expected diff (ZCode usage support): the frozen baseline predates
+      // ZCode log parsing; the registry now declares a generic-sqlite adapter
+      // over model_usage rows in ~/.zcode/cli/db/db.sqlite.
+      assert.equal(usageLogParsingFor(tool.id), "adapter");
+      continue;
+    }
+    if (
+      tool.id === "goose" ||
+      tool.id === "qodercn" ||
+      tool.id === "anythingllm" ||
+      tool.id === "kiro" ||
+      tool.id === "mimo" ||
+      tool.id === "craft"
+    ) {
+      // Expected diff (Goose/Qoder CN usage support, TokenTracker-sourced):
+      // the frozen baseline predates their log parsing; the registry now
+      // declares generic-sqlite adapters over goose sessions.db and the
+      // QoderCN local.db (chat_message usage rows).
       assert.equal(usageLogParsingFor(tool.id), "adapter");
       continue;
     }
@@ -91,7 +148,20 @@ test("baseline skill agents remain present in the live Skill rules", () => {
       (rule) => rule.toolId === expected.toolId,
     );
     assert.ok(live, `baseline skill agent "${expected.toolId}" missing`);
-    assert.deepEqual([...live.roots], [...expected.roots]);
+    if (expected.toolId === "hermes") {
+      // Expected diff (Hermes Windows support): the registry now declares the
+      // %LOCALAPPDATA%\hermes skills root (`AppData/Local/hermes/skills`)
+      // alongside the frozen ~/.hermes/skills default, so the live rule keeps
+      // the baseline root and appends the LocalAppData arm.
+      for (const root of expected.roots) {
+        assert.ok(
+          live.roots.includes(root),
+          `${expected.toolId} must retain baseline skill root ${root}`,
+        );
+      }
+    } else {
+      assert.deepEqual([...live.roots], [...expected.roots]);
+    }
     assert.equal(live.envHome, expected.envHome);
     assert.deepEqual(
       [...(live.markers ?? ["SKILL.md", "skill.md"])],

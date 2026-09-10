@@ -63,6 +63,32 @@ export async function loadDashboardSummaryReadModel(
   toolId?: string | null,
 ): Promise<DashboardSummaryReadModel> {
   const { v2, monitoring, error } = await buildDashboardV2Snapshot(locale);
+  // Canonical security overview resolved against the in-process engine (or
+  // the persisted-history fallback). Resolved with the other server data so
+  // the security cards are never a second, lazily loaded request. Tool-scoped
+  // window projections do not carry the field, so they skip the engine read.
+  let security: DashboardSummaryReadModel["security"];
+  if (toolId == null) {
+    const { resolveSecurityOverview } =
+      await import("../security-assessment/overview.server.ts");
+    security = await resolveSecurityOverview().catch(() => ({
+      available: false,
+      coverage: 0,
+      runCount: 0,
+      totalSkills: 0,
+      summary: null,
+      resolvedAt: null,
+    }));
+  } else {
+    security = {
+      available: false,
+      coverage: 0,
+      runCount: 0,
+      totalSkills: 0,
+      summary: null,
+      resolvedAt: null,
+    };
+  }
   // P0-T0-09: record projection duration + DTO bytes into the metrics sink.
   const summary = measureReadModel(
     "dashboard.summary",
@@ -78,6 +104,7 @@ export async function loadDashboardSummaryReadModel(
   const hero = createDashboardV2HeroView({
     snapshot: v2,
     monitoring: monitoringOverride ?? monitoring,
+    securityOverview: security,
     activeInsightCount: activeInsightCount({
       generatedAt: v2.generatedAt,
       events: v2.events.length,
@@ -89,7 +116,12 @@ export async function loadDashboardSummaryReadModel(
       },
     }),
   });
-  return { ...summary, hero, monitoring: monitoringOverride ?? monitoring };
+  return {
+    ...summary,
+    hero,
+    monitoring: monitoringOverride ?? monitoring,
+    security,
+  };
 }
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;

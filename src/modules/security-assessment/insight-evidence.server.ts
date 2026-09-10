@@ -16,7 +16,6 @@ import {
   metricValue,
   statusEvidence,
 } from "../../app/insights/evidence-util.server.ts";
-import { getMonitoringSecuritySummary } from "../../app/security-summary.server.ts";
 import type {
   InsightCandidate,
   InsightEvidenceBundle,
@@ -127,18 +126,25 @@ export const securityInsightAdapter: PageInsightAdapter = {
     const nowMs = Date.now();
     const observedAt = new Date(nowMs).toISOString();
 
-    const security = await getMonitoringSecuritySummary();
+    const { resolveSecurityOverview } = await import("./overview.server.ts");
+    const overview = await resolveSecurityOverview().catch(() => null);
+    const security = overview?.summary ?? null;
     if (security == null) {
       return emptyBundle("security", scope, observedAt, true);
     }
 
     const freshness = freshnessOf(security.assessedAt, nowMs);
     const coverageRate =
-      security.discoveredAssetCount > 0
-        ? Math.round(
-            (security.assessedAssetCount / security.discoveredAssetCount) * 100,
-          )
-        : null;
+      overview?.available === true
+        ? overview.totalSkills > 0
+          ? Math.round((overview.coverage / overview.totalSkills) * 100)
+          : null
+        : security.discoveredAssetCount > 0
+          ? Math.round(
+              (security.assessedAssetCount / security.discoveredAssetCount) *
+                100,
+            )
+          : null;
 
     return {
       surfaceId: "security" as const,
@@ -147,14 +153,18 @@ export const securityInsightAdapter: PageInsightAdapter = {
       evidence: [
         metricEvidence(
           "security.assessed",
-          security.assessedAssetCount,
+          overview?.available === true
+            ? overview.coverage
+            : security.assessedAssetCount,
           observedAt,
           freshness,
           "count",
         ),
         metricEvidence(
           "security.discovered",
-          security.discoveredAssetCount,
+          overview?.available === true
+            ? overview.totalSkills
+            : security.discoveredAssetCount,
           observedAt,
           freshness,
           "count",

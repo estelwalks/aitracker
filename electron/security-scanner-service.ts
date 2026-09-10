@@ -39,6 +39,11 @@ const MAX_FILE_BYTES = 1_000_000;
 const MAX_TOTAL_BYTES = 20_000_000;
 const MAX_HISTORY = 200;
 const HISTORY_VERSION = 1;
+/**
+ * Fallback skill-discovery depth for roots without an explicit per-agent
+ * `maxDepth` (the Electron mirror of the catalog scanner's DEFAULT_MAX_DEPTH).
+ */
+export const DEFAULT_DISCOVERY_DEPTH = 3;
 /** Default width of the per-run Skill scan worker pool (see `scanConcurrency`). */
 const DEFAULT_SCAN_CONCURRENCY = 4;
 /** Upper clamp for `scanConcurrency`; the pool never starts more workers than targets. */
@@ -57,6 +62,13 @@ interface ManagedSkillRoot {
   toolId: string;
   suffixes: readonly string[];
   envHome?: string;
+  /**
+   * Max discovery depth counting from the agent root (root = 0); default
+   * `DEFAULT_DISCOVERY_DEPTH`. Mirrors `SkillAgentRule.maxDepth` so the
+   * security scanner sees exactly the same installed Skills as the Skill
+   * management workspace (WorkBuddy nests its cached Skills below 3 levels).
+   */
+  maxDepth?: number;
 }
 
 /**
@@ -96,8 +108,29 @@ export const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
     suffixes: [".grok/skills"],
     envHome: "GROK_HOME",
   },
-  { agent: "Hermes Agent", toolId: "hermes", suffixes: [".hermes/skills"] },
+  {
+    agent: "Hermes Agent",
+    toolId: "hermes",
+    suffixes: [".hermes/skills", "AppData/Local/hermes/skills"],
+  },
   { agent: "AiPy", toolId: "aipy", suffixes: [".aipyapp/skills"] },
+  {
+    agent: "WorkBuddy",
+    toolId: "workbuddy",
+    suffixes: [".workbuddy/skills", ".workbuddy/plugins/cache"],
+    // Mirrors the registry rule: cached Skills nest several levels below the
+    // plugin-cache root, so the default 3-level discovery walk would hide
+    // them from security scanning entirely.
+    maxDepth: 8,
+  },
+  {
+    agent: "ZCode",
+    toolId: "zcode",
+    suffixes: [".zcode/skills", ".zcode/cli/plugins/cache"],
+    // Mirrors the registry rule: marketplace plugin Skills sit several levels
+    // below the plugin-cache root (plugin/version/skills/<name>).
+    maxDepth: 8,
+  },
 ];
 
 const TOOL_DATA_ROOTS_ENV = "AITRACKER_TOOL_DATA_DIRS";
@@ -133,10 +166,10 @@ export function resolveManagedSkillRoots(
   homeDirectory: string,
   env: Record<string, string | undefined>,
   toolDataRoots: ReadonlyMap<string, string> = new Map(),
-): Array<{ agent: string; root: string }> {
+): Array<{ agent: string; root: string; maxDepth: number }> {
   const merged = parseToolDataRootsEnvForSecurity(env[TOOL_DATA_ROOTS_ENV]);
   for (const [toolId, dir] of toolDataRoots) merged.set(toolId, dir);
-  const entries: Array<{ agent: string; root: string }> = [];
+  const entries: Array<{ agent: string; root: string; maxDepth: number }> = [];
   for (const definition of MANAGED_SKILL_ROOTS) {
     for (const suffix of definition.suffixes) {
       const overrideDir = merged.get(definition.toolId);
@@ -148,6 +181,7 @@ export function resolveManagedSkillRoots(
         root: override
           ? join(override, basename(suffix))
           : join(homeDirectory, suffix),
+        maxDepth: definition.maxDepth ?? DEFAULT_DISCOVERY_DEPTH,
       });
     }
   }
@@ -713,12 +747,12 @@ export class SecurityScannerService {
       typeof rawToolDataRoots === "function"
         ? ((await rawToolDataRoots()) ?? new Map<string, string>())
         : (rawToolDataRoots ?? new Map<string, string>());
-    for (const { agent, root } of resolveManagedSkillRoots(
+    for (const { agent, root, maxDepth } of resolveManagedSkillRoots(
       this.#options.homeDirectory,
       this.#options.env ?? {},
       toolDataRoots,
     )) {
-      await this.#discoverRoot(root, agent, grouped);
+      await this.#discoverRoot(root, agent, grouped, false, maxDepth);
     }
     for (const root of options?.additionalRoots ?? []) {
       if (typeof root !== "string" || root.trim() === "") continue;
@@ -729,8 +763,31 @@ export class SecurityScannerService {
         true,
       );
     }
-    const deduplicated = new Map<string, TrustedSkill>();
+    // Discovery dedupe is two-tier so a page refresh never reads every Skill
+    // file back from disk just to re-derive identities:
+    //   1. a cheap structural fingerprint (relative paths + byte sizes only,
+    //      no content reads) partitions the discovered copies;
+    //   2. only collisions — identical layouts, typically the same Skill
+    //      copied across Agents, or same-shape content that differs — fall
+    //      back to the bounded full-content fingerprint used by scan reports.
+    // The final partition is equivalent to hashing every file up front:
+    // identical content implies an identical tree (same relative paths and
+    // sizes), so it always collides and is confirmed by tier 2; content that
+    // differs under the same layout is separated again by the tier-2 hash.
+    const fingerprintGroups = new Map<string, TrustedSkill[]>();
+    const unresolved: TrustedSkill[] = [];
     for (const value of grouped.values()) {
+      const fingerprint = await this.#structuralFingerprint(value.root);
+      if (fingerprint == null) {
+        unresolved.push(value);
+        continue;
+      }
+      const members = fingerprintGroups.get(fingerprint);
+      if (members) members.push(value);
+      else fingerprintGroups.set(fingerprint, [value]);
+    }
+    const deduplicated = new Map<string, TrustedSkill>();
+    const mergeByFullFingerprint = async (value: TrustedSkill) => {
       let key = `name:${value.target.name.trim().toLocaleLowerCase()}`;
       try {
         // Discovery metadata intentionally stays path-free, so use the same
@@ -745,7 +802,7 @@ export class SecurityScannerService {
       const existing = deduplicated.get(key);
       if (!existing) {
         deduplicated.set(key, value);
-        continue;
+        return;
       }
       const agents = [
         ...new Set([...existing.target.agents, ...value.target.agents]),
@@ -763,7 +820,19 @@ export class SecurityScannerService {
               : value.target.modifiedAt,
         },
       });
+    };
+    // Unique fingerprints cannot collide with any other copy; keep them as-is
+    // without reading file contents back from disk.
+    for (const members of fingerprintGroups.values()) {
+      if (members.length === 1) {
+        deduplicated.set(`ref:${members[0]!.target.skillRef}`, members[0]!);
+        continue;
+      }
+      for (const member of members) await mergeByFullFingerprint(member);
     }
+    // Roots whose structural pass failed (unreadable) keep the legacy full
+    // collect / name-fallback merge so they stay discoverable.
+    for (const member of unresolved) await mergeByFullFingerprint(member);
     for (const value of deduplicated.values())
       this.#trusted.set(value.target.skillRef, value);
     return [...deduplicated.values()]
@@ -1277,6 +1346,7 @@ export class SecurityScannerService {
     agent: string,
     output: Map<string, TrustedSkill>,
     includeRoot = false,
+    maxDepth = DEFAULT_DISCOVERY_DEPTH,
   ): Promise<void> {
     if (includeRoot && (await this.#findMarker(root))) {
       let details;
@@ -1338,7 +1408,10 @@ export class SecurityScannerService {
               source: "discovered",
             },
           });
-        } else if (depth + 1 < 3) await visit(entry.path, depth + 1);
+          // Depth bound mirrors the catalog scanner's per-agent maxDepth so the
+          // security engine discovers exactly the Skills the Skill management
+          // workspace manages (WorkBuddy nests deeper than the old fixed 3).
+        } else if (depth + 1 < maxDepth) await visit(entry.path, depth + 1);
       }
     };
     await visit(root, 0);
@@ -1354,6 +1427,83 @@ export class SecurityScannerService {
       }
     }
     return null;
+  }
+
+  /**
+   * Cheap structural fingerprint used to partition discovered copies before
+   * the expensive full-content dedupe. Mirrors `#collect`'s traversal bounds
+   * (sorted order, depth cap, 500-file cap, 20 MB cumulative byte cap) but
+   * reads only directory metadata — never file content — so a discovery pass
+   * costs a handful of `lstat` calls per Skill instead of re-reading every
+   * file. Identical copies always produce the same fingerprint; copies that
+   * merely share a layout are separated again by the tier-2 content hash.
+   * Returns `null` when the root cannot be resolved, so the caller can fall
+   * back to the legacy full-collect merge.
+   */
+  async #structuralFingerprint(root: string): Promise<string | null> {
+    let rootReal: string;
+    try {
+      rootReal = await realpath(root);
+    } catch {
+      return null;
+    }
+    const hash = createHash("sha256");
+    let fileCount = 0;
+    let totalBytes = 0;
+    let fileLimitReached = false;
+    const visit = async (directory: string, depth: number): Promise<void> => {
+      let handle;
+      try {
+        handle = await opendir(directory);
+      } catch {
+        return;
+      }
+      const entries: Array<{ name: string; path: string }> = [];
+      for await (const entry of handle)
+        entries.push({ name: entry.name, path: join(directory, entry.name) });
+      entries.sort((left, right) => left.name.localeCompare(right.name));
+      for (const entry of entries) {
+        if (fileLimitReached) return;
+        const relativePath = relative(rootReal, entry.path)
+          .split(sep)
+          .join("/");
+        // Same hard failure as #collect: an unsafe entry invalidates the whole
+        // skill, so defer to the full-collect/name-fallback path.
+        if (!isSafeRelativePath(relativePath)) {
+          throw new Error("Unsafe Skill entry path");
+        }
+        let details;
+        try {
+          details = await lstat(entry.path);
+        } catch {
+          continue;
+        }
+        if (details.isSymbolicLink()) continue;
+        if (details.isDirectory()) {
+          if (depth >= MAX_DEPTH) continue;
+          const directoryReal = await realpath(entry.path).catch(() => null);
+          if (directoryReal == null || !isWithin(rootReal, directoryReal))
+            continue;
+          await visit(directoryReal, depth + 1);
+          continue;
+        }
+        if (!details.isFile()) continue;
+        if (fileCount >= MAX_FILES) {
+          fileLimitReached = true;
+          return;
+        }
+        totalBytes += details.size;
+        if (totalBytes > MAX_TOTAL_BYTES) continue;
+        hash.update(relativePath).update("\0").update(String(details.size));
+        fileCount += 1;
+      }
+    };
+    try {
+      await visit(rootReal, 0);
+    } catch {
+      return null;
+    }
+    return hash.digest("hex");
   }
 
   async #matchesSkillName(root: string, requested: string): Promise<boolean> {

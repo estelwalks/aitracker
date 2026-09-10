@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Locale } from "../../../lib/i18n/locale.ts";
+import { SECURITY_SCAN_COMPLETED_EVENT } from "../../security-assessment/index.ts";
 import {
   getDashboardSnapshotStatus,
   getDashboardSummaryReadModel,
@@ -46,6 +47,25 @@ export function useDashboardSummary(locale: Locale) {
   useEffect(() => {
     lastHandledStatus.current = null;
   }, [locale]);
+
+  // The security overview is part of the server-composed summary now; when a
+  // scan completes elsewhere, mark it stale so the next dashboard read carries
+  // the fresh counts instead of the pre-scan ones.
+  useEffect(() => {
+    const onScanCompleted = () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["dashboard-summary"],
+        exact: true,
+      });
+    };
+    window.addEventListener(SECURITY_SCAN_COMPLETED_EVENT, onScanCompleted);
+    return () => {
+      window.removeEventListener(
+        SECURITY_SCAN_COMPLETED_EVENT,
+        onScanCompleted,
+      );
+    };
+  }, [queryClient]);
 
   const summaryQuery = useQuery({
     queryKey: ["dashboard-summary", locale],

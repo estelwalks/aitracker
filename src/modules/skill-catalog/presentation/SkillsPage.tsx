@@ -59,6 +59,7 @@ import {
   getDesktopSecurityClient,
   isScanActive,
   SECURITY_SCAN_STARTED_EVENT,
+  type SecurityOverviewReadModel,
   type SecuritySkillVerdictReadModel,
 } from "../../security-assessment/index.ts";
 
@@ -74,6 +75,13 @@ export type SkillsPageProps = {
   showToolOverview?: boolean;
   /** Real security-detection summary (skill name → risk-finding count). */
   security?: SkillsSecurityView;
+  /**
+   * Canonical security overview resolved by the route loader — the same
+   * server-composed model the dashboard posture cards read, so Skill
+   * management and the homepage always agree. null/undefined = engine
+   * unavailable or a legacy caller: KPIs fall back to snapshot totals.
+   */
+  securityOverview?: SecurityOverviewReadModel | null;
   /** Latest safe-scan verdict per Skill, used by the Agent overview KPI. */
   securityVerdicts?: SecuritySkillVerdictReadModel;
   /** Real distillation activity for the KPI row + banner. */
@@ -102,6 +110,7 @@ export function SkillsPage({
   showWorkspace = true,
   showToolOverview = true,
   security,
+  securityOverview,
   securityVerdicts,
   distillation,
 }: SkillsPageProps) {
@@ -312,20 +321,27 @@ export function SkillsPage({
               ? "prompt"
               : "all";
 
-  const securitySummary = security
-    ? {
-        scannedCount: security.byName.size,
-        riskCount: [...security.byName.values()].reduce(
-          (total, count) => total + count,
-          0,
-        ),
-      }
+  // Content-unique asset basis shared with the dashboard security posture.
+  // The overview arrives server-composed with the route loader, so there is
+  // no pending state here: when no engine exists (overview unavailable) the
+  // KPIs fall back to the snapshot's name-based totals.
+  const securityScanAvailable = securityOverview?.available === true;
+  const scannedTotal = securityScanAvailable
+    ? (securityOverview!.totalSkills ?? 0)
     : null;
+  const scannedCount = securityScanAvailable
+    ? (securityOverview!.coverage ?? 0)
+    : null;
+  const unsafeCount =
+    securityScanAvailable && securityOverview!.summary != null
+      ? securityOverview!.summary!.suspiciousCount +
+        securityOverview!.summary!.dangerousCount +
+        securityOverview!.summary!.unknownCount +
+        securityOverview!.summary!.failedAssetCount
+      : null;
   const securityCoveragePct =
-    summary.skillCount > 0
-      ? Math.round(
-          ((securitySummary?.scannedCount ?? 0) / summary.skillCount) * 100,
-        )
+    scannedTotal != null && scannedCount != null && scannedTotal > 0
+      ? Math.round((scannedCount / scannedTotal) * 100)
       : 0;
 
   const assets = useMemo(() => {
@@ -694,10 +710,19 @@ export function SkillsPage({
             {[
               {
                 label: t("skills.kpi.localSkills"),
-                value: format.formatNumber(summary.skillCount),
-                hint: t("skills.kpi.localSkillsHint", {
-                  count: format.formatNumber(summary.installationCount),
-                }),
+                // Content-deduplicated asset total (identical copies across
+                // Agents merge) — the same number the dashboard posture card
+                // uses as its denominator. Name-based fallback only when no
+                // security engine exists.
+                value: format.formatNumber(scannedTotal ?? summary.skillCount),
+                hint: securityScanAvailable
+                  ? t("skills.kpi.localAssetsHint", {
+                      names: format.formatNumber(summary.skillCount),
+                      installs: format.formatNumber(summary.installationCount),
+                    })
+                  : t("skills.kpi.localSkillsHint", {
+                      count: format.formatNumber(summary.installationCount),
+                    }),
               },
               {
                 label: t("skills.kpi.distilled"),
@@ -710,9 +735,9 @@ export function SkillsPage({
               {
                 label: t("skills.kpi.detected"),
                 value:
-                  securitySummary == null
+                  scannedCount == null
                     ? "—"
-                    : format.formatNumber(securitySummary.scannedCount),
+                    : format.formatNumber(scannedCount),
                 hint: t("skills.kpi.detectedHint", {
                   pct: format.formatNumber(securityCoveragePct),
                 }),
@@ -720,11 +745,9 @@ export function SkillsPage({
               {
                 label: t("skills.kpi.risks"),
                 value:
-                  securitySummary == null
-                    ? "—"
-                    : format.formatNumber(securitySummary.riskCount),
+                  unsafeCount == null ? "—" : format.formatNumber(unsafeCount),
                 hint:
-                  securitySummary != null && securitySummary.riskCount > 0
+                  unsafeCount != null && unsafeCount > 0
                     ? t("skills.kpi.risksHint")
                     : t("skills.kpi.risksHintClean"),
               },

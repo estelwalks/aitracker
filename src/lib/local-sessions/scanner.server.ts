@@ -178,7 +178,11 @@ function mergeTerminalStatus(
 }
 
 function timestampFromMs(ms: number): RecordTimestamp {
-  return { ms, iso: new Date(ms).toISOString() };
+  // SQLite epoch timestamps can carry sub-millisecond precision (REAL
+  // seconds); JavaScript dates only keep whole milliseconds and the persisted
+  // session projection stores INTEGER columns, so round once at the boundary.
+  const wholeMs = Math.round(ms);
+  return { ms: wholeMs, iso: new Date(wholeMs).toISOString() };
 }
 
 function parseTimestampValue(value: unknown): RecordTimestamp | undefined {
@@ -2531,6 +2535,603 @@ registerSessionReader({
   key: "omp-session-v1",
   scan: scanOmpSessions,
   defaultRoots: [".omp", ".oh-my-pi"],
+});
+
+// Hermes Agent — state.db (SQLite) at the Hermes data root: the default
+// profile plus `profiles/<name>/state.db` (portable HERMES_HOME layouts),
+// mirroring the generic-sqlite usage adapter and its multi-profile glob.
+// ---------------------------------------------------------------------------
+
+async function collectHermesStateDatabases(
+  hermesDirectory: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const databases: string[] = [];
+  const pushIfFile = async (candidate: string): Promise<void> => {
+    signal?.throwIfAborted();
+    try {
+      const info = await stat(candidate);
+      if (info.isFile()) databases.push(candidate);
+    } catch {
+      // A missing database is an empty profile, never an error.
+    }
+  };
+  await pushIfFile(join(hermesDirectory, "state.db"));
+  const profilesRoot = join(hermesDirectory, "profiles");
+  if (!(await directoryAvailable(profilesRoot))) return databases;
+  let scanned = 0;
+  let directory;
+  try {
+    directory = await opendir(profilesRoot);
+  } catch {
+    return databases;
+  }
+  try {
+    for await (const entry of directory) {
+      signal?.throwIfAborted();
+      if (scanned >= MAX_DIRECTORY_ENTRIES) break;
+      scanned += 1;
+      if (!entry.isDirectory()) continue;
+      await pushIfFile(join(profilesRoot, entry.name, "state.db"));
+    }
+  } finally {
+    await directory.close().catch(() => undefined);
+  }
+  return databases;
+}
+
+interface HermesMessageStats {
+  users: number;
+  firstUserText: string | undefined;
+  firstAtMs: number | undefined;
+  lastAtMs: number | undefined;
+}
+
+/** Best-effort user-message stats; null when the messages table is unusable. */
+function hermesMessageStats(
+  database: DatabaseSync,
+  sessionId: string,
+): HermesMessageStats | null {
+  try {
+    const countRow = database
+      .prepare(
+        `SELECT COUNT(*) AS n
+         FROM messages
+         WHERE session_id = ? AND role = 'user'`,
+      )
+      .get(sessionId) as { n?: unknown } | undefined;
+    const boundsRow = database
+      .prepare(
+        `SELECT MIN(timestamp) AS minTs, MAX(timestamp) AS maxTs
+         FROM messages
+         WHERE session_id = ?`,
+      )
+      .get(sessionId) as { minTs?: unknown; maxTs?: unknown } | undefined;
+    const firstRow = database
+      .prepare(
+        `SELECT content
+         FROM messages
+         WHERE session_id = ? AND role = 'user' AND content IS NOT NULL
+         ORDER BY timestamp ASC, id ASC
+         LIMIT 1`,
+      )
+      .get(sessionId) as { content?: unknown } | undefined;
+    return {
+      users: Number(countRow?.n ?? 0),
+      firstUserText: hermesUserTitleText(firstRow?.content),
+      firstAtMs: hermesEpochSecondsToMs(boundsRow?.minTs),
+      lastAtMs: hermesEpochSecondsToMs(boundsRow?.maxTs),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Hermes stores epoch seconds (REAL) in SQLite; convert with a sane range. */
+function hermesEpochSecondsToMs(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return value < 1e12 ? Math.round(value * 1_000) : Math.round(value);
+}
+
+/**
+ * Reduce the first user message to a display-safe fallback title. Hermes
+ * stores content either as plain text or as a serialized JSON block array.
+ */
+function hermesUserTitleText(value: unknown): string | undefined {
+  if (typeof value !== "string") return safeFallbackTitle(value);
+  const trimmed = value.trim();
+  if (
+    trimmed.length > 0 &&
+    (trimmed.startsWith("[") || trimmed.startsWith("{"))
+  ) {
+    try {
+      return safeFallbackTitle(JSON.parse(trimmed) as unknown);
+    } catch {
+      // Fall through to the raw string treatment below.
+    }
+  }
+  return safeFallbackTitle(trimmed);
+}
+
+async function scanHermesSessions(
+  hermesDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  const databases = await collectHermesStateDatabases(hermesDirectory, signal);
+  const fragments = new Map<string, SessionFragment>();
+  for (const databasePath of databases) {
+    signal?.throwIfAborted();
+    let database: DatabaseSync | undefined;
+    try {
+      database = new DatabaseSync(databasePath, { readOnly: true });
+      const rows = database
+        .prepare(
+          `SELECT id, model, title, display_name, started_at, ended_at,
+                  last_activity_at, cwd, input_tokens, output_tokens,
+                  cache_read_tokens, cache_write_tokens, reasoning_tokens
+           FROM sessions`,
+        )
+        .all() as Array<Record<string, unknown>>;
+      for (const row of rows) {
+        const sessionId = stringValue(row.id);
+        const startedAt = parseTimestampValue(row.started_at);
+        if (sessionId == null || startedAt == null) continue;
+        let fragment = fragments.get(sessionId);
+        if (fragment == null) {
+          fragment = createEmptyFragment("hermes", sessionId);
+          fragments.set(sessionId, fragment);
+        }
+        const explicitTitle =
+          stringValue(row.title) ?? stringValue(row.display_name);
+        if (fragment.title === "" && explicitTitle != null) {
+          fragment.title = explicitTitle;
+        }
+        if (fragment.model == null) {
+          const model = stringValue(row.model);
+          if (model != null) fragment.model = model;
+        }
+        if (fragment.projectRef == null) {
+          const cwd = stringValue(row.cwd);
+          if (cwd != null) fragment.projectRef = cwd;
+        }
+        fragment.timestamps.push(startedAt);
+        const endedAt = parseTimestampValue(
+          row.ended_at ?? row.last_activity_at,
+        );
+        if (endedAt != null) fragment.timestamps.push(endedAt);
+        const inputTokens = tokenValue(row.input_tokens);
+        const cachedInputTokens = tokenValue(row.cache_read_tokens);
+        const cacheCreationInputTokens = tokenValue(row.cache_write_tokens);
+        const outputTokens = tokenValue(row.output_tokens);
+        const reasoningOutputTokens = tokenValue(row.reasoning_tokens);
+        addTokenCounts(fragment.totals, {
+          inputTokens,
+          cachedInputTokens,
+          cacheCreationInputTokens,
+          outputTokens,
+          reasoningOutputTokens,
+          totalTokens:
+            inputTokens +
+            cachedInputTokens +
+            cacheCreationInputTokens +
+            outputTokens +
+            reasoningOutputTokens,
+        });
+        const stats = hermesMessageStats(database, sessionId);
+        if (stats != null) {
+          fragment.turns += stats.users;
+          if (stats.firstAtMs != null && stats.lastAtMs != null) {
+            // Bound the record with real message activity so an in-flight
+            // session (ended_at NULL) is not reported with a zero duration.
+            fragment.timestamps.push(
+              timestampFromMs(stats.firstAtMs),
+              timestampFromMs(stats.lastAtMs),
+            );
+          }
+          if (fragment.fallbackTitle === "" && stats.firstUserText != null) {
+            fragment.fallbackTitle = stats.firstUserText;
+          }
+        }
+        fragment.resumeSupported = false;
+      }
+    } catch {
+      // An unreadable or locked database is an empty source, never an error.
+    } finally {
+      database?.close();
+    }
+  }
+
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
+}
+
+// WorkBuddy — one JSONL conversation per session under
+// `~/.workbuddy/projects/<project>/<conversation>.jsonl`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-record token math mirroring the workbuddy usage adapter
+ * (`workbuddyEventFromRecord` in local-usage/scanner.server.ts) so session
+ * totals and usage events never disagree for the same rawUsage record.
+ */
+function workbuddyUsageTokens(
+  record: JsonObject,
+): SessionTokenCounts | undefined {
+  const providerData = asObject(record.providerData);
+  const rawUsage = asObject(providerData?.rawUsage);
+  if (rawUsage == null) return undefined;
+  const promptDetails = asObject(rawUsage.prompt_tokens_details);
+  const completionDetails = asObject(rawUsage.completion_tokens_details);
+  const promptTokens = tokenValue(rawUsage.prompt_tokens);
+  const completionTokens = tokenValue(rawUsage.completion_tokens);
+  const cachedInputTokens = Math.max(
+    tokenValue(rawUsage.cache_read_input_tokens),
+    tokenValue(promptDetails?.cached_tokens),
+    tokenValue(rawUsage.prompt_cache_hit_tokens),
+  );
+  const cacheCreationInputTokens = tokenValue(
+    rawUsage.cache_creation_input_tokens,
+  );
+  const inputTokens = Math.max(
+    0,
+    promptTokens - cachedInputTokens - cacheCreationInputTokens,
+  );
+  const reasoningOutputTokens = Math.min(
+    completionTokens,
+    Math.max(
+      tokenValue(completionDetails?.reasoning_tokens),
+      tokenValue(rawUsage.completion_thinking_tokens),
+    ),
+  );
+  const outputTokens = Math.max(0, completionTokens - reasoningOutputTokens);
+  const totalTokens =
+    inputTokens +
+    cachedInputTokens +
+    cacheCreationInputTokens +
+    outputTokens +
+    reasoningOutputTokens;
+  if (totalTokens === 0) return undefined;
+  return {
+    inputTokens,
+    cachedInputTokens,
+    cacheCreationInputTokens,
+    outputTokens,
+    reasoningOutputTokens,
+    totalTokens,
+  };
+}
+
+function workbuddySessionIdFromFileName(filePath: string): string | undefined {
+  const name = basename(filePath);
+  const stem = name.endsWith(".jsonl") ? name.slice(0, -".jsonl".length) : name;
+  return stringValue(stem);
+}
+
+async function scanWorkbuddySessions(
+  workbuddyDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  const projectsRoot = join(workbuddyDirectory, "projects");
+  const files = await collectJsonlFiles([projectsRoot], () => true, signal);
+  const fragments = new Map<string, SessionFragment>();
+
+  for (const file of files) {
+    signal?.throwIfAborted();
+    let sessionId: string | undefined;
+    const fallbackSessionId = workbuddySessionIdFromFileName(file.path);
+    let explicitTitle: string | undefined;
+    let fallbackTitle: string | undefined;
+    let projectRef: string | null = null;
+    let lastModel: string | null = null;
+    let userTurns = 0;
+    let assistantMessages = 0;
+    const timestamps: RecordTimestamp[] = [];
+    const totals = emptyTokenCounts();
+    const seenResponseIds = new Set<string>();
+
+    await readJsonLines(file.path, (record) => {
+      signal?.throwIfAborted();
+      const ts = parseTimestampValue(record.timestamp);
+      if (ts != null) timestamps.push(ts);
+      if (sessionId === undefined) {
+        sessionId = stringValue(record.sessionId);
+      }
+      if (projectRef === null) {
+        projectRef = stringValue(record.cwd) ?? null;
+      }
+      const providerData = asObject(record.providerData);
+      const model =
+        stringValue(providerData?.requestModelName) ??
+        stringValue(providerData?.requestModelId) ??
+        stringValue(providerData?.model);
+      if (model != null) lastModel = model;
+      if (stringValue(record.type) === "ai-title") {
+        const aiTitle = stringValue(record.aiTitle);
+        if (aiTitle != null) explicitTitle ??= aiTitle;
+      }
+      const role = stringValue(record.role);
+      if (role === "user") {
+        userTurns += 1;
+        if (fallbackTitle === undefined) {
+          fallbackTitle = safeFallbackTitle(record.content);
+        }
+        return;
+      }
+      if (role === "assistant") {
+        assistantMessages += 1;
+      }
+      const responseId =
+        stringValue(record.id) ??
+        stringValue(providerData?.messageId) ??
+        `${stringValue(record.sessionId) ?? fallbackSessionId ?? file.path}:${String(record.timestamp)}`;
+      if (seenResponseIds.has(responseId)) return;
+      const usage = workbuddyUsageTokens(record);
+      if (usage == null) return;
+      seenResponseIds.add(responseId);
+      addTokenCounts(totals, usage);
+    });
+
+    if (sessionId === undefined) sessionId = fallbackSessionId;
+    if (sessionId === undefined || sessionId === "") continue;
+    // Skip files without any recoverable conversation metadata.
+    if (
+      userTurns === 0 &&
+      assistantMessages === 0 &&
+      explicitTitle === undefined &&
+      fallbackTitle === undefined &&
+      timestamps.length === 0
+    ) {
+      continue;
+    }
+    if (fragments.has(sessionId)) continue;
+    const fragment = createEmptyFragment("workbuddy", sessionId);
+    if (explicitTitle != null) fragment.title = explicitTitle;
+    if (projectRef != null) fragment.projectRef = projectRef;
+    if (lastModel != null) fragment.model = lastModel;
+    if (fallbackTitle != null) fragment.fallbackTitle = fallbackTitle;
+    fragment.timestamps.push(...timestamps);
+    addTokenCounts(fragment.totals, totals);
+    fragment.turns += userTurns > 0 ? userTurns : assistantMessages;
+    fragment.resumeSupported = false;
+    fragments.set(sessionId, fragment);
+  }
+
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
+}
+
+// ZCode — one SQLite database at `~/.zcode/cli/db/db.sqlite` holds sessions,
+// usage rows (`model_usage`) and messages (`message`/`part`). Child sessions
+// (subagent/agent runs linked by `session.parent_id`) are folded into their
+// top-level parent so the list shows one conversation per user session while
+// per-session token totals still cover the full subtree. ZCode stores usage
+// columns as epoch-millisecond INTEGERs and `message.data` as JSON text whose
+// `role` is read via `json_extract` — never the prompt/response bodies.
+// ---------------------------------------------------------------------------
+
+/** Clamp DB-authored session titles (a subagent prompt can be very long). */
+const ZCODE_TITLE_MAX_LENGTH = 200;
+
+interface ZcodeSessionUsageRow {
+  sessionId: string;
+  modelId: string | null;
+  startedAt: unknown;
+  completedAt: unknown;
+  inputTokens: unknown;
+  outputTokens: unknown;
+  reasoningTokens: unknown;
+  cacheCreationTokens: unknown;
+  cacheReadTokens: unknown;
+}
+
+async function scanZcodeSessions(
+  zcodeDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  signal?.throwIfAborted();
+  const databasePath = join(zcodeDirectory, "cli", "db", "db.sqlite");
+  let database: DatabaseSync | undefined;
+  try {
+    const databaseStat = await stat(databasePath);
+    if (!databaseStat.isFile()) return [];
+    database = new DatabaseSync(databasePath, { readOnly: true });
+  } catch {
+    database?.close();
+    return [];
+  }
+
+  try {
+    // Parentless sessions are top-level conversation records. Children are
+    // processed separately so orphaned rows can be skipped defensively.
+    const sessionRows = database
+      .prepare(
+        `SELECT id, parent_id, title, directory,
+                time_created, time_updated
+         FROM session
+         WHERE id IS NOT NULL AND id <> ''`,
+      )
+      .all() as Array<Record<string, unknown>>;
+    const byId = new Map<string, Record<string, unknown>>();
+    const childrenByParent = new Map<string, string[]>();
+    for (const row of sessionRows) {
+      const sessionId = stringValue(row.id);
+      if (sessionId == null) continue;
+      byId.set(sessionId, row);
+      const parentId = stringValue(row.parent_id);
+      if (parentId == null || parentId === sessionId) continue;
+      if (byId.has(parentId)) {
+        const list = childrenByParent.get(parentId) ?? [];
+        list.push(sessionId);
+        childrenByParent.set(parentId, list);
+      }
+    }
+
+    const fragments = new Map<string, SessionFragment>();
+    const ensureFragment = (sessionId: string): SessionFragment => {
+      let fragment = fragments.get(sessionId);
+      if (fragment == null) {
+        fragment = createEmptyFragment("zcode", sessionId);
+        fragments.set(sessionId, fragment);
+      }
+      return fragment;
+    };
+
+    // One row per provider request: totals, activity bounds and the first
+    // model used are accumulated per session subtree below.
+    const usageRows = database
+      .prepare(
+        `SELECT session_id, model_id, started_at, completed_at,
+                input_tokens, output_tokens, reasoning_tokens,
+                cache_creation_input_tokens, cache_read_input_tokens
+         FROM model_usage
+         WHERE session_id IS NOT NULL AND session_id <> ''
+         ORDER BY COALESCE(completed_at, started_at) ASC`,
+      )
+      .all() as Array<Record<string, unknown>>;
+    const usageBySession = new Map<string, ZcodeSessionUsageRow[]>();
+    for (const row of usageRows) {
+      signal?.throwIfAborted();
+      const sessionId = stringValue(row.session_id);
+      if (sessionId == null || !byId.has(sessionId)) continue;
+      const list = usageBySession.get(sessionId) ?? [];
+      list.push({
+        sessionId,
+        modelId: stringValue(row.model_id) ?? null,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+        inputTokens: row.input_tokens,
+        outputTokens: row.output_tokens,
+        reasoningTokens: row.reasoning_tokens,
+        cacheCreationTokens: row.cache_creation_input_tokens,
+        cacheReadTokens: row.cache_read_input_tokens,
+      });
+      usageBySession.set(sessionId, list);
+    }
+
+    // User-turn counts (never content) per session from the message table.
+    const userTurnCounts = new Map<string, number>();
+    for (const row of database
+      .prepare(
+        `SELECT session_id, COUNT(*) AS n
+         FROM message
+         WHERE json_extract(data, '$.role') = 'user'
+         GROUP BY session_id`,
+      )
+      .all() as Array<Record<string, unknown>>) {
+      const sessionId = stringValue(row.session_id);
+      const count = Number(row.n);
+      if (sessionId != null && Number.isFinite(count) && count > 0) {
+        userTurnCounts.set(sessionId, count);
+      }
+    }
+
+    const foldIntoFragment = (
+      fragment: SessionFragment,
+      sessionId: string,
+      usage: readonly ZcodeSessionUsageRow[] | undefined,
+    ): void => {
+      const row = byId.get(sessionId);
+      if (row == null) return;
+      if (fragment.title === "") {
+        const title = stringValue(row.title);
+        if (title != null) {
+          fragment.title = Array.from(title)
+            .slice(0, ZCODE_TITLE_MAX_LENGTH)
+            .join("");
+        }
+      }
+      if (fragment.projectRef == null) {
+        fragment.projectRef = stringValue(row.directory) ?? null;
+      }
+      for (const value of [row.time_created, row.time_updated]) {
+        const timestamp = parseTimestampValue(value);
+        if (timestamp != null) fragment.timestamps.push(timestamp);
+      }
+      fragment.turns += userTurnCounts.get(sessionId) ?? 0;
+      for (const entry of usage ?? []) {
+        if (fragment.model == null && entry.modelId != null) {
+          fragment.model = entry.modelId;
+        }
+        const startedAt = parseTimestampValue(entry.startedAt);
+        const completedAt = parseTimestampValue(entry.completedAt);
+        if (startedAt != null) fragment.timestamps.push(startedAt);
+        if (completedAt != null) fragment.timestamps.push(completedAt);
+        const inputTokens = tokenValue(entry.inputTokens);
+        const outputTokens = tokenValue(entry.outputTokens);
+        const reasoningTokens = tokenValue(entry.reasoningTokens);
+        const cachedInputTokens = tokenValue(entry.cacheReadTokens);
+        const cacheCreationTokens = tokenValue(entry.cacheCreationTokens);
+        // ZCode provider totals are `input + output` where `input_tokens`
+        // already contains cached input and `output_tokens` already contains
+        // reasoning (DeepSeek-style). Decompose like the usage adapter so the
+        // components never double count and per-session totals equal the
+        // dashboard's per-session usage sums.
+        const freshInputTokens = Math.max(
+          0,
+          inputTokens - cachedInputTokens - cacheCreationTokens,
+        );
+        const textOutputTokens = Math.max(0, outputTokens - reasoningTokens);
+        addTokenCounts(fragment.totals, {
+          inputTokens: freshInputTokens,
+          outputTokens: textOutputTokens,
+          cachedInputTokens,
+          cacheCreationInputTokens: cacheCreationTokens,
+          reasoningOutputTokens: reasoningTokens,
+          totalTokens:
+            freshInputTokens +
+            cachedInputTokens +
+            cacheCreationTokens +
+            textOutputTokens +
+            reasoningTokens,
+        });
+      }
+    };
+
+    for (const sessionId of byId.keys()) {
+      signal?.throwIfAborted();
+      const parent = byId.get(sessionId);
+      // Children are folded into their parent (orphan child rows are skipped).
+      if (parent == null || stringValue(parent.parent_id) != null) continue;
+      const fragment = ensureFragment(sessionId);
+      const usage = usageBySession.get(sessionId);
+      foldIntoFragment(fragment, sessionId, usage);
+      fragment.subagentCalls += (childrenByParent.get(sessionId) ?? []).length;
+      fragment.resumeSupported = false;
+      for (const childId of childrenByParent.get(sessionId) ?? []) {
+        signal?.throwIfAborted();
+        foldIntoFragment(fragment, childId, usageBySession.get(childId));
+      }
+    }
+
+    return Promise.all(
+      [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+    );
+  } catch {
+    // An unreadable or locked database is an empty source, never an error.
+    return [];
+  } finally {
+    database.close();
+  }
+}
+
+registerSessionReader({
+  key: "zcode-session-v1",
+  scan: scanZcodeSessions,
+  defaultRoots: [".zcode"],
+});
+registerSessionReader({
+  key: "hermes-session-v1",
+  scan: scanHermesSessions,
+  defaultRoots: [".hermes"],
+});
+registerSessionReader({
+  key: "workbuddy-session-v1",
+  scan: scanWorkbuddySessions,
+  defaultRoots: [".workbuddy"],
 });
 /**
  * Scan every registry-declared session tool and return a merged, deduplicated,

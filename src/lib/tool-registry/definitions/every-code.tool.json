@@ -16,12 +16,7 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
         "path": ".every-code"
       }
@@ -29,7 +24,18 @@
   },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "native",
+      "reader": "every-code-rollout-v1",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11"],
+          "base": "home",
+          "path": ".code/sessions",
+          "glob": "**/rollout-*.jsonl",
+          "format": "jsonl"
+        }
+      ],
+      "maxFileSizeBytes": 67108864
     },
     "skills": "unsupported",
     "agents": "unsupported",

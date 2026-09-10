@@ -16,12 +16,7 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
         "path": ".factory"
       }
@@ -29,7 +24,18 @@
   },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "native",
+      "reader": "droid-settings-v1",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".factory/sessions",
+          "glob": "**/*.settings.json",
+          "format": "json"
+        }
+      ],
+      "maxFileSizeBytes": 67108864
     },
     "skills": "unsupported",
     "agents": "unsupported",

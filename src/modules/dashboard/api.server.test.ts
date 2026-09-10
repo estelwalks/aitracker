@@ -256,14 +256,16 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
     monthlyReports: { count: null, available: false },
   });
   // pi, omp and Hermes Agent gained usage readers (milestone v1.0.1), so the
-  // supported count grows by three over the frozen baseline.
+  // supported count grows by three over the frozen baseline; ZCode, Goose and
+  // Qoder CN (sqlite adapters) add three more; Zed (threads.db native reader)
+  // adds one more.
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport !== "unsupported").length,
-    23,
+    35,
   );
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport === "unsupported").length,
-    13,
+    1,
   );
 });
 

@@ -15,7 +15,6 @@ import {
   getDashboardToolWindow,
 } from "../summary-query.ts";
 import type { DashboardSnapshotStatus } from "../summary-query.ts";
-import { useSecurityScanOverview } from "../../security-assessment/index.ts";
 import {
   DashboardAgentWorkstreams,
   DashboardContribHeatmap,
@@ -80,7 +79,6 @@ export function DashboardV2Page({
   readonly onRetry: () => Promise<void>;
 }) {
   const { format, t } = useI18n();
-  const securityScan = useSecurityScanOverview();
   const [period, setPeriod] = useState<UsagePeriod>("30d");
   const initialStandardWindow = data.windows["30d"];
   // Date-only range inputs must use the same local calendar convention as
@@ -303,7 +301,7 @@ export function DashboardV2Page({
         today={today}
         hero={hero}
         security={data.monitoring?.security}
-        securityScan={securityScan}
+        securityScan={data.security}
       />
       {/* 时间范围：全页吸顶（与原型一致的横贯细条） */}
       <div className="dashboard-range-bar sticky top-0 z-30 -mx-[16px] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 bg-background px-[16px] py-2 md:-mx-[24px] md:px-[24px] 2xl:-mx-[32px] 2xl:px-[32px]">
@@ -354,7 +352,7 @@ export function DashboardV2Page({
         view={view}
         monitoring={hero.monitoring}
         security={data.monitoring?.security}
-        securityScan={securityScan}
+        securityScan={data.security}
         baselineLabel={baselineLabel}
       />
       <DashboardToolSwitcher

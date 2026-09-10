@@ -1,4 +1,5 @@
 import { realpath } from "node:fs/promises";
+import { posix } from "node:path";
 
 import {
   findNearestGitRepositoryRoot,
@@ -91,7 +92,7 @@ export function canonicalizeProjectIdentity(
   platform: NodeJS.Platform = process.platform,
 ): Promise<CanonicalProjectIdentity> {
   return canonicalizeProjectPathDetailsFor(
-    serverPathImplForPlatform(platform),
+    pathImplForRecordedProject(project, platform),
     project,
     homeDirectory,
   );
@@ -104,8 +105,26 @@ export function canonicalizeProjectPath(
   platform: NodeJS.Platform = process.platform,
 ): Promise<string> {
   return canonicalizeProjectPathFor(
-    serverPathImplForPlatform(platform),
+    pathImplForRecordedProject(project, platform),
     project,
     homeDirectory,
   );
+}
+
+/**
+ * Recorded project/cwd values keep the path semantics of the machine that
+ * produced them. A POSIX-style value such as `/Users/…` read on Windows must
+ * not be reinterpreted as a Windows root-relative path (`\Users\…`) — that
+ * would mangle projects imported from other machines and from fixtures. Real
+ * Windows values carry a drive letter or a native backslash form, so they are
+ * resolved with the win32 implementation regardless of this rule.
+ */
+function pathImplForRecordedProject(
+  project: string,
+  platform: NodeJS.Platform,
+): ProjectPathImpl {
+  if (platform === "win32" && project.startsWith("/")) {
+    return posix;
+  }
+  return serverPathImplForPlatform(platform);
 }

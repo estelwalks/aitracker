@@ -40,6 +40,8 @@ export const sources = {
   },
   scanning: "扫描中",
   rescan: "重新扫描",
+  refreshNow: "立即刷新",
+  refreshing: "刷新中",
   empty: {
     title: "没有匹配的工具",
     desc: "调整筛选条件或搜索关键词后重试。",

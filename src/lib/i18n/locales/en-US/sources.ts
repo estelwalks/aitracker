@@ -42,6 +42,8 @@ export const sources = {
   },
   scanning: "Scanning",
   rescan: "Rescan",
+  refreshNow: "Refresh now",
+  refreshing: "Refreshing…",
   empty: {
     title: "No matching tools",
     desc: "Adjust the filters or search keywords and try again.",

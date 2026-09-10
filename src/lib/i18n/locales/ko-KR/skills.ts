@@ -303,6 +303,8 @@ export const skills = {
     detected: "스캔됨",
     risks: "안전하지 않음",
     localSkillsHint: "{count}개 설치 위치에 배포",
+    localAssetsHint:
+      "내용 기준 중복 제거 · 이름 {names}개 · 설치 위치 {installs}개에 배포",
     distilledHint: "세션에서 추출",
     detectedHint: "커버리지 {pct}%",
     risksHint: "즉시 처리 권장",

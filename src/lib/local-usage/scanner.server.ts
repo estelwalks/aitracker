@@ -2,9 +2,18 @@ import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { opendir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { createInterface } from "node:readline";
 import { DatabaseSync } from "node:sqlite";
+import { zstdDecompressSync } from "node:zlib";
 
 import { ENV } from "../app-config";
 import {
@@ -86,8 +95,11 @@ const FUTURE_TIMESTAMP_TOLERANCE_MS =
 // events gain the new privacy-safe output aggregate instead of retaining a
 // stale "unobserved" capability. v17 adds per-file DSH append state
 // (prefixEnd/prefixHash/endsWithNewline/parserState) so appended frames of a
-// growing session log can be decoded without re-decoding the prefix.
-const PERSISTENT_CACHE_VERSION = 17;
+// growing session log can be decoded without re-decoding the prefix. v18 adds
+// the WAL companion signature (`wal`) to generic sqlite entries so a
+// WAL-mode database whose main file was not checkpointed yet is re-parsed
+// (fresh frames live in `db.sqlite-wal`, invisible to main-file mtime/size).
+const PERSISTENT_CACHE_VERSION = 18;
 /**
  * Fingerprint of the tool-registry config that produced this cache. A config
  * change (paths, reader, command, pricing-rule set, or any JSON definition)
@@ -104,6 +116,14 @@ interface FileCandidate {
   path: string;
   modifiedAt: number;
   size: number;
+  /**
+   * Signature of the `-wal` companion for sqlite candidates: `null` when no
+   * WAL file exists, omitted for non-sqlite files. WAL-mode databases can
+   * grow their `-wal` file (new usage rows) while the main database file
+   * keeps its mtime/size until the next checkpoint, so cache reuse must also
+   * compare the WAL signature.
+   */
+  wal?: { modifiedAt: number; size: number } | null;
 }
 
 interface SourceScanResult {
@@ -169,6 +189,13 @@ interface PersistentFileEntryBase {
   mtimeMs: number;
   size: number;
   malformedLines: number;
+  /**
+   * WAL companion signature for sqlite-based entries: `null` when the source
+   * database had no `-wal` file when parsed; absent for non-sqlite entries.
+   * Cache reuse compares it so fresh WAL frames trigger a re-parse even when
+   * the main database file has not been checkpointed (mtime/size unchanged).
+   */
+  wal?: { mtimeMs: number; size: number } | null;
 }
 
 interface PersistentClaudeFileEntry extends PersistentFileEntryBase {
@@ -176,8 +203,15 @@ interface PersistentClaudeFileEntry extends PersistentFileEntryBase {
   claudeEvents: CachedClaudeEvent[];
 }
 
+/**
+ * Codex-family rollout sources: OpenAI Codex (`~/.codex/sessions`) and the
+ * Every Code CLI, which persists the same rollout JSONL layout under
+ * `~/.code/sessions`. Both share one controlled parser (`scanCodexFamily`).
+ */
+type RolloutSource = "codex" | "every-code";
+
 interface PersistentCodexFileEntry extends PersistentFileEntryBase {
-  source: "codex";
+  source: RolloutSource;
   events: LocalUsageEvent[];
 }
 
@@ -404,6 +438,23 @@ function isCachedContext(value: unknown): boolean {
   return true;
 }
 
+/**
+ * Decode the persisted `wal` field: `null` means "no WAL companion existed",
+ * a valid signature object is trusted for cache reuse, and malformed values
+ * degrade to `undefined` (untrusted — the file is re-parsed once).
+ */
+function cachedWalSignature(
+  value: unknown,
+): { mtimeMs: number; size: number } | null | undefined {
+  if (value === null) return null;
+  const wal = asObject(value);
+  if (wal == null) return undefined;
+  if (!nonNegativeNumber(wal.mtimeMs) || !nonNegativeNumber(wal.size)) {
+    return undefined;
+  }
+  return { mtimeMs: wal.mtimeMs, size: wal.size };
+}
+
 function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
   const entry = asObject(value);
   const path = stringValue(entry?.path);
@@ -418,6 +469,7 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
   ) {
     return undefined;
   }
+  const wal = cachedWalSignature(entry.wal);
 
   if (source === "claude-code") {
     if (!Array.isArray(entry.claudeEvents)) {
@@ -438,6 +490,7 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
       mtimeMs: entry.mtimeMs,
       size: entry.size,
       malformedLines: entry.malformedLines,
+      ...(wal !== undefined ? { wal } : {}),
       claudeEvents,
     };
   }
@@ -465,6 +518,7 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
       mtimeMs: entry.mtimeMs,
       size: entry.size,
       malformedLines: entry.malformedLines,
+      ...(wal !== undefined ? { wal } : {}),
       identifiedEvents,
       diagnostics: Array.isArray(entry.diagnostics)
         ? entry.diagnostics.filter(isCachedDiagnostic)
@@ -511,13 +565,14 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
   ) {
     return undefined;
   }
-  if (source === "codex") {
+  if (source === "codex" || source === "every-code") {
     return {
       source,
       path,
       mtimeMs: entry.mtimeMs,
       size: entry.size,
       malformedLines: entry.malformedLines,
+      ...(wal !== undefined ? { wal } : {}),
       events: entry.events,
     };
   }
@@ -541,6 +596,7 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
     mtimeMs: entry.mtimeMs,
     size: entry.size,
     malformedLines: entry.malformedLines,
+    ...(wal !== undefined ? { wal } : {}),
     events: entry.events,
     ...(identities == null ? {} : { identities }),
     diagnostics,
@@ -662,6 +718,47 @@ function fileSignatureMatches(
     entry.mtimeMs === candidate.modifiedAt &&
     entry.size === candidate.size
   );
+}
+
+/**
+ * WAL-companion freshness for sqlite candidates (non-sqlite files always
+ * match). WAL-mode databases append new frames to `db.sqlite-wal` while the
+ * main `db.sqlite` file keeps its mtime/size until the next checkpoint, so a
+ * matching main-file signature alone would silently serve stale cached
+ * events. A malformed/missing persisted signature never blocks a re-parse:
+ * it simply means the entry cannot prove freshness.
+ */
+function sqliteWalMatches(
+  candidate: FileCandidate & { format: UsageAdapterPath["format"] },
+  entry: PersistentFileEntry | undefined,
+): boolean {
+  if (candidate.format !== "sqlite") return true;
+  if (entry == null) return false;
+  const cached = entry.wal;
+  if (cached === undefined) return false;
+  const wal = candidate.wal;
+  if (wal == null) return cached === null;
+  return (
+    cached !== null &&
+    wal.modifiedAt === cached.mtimeMs &&
+    wal.size === cached.size
+  );
+}
+
+/**
+ * Stat the `-wal` companion of a sqlite database: `null` when it does not
+ * exist (the database is not in WAL mode, or its WAL was checkpointed and
+ * removed on a clean close).
+ */
+async function walSignatureFor(
+  databasePath: string,
+): Promise<{ modifiedAt: number; size: number } | null> {
+  try {
+    const info = await stat(`${databasePath}-wal`);
+    return info.isFile() ? { modifiedAt: info.mtimeMs, size: info.size } : null;
+  } catch {
+    return null;
+  }
 }
 
 async function collectRecentJsonlFiles(
@@ -890,12 +987,18 @@ async function collectAdapterFiles(
         try {
           const fileStat = await stat(entryPath);
           if (fileStat.mtimeMs >= cutoffTime) {
-            candidates.set(entryPath, {
+            const candidate: FileCandidate & {
+              format: UsageAdapterPath["format"];
+            } = {
               path: entryPath,
               modifiedAt: fileStat.mtimeMs,
               size: fileStat.size,
               format: placement.pathConfig.format,
-            });
+            };
+            if (placement.pathConfig.format === "sqlite") {
+              candidate.wal = await walSignatureFor(entryPath);
+            }
+            candidates.set(entryPath, candidate);
           }
         } catch {
           continue;
@@ -940,14 +1043,16 @@ async function readJsonLines(
   filePath: string,
   onRecord: (record: JsonObject) => void,
   signal?: AbortSignal,
+  maxFileBytes: number = MAX_JSONL_FILE_BYTES,
 ): Promise<{ malformedLines: number; oversized: boolean }> {
   let malformedLines = 0;
   // P2-17: stat pre-check before streaming so a file above the whole-file cap
   // is skipped instead of buffered (bounded collection memory). Callers turn
-  // the flag into a file-too-large diagnostic.
+  // the flag into a file-too-large diagnostic. Native readers may pass a
+  // tighter registry-declared cap; the shared default is the hard JSONL cap.
   try {
     const fileStat = await stat(filePath);
-    if (fileStat.size > MAX_JSONL_FILE_BYTES) {
+    if (fileStat.size > maxFileBytes) {
       return { malformedLines: 0, oversized: true };
     }
   } catch {
@@ -1226,7 +1331,10 @@ function codexContextFromRecord(
   };
 }
 
-function codexSessionIdFromRecord(record: JsonObject): string | undefined {
+function codexSessionIdFromRecord(
+  record: JsonObject,
+  source: RolloutSource,
+): string | undefined {
   const payload = asObject(record.payload);
   const explicitIdentifier =
     record.sessionId ??
@@ -1242,7 +1350,7 @@ function codexSessionIdFromRecord(record: JsonObject): string | undefined {
     payload?.threadId ??
     payload?.thread_id;
   const explicitSessionId = sessionIdFromStructuredValue(
-    "codex",
+    source,
     explicitIdentifier,
   );
   if (explicitSessionId != null) {
@@ -1252,7 +1360,7 @@ function codexSessionIdFromRecord(record: JsonObject): string | undefined {
   const recordType = stringValue(record.type);
   const payloadType = stringValue(payload?.type);
   if (recordType === "session_meta" || payloadType === "session_meta") {
-    return sessionIdFromStructuredValue("codex", payload?.id ?? record.id);
+    return sessionIdFromStructuredValue(source, payload?.id ?? record.id);
   }
   return undefined;
 }
@@ -1262,6 +1370,7 @@ function codexEventFromRecord(
   context: { model: string; project: string; sessionId: string },
   pendingContext: LocalUsageEvent["context"],
   previousTotalUsage?: JsonObject,
+  source: RolloutSource = "codex",
 ): LocalUsageEvent | undefined {
   const payload = asObject(record.payload);
   const nestedMessage = asObject(payload?.msg);
@@ -1322,7 +1431,7 @@ function codexEventFromRecord(
   }
 
   return {
-    source: "codex",
+    source,
     timestamp: timestamp.toISOString(),
     sessionId: context.sessionId,
     model: context.model,
@@ -1337,6 +1446,12 @@ function codexEventFromRecord(
   };
 }
 
+/**
+ * Codex (OpenAI CLI) native reader entry point: scan the passed session roots
+ * (regular + archived, per configured home) with the shared rollout parser.
+ * Behavior is pinned by the codex regression tests; it must stay exactly the
+ * default-parameter path of {@link scanCodexFamily}.
+ */
 async function scanCodex(
   roots: string[],
   homeDirectory: string,
@@ -1346,6 +1461,73 @@ async function scanCodex(
   cachedFiles: Map<string, PersistentFileEntry>,
   signal?: AbortSignal,
 ): Promise<SourceScanResult> {
+  return scanCodexFamily(
+    "codex",
+    roots,
+    homeDirectory,
+    cutoffTime,
+    nowTime,
+    maxFiles,
+    cachedFiles,
+    signal,
+  );
+}
+
+/**
+ * Every Code native usage reader. Every Code is a Codex-family CLI that
+ * persists session rollouts with the SAME JSONL schema as codex (context
+ * lines `turn_context` with payload.model/cwd, token lines carrying
+ * `last_token_usage`/`total_token_usage` — both the flat
+ * `payload.type === "token_count"` envelope and the nested
+ * `payload.msg.type === "token_count"` form are accepted). Roots are kept
+ * simple by design: only `join(home, ".code", "sessions")` per home is
+ * scanned — no `archived_sessions` tree and no WSL arm, unlike codex. The
+ * registry-declared per-file cap (64 MiB) is enforced before streaming.
+ */
+async function scanEveryCodeUsageAdapter(
+  roots: string[],
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
+): Promise<SourceScanResult> {
+  const adapter = BUILTIN_USAGE_ADAPTERS.find(
+    (candidate) => candidate.source === "every-code",
+  );
+  return scanCodexFamily(
+    "every-code",
+    roots,
+    homeDirectory,
+    cutoffTime,
+    nowTime,
+    maxFiles,
+    cachedFiles,
+    signal,
+    adapter?.maxFileSizeBytes,
+  );
+}
+
+/**
+ * Shared Codex-family rollout scan (codex + every-code). `roots` are passed
+ * in (each caller computes its own home/archive topology) and `source`
+ * parameterizes event/cache/summary identity. `maxFileBytes` is the optional
+ * registry-declared whole-file cap; omitting it keeps the reader's hard JSONL
+ * cap (the codex default).
+ */
+async function scanCodexFamily(
+  source: RolloutSource,
+  roots: string[],
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
+  maxFileBytes?: number,
+): Promise<SourceScanResult> {
+  const fileCap = maxFileBytes ?? MAX_JSONL_FILE_BYTES;
   const selected = await collectRecentJsonlFiles(
     roots,
     cutoffTime,
@@ -1358,14 +1540,14 @@ async function scanCodex(
   let filesReused = 0;
   let filesParsed = 0;
   let malformedLines = 0;
-  const codexDiagnostics: LocalUsageDiagnostic[] = [];
+  const rolloutDiagnostics: LocalUsageDiagnostic[] = [];
   const cacheEntries: PersistentCodexFileEntry[] = [];
 
   for (const file of selected.files) {
     signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     let entry: PersistentCodexFileEntry;
-    if (fileSignatureMatches(file, cached, "codex")) {
+    if (fileSignatureMatches(file, cached, source)) {
       entry = cached as PersistentCodexFileEntry;
       filesReused += 1;
     } else {
@@ -1378,7 +1560,7 @@ async function scanCodex(
       const context = {
         model: "unknown",
         project: "unknown",
-        sessionId: sessionIdFromRelativeFile("codex", relativeFileIdentity),
+        sessionId: sessionIdFromRelativeFile(source, relativeFileIdentity),
       };
       const fileEvents: LocalUsageEvent[] = [];
       let pendingContext = createCodexPendingContext();
@@ -1388,7 +1570,7 @@ async function scanCodex(
           file.path,
           (record) => {
             context.sessionId =
-              codexSessionIdFromRecord(record) ?? context.sessionId;
+              codexSessionIdFromRecord(record, source) ?? context.sessionId;
             const nextContext = codexContextFromRecord(record);
             if (nextContext != null) {
               context.model = nextContext.model ?? context.model;
@@ -1404,6 +1586,7 @@ async function scanCodex(
               context,
               consumeCodexPendingContext(pendingContext),
               previousTotalUsage,
+              source,
             );
             const payload = asObject(record.payload);
             const nestedMessage = asObject(payload?.msg);
@@ -1425,19 +1608,20 @@ async function scanCodex(
             collectCodexContextRecord(pendingContext, record);
           },
           signal,
+          fileCap,
         );
       signal?.throwIfAborted();
       if (oversized) {
-        codexDiagnostics.push({
-          source: "codex",
+        rolloutDiagnostics.push({
+          source,
           code: "file-too-large",
           path: file.path,
           count: 1,
-          message: `日志超过 ${MAX_JSONL_FILE_BYTES} 字节读取上限，已跳过。`,
+          message: `日志超过 ${fileCap} 字节读取上限，已跳过。`,
         });
       }
       entry = {
-        source: "codex",
+        source,
         path: file.path,
         mtimeMs: file.modifiedAt,
         size: file.size,
@@ -1459,7 +1643,7 @@ async function scanCodex(
   return {
     events,
     summary: {
-      source: "codex",
+      source,
       available: events.length > 0,
       detected: selected.available,
       paths: roots,
@@ -1469,7 +1653,7 @@ async function scanCodex(
       filesParsed,
       malformedLines,
       events: events.length,
-      diagnostics: codexDiagnostics,
+      diagnostics: rolloutDiagnostics,
     },
     cacheEntries,
   };
@@ -2996,6 +3180,1448 @@ async function scanDshUsageAdapter(
   };
 }
 
+// Zed Agent (threads.db) parsing contract (TokenTracker-sourced). Every thread
+// row stores the full thread JSON in `data` as utf8 text (`data_type='json'`)
+// or as zstd-compressed utf8 text (`data_type='zstd'`). The thread JSON carries
+// `request_token_usage` (a per-request map/array) and/or
+// `cumulative_token_usage` (one object) with input_tokens / output_tokens /
+// cache_read_input_tokens / cache_creation_input_tokens (integers, though some
+// historical rows used numeric strings). A row is rewritten with larger
+// cumulative totals on every send, so each scan emits one event per thread with
+// its CURRENT totals (no per-thread delta bookkeeping).
+//
+// Providers whose usage is ALSO captured by a dedicated AITracker reader are
+// skipped so the same tokens are never counted twice. Zed's native providers
+// (zed.dev, copilot_chat, openai*, anthropic, google, ollama, lmstudio, ...) do
+// not overlap any dedicated reader (e.g. Zed's copilot_chat talks to the
+// Copilot API directly and never writes the ~/.copilot data the Copilot parser
+// reads), so the set is empty today — the extension point if Zed ever persists
+// external-ACP-agent usage (Claude Code / Codex run inside Zed) into
+// threads.db with a recognizable provider id.
+const ZED_DOUBLE_COUNTED_PROVIDERS: ReadonlySet<string> = new Set();
+/** Cap on one decoded thread blob (raw or zstd-expanded), mirroring tokscale. */
+const MAX_ZED_THREAD_JSON_BYTES = 16 * 1024 * 1024;
+
+interface ZedTokenTotals {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+/** Coerce one token field: numbers and numeric strings, negatives -> 0. */
+function zedTokenCount(value: unknown): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }
+  return 0;
+}
+
+/** Pull the 4-tuple out of one Zed TokenUsage object (null for non-objects). */
+function zedReadUsage(value: unknown): ZedTokenTotals | null {
+  const usage = asObject(value);
+  if (usage == null) return null;
+  return {
+    input: zedTokenCount(usage.input_tokens),
+    output: zedTokenCount(usage.output_tokens),
+    cacheRead: zedTokenCount(usage.cache_read_input_tokens),
+    cacheWrite: zedTokenCount(usage.cache_creation_input_tokens),
+  };
+}
+
+function zedZeroTotals(): ZedTokenTotals {
+  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+}
+
+function zedTotalsSum(totals: ZedTokenTotals): number {
+  return totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
+}
+
+/** Sum per-request usage (array items or object values). */
+function zedSumRequestUsage(value: unknown): ZedTokenTotals {
+  const totals = zedZeroTotals();
+  const entries = Array.isArray(value)
+    ? value
+    : asObject(value) != null
+      ? Object.values(asObject(value)!)
+      : [];
+  for (const entry of entries) {
+    const usage = zedReadUsage(entry);
+    if (usage == null) continue;
+    totals.input += usage.input;
+    totals.output += usage.output;
+    totals.cacheRead += usage.cacheRead;
+    totals.cacheWrite += usage.cacheWrite;
+  }
+  return totals;
+}
+
+/**
+ * Extract the model + current totals from one decoded thread JSON.
+ * Returns undefined for rows that must never become events: imported threads,
+ * threads without a model id, threads of a double-counted provider, and
+ * threads with no recorded usage at all.
+ */
+function zedThreadUsage(thread: unknown):
+  | {
+      model: string;
+      totals: ZedTokenTotals;
+    }
+  | undefined {
+  const value = asObject(thread);
+  if (value == null) return undefined;
+  if (value.imported === true) return undefined;
+  const model = asObject(value.model);
+  const modelId = stringValue(model?.model);
+  if (modelId == null) return undefined;
+  const provider =
+    typeof model?.provider === "string" ? model.provider.trim() : "";
+  if (
+    provider.length > 0 &&
+    ZED_DOUBLE_COUNTED_PROVIDERS.has(provider.toLowerCase())
+  ) {
+    return undefined;
+  }
+  const request = zedSumRequestUsage(value.request_token_usage);
+  if (zedTotalsSum(request) > 0) return { model: modelId, totals: request };
+  const cumulative = zedReadUsage(value.cumulative_token_usage);
+  if (cumulative != null && zedTotalsSum(cumulative) > 0) {
+    return { model: modelId, totals: cumulative };
+  }
+  return undefined;
+}
+
+/**
+ * Decode + extract one threads.db row into an event payload. Throws for
+ * undecodable rows (unsupported data_type, oversized/undecodable blobs,
+ * invalid JSON); rows that simply carry no countable usage return undefined.
+ */
+function decodeZedThread(row: Record<string, unknown>):
+  | {
+      model: string;
+      totals: ZedTokenTotals;
+      updatedAt: Date;
+    }
+  | undefined {
+  const id = stringValue(row.id);
+  if (id == null) return undefined;
+  const type = stringValue(row.data_type)?.trim().toLowerCase();
+  const raw = row.data;
+  const data = Buffer.isBuffer(raw)
+    ? raw
+    : raw instanceof Uint8Array
+      ? Buffer.from(raw)
+      : null;
+  if (data == null) return undefined;
+  let text: string;
+  if (type === "json") {
+    if (data.length > MAX_ZED_THREAD_JSON_BYTES) {
+      throw new Error(`json blob exceeds ${MAX_ZED_THREAD_JSON_BYTES} bytes`);
+    }
+    text = data.toString("utf8");
+  } else if (type === "zstd") {
+    const out = zstdDecompressSync(data);
+    if (out.length > MAX_ZED_THREAD_JSON_BYTES) {
+      throw new Error(
+        `decoded zstd blob exceeds ${MAX_ZED_THREAD_JSON_BYTES} bytes`,
+      );
+    }
+    text = out.toString("utf8");
+  } else {
+    throw new Error(`unsupported data_type: ${String(row.data_type)}`);
+  }
+  const usage = zedThreadUsage(JSON.parse(text) as unknown);
+  if (usage == null) return undefined;
+  const updatedAt = timestampValue(row.updated_at);
+  if (updatedAt == null) return undefined;
+  return { model: usage.model, totals: usage.totals, updatedAt };
+}
+
+/**
+ * Parse Zed's `threads.db` (one event per thread row, current cumulative
+ * totals). Rows that cannot be decoded are skipped and counted as malformed;
+ * a row-level failure never fails the whole database.
+ */
+function parseZedThreadsDb(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  adapter: UsageAdapterContract,
+  signal?: AbortSignal,
+): {
+  events: LocalUsageEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+} {
+  signal?.throwIfAborted();
+  if (file.size > adapter.maxFileSizeBytes) {
+    return {
+      events: [],
+      malformedLines: 0,
+      diagnostics: [
+        diagnostic(
+          adapter,
+          "file-too-large",
+          file.path,
+          `日志超过 ${adapter.maxFileSizeBytes} 字节读取上限，已跳过。`,
+        ),
+      ],
+    };
+  }
+  const events: LocalUsageEvent[] = [];
+  let malformedLines = 0;
+  let database: DatabaseSync | undefined;
+  try {
+    database = new DatabaseSync(file.path, { readOnly: true });
+    const rows = database
+      .prepare("SELECT id, updated_at, data_type, data FROM threads")
+      .all() as Array<Record<string, unknown>>;
+    for (const row of rows) {
+      signal?.throwIfAborted();
+      let decoded;
+      try {
+        decoded = decodeZedThread(row);
+      } catch {
+        malformedLines += 1;
+        continue;
+      }
+      if (decoded == null) continue;
+      const totals = decoded.totals;
+      const totalTokens =
+        totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
+      events.push({
+        source: adapter.source as LocalUsageSource,
+        timestamp: decoded.updatedAt.toISOString(),
+        // decodeZedThread only returns rows with a non-empty id, so the
+        // structured session id is always derivable here.
+        sessionId: sessionIdFromStructuredValue(adapter.source, row.id)!,
+        model: decoded.model,
+        project: "unknown",
+        inputTokens: totals.input,
+        cachedInputTokens: totals.cacheRead,
+        cacheCreationInputTokens: totals.cacheWrite,
+        outputTokens: totals.output,
+        reasoningOutputTokens: 0,
+        totalTokens,
+      });
+    }
+    return {
+      events,
+      malformedLines,
+      diagnostics:
+        events.length === 0 && malformedLines > 0
+          ? [
+              {
+                source: adapter.source,
+                code: "malformed-json",
+                path: file.path,
+                count: malformedLines,
+                message: "threads.db 包含无法解码的线程记录。",
+              },
+            ]
+          : [],
+    };
+  } catch {
+    return {
+      events: [],
+      malformedLines: 0,
+      diagnostics: [
+        diagnostic(
+          adapter,
+          "query-failed",
+          file.path,
+          "SQLite 只读查询执行失败，已跳过。",
+        ),
+      ],
+    };
+  } finally {
+    database?.close();
+  }
+}
+
+/**
+ * Zed Agent native scan: same per-file cache contract as the generic sqlite
+ * adapters (main-file signature + WAL companion), producing one event per
+ * thread row with its current cumulative totals. Every thread row decodes to
+ * its own structured session id, so identical rows across scans (cache reuse
+ * or rotated copies of the same database) collapse to a single event.
+ */
+async function scanZedUsageAdapter(
+  adapter: UsageAdapterContract,
+  platformOs: PlatformOs,
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
+  overrides?: UsageOverrideMap,
+): Promise<SourceScanResult> {
+  const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
+  const placements = rebaseUsagePathConfigs(
+    pathConfigs,
+    homeDirectory,
+    usageOverrideFor(adapter.source, overrides),
+  );
+  const selected = await collectAdapterFiles(
+    placements,
+    cutoffTime,
+    maxFiles,
+    signal,
+  );
+  const cacheEntries: PersistentGenericFileEntry[] = [];
+  const diagnostics: LocalUsageDiagnostic[] = [];
+  let filesRead = 0;
+  let filesReused = 0;
+  let filesParsed = 0;
+  let malformedLines = 0;
+
+  for (const file of selected.files) {
+    signal?.throwIfAborted();
+    const cached = cachedFiles.get(file.path);
+    let entry: PersistentGenericFileEntry;
+    if (
+      fileSignatureMatches(file, cached, adapter.source) &&
+      sqliteWalMatches(file, cached)
+    ) {
+      entry = cached as PersistentGenericFileEntry;
+      filesReused += 1;
+    } else {
+      const parsed = await parseZedThreadsDb(file, adapter, signal);
+      parsed.events = parsed.events.map((event) => ({
+        ...event,
+        project: normalizeProjectPath(event.project, homeDirectory),
+      }));
+      entry = {
+        source: adapter.source as PersistentGenericFileEntry["source"],
+        path: file.path,
+        mtimeMs: file.modifiedAt,
+        size: file.size,
+        malformedLines: parsed.malformedLines,
+        ...(file.format === "sqlite"
+          ? {
+              wal:
+                file.wal == null
+                  ? null
+                  : { mtimeMs: file.wal.modifiedAt, size: file.wal.size },
+            }
+          : {}),
+        events: parsed.events,
+        diagnostics: parsed.diagnostics,
+      };
+      filesParsed += 1;
+    }
+    diagnostics.push(...entry.diagnostics);
+    cacheEntries.push(entry);
+    filesRead += 1;
+    malformedLines += entry.malformedLines;
+  }
+
+  const events = zedEventsInRange(
+    cacheEntries,
+    homeDirectory,
+    adapter,
+    cutoffTime,
+    nowTime,
+  );
+  return {
+    events,
+    summary: {
+      source: adapter.source,
+      available: events.length > 0,
+      detected: selected.detected,
+      paths: placements.map((placement) => placement.root),
+      filesConsidered: selected.files.length,
+      filesRead,
+      filesReused,
+      filesParsed,
+      malformedLines,
+      events: events.length,
+      diagnostics,
+    },
+    cacheEntries,
+  };
+}
+
+/**
+ * Zed events carry structured session ids, so identical current-totals rows
+ * dedupe across every considered file (cache-reused and freshly parsed alike)
+ * and out-of-window threads are dropped.
+ */
+function zedEventsInRange(
+  cacheEntries: readonly PersistentGenericFileEntry[],
+  homeDirectory: string,
+  adapter: UsageAdapterContract,
+  cutoffTime: number,
+  nowTime: number,
+): LocalUsageEvent[] {
+  const byIdentity = new Map<string, LocalUsageEvent>();
+  for (const entry of cacheEntries) {
+    const fileFallbackSessionId = sessionIdFromRelativeFile(
+      adapter.source,
+      relative(homeDirectory, entry.path),
+    );
+    for (const event of entry.events) {
+      if (!isTimestampInRange(new Date(event.timestamp), cutoffTime, nowTime)) {
+        continue;
+      }
+      const identity = genericEventIdentity(
+        adapter,
+        event,
+        fileFallbackSessionId,
+      );
+      if (byIdentity.has(identity)) continue;
+      byIdentity.set(identity, event);
+    }
+  }
+  return [...byIdentity.values()];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Droid (Factory CLI) parsing contract (TokenTracker-sourced). Each Droid
+// session has two sibling files under ~/.factory/sessions/<id>:
+//   <session-id>.settings.json   — one JSON object whose tokenUsage holds the
+//                                  CUMULATIVE session-level totals:
+//     {
+//       "model": "custom:GLM-5.1-[Proxy]-0",
+//       "tokenUsage": {
+//         "inputTokens": 12345,     // already excludes cached reads
+//         "outputTokens": 678,
+//         "cacheCreationTokens": 0,
+//         "cacheReadTokens": 0,
+//         "thinkingTokens": 0
+//       }
+//     }
+//   <session-id>.jsonl           — per-message transcript (no token counts).
+// The settings file is rewritten every turn, so the event timestamp is the
+// settings file's own mtime; each parsed file emits one event carrying its
+// CURRENT session-level cumulative totals. Token mapping: inputTokens ->
+// input, cacheReadTokens -> cached input, cacheCreationTokens -> cache
+// creation, outputTokens -> output, thinkingTokens -> reasoning output; the
+// event total is the component sum (the optional `totalTokens` field is not
+// redistributed).
+//
+// The model id falls back settings.model -> the sibling transcript's first
+// `Model:` line -> "droid-unknown". Normalization mirrors TokenTracker's
+// normalizeDroidModelName (ccusage droid parser parity): strip a `custom:`
+// prefix, delete `[...]` segments, lowercase, and collapse runs of
+// whitespace/dots and of dashes to a single `-` (underscores are preserved).
+//
+// The structured session id is derived from the settings stem, so when the
+// SAME session stem appears in several folders under the sessions root
+// (TokenTracker #204), every copy would share one cumulative counter and
+// emitting them all would double count. The canonical copy per stem — largest
+// cumulative token sum, ties to the newest mtime then lexicographically
+// smaller path — is therefore selected per scan, mirroring TokenTracker's
+// dedupeDroidSettingsFilesBySession.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DROID_SETTINGS_SUFFIX = ".settings.json";
+/** Fallback model id when neither settings.model nor the transcript yields one. */
+const DROID_UNKNOWN_MODEL = "droid-unknown";
+/** Cap on sibling-transcript bytes probed for the fallback model id. */
+const MAX_DROID_MODEL_SIDECAR_BYTES = 1024 * 1024;
+/** Cap on sibling-transcript lines probed for the fallback model id (ccusage parity). */
+const MAX_DROID_MODEL_SIDECAR_LINES = 500;
+
+/** Coerce one Droid token field: numbers and numeric strings, <= 0 -> 0. */
+function droidTokenCount(value: unknown): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 0;
+  }
+  return 0;
+}
+
+/**
+ * Model-id normalization mirroring TokenTracker's normalizeDroidModelName
+ * (itself ccusage `normalize_droid_model_name` parity): strip a `custom:`
+ * prefix, delete `[...]` segments, lowercase, and collapse runs of
+ * whitespace/dots and of dashes to a single `-`. Underscores are preserved so
+ * `glm_5_1` stays distinct from `glm-5-1`.
+ */
+function normalizeDroidModelName(raw: string): string {
+  let value = raw.startsWith("custom:") ? raw.slice("custom:".length) : raw;
+  value = value.replace(/\[[^\]]*\]/g, "");
+  value = value.toLowerCase();
+  value = value.replace(/[\s.]+/g, "-");
+  value = value.replace(/-+/g, "-");
+  value = value.replace(/^-+|-+$/g, "");
+  return value;
+}
+
+/** Session stem of a settings file: basename minus `.settings.json`. */
+function droidSettingsStem(filePath: string): string | undefined {
+  const name = basename(filePath);
+  return name.endsWith(DROID_SETTINGS_SUFFIX)
+    ? name.slice(0, -DROID_SETTINGS_SUFFIX.length)
+    : undefined;
+}
+
+/**
+ * Read the bounded head of a UTF-8 text file (used for the sibling-transcript
+ * model probe). Rejects when the file does not exist or cannot be read.
+ */
+function readFileHead(
+  filePath: string,
+  maxBytes: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = createReadStream(filePath, {
+      encoding: "utf8",
+      start: 0,
+      end: maxBytes - 1,
+    });
+    let text = "";
+    stream.on("data", (chunk) => {
+      if (typeof chunk === "string") text += chunk;
+    });
+    stream.on("error", (error) => reject(error));
+    stream.on("end", () => {
+      signal?.throwIfAborted();
+      resolve(text);
+    });
+  });
+}
+
+/**
+ * Fallback model resolution: scan the sibling `<id>.jsonl` transcript for the
+ * first `Model:` marker (first 500 lines, mirroring TokenTracker/ccusage) and
+ * normalize the trailing text, cut at the first `"`, `\`, or `[`. Returns ""
+ * when no line yields a usable model id.
+ */
+async function droidModelFromSidecarJsonl(
+  settingsPath: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const sidecarPath = `${settingsPath.slice(0, -DROID_SETTINGS_SUFFIX.length)}.jsonl`;
+  let head: string;
+  try {
+    head = await readFileHead(
+      sidecarPath,
+      MAX_DROID_MODEL_SIDECAR_BYTES,
+      signal,
+    );
+  } catch {
+    return "";
+  }
+  const lines = head.split("\n");
+  const limit = Math.min(lines.length, MAX_DROID_MODEL_SIDECAR_LINES);
+  for (let index = 0; index < limit; index += 1) {
+    signal?.throwIfAborted();
+    const marker = lines[index].indexOf("Model:");
+    if (marker < 0) continue;
+    let tail = lines[index].slice(marker + "Model:".length);
+    let cut = tail.length;
+    for (const character of ['"', "\\", "["]) {
+      const position = tail.indexOf(character);
+      if (position >= 0 && position < cut) cut = position;
+    }
+    const candidate = normalizeDroidModelName(tail.slice(0, cut).trim());
+    if (candidate.length > 0) return candidate;
+  }
+  return "";
+}
+
+/**
+ * Model resolution chain mirroring TokenTracker's resolveDroidModel up to the
+ * unknown fallback: settings.model (normalized) -> sibling transcript's
+ * `Model:` line (normalized) -> "droid-unknown".
+ */
+async function droidModelForSettings(
+  settings: JsonObject,
+  filePath: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const direct = stringValue(settings.model);
+  if (direct != null) {
+    const normalized = normalizeDroidModelName(direct);
+    if (normalized.length > 0) return normalized;
+  }
+  const sidecar = await droidModelFromSidecarJsonl(filePath, signal);
+  return sidecar.length > 0 ? sidecar : DROID_UNKNOWN_MODEL;
+}
+
+/**
+ * Parse one Droid `<sessionId>.settings.json` into a single event carrying
+ * the session's current cumulative totals, timestamped with the file mtime.
+ * Files with malformed JSON, without a tokenUsage object, or whose component
+ * tokens sum to zero are skipped; a failing file never fails the whole scan.
+ */
+async function parseDroidSettingsFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  adapter: UsageAdapterContract,
+  signal?: AbortSignal,
+): Promise<{
+  events: LocalUsageEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  signal?.throwIfAborted();
+  if (file.size > adapter.maxFileSizeBytes) {
+    return {
+      events: [],
+      malformedLines: 0,
+      diagnostics: [
+        diagnostic(
+          adapter,
+          "file-too-large",
+          file.path,
+          `日志超过 ${adapter.maxFileSizeBytes} 字节读取上限，已跳过。`,
+        ),
+      ],
+    };
+  }
+  // Only `<id>.settings.json` files are collected by the registry glob, so the
+  // structured session id is always derivable from the stem.
+  const stem = droidSettingsStem(file.path);
+  if (stem == null || stem.length === 0) {
+    return { events: [], malformedLines: 0, diagnostics: [] };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(file.path, "utf8")) as unknown;
+  } catch {
+    return {
+      events: [],
+      malformedLines: 1,
+      diagnostics: [
+        diagnostic(
+          adapter,
+          "malformed-json",
+          file.path,
+          "Droid 会话 settings.json 无法解析，已跳过。",
+        ),
+      ],
+    };
+  }
+  const settings = asObject(parsed);
+  const usage = settings == null ? undefined : asObject(settings.tokenUsage);
+  if (settings == null || usage == null) {
+    return { events: [], malformedLines: 0, diagnostics: [] };
+  }
+  const inputTokens = droidTokenCount(usage.inputTokens);
+  const cachedInputTokens = droidTokenCount(usage.cacheReadTokens);
+  const cacheCreationInputTokens = droidTokenCount(usage.cacheCreationTokens);
+  const outputTokens = droidTokenCount(usage.outputTokens);
+  const reasoningOutputTokens = droidTokenCount(usage.thinkingTokens);
+  const totalTokens =
+    inputTokens +
+    cachedInputTokens +
+    cacheCreationInputTokens +
+    outputTokens +
+    reasoningOutputTokens;
+  // A zero-sum payload (mid-write or a wiped tokenUsage) is transient and must
+  // never surface as an event.
+  if (totalTokens <= 0) {
+    return { events: [], malformedLines: 0, diagnostics: [] };
+  }
+  const model = await droidModelForSettings(settings, file.path, signal);
+  const event: LocalUsageEvent = {
+    source: adapter.source as LocalUsageSource,
+    // The settings file is rewritten each turn, so its mtime is the most
+    // accurate "when did these tokens land" signal available.
+    timestamp: new Date(file.modifiedAt).toISOString(),
+    sessionId: sessionIdFromStructuredValue(adapter.source, stem)!,
+    model,
+    project: "unknown",
+    inputTokens,
+    cachedInputTokens,
+    cacheCreationInputTokens,
+    outputTokens,
+    reasoningOutputTokens,
+    totalTokens,
+  };
+  return { events: [event], malformedLines: 0, diagnostics: [] };
+}
+
+/**
+ * Droid (Factory CLI) native scan: same per-file cache contract as the Zed
+ * adapter (main-file signature + WAL companion), producing one event per
+ * parsed settings file with its current cumulative totals.
+ */
+async function scanDroidUsageAdapter(
+  adapter: UsageAdapterContract,
+  platformOs: PlatformOs,
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
+  overrides?: UsageOverrideMap,
+): Promise<SourceScanResult> {
+  const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
+  const placements = rebaseUsagePathConfigs(
+    pathConfigs,
+    homeDirectory,
+    usageOverrideFor(adapter.source, overrides),
+  );
+  const selected = await collectAdapterFiles(
+    placements,
+    cutoffTime,
+    maxFiles,
+    signal,
+  );
+  const cacheEntries: PersistentGenericFileEntry[] = [];
+  const diagnostics: LocalUsageDiagnostic[] = [];
+  let filesRead = 0;
+  let filesReused = 0;
+  let filesParsed = 0;
+  let malformedLines = 0;
+
+  for (const file of selected.files) {
+    signal?.throwIfAborted();
+    const cached = cachedFiles.get(file.path);
+    let entry: PersistentGenericFileEntry;
+    if (
+      fileSignatureMatches(file, cached, adapter.source) &&
+      sqliteWalMatches(file, cached)
+    ) {
+      entry = cached as PersistentGenericFileEntry;
+      filesReused += 1;
+    } else {
+      const parsed = await parseDroidSettingsFile(file, adapter, signal);
+      parsed.events = parsed.events.map((event) => ({
+        ...event,
+        project: normalizeProjectPath(event.project, homeDirectory),
+      }));
+      entry = {
+        source: adapter.source as PersistentGenericFileEntry["source"],
+        path: file.path,
+        mtimeMs: file.modifiedAt,
+        size: file.size,
+        malformedLines: parsed.malformedLines,
+        // settings files are plain JSON, never sqlite: no WAL companion.
+        events: parsed.events,
+        diagnostics: parsed.diagnostics,
+      };
+      filesParsed += 1;
+    }
+    diagnostics.push(...entry.diagnostics);
+    cacheEntries.push(entry);
+    filesRead += 1;
+    malformedLines += entry.malformedLines;
+  }
+
+  const events = droidEventsInRange(cacheEntries, adapter, cutoffTime, nowTime);
+  return {
+    events,
+    summary: {
+      source: adapter.source,
+      available: events.length > 0,
+      detected: selected.detected,
+      paths: placements.map((placement) => placement.root),
+      filesConsidered: selected.files.length,
+      filesRead,
+      filesReused,
+      filesParsed,
+      malformedLines,
+      events: events.length,
+      diagnostics,
+    },
+    cacheEntries,
+  };
+}
+
+/**
+ * Droid events carry structured session ids derived from the settings stem,
+ * and the same stem may legitimately appear in several folders under the
+ * sessions root (moved/duplicated sessions, TokenTracker #204). Those copies
+ * share one cumulative counter, so each scan emits only the most complete one:
+ * the canonical copy per stem is the largest cumulative token sum, ties broken
+ * by the newer mtime then the lexicographically smaller path (matching
+ * TokenTracker's dedupeDroidSettingsFilesBySession). Cache-reused entries
+ * participate too, so a copy that grows past its siblings after a re-parse can
+ * win without re-reading the others. Out-of-window events are dropped.
+ */
+function droidEventsInRange(
+  cacheEntries: readonly PersistentGenericFileEntry[],
+  adapter: UsageAdapterContract,
+  cutoffTime: number,
+  nowTime: number,
+): LocalUsageEvent[] {
+  const canonicalByStem = new Map<
+    string,
+    { event?: LocalUsageEvent; mtimeMs: number; path: string; sum: number }
+  >();
+  for (const entry of cacheEntries) {
+    const stem = droidSettingsStem(entry.path);
+    if (stem == null) continue;
+    let event: LocalUsageEvent | undefined;
+    for (const candidate of entry.events) {
+      if (
+        isTimestampInRange(new Date(candidate.timestamp), cutoffTime, nowTime)
+      ) {
+        event = candidate;
+        break;
+      }
+    }
+    const sum = event?.totalTokens ?? 0;
+    const previous = canonicalByStem.get(stem);
+    if (
+      previous == null ||
+      sum > previous.sum ||
+      (sum === previous.sum && entry.mtimeMs > previous.mtimeMs) ||
+      (sum === previous.sum &&
+        entry.mtimeMs === previous.mtimeMs &&
+        entry.path.localeCompare(previous.path) < 0)
+    ) {
+      canonicalByStem.set(stem, {
+        ...(event == null ? {} : { event }),
+        mtimeMs: entry.mtimeMs,
+        path: entry.path,
+        sum,
+      });
+    }
+  }
+  const events: LocalUsageEvent[] = [];
+  for (const best of canonicalByStem.values()) {
+    if (best.event != null) events.push(best.event);
+  }
+  return events;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CodeBuddy CLI parsing contract (TokenTracker-sourced, parseCodebuddy-
+// Incremental parity). CodeBuddy is structurally cloned from Claude Code and
+// writes one JSONL transcript per session under
+// `~/.codebuddy/projects/<encoded-cwd>/<sessionId>.jsonl`. ANY record type
+// (assistant message or function_call) whose `providerData.rawUsage` object is
+// present represents one LLM round-trip; real installs carry usage on
+// function_call rows too (~93% of round-trips), so filtering by record type
+// would drop the majority of usage. The function_call/message rows of the
+// SAME round-trip share `providerData.messageId`, so rows are deduped by
+// message id with the FIRST row in file order deciding the outcome — a
+// zero-sum or timestamp-less first row consumes the id and later mirrors are
+// skipped, mirroring TokenTracker's incremental seenIds cursor on a
+// from-scratch parse.
+//
+// Token math (must be exact; prompt_tokens INCLUDES cached + cache-creation
+// input, and completion_tokens INCLUDES reasoning, so neither may be passed
+// through unchanged):
+//   cachedRead   = max(prompt_tokens_details.cached_tokens,
+//                      prompt_cache_hit_tokens, cache_read_input_tokens)
+//   cacheCreation = max(cache_creation_input_tokens, prompt_cache_write_tokens)
+//   input        = prompt_tokens - cachedRead - cacheCreation
+//   reasoning    = min(completion_tokens,
+//                      completion_tokens_details.reasoning_tokens)
+//   output       = completion_tokens - reasoning
+// Rows whose components sum to zero are transient (mid-write) and skipped.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fallback model id when a row carries no providerData.model. */
+const CODEBUDDY_UNKNOWN_MODEL = "unknown";
+
+/** Coerce one CodeBuddy token field: numbers and numeric strings, <= 0 -> 0. */
+function codebuddyTokenCount(value: unknown): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 0;
+  }
+  return 0;
+}
+
+/**
+ * Coerce an epoch timestamp to milliseconds, mirroring TokenTracker's
+ * coerceEpochMs: numbers and numeric strings; <= 0 / non-finite -> 0 (absent);
+ * values below 1e12 are epoch SECONDS and are scaled up to milliseconds.
+ */
+function coerceEpochMs(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n < 1e12 ? Math.trunc(n * 1000) : Math.trunc(n);
+}
+
+/**
+ * Parse one CodeBuddy `<sessionId>.jsonl` transcript into one event per
+ * round-trip (deduped by `providerData.messageId`, first row in file order
+ * wins, mirroring TokenTracker's parseCodebuddyIncremental). Files above the
+ * adapter size cap and unparseable lines are reported through diagnostics; a
+ * failing line never fails the whole file.
+ */
+async function parseCodebuddyJsonlFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  adapter: UsageAdapterContract,
+  signal?: AbortSignal,
+): Promise<{
+  events: LocalUsageEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  signal?.throwIfAborted();
+  if (file.size > adapter.maxFileSizeBytes) {
+    return {
+      events: [],
+      malformedLines: 0,
+      diagnostics: [
+        diagnostic(
+          adapter,
+          "file-too-large",
+          file.path,
+          `日志超过 ${adapter.maxFileSizeBytes} 字节读取上限，已跳过。`,
+        ),
+      ],
+    };
+  }
+  // TokenTracker falls back to the transcript stem when a row lacks its own
+  // sessionId; the file layout guarantees the stem is the real session id.
+  const fileSessionId = basename(file.path, ".jsonl");
+  const events: LocalUsageEvent[] = [];
+  const consumedMessageIds = new Set<string>();
+  const { malformedLines, oversized } = await readJsonLines(
+    file.path,
+    (record) => {
+      const providerData = asObject(record.providerData);
+      const rawUsage = asObject(providerData?.rawUsage);
+      if (rawUsage == null) return;
+      const rowSessionId = stringValue(record.sessionId) ?? fileSessionId;
+      const tsMs = coerceEpochMs(record.timestamp);
+      const messageId =
+        stringValue(providerData?.messageId) ??
+        stringValue(record.uuid) ??
+        stringValue(record.id) ??
+        (tsMs > 0 ? `${rowSessionId}:${tsMs}` : null);
+      if (messageId == null || consumedMessageIds.has(messageId)) return;
+      const promptTokens = codebuddyTokenCount(rawUsage.prompt_tokens);
+      const completionTokensRaw = codebuddyTokenCount(
+        rawUsage.completion_tokens,
+      );
+      const promptDetails = asObject(rawUsage.prompt_tokens_details);
+      const completionDetails = asObject(rawUsage.completion_tokens_details);
+      // Cache-read mirrors three ways depending on upstream (Anthropic-style
+      // cache_read_input_tokens, OpenAI-style prompt_tokens_details
+      // .cached_tokens, DeepSeek-style prompt_cache_hit_tokens); on real data
+      // exactly one is non-zero. Take the max, same as TokenTracker.
+      const cachedInputTokens = Math.max(
+        codebuddyTokenCount(promptDetails?.cached_tokens),
+        codebuddyTokenCount(rawUsage.prompt_cache_hit_tokens),
+        codebuddyTokenCount(rawUsage.cache_read_input_tokens),
+      );
+      const cacheCreationInputTokens = Math.max(
+        codebuddyTokenCount(rawUsage.cache_creation_input_tokens),
+        codebuddyTokenCount(rawUsage.prompt_cache_write_tokens),
+      );
+      const reasoningOutputTokens = Math.min(
+        completionTokensRaw,
+        codebuddyTokenCount(completionDetails?.reasoning_tokens),
+      );
+      const outputTokens = completionTokensRaw - reasoningOutputTokens;
+      const inputTokens = Math.max(
+        0,
+        promptTokens - cachedInputTokens - cacheCreationInputTokens,
+      );
+      const totalTokens =
+        inputTokens +
+        cachedInputTokens +
+        cacheCreationInputTokens +
+        outputTokens +
+        reasoningOutputTokens;
+      // A zero-sum payload (mid-write) is transient: consume the id and never
+      // surface it (matching TT, which marks zero-sum and timestamp-less ids
+      // as seen before continuing).
+      if (totalTokens <= 0 || tsMs <= 0) {
+        consumedMessageIds.add(messageId);
+        return;
+      }
+      consumedMessageIds.add(messageId);
+      events.push({
+        source: adapter.source as LocalUsageSource,
+        timestamp: new Date(tsMs).toISOString(),
+        sessionId: sessionIdFromStructuredValue(adapter.source, rowSessionId)!,
+        model: stringValue(providerData?.model) ?? CODEBUDDY_UNKNOWN_MODEL,
+        project: "unknown",
+        inputTokens,
+        cachedInputTokens,
+        cacheCreationInputTokens,
+        outputTokens,
+        reasoningOutputTokens,
+        totalTokens,
+      });
+    },
+    signal,
+  );
+  const diagnostics: LocalUsageDiagnostic[] = [];
+  if (oversized) {
+    diagnostics.push(
+      diagnostic(
+        adapter,
+        "file-too-large",
+        file.path,
+        `日志超过 ${MAX_JSONL_FILE_BYTES} 字节读取上限，已跳过。`,
+      ),
+    );
+  }
+  if (malformedLines > 0) {
+    const item = diagnostic(
+      adapter,
+      "malformed-json",
+      file.path,
+      "JSONL 包含无法解析的记录。",
+    );
+    item.count = malformedLines;
+    diagnostics.push(item);
+  }
+  return { events, malformedLines, diagnostics };
+}
+
+/**
+ * CodeBuddy native scan: same per-file cache contract as the Droid adapter
+ * (main-file signature reuse through `fileSignatureMatches`; plain JSONL
+ * entries use the generic `PersistentGenericFileEntry` shape — no WAL
+ * companion), producing one event per parsed round-trip row.
+ */
+async function scanCodebuddyUsageAdapter(
+  adapter: UsageAdapterContract,
+  platformOs: PlatformOs,
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
+  overrides?: UsageOverrideMap,
+): Promise<SourceScanResult> {
+  const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
+  const placements = rebaseUsagePathConfigs(
+    pathConfigs,
+    homeDirectory,
+    usageOverrideFor(adapter.source, overrides),
+  );
+  const selected = await collectAdapterFiles(
+    placements,
+    cutoffTime,
+    maxFiles,
+    signal,
+  );
+  const cacheEntries: PersistentGenericFileEntry[] = [];
+  const diagnostics: LocalUsageDiagnostic[] = [];
+  let filesRead = 0;
+  let filesReused = 0;
+  let filesParsed = 0;
+  let malformedLines = 0;
+
+  for (const file of selected.files) {
+    signal?.throwIfAborted();
+    const cached = cachedFiles.get(file.path);
+    let entry: PersistentGenericFileEntry;
+    if (
+      fileSignatureMatches(file, cached, adapter.source) &&
+      sqliteWalMatches(file, cached)
+    ) {
+      entry = cached as PersistentGenericFileEntry;
+      filesReused += 1;
+    } else {
+      const parsed = await parseCodebuddyJsonlFile(file, adapter, signal);
+      parsed.events = parsed.events.map((event) => ({
+        ...event,
+        project: normalizeProjectPath(event.project, homeDirectory),
+      }));
+      entry = {
+        source: adapter.source as PersistentGenericFileEntry["source"],
+        path: file.path,
+        mtimeMs: file.modifiedAt,
+        size: file.size,
+        malformedLines: parsed.malformedLines,
+        // transcript files are plain JSONL, never sqlite: no WAL companion.
+        events: parsed.events,
+        diagnostics: parsed.diagnostics,
+      };
+      filesParsed += 1;
+    }
+    diagnostics.push(...entry.diagnostics);
+    cacheEntries.push(entry);
+    filesRead += 1;
+    malformedLines += entry.malformedLines;
+  }
+
+  const events = codebuddyEventsInRange(
+    cacheEntries,
+    homeDirectory,
+    adapter,
+    cutoffTime,
+    nowTime,
+  );
+  return {
+    events,
+    summary: {
+      source: adapter.source,
+      available: events.length > 0,
+      detected: selected.detected,
+      paths: placements.map((placement) => placement.root),
+      filesConsidered: selected.files.length,
+      filesRead,
+      filesReused,
+      filesParsed,
+      malformedLines,
+      events: events.length,
+      diagnostics,
+    },
+    cacheEntries,
+  };
+}
+
+/**
+ * CodeBuddy events carry structured session ids (from `row.sessionId` with
+ * the transcript stem fallback), so identical round-trip rows in rotated
+ * copies of a transcript (cache-reused and freshly parsed alike) collapse to
+ * a single event; out-of-window rows are dropped.
+ */
+function codebuddyEventsInRange(
+  cacheEntries: readonly PersistentGenericFileEntry[],
+  homeDirectory: string,
+  adapter: UsageAdapterContract,
+  cutoffTime: number,
+  nowTime: number,
+): LocalUsageEvent[] {
+  const byIdentity = new Map<string, LocalUsageEvent>();
+  for (const entry of cacheEntries) {
+    const fileFallbackSessionId = sessionIdFromRelativeFile(
+      adapter.source,
+      relative(homeDirectory, entry.path),
+    );
+    for (const event of entry.events) {
+      if (!isTimestampInRange(new Date(event.timestamp), cutoffTime, nowTime)) {
+        continue;
+      }
+      const identity = genericEventIdentity(
+        adapter,
+        event,
+        fileFallbackSessionId,
+      );
+      if (byIdentity.has(identity)) continue;
+      byIdentity.set(identity, event);
+    }
+  }
+  return [...byIdentity.values()];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kilo Code task usage parsing contract (TokenTracker-sourced,
+// parseKilocodeIncremental parity). Kilo Code is a Cline-family VS Code
+// extension writing one WHOLE-FILE JSON array per task under
+// `<IDE config>/User/globalStorage/kilocode.kilo-code/tasks/<taskUuid>/
+// ui_messages.json`; the file is rewritten in full on every turn (no byte
+// tailing), so a changed file is always re-read and re-parsed from scratch.
+//
+// Records are messages of shape
+//   { type: "say", say: "api_req_started" | "api_req_deleted",
+//     ts: <epoch ms>, text: "<JSON-stringified payload>" }
+// whose `text` holds the JSON-stringified token payload:
+//   { tokensIn, tokensOut, cacheReads, cacheWrites, cost,
+//     inferenceProvider, apiProtocol }
+// (token and provider facts live INSIDE the text string — the reason this
+// reader must be native). `api_req_deleted` rows represent provider-billed
+// tokens removed from the task (edit-and-retry) and count exactly like
+// `api_req_started`. Per request:
+//   input = tokensIn, cached = cacheReads, cacheCreation = cacheWrites,
+//   output = tokensOut, reasoning = 0, total = the sum of the four.
+// Rows that are not one of the two says, whose text is not JSON (or does not
+// parse), or whose ts is invalid are skipped. An all-zero payload never
+// produces an event: `api_req_started` is written at request START with zero
+// tokens and back-filled in place at the same ts, so the back-fill simply
+// shows up as a same-ts row with a positive total — with no seen set,
+// identity (sessionId, ts, total) is naturally idempotent as long as zero
+// rows emit nothing.
+//
+// Kilo Code persists only the inference provider (e.g. "minimax", "Moonshot
+// AI", "Stealth") in ui_messages.json — never a per-turn model id — so the
+// model field is `provider:<slug>` (normalizeKilocodeProviderToModel).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fallback model id when a payload carries no usable inferenceProvider. */
+const KILOCODE_UNKNOWN_MODEL = "provider:unknown";
+
+/**
+ * Coerce one Kilo Code token field, mirroring TokenTracker's toNonNegativeInt
+ * exactly: numbers and numeric strings, negative or non-finite -> 0,
+ * fractional values floored.
+ */
+function kilocodeTokenCount(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
+}
+
+/**
+ * Normalize a Kilo Code inference provider into the display model id,
+ * mirroring TokenTracker's normalizeKilocodeProviderToModel: trimmed,
+ * lowercased, whitespace runs -> "-", everything outside [a-z0-9._-]
+ * stripped; a slug without any alphanumeric character carries no information
+ * and degrades to "provider:unknown".
+ */
+function normalizeKilocodeProviderToModel(providerName: unknown): string {
+  if (typeof providerName !== "string" || providerName.trim().length === 0) {
+    return KILOCODE_UNKNOWN_MODEL;
+  }
+  const slug = providerName
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9._-]/g, "");
+  if (slug.length === 0 || !/[a-z0-9]/u.test(slug)) {
+    return KILOCODE_UNKNOWN_MODEL;
+  }
+  return `provider:${slug}`;
+}
+
+/**
+ * Parse one Kilo Code `<taskUuid>/ui_messages.json` (a single top-level JSON
+ * array) into one event per token-bearing api_req_started/api_req_deleted
+ * message, following the TokenTracker rules above. Files above the adapter
+ * size cap and unparseable files are reported through diagnostics; a failing
+ * element never fails the whole file.
+ */
+async function parseKilocodeUiMessagesFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  adapter: UsageAdapterContract,
+  signal?: AbortSignal,
+): Promise<{
+  events: LocalUsageEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  signal?.throwIfAborted();
+  if (file.size > adapter.maxFileSizeBytes) {
+    return {
+      events: [],
+      malformedLines: 0,
+      diagnostics: [
+        diagnostic(
+          adapter,
+          "file-too-large",
+          file.path,
+          `日志超过 ${adapter.maxFileSizeBytes} 字节读取上限，已跳过。`,
+        ),
+      ],
+    };
+  }
+  // The registry glob only collects `<taskUuid>/ui_messages.json`, so the
+  // structured session id is always derivable from the immediate parent dir.
+  const taskUuid = basename(dirname(file.path));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(file.path, "utf8")) as unknown;
+  } catch {
+    // ui_messages.json is rewritten whole on every turn; a read racing a
+    // rewrite is transient and must not fail the scan (mirrors TokenTracker,
+    // which skips unparseable files silently).
+    return {
+      events: [],
+      malformedLines: 1,
+      diagnostics: [
+        diagnostic(
+          adapter,
+          "malformed-json",
+          file.path,
+          "Kilo Code ui_messages.json 无法解析，已跳过。",
+        ),
+      ],
+    };
+  }
+  if (!Array.isArray(parsed)) {
+    return { events: [], malformedLines: 0, diagnostics: [] };
+  }
+  const sessionId = sessionIdFromStructuredValue(adapter.source, taskUuid);
+  const events: LocalUsageEvent[] = [];
+  for (const element of parsed) {
+    signal?.throwIfAborted();
+    const message = asObject(element);
+    if (message == null) continue;
+    if (
+      message.say !== "api_req_started" &&
+      message.say !== "api_req_deleted"
+    ) {
+      continue;
+    }
+    const text = stringValue(message.text);
+    if (text == null || !text.startsWith("{")) continue;
+    let payload: JsonObject | undefined;
+    try {
+      payload = asObject(JSON.parse(text) as unknown);
+    } catch {
+      continue;
+    }
+    if (payload == null) continue;
+    const ts = Number(message.ts);
+    if (!Number.isFinite(ts) || ts <= 0) continue;
+    const inputTokens = kilocodeTokenCount(payload.tokensIn);
+    const cachedInputTokens = kilocodeTokenCount(payload.cacheReads);
+    const cacheCreationInputTokens = kilocodeTokenCount(payload.cacheWrites);
+    const outputTokens = kilocodeTokenCount(payload.tokensOut);
+    // A zero-sum payload is a request-START placeholder (back-filled in place
+    // at the same ts on completion): never an event, and no seen-id is needed
+    // because the back-filled row is the same ts with a positive total.
+    if (
+      inputTokens === 0 &&
+      cachedInputTokens === 0 &&
+      cacheCreationInputTokens === 0 &&
+      outputTokens === 0
+    ) {
+      continue;
+    }
+    events.push({
+      source: adapter.source as LocalUsageSource,
+      timestamp: new Date(ts).toISOString(),
+      ...(sessionId == null ? {} : { sessionId }),
+      model: normalizeKilocodeProviderToModel(payload.inferenceProvider),
+      project: "unknown",
+      inputTokens,
+      cachedInputTokens,
+      cacheCreationInputTokens,
+      outputTokens,
+      reasoningOutputTokens: 0,
+      totalTokens:
+        inputTokens +
+        cachedInputTokens +
+        cacheCreationInputTokens +
+        outputTokens,
+    });
+  }
+  return { events, malformedLines: 0, diagnostics: [] };
+}
+
+/**
+ * Kilo Code native scan: same per-file cache contract as the CodeBuddy
+ * adapter (main-file signature reuse through `fileSignatureMatches`; plain
+ * JSON entries use the generic `PersistentGenericFileEntry` shape — no WAL
+ * companion), producing one event per parsed token-bearing message.
+ */
+async function scanKilocodeUsageAdapter(
+  adapter: UsageAdapterContract,
+  platformOs: PlatformOs,
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
+  overrides?: UsageOverrideMap,
+): Promise<SourceScanResult> {
+  const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
+  const placements = rebaseUsagePathConfigs(
+    pathConfigs,
+    homeDirectory,
+    usageOverrideFor(adapter.source, overrides),
+  );
+  const selected = await collectAdapterFiles(
+    placements,
+    cutoffTime,
+    maxFiles,
+    signal,
+  );
+  const cacheEntries: PersistentGenericFileEntry[] = [];
+  const diagnostics: LocalUsageDiagnostic[] = [];
+  let filesRead = 0;
+  let filesReused = 0;
+  let filesParsed = 0;
+  let malformedLines = 0;
+
+  for (const file of selected.files) {
+    signal?.throwIfAborted();
+    const cached = cachedFiles.get(file.path);
+    let entry: PersistentGenericFileEntry;
+    if (
+      fileSignatureMatches(file, cached, adapter.source) &&
+      sqliteWalMatches(file, cached)
+    ) {
+      entry = cached as PersistentGenericFileEntry;
+      filesReused += 1;
+    } else {
+      const parsed = await parseKilocodeUiMessagesFile(file, adapter, signal);
+      parsed.events = parsed.events.map((event) => ({
+        ...event,
+        project: normalizeProjectPath(event.project, homeDirectory),
+      }));
+      entry = {
+        source: adapter.source as PersistentGenericFileEntry["source"],
+        path: file.path,
+        mtimeMs: file.modifiedAt,
+        size: file.size,
+        malformedLines: parsed.malformedLines,
+        // ui_messages.json files are plain whole-file JSON, never sqlite: no
+        // WAL companion.
+        events: parsed.events,
+        diagnostics: parsed.diagnostics,
+      };
+      filesParsed += 1;
+    }
+    diagnostics.push(...entry.diagnostics);
+    cacheEntries.push(entry);
+    filesRead += 1;
+    malformedLines += entry.malformedLines;
+  }
+
+  const events = kilocodeEventsInRange(
+    cacheEntries,
+    homeDirectory,
+    adapter,
+    cutoffTime,
+    nowTime,
+  );
+  return {
+    events,
+    summary: {
+      source: adapter.source,
+      available: events.length > 0,
+      detected: selected.detected,
+      paths: placements.map((placement) => placement.root),
+      filesConsidered: selected.files.length,
+      filesRead,
+      filesReused,
+      filesParsed,
+      malformedLines,
+      events: events.length,
+      diagnostics,
+    },
+    cacheEntries,
+  };
+}
+
+/**
+ * Kilo Code events carry structured session ids (derived from the taskUuid
+ * directory), so identical messages in rotated copies of a task file
+ * (cache-reused and freshly parsed alike) collapse to a single event by
+ * (sessionId, timestamp, totalTokens); out-of-window events are dropped.
+ */
+function kilocodeEventsInRange(
+  cacheEntries: readonly PersistentGenericFileEntry[],
+  homeDirectory: string,
+  adapter: UsageAdapterContract,
+  cutoffTime: number,
+  nowTime: number,
+): LocalUsageEvent[] {
+  const byIdentity = new Map<string, LocalUsageEvent>();
+  for (const entry of cacheEntries) {
+    const fileFallbackSessionId = sessionIdFromRelativeFile(
+      adapter.source,
+      relative(homeDirectory, entry.path),
+    );
+    for (const event of entry.events) {
+      if (!isTimestampInRange(new Date(event.timestamp), cutoffTime, nowTime)) {
+        continue;
+      }
+      const identity = genericEventIdentity(
+        adapter,
+        event,
+        fileFallbackSessionId,
+      );
+      if (byIdentity.has(identity)) continue;
+      byIdentity.set(identity, event);
+    }
+  }
+  return [...byIdentity.values()];
+}
+
 function diagnostic(
   adapter: UsageAdapterContract,
   code: LocalUsageDiagnostic["code"],
@@ -3247,7 +4873,10 @@ async function scanGenericAdapter(
     signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     let entry: PersistentGenericFileEntry;
-    if (fileSignatureMatches(file, cached, adapter.source)) {
+    if (
+      fileSignatureMatches(file, cached, adapter.source) &&
+      sqliteWalMatches(file, cached)
+    ) {
       entry = cached as PersistentGenericFileEntry;
       filesReused += 1;
     } else {
@@ -3270,6 +4899,14 @@ async function scanGenericAdapter(
         mtimeMs: file.modifiedAt,
         size: file.size,
         malformedLines: parsed.malformedLines,
+        ...(file.format === "sqlite"
+          ? {
+              wal:
+                file.wal == null
+                  ? null
+                  : { mtimeMs: file.wal.modifiedAt, size: file.wal.size },
+            }
+          : {}),
         events: parsed.events,
         diagnostics: parsed.diagnostics,
       };
@@ -3488,6 +5125,12 @@ export async function scanLocalUsage(
     join(root, "sessions"),
     join(root, "archived_sessions"),
   ]);
+  // Every Code is a Codex-family CLI writing the same rollout schema under
+  // `~/.code/sessions`. Kept simple by design: one sessions root per home —
+  // no archived_sessions tree and no WSL arm (unlike codex).
+  const everyCodeRoots = uniqueRoots(
+    homeDirectories.map((directory) => join(directory, ".code", "sessions")),
+  );
   const cutoffTime = nowTime - lookbackDays * DAY_IN_MS;
   // Rebuildable performance index. The scanner itself never writes files;
   // callers that want fast restarts may persist `snapshotUsageScanIndex()` and
@@ -3548,6 +5191,7 @@ export async function scanLocalUsage(
   const [
     claude,
     codex,
+    everyCode,
     workbuddy,
     gemini,
     grok,
@@ -3556,6 +5200,10 @@ export async function scanLocalUsage(
     dsh,
     pi,
     omp,
+    zed,
+    droid,
+    codebuddy,
+    kilocode,
     ...genericResults
   ] = await Promise.all([
     scanClaude(
@@ -3576,6 +5224,15 @@ export async function scanLocalUsage(
       cachedFiles,
       options.signal,
     ).catch((error) => sourceFailure("codex", error)),
+    scanEveryCodeUsageAdapter(
+      everyCodeRoots,
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+      options.signal,
+    ).catch((error) => sourceFailure("every-code", error)),
     scanWorkbuddy(
       homeDirectory,
       cutoffTime,
@@ -3619,6 +5276,58 @@ export async function scanLocalUsage(
       options.signal,
       options.toolDataRoots,
     ).catch((error) => sourceFailure("dsh", error)),
+    scanZedUsageAdapter(
+      BUILTIN_USAGE_ADAPTERS.find(
+        (candidate) => candidate.reader === "zed-threads-v1",
+      )!,
+      osFromProcess(platform),
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+      options.signal,
+      options.toolDataRoots,
+    ).catch((error) => sourceFailure("zed", error)),
+    scanDroidUsageAdapter(
+      BUILTIN_USAGE_ADAPTERS.find(
+        (candidate) => candidate.reader === "droid-settings-v1",
+      )!,
+      osFromProcess(platform),
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+      options.signal,
+      options.toolDataRoots,
+    ).catch((error) => sourceFailure("droid", error)),
+    scanCodebuddyUsageAdapter(
+      BUILTIN_USAGE_ADAPTERS.find(
+        (candidate) => candidate.reader === "codebuddy-log-v1",
+      )!,
+      osFromProcess(platform),
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+      options.signal,
+      options.toolDataRoots,
+    ).catch((error) => sourceFailure("codebuddy", error)),
+    scanKilocodeUsageAdapter(
+      BUILTIN_USAGE_ADAPTERS.find(
+        (candidate) => candidate.reader === "kilocode-task-v1",
+      )!,
+      osFromProcess(platform),
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+      options.signal,
+      options.toolDataRoots,
+    ).catch((error) => sourceFailure("kilocode", error)),
     ...(await runBoundedGenericAdapters(
       genericAdapters,
       osFromProcess(platform),
@@ -3636,6 +5345,7 @@ export async function scanLocalUsage(
   const currentCacheEntries = [
     ...claude.cacheEntries,
     ...codex.cacheEntries,
+    ...everyCode.cacheEntries,
     ...workbuddy.cacheEntries,
     ...gemini.cacheEntries,
     ...grok.cacheEntries,
@@ -3644,6 +5354,10 @@ export async function scanLocalUsage(
     ...dsh.cacheEntries,
     ...pi.cacheEntries,
     ...omp.cacheEntries,
+    ...zed.cacheEntries,
+    ...droid.cacheEntries,
+    ...codebuddy.cacheEntries,
+    ...kilocode.cacheEntries,
     ...genericResults.flatMap((result) => result.cacheEntries),
   ].sort((left, right) => left.path.localeCompare(right.path));
   const shouldWritePersistentIndex =
@@ -3651,6 +5365,7 @@ export async function scanLocalUsage(
     (persistentIndex == null ||
       claude.summary.filesParsed > 0 ||
       codex.summary.filesParsed > 0 ||
+      everyCode.summary.filesParsed > 0 ||
       workbuddy.summary.filesParsed > 0 ||
       gemini.summary.filesParsed > 0 ||
       grok.summary.filesParsed > 0 ||
@@ -3659,6 +5374,10 @@ export async function scanLocalUsage(
       dsh.summary.filesParsed > 0 ||
       pi.summary.filesParsed > 0 ||
       omp.summary.filesParsed > 0 ||
+      zed.summary.filesParsed > 0 ||
+      droid.summary.filesParsed > 0 ||
+      codebuddy.summary.filesParsed > 0 ||
+      kilocode.summary.filesParsed > 0 ||
       genericResults.some((result) => result.summary.filesParsed > 0) ||
       persistentIndex.files.length !== currentCacheEntries.length);
   if (shouldWritePersistentIndex) {
@@ -3668,6 +5387,7 @@ export async function scanLocalUsage(
   const nativeEvents = [
     ...claude.events,
     ...codex.events,
+    ...everyCode.events,
     ...workbuddy.events,
     ...gemini.events,
     ...grok.events,
@@ -3676,6 +5396,10 @@ export async function scanLocalUsage(
     ...dsh.events,
     ...pi.events,
     ...omp.events,
+    ...zed.events,
+    ...droid.events,
+    ...codebuddy.events,
+    ...kilocode.events,
     ...genericResults.flatMap((result) => result.events),
   ];
   const canonicalProjectPaths = new Map<string, Promise<string>>();
@@ -3697,6 +5421,7 @@ export async function scanLocalUsage(
   for (const summary of [
     claude.summary,
     codex.summary,
+    everyCode.summary,
     workbuddy.summary,
     gemini.summary,
     grok.summary,
@@ -3705,6 +5430,10 @@ export async function scanLocalUsage(
     dsh.summary,
     pi.summary,
     omp.summary,
+    zed.summary,
+    droid.summary,
+    codebuddy.summary,
+    kilocode.summary,
     ...genericResults.map((result) => result.summary),
   ]) {
     if (summary.events > 0 || !summaryBySource.has(summary.source)) {

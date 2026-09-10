@@ -694,3 +694,310 @@ test("Pi: transcript lookup falls back to the storage header id", async () => {
     assert.equal(transcript.messages[0]?.text, "Legacy dir question");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Hermes Agent — state.db (SQLite) transcripts
+// ---------------------------------------------------------------------------
+
+test("Hermes: extracts user/assistant text and reasoning from state.db", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "hermes-s300-abc123";
+    const hermesDir = join(home, ".hermes");
+    await mkdir(hermesDir, { recursive: true });
+    const database = new NodeSqliteDatabase({
+      path: join(hermesDir, "state.db"),
+    });
+    try {
+      database.exec(`
+        CREATE TABLE messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          content TEXT,
+          reasoning_content TEXT,
+          reasoning TEXT,
+          timestamp REAL
+        );
+      `);
+      const insert = database.prepare(
+        `INSERT INTO messages (session_id, role, content, reasoning_content, reasoning, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      );
+      insert.run(sessionId, "user", "Refactor the module", null, null, 1000.5);
+      insert.run(
+        sessionId,
+        "assistant",
+        "",
+        "Plan the refactor first",
+        "Plan the refactor first",
+        2000.5,
+      );
+      insert.run(sessionId, "assistant", "Done here", null, null, 3000.5);
+      insert.run(sessionId, "tool", "tool output", null, null, 2500.5);
+      insert.run("other-session", "user", "other prompt", null, null, 500.5);
+    } finally {
+      database.close();
+    }
+
+    const before = await snapshotTree(home);
+    const transcript = await loadSessionTranscript(
+      { source: "hermes", sessionId },
+      { homeDirectory: home },
+    );
+    const after = await snapshotTree(home);
+
+    assert.equal(transcript.source, "hermes");
+    assert.deepEqual(
+      transcript.messages.map((message) => ({
+        role: message.role,
+        text: message.text,
+        thinking: message.thinking,
+      })),
+      [
+        { role: "user", text: "Refactor the module", thinking: undefined },
+        {
+          role: "assistant",
+          text: "",
+          thinking: "Plan the refactor first",
+        },
+        { role: "assistant", text: "Done here", thinking: undefined },
+      ],
+    );
+    assert.deepEqual(after, before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WorkBuddy — projects JSONL transcripts
+// ---------------------------------------------------------------------------
+
+test("WorkBuddy: extracts user/assistant text from the conversation jsonl", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "dffe8d5b-2436-4022-b549-d9c227385c19";
+    const sessionDirectory = join(home, ".workbuddy", "projects", "demo");
+    await mkdir(sessionDirectory, { recursive: true });
+    const write = (name: string, lines: object[]) =>
+      writeFile(
+        join(sessionDirectory, name),
+        lines.map((line) => JSON.stringify(line)).join("\n") + "\n",
+      );
+    await write(`${sessionId}.jsonl`, [
+      {
+        id: "u-1",
+        timestamp: new Date("2026-09-09T04:50:15.000Z").getTime(),
+        role: "user",
+        content: "Fix the login bug",
+        sessionId,
+      },
+      {
+        id: "title-1",
+        timestamp: new Date("2026-09-09T04:50:16.000Z").getTime(),
+        type: "ai-title",
+        aiTitle: "Debug login",
+        sessionId,
+      },
+      {
+        id: "resp-1",
+        timestamp: new Date("2026-09-09T04:50:17.000Z").getTime(),
+        type: "function_call",
+        sessionId,
+        providerData: { rawUsage: {} },
+      },
+      {
+        id: "a-1",
+        timestamp: new Date("2026-09-09T04:50:18.000Z").getTime(),
+        role: "assistant",
+        content: "I fixed the login flow.",
+        sessionId,
+      },
+      {
+        id: "reason-1",
+        timestamp: new Date("2026-09-09T04:50:19.000Z").getTime(),
+        type: "reasoning",
+        content: "hidden reasoning",
+        rawContent: "hidden reasoning",
+        sessionId,
+      },
+    ]);
+    // A different conversation in the same project folder must stay separate.
+    await write("9a8b7c6d-1111-2222-3333-444455556666.jsonl", [
+      {
+        id: "u-2",
+        timestamp: new Date("2026-09-09T05:00:00.000Z").getTime(),
+        role: "user",
+        content: "Other conversation",
+        sessionId: "9a8b7c6d-1111-2222-3333-444455556666",
+      },
+    ]);
+
+    const before = await snapshotTree(home);
+    const transcript = await loadSessionTranscript(
+      { source: "workbuddy", sessionId },
+      { homeDirectory: home },
+    );
+    const after = await snapshotTree(home);
+
+    assert.equal(transcript.source, "workbuddy");
+    assert.deepEqual(
+      transcript.messages.map((message) => ({
+        role: message.role,
+        text: message.text,
+        thinking: message.thinking,
+      })),
+      [
+        { role: "user", text: "Fix the login bug", thinking: undefined },
+        {
+          role: "assistant",
+          text: "I fixed the login flow.",
+          thinking: undefined,
+        },
+      ],
+    );
+    assert.deepEqual(after, before);
+  });
+});
+
+test("ZCode: extracts ordered user/assistant text and reasoning from db.sqlite", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "sess-zcode-s300-aaaaaaaa";
+    const dbDir = join(home, ".zcode", "cli", "db");
+    await mkdir(dbDir, { recursive: true });
+    const databasePath = join(dbDir, "db.sqlite");
+    const database = new NodeSqliteDatabase({ path: databasePath });
+    try {
+      database.exec(`
+        CREATE TABLE message (
+          id TEXT PRIMARY KEY,
+          session_id TEXT,
+          data TEXT,
+          sequence INTEGER,
+          time_created INTEGER
+        );
+        CREATE TABLE part (
+          id TEXT PRIMARY KEY,
+          message_id TEXT,
+          session_id TEXT,
+          data TEXT,
+          sequence INTEGER
+        );
+      `);
+      const insertMessage = database.prepare(
+        "INSERT INTO message (id, session_id, data, sequence, time_created) VALUES (?, ?, ?, ?, ?)",
+      );
+      const insertPart = database.prepare(
+        "INSERT INTO part (id, message_id, session_id, data, sequence) VALUES (?, ?, ?, ?, ?)",
+      );
+      const userMsg = (id: string, text: string, atMs: number): void => {
+        insertMessage.run(
+          id,
+          sessionId,
+          JSON.stringify({ role: "user", agent: "zcode-agent" }),
+          1,
+          atMs,
+        );
+        insertPart.run(
+          `${id}-p`,
+          id,
+          sessionId,
+          JSON.stringify({
+            type: "text",
+            text,
+            time: { start: atMs, end: atMs },
+          }),
+          0,
+        );
+      };
+      const assistantMsg = (
+        id: string,
+        reasoning: string | null,
+        text: string,
+        atMs: number,
+      ): void => {
+        insertMessage.run(
+          id,
+          sessionId,
+          JSON.stringify({ role: "assistant", agent: "zcode-agent" }),
+          1,
+          atMs,
+        );
+        let sequence = 0;
+        insertPart.run(
+          `${id}-step`,
+          id,
+          sessionId,
+          JSON.stringify({ type: "step-start" }),
+          sequence++,
+        );
+        if (reasoning != null) {
+          insertPart.run(
+            `${id}-reason`,
+            id,
+            sessionId,
+            JSON.stringify({ type: "reasoning", text: reasoning }),
+            sequence++,
+          );
+        }
+        insertPart.run(
+          `${id}-text`,
+          id,
+          sessionId,
+          JSON.stringify({ type: "text", text }),
+          sequence++,
+        );
+        insertPart.run(
+          `${id}-finish`,
+          id,
+          sessionId,
+          JSON.stringify({ type: "step-finish", reason: "stop" }),
+          sequence++,
+        );
+      };
+      userMsg("m1", "请修复登录 bug", 1000);
+      assistantMsg("m2", "让我先看看代码。", "已修复登录流程。", 2000);
+      // A different session must never leak into this transcript.
+      insertMessage.run(
+        "other-m",
+        "other-sess-00000000000000000000000",
+        JSON.stringify({ role: "user", agent: "zcode-agent" }),
+        1,
+        1500,
+      );
+      insertPart.run(
+        "other-p",
+        "other-m",
+        "other-sess-00000000000000000000000",
+        JSON.stringify({ type: "text", text: "其他会话" }),
+        0,
+      );
+      assistantMsg("m3", null, "还需要其他帮助吗？", 3000);
+    } finally {
+      database.close();
+    }
+
+    const before = await snapshotTree(home);
+    const transcript = await loadSessionTranscript(
+      { source: "zcode", sessionId },
+      { homeDirectory: home },
+    );
+    const after = await snapshotTree(home);
+
+    assert.equal(transcript.source, "zcode");
+    assert.deepEqual(
+      transcript.messages.map((message) => ({
+        role: message.role,
+        text: message.text,
+        thinking: message.thinking,
+      })),
+      [
+        { role: "user", text: "请修复登录 bug", thinking: undefined },
+        {
+          role: "assistant",
+          text: "已修复登录流程。",
+          thinking: "让我先看看代码。",
+        },
+        { role: "assistant", text: "还需要其他帮助吗？", thinking: undefined },
+      ],
+    );
+    assert.deepEqual(after, before);
+  });
+});

@@ -16,42 +16,39 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
-        "base": "home",
-        "path": ".codebuddy"
-      },
-      {
-        "targets": [
-          "macos"
-        ],
+        "targets": ["macos"],
         "base": "appData",
         "path": "CodeBuddyExtension/Logs"
       },
       {
-        "targets": [
-          "windows10",
-          "windows11"
-        ],
+        "targets": ["windows10", "windows11"],
         "base": "userProfile",
         "path": "Local/CodeBuddyExtension/Logs"
       },
       {
-        "targets": [
-          "linux"
-        ],
+        "targets": ["linux"],
         "base": "dataHome",
         "path": "CodeBuddyExtension/Logs"
       }
-    ]
+    ],
+    "executable": {
+      "shared": ["codebuddy"]
+    }
   },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "native",
+      "reader": "codebuddy-log-v1",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11"],
+          "base": "home",
+          "path": ".codebuddy/projects",
+          "glob": "**/*.jsonl",
+          "format": "jsonl"
+        }
+      ],
+      "maxFileSizeBytes": 67108864
     },
     "skills": "unsupported",
     "agents": "unsupported",

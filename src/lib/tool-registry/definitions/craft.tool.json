@@ -16,12 +16,7 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
         "path": ".craft-agent"
       }
@@ -29,7 +24,30 @@
   },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "adapter",
+      "reader": "generic-jsonl",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11"],
+          "base": "home",
+          "path": ".craft-agent/workspaces",
+          "glob": "**/session.jsonl",
+          "format": "jsonl"
+        }
+      ],
+      "mapping": {
+        "timestamp": ["lastMessageAt", "lastUsedAt", "createdAt"],
+        "sessionId": ["id", "sdkSessionId"],
+        "model": ["model"],
+        "project": ["cwd"],
+        "inputTokens": ["tokenUsage.inputTokens"],
+        "cachedInputTokens": ["tokenUsage.cacheReadTokens"],
+        "cacheCreationInputTokens": ["tokenUsage.cacheCreationTokens"],
+        "outputTokens": ["tokenUsage.outputTokens"],
+        "reasoningOutputTokens": ["tokenUsage.reasoningTokens"],
+        "totalTokens": ["tokenUsage.totalTokens"]
+      },
+      "maxFileSizeBytes": 67108864
     },
     "skills": "unsupported",
     "agents": "unsupported",

@@ -26,6 +26,7 @@ export const BUILTIN_USAGE_READERS: ReadonlySet<string> = new Set([
   "generic-sqlite",
   "claude-rollout-v1",
   "codex-rollout-v1",
+  "every-code-rollout-v1",
   "gemini-session-v1",
   "grok-turn-v1",
   "openclaw-session-v1",
@@ -34,6 +35,10 @@ export const BUILTIN_USAGE_READERS: ReadonlySet<string> = new Set([
   "dsh-session-v1",
   "pi-session-v1",
   "omp-session-v1",
+  "zed-threads-v1",
+  "droid-settings-v1",
+  "codebuddy-log-v1",
+  "kilocode-task-v1",
 ]);
 
 export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([
@@ -44,6 +49,9 @@ export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([
   "aipy-session-v1",
   "pi-session-v1",
   "omp-session-v1",
+  "hermes-session-v1",
+  "workbuddy-session-v1",
+  "zcode-session-v1",
 ]);
 
 export const BUILTIN_CONTEXT_READERS: ReadonlySet<string> = new Set([

@@ -1,5 +1,69 @@
 import { createServerFn } from "@tanstack/react-start";
 
+import type { SecurityOverviewReadModel } from "../security-assessment/overview.contracts.ts";
+import type { SkillWorkspaceSnapshot } from "../skill-catalog/query.ts";
+
+/** Server-composed security block for the Skill management page. */
+export interface SkillHubSecurityData {
+  /** Canonical security overview (dashboard posture basis). */
+  readonly overview: SecurityOverviewReadModel;
+  /** skill name → risk-finding count for the list rows. */
+  readonly byRisk: Readonly<Record<string, number>>;
+}
+
+/** Server-composed Skill management page payload (route loader data). */
+export interface SkillHubData {
+  readonly workspace: SkillWorkspaceSnapshot;
+  readonly security: SkillHubSecurityData;
+}
+
+/**
+ * Whole-page data for `/skills` (workspace snapshot + canonical security
+ * overview + per-skill risk badges) resolved server-side in ONE RPC. The
+ * heavy scanner/DB modules stay out of the browser bundle: they are only
+ * imported from this handler, which the renderer never executes.
+ */
+export const getSkillHubPageData = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SkillHubData> => {
+    const [
+      { getSkillWorkspace },
+      { resolveSecurityOverview },
+      { readSecurityHistoryViews },
+    ] = await Promise.all([
+      import("../skill-catalog/query.ts"),
+      import("../security-assessment/overview.server.ts"),
+      import("../../app/security-summary.server.ts"),
+    ]);
+    const [workspace, overview, history] = await Promise.all([
+      getSkillWorkspace(),
+      resolveSecurityOverview().catch(() => null),
+      readSecurityHistoryViews().catch(() => []),
+    ]);
+    let byRisk: Record<string, number> = {};
+    if (overview?.available === true) {
+      const { projectSkillSecurityView } =
+        await import("./presentation/skill-security-view.ts");
+      byRisk = Object.fromEntries(
+        projectSkillSecurityView(workspace.snapshot.skills, history).byName,
+      );
+    }
+    return {
+      workspace,
+      security: {
+        overview: overview ?? {
+          available: false,
+          coverage: 0,
+          runCount: 0,
+          totalSkills: 0,
+          summary: null,
+          resolvedAt: null,
+        },
+        byRisk,
+      },
+    };
+  },
+);
+
 import type {
   MarketAgent,
   MarketListResult as LegacyMarketListResult,

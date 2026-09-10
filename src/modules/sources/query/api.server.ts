@@ -4,7 +4,11 @@ import { SKILL_AGENTS } from "../../../lib/local-skills/types";
 import { AI_TOOLS } from "../../../lib/tools/catalog";
 import { osFromProcess } from "../../../lib/tools/detection.server";
 import { sourcePathsForPlatform } from "../../../lib/local-usage/source-paths";
-import { getTool } from "../../../lib/tool-registry/registry";
+import { computeToolRegistryVersion } from "../../../lib/tool-registry/fingerprint.server.ts";
+import {
+  getDefaultRegistry,
+  getTool,
+} from "../../../lib/tool-registry/registry";
 import {
   isToolDataRootConfigurable,
   loadEffectiveToolDataRoots,
@@ -13,6 +17,16 @@ import {
   toSourcesQuerySummary,
   type SourcesQuerySummary,
 } from "./presentation/model";
+
+/**
+ * Fingerprint of the registry definitions behind this build. The persisted
+ * installation snapshot stamps the fingerprint that produced its probe facts;
+ * a mismatch — an app upgrade that changed detection roots/executables or
+ * capabilities without adding/removing tool ids — means those facts describe
+ * the previous definitions and a background re-probe is scheduled instead of
+ * serving stale "installed" states for up to the freshness window.
+ */
+const REGISTRY_FINGERPRINT = computeToolRegistryVersion(getDefaultRegistry());
 /**
  * Skill-agent label of a tool id: the registry display name (`AI_TOOLS[].nameZh`)
  * when it is one of the managed SKILL_AGENTS, else null (no Skill root).
@@ -140,11 +154,18 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
   const catalogChanged = AI_TOOLS.some(
     (tool) => !knownInstallationIds.has(tool.id),
   );
-  if (installations.data == null || catalogChanged) {
-    // A registry upgrade can add a tool while the persisted installation
-    // snapshot is still inside its six-hour freshness window. Repair that
-    // shape mismatch in the background; serve the last-known-good (or empty)
-    // projection now so the route never waits for installation probing.
+  // A registry upgrade may also change probe roots/executables while the
+  // tool-id set stays identical; the persisted snapshot records the registry
+  // fingerprint that produced its facts, so a mismatch is shape staleness too.
+  const registryChanged =
+    installations.data != null &&
+    installations.sourceFingerprint !== REGISTRY_FINGERPRINT;
+  if (installations.data == null || catalogChanged || registryChanged) {
+    // A registry upgrade can change the tool set or its probe shape while the
+    // persisted installation snapshot is still inside its freshness window.
+    // Repair that shape mismatch in the background; serve the last-known-good
+    // (or empty) projection now so the route never waits for installation
+    // probing.
     void installationSnapshot
       .requestRefresh({
         reason: installations.data == null ? "empty" : "event",

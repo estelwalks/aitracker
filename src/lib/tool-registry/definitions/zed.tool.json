@@ -16,25 +16,17 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos"
-        ],
+        "targets": ["macos"],
         "base": "appData",
         "path": "Zed"
       },
       {
-        "targets": [
-          "macos",
-          "linux"
-        ],
+        "targets": ["macos", "linux"],
         "base": "dataHome",
         "path": "zed"
       },
       {
-        "targets": [
-          "windows10",
-          "windows11"
-        ],
+        "targets": ["windows10", "windows11"],
         "base": "userProfile",
         "path": "Local/Zed/threads"
       }
@@ -42,7 +34,32 @@
   },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "native",
+      "reader": "zed-threads-v1",
+      "paths": [
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "Zed/threads",
+          "glob": "threads.db",
+          "format": "sqlite"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "userProfile",
+          "path": "Local/Zed/threads",
+          "glob": "threads.db",
+          "format": "sqlite"
+        },
+        {
+          "targets": ["linux"],
+          "base": "dataHome",
+          "path": "zed/threads",
+          "glob": "threads.db",
+          "format": "sqlite"
+        }
+      ],
+      "maxFileSizeBytes": 536870912
     },
     "skills": "unsupported",
     "agents": "unsupported",
