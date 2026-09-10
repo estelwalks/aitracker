@@ -18,8 +18,15 @@ evidence without adding another CI workflow or slowing ordinary pull requests.
   `npm run release:notes -- --version <version> --output -`.
 - Keep the release page short: it is an update summary plus a pointer to the
   README for install commands, not a second copy of the documentation. The
-  workflow appends only a short `## 下载` section, so anything longer differs
-  per release and belongs in the changelog.
+  workflow appends only a short `## Download` section, so anything longer
+  differs per release and belongs in the changelog.
+- Check the `publish-npm` workflow finished for the tag. It publishes
+  `packages/cli` to npm and moves the `latest`/`beta` dist-tag, which is what
+  `npx --yes @estelwalks/aitracker@latest` documents; it needs the repository
+  secret `NPM_TOKEN` (an npm automation token with publish access for the
+  `@estelwalks` scope) and reports a missing secret as a clear failure. Rerun it
+  by hand with `gh workflow run publish-npm.yml -f version=<version>`; the job
+  is idempotent and skips a version npm already serves.
 - Run `npm ci` from a clean checkout.
 - Run the release contract gate against the exact tag:
   `npm run verify:release-contract -- --tag v<version> --channel <stable|beta>`.

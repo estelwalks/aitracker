@@ -101,6 +101,25 @@ GitHub refuses to reuse an immutable tag name. Its content ships as
 [1.0.3] below. Because the release contract requires the tag to equal
 `v<package.json version>`, the only way forward was the next version.
 
+## Compatibility window closed at 1.0.3
+
+1.0.3 is the last release that keeps clients from 1.0.0 and 1.0.1 able to
+update themselves, and the plan is that every existing install reaches it.
+From **1.0.4 onward the release contract targets 1.0.3 and later only**, so
+future releases may drop the compatibility layer described under [1.0.3]:
+the versioned installer copies, the tag-addressed artifact URLs, and the
+three-platform limit on `release-metadata.json`.
+
+What is dropped is the _compatibility_ obligation, not updateability: a
+client on 1.0.3 and later still needs every release to keep
+
+- `release-metadata.json` attached under exactly that name;
+- the `darwin-arm64`, `darwin-x64` and `win32-x64` artifact records;
+- each record's `name`, `url`, `sha256` and `size`, with the bytes matching.
+
+Those three rules are what every future update is resolved through; the
+compatibility layer exists only for the older clients.
+
 ## [1.0.1] - 2026-09-08
 
 - Added pi and oh-my-pi (omp) session and usage readers over their `~/.pi`

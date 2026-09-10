@@ -1,0 +1,107 @@
+name: Publish CLI
+
+# Publishes @estelwalks/aitracker to npm so the documented
+# `npx --yes @estelwalks/aitracker@latest` resolves to this release. The tag
+# release job does not do this: npm needs a token that only a maintainer can
+# add (repository secret NPM_TOKEN, an automation token with publish access for
+# the @estelwalks scope).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to (re)publish, for example 1.0.3
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  # Required for `npm publish --provenance`: it attests that this tarball was
+  # built from this commit in this repository.
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish @estelwalks/aitracker
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve the version to publish
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::unexpected version: $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing version $version"
+
+      - name: Verify the package version matches
+        shell: bash
+        run: |
+          actual="$(node -p "require('./packages/cli/package.json').version")"
+          if [[ "$actual" != "${{ steps.version.outputs.version }}" ]]; then
+            echo "::error::packages/cli/package.json is $actual, expected ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+
+      - name: Check whether npm already has this version
+        id: existing
+        shell: bash
+        run: |
+          if npm view "@estelwalks/aitracker@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "npm already serves ${{ steps.version.outputs.version }}"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only packages the CLI: `files` in packages/cli/package.json limits the
+      # tarball to bin/, src/ and README.md, so no build step is needed here.
+      - name: Publish
+        if: steps.existing.outputs.published == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          if [[ -z "${NODE_AUTH_TOKEN}" ]]; then
+            echo "::error::The repository secret NPM_TOKEN is not set. Add an npm automation token with publish access for the @estelwalks scope (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          npm publish ./packages/cli --access public --provenance
+
+      # `latest` and `beta` must follow the release: the READMEs and the release
+      # notes document `npx --yes @estelwalks/aitracker@latest`, which resolves
+      # through this dist-tag.
+      - name: Move the dist-tag
+        if: steps.existing.outputs.published == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          if [[ "$version" == *-* ]]; then
+            tag=beta
+          else
+            tag=latest
+          fi
+          npm dist-tag add "@estelwalks/aitracker@${version}" "$tag"
+          echo "### Published @estelwalks/aitracker@${version} (dist-tag: $tag)" >> "$GITHUB_STEP_SUMMARY"
+          npm dist-tag ls @estelwalks/aitracker >> "$GITHUB_STEP_SUMMARY"
