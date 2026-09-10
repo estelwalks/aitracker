@@ -68,6 +68,48 @@ test("a missing or empty section is an error instead of blank notes", () => {
   assert.throws(() => extractReleaseNotes(SAMPLE, ""), /version is required/u);
 });
 
+test("a Highlights sub-section is what gets published", () => {
+  const withHighlights = [
+    "## [1.0.2] - 2026-09-10",
+    "",
+    "### Highlights",
+    "",
+    "- Short user-facing line",
+    "- Another short line",
+    "",
+    "### Details",
+    "",
+    "- Long internal note that stays in the changelog",
+    "",
+    "## [1.0.1] - 2026-09-08",
+    "",
+    "- older",
+  ].join("\n");
+  assert.equal(
+    extractReleaseNotes(withHighlights, "1.0.2"),
+    "- Short user-facing line\n- Another short line\n",
+  );
+  assert.doesNotMatch(
+    extractReleaseNotes(withHighlights, "1.0.2"),
+    /Long internal note/u,
+  );
+});
+
+test("without highlights the whole section is still published", () => {
+  assert.equal(
+    extractReleaseNotes(SAMPLE, "1.0.2"),
+    "- second release note\n- another note\n",
+  );
+});
+
+test("an empty Highlights heading is an error, not a blank release", () => {
+  const empty = "## [1.0.2]\n\n### Highlights\n\n## [1.0.1]\n\n- older\n";
+  assert.throws(
+    () => extractReleaseNotes(empty, "1.0.2"),
+    /empty "### Highlights"/u,
+  );
+});
+
 test("parses options and rejects unknown flags", () => {
   assert.deepEqual(
     parseReleaseNotesArgs(["--version", "1.0.2"]).version,

@@ -8,11 +8,18 @@ evidence without adding another CI workflow or slowing ordinary pull requests.
 - Confirm `package.json`, `package-lock.json`, and `packages/cli/package.json`
   use the same semantic version. `src/lib/app-config.ts` reads the version from
   the root `package.json`, so there is no separate constant to edit.
-- Update `CHANGELOG.md` with user-facing changes and known limitations. The
-  release workflow publishes that version's `## [<version>]` section verbatim
-  as the GitHub release notes and fails the tag when the section is missing or
-  empty — preview it locally with
+- Update `CHANGELOG.md` with user-facing changes and known limitations, and put
+  the short summary users should read in a `### Highlights` sub-section at the
+  top of the entry; everything below it (`### Details`) stays in the changelog.
+  The release workflow publishes the Highlights list as the GitHub release
+  notes, falling back to the whole section when a version has none, and fails
+  the tag when the section or an empty Highlights heading would ship blank
+  notes — preview it locally with
   `npm run release:notes -- --version <version> --output -`.
+- Keep the release page short: it is an update summary plus a pointer to the
+  README for install commands, not a second copy of the documentation. The
+  workflow appends only a short `## 下载` section, so anything longer differs
+  per release and belongs in the changelog.
 - Run `npm ci` from a clean checkout.
 - Run the release contract gate against the exact tag:
   `npm run verify:release-contract -- --tag v<version> --channel <stable|beta>`.

@@ -7,7 +7,26 @@ import { fileURLToPath } from "node:url";
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const SECTION_PATTERN = /^## \[([^\]]+)\](?:[^\n]*)$/u;
+/** Sub-heading whose content is what users read on the GitHub release page. */
+const HIGHLIGHTS_PATTERN = /^### +Highlights *$/u;
+const SUB_HEADING_PATTERN = /^### /u;
 
+function trimBlankEdges(lines) {
+  const body = [...lines];
+  while (body.length > 0 && body[body.length - 1].trim() === "") body.pop();
+  while (body.length > 0 && body[0].trim() === "") body.shift();
+  return body;
+}
+
+/**
+ * Release notes for one version, taken from CHANGELOG.md.
+ *
+ * The GitHub release page is an update summary, not a second copy of the
+ * changelog, so a section may carry a `### Highlights` sub-section listing the
+ * user-visible changes in short form. When it exists, only that sub-section is
+ * published; otherwise the whole section is used, which keeps a version
+ * without highlights releasable instead of shipping an empty release.
+ */
 export function extractReleaseNotes(changelog, version) {
   if (typeof changelog !== "string")
     throw new Error("changelog must be a string");
@@ -29,13 +48,28 @@ export function extractReleaseNotes(changelog, version) {
     if (SECTION_PATTERN.test(lines[index])) break;
     body.push(lines[index]);
   }
-  while (body.length > 0 && body[body.length - 1].trim() === "") body.pop();
-  while (body.length > 0 && body[0].trim() === "") body.shift();
-  if (body.length === 0)
+  const section = trimBlankEdges(body);
+  if (section.length === 0)
     throw new Error(
       `CHANGELOG.md "## [${version}]" section is empty; release notes would be blank`,
     );
-  return `${body.join("\n")}\n`;
+
+  const highlightsAt = section.findIndex((line) =>
+    HIGHLIGHTS_PATTERN.test(line),
+  );
+  if (highlightsAt === -1) return `${section.join("\n")}\n`;
+
+  const highlights = [];
+  for (let index = highlightsAt + 1; index < section.length; index += 1) {
+    if (SUB_HEADING_PATTERN.test(section[index])) break;
+    highlights.push(section[index]);
+  }
+  const trimmed = trimBlankEdges(highlights);
+  if (trimmed.length === 0)
+    throw new Error(
+      `CHANGELOG.md "## [${version}]" has an empty "### Highlights" section; move the summary or remove the heading`,
+    );
+  return `${trimmed.join("\n")}\n`;
 }
 
 export function parseReleaseNotesArgs(argv) {

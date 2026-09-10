@@ -7,6 +7,18 @@ uses semantic versioning for published releases.
 
 ## [1.0.2] - 2026-09-10
 
+### Highlights
+
+- 应用内更新变成完整流程：每 6 小时检查、后台静默下载、重启即安装；慢速网络可续传，进度以百分比显示，延后可记住版本
+- macOS 更新不再需要手动拖入「应用程序」：点重启后自动挂载、替换、重启（首次启动需确认一次系统安全提示）
+- 新增更新代理设置（默认关闭），供无法直连 GitHub 的网络使用
+- 新增 Windows ARM64 安装包
+- 安装包文件名不再带版本号，下载链接永久指向最新版本，无需随版本更换
+- macOS 应用图标改为白色圆角底板
+- 技能目录改为并发扫描，技能目录越多扫描越快
+
+### Details
+
 - In-app updates are now a complete workflow instead of a manual check: the
   desktop client checks GitHub every six hours while it runs, downloads a
   verified installer silently in the background, and offers restart-to-install
