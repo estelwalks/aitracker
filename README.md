@@ -107,7 +107,7 @@ npx --yes @estelwalks/aitracker@latest
 
 This command downloads and opens the desktop installer. `@latest` follows the
 newest stable release, so it never needs editing; pin a version
-(`@estelwalks/aitracker@1.0.2`) when you need to reproduce an exact build. Beta
+(`@estelwalks/aitracker@1.0.3`) when you need to reproduce an exact build. Beta
 builds are published under `@beta`.
 
 If your npm configuration uses a mirror that does not contain the package, use

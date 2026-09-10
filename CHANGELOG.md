@@ -62,7 +62,7 @@ uses semantic versioning for published releases.
   download links and `npx --yes @estelwalks/aitracker@latest` keep pointing at
   the current build without a documentation edit per release.
 - Every release publishes each installer twice: under that versionless name and
-  under a versioned copy (`AITracker-1.0.2-x64.dmg`). `release-metadata.json`
+  under a versioned copy (`AITracker-1.0.3-x64.dmg`). `release-metadata.json`
   names the versioned copies at `releases/download/v<version>/<name>` URLs
   specifically so installs from 1.0.0 and 1.0.1 - which compare the URL to that
   exact string and require the matching asset - can update themselves instead of

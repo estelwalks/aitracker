@@ -21,38 +21,27 @@ const INTEL_SHA = "b".repeat(64);
 
 function fixture(channel = "stable") {
   const version = channel === "stable" ? "1.2.3" : "1.2.3-beta.1";
+  // release-metadata.json names the versioned installer at its tag-addressed
+  // URL, which is what clients released before 1.0.2 require; the cask must
+  // still end up pointing at the versionless URL.
+  const base = `https://github.com/estelwalks/aitracker/releases/download/v${version}`;
+  const artifacts = [
+    ["darwin-arm64", `AITracker-${version}-arm64.dmg`, ARM_SHA, 123456],
+    ["darwin-x64", `AITracker-${version}-x64.dmg`, INTEL_SHA, 123457],
+    ["win32-x64", `AITracker-Setup-${version}-x64.exe`, "c".repeat(64), 123458],
+  ];
   return {
     schemaVersion: 1,
     appVersion: version,
     channel,
     repository: "estelwalks/aitracker",
     gitTag: `v${version}`,
-    artifacts: {
-      "darwin-arm64": {
-        name: "AITracker-arm64.dmg",
-        url: "https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg",
-        sha256: ARM_SHA,
-        size: 123456,
-      },
-      "darwin-x64": {
-        name: "AITracker-x64.dmg",
-        url: "https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg",
-        sha256: INTEL_SHA,
-        size: 123457,
-      },
-      "win32-arm64": {
-        name: "AITracker-Setup-arm64.exe",
-        url: "https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe",
-        sha256: "d".repeat(64),
-        size: 123459,
-      },
-      "win32-x64": {
-        name: "AITracker-Setup-x64.exe",
-        url: "https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe",
-        sha256: "c".repeat(64),
-        size: 123458,
-      },
-    },
+    artifacts: Object.fromEntries(
+      artifacts.map(([key, name, sha256, size]) => [
+        key,
+        { name, url: `${base}/${name}`, sha256, size },
+      ]),
+    ),
   };
 }
 

@@ -32,7 +32,7 @@ function fail(message) {
   throw new TypeError(`Invalid release metadata: ${message}`);
 }
 
-function validateArtifact(artifact, { key, expectedName }) {
+function validateArtifact(artifact, { key, expectedName, metadataVersion }) {
   if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
     fail(`artifacts.${key} must be an object`);
   }
@@ -49,12 +49,29 @@ function validateArtifact(artifact, { key, expectedName }) {
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
   }
-  // Installer names carry no version, so the URL is the versionless
-  // releases/latest/download/<name> form: the Cask pins the exact version in
-  // its own `version` stanza and verifies bytes through `sha256`.
-  if (url !== `${LATEST_DOWNLOAD_BASE_URL}${name}`) {
-    fail(`artifacts.${key}.url must be ${LATEST_DOWNLOAD_BASE_URL}${name}`);
+  // The metadata names the versioned installer at its tag-addressed URL, which
+  // is what clients released before 1.0.2 require. The cask points at the
+  // versionless `releases/latest/download/<name>` URL instead: that is the name
+  // the download page and READMEs use and it never needs editing per release.
+  // The version is pinned by the `version` stanza and the bytes by `sha256`, and
+  // both namings hold identical bytes.
+  const expected = `${LATEST_DOWNLOAD_BASE_URL}${versionlessName(name)}`;
+  const accepted = [
+    expected,
+    `https://github.com/${DEFAULT_REPOSITORY}/releases/download/v${metadataVersion}/${name}`,
+  ];
+  if (!accepted.includes(url)) {
+    fail(`artifacts.${key}.url must be ${expected} or ${accepted[1]}`);
   }
+}
+
+/** `AITracker-1.0.3-x64.dmg` -> `AITracker-x64.dmg`. */
+function versionlessName(name) {
+  const match =
+    /^(.*?)-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-(arm64|x64)\.(dmg|exe)$/u.exec(
+      name,
+    );
+  return match ? `${match[1]}-${match[2]}.${match[3]}` : name;
 }
 
 /**
@@ -80,10 +97,14 @@ export function validateMetadata(metadata, { channel } = {}) {
     fail(error instanceof Error ? error.message : String(error));
   }
 
+  // release-metadata.json names the versioned copy of each installer (clients
+  // released before 1.0.2 require that form); the cask still points at the
+  // versionless URL, so derive the name the download page uses.
   for (const [, , arch] of REQUIRED_DARWIN_ARTIFACTS) {
     validateArtifact(findArtifact(metadata, "darwin", arch), {
       key: `darwin-${arch}`,
-      expectedName: `AITracker-${arch}.dmg`,
+      expectedName: `AITracker-${metadata.appVersion}-${arch}.dmg`,
+      metadataVersion: metadata.appVersion,
     });
   }
   return metadata;
@@ -109,8 +130,8 @@ export function renderCask(metadata, { token, channel } = {}) {
     [
       `cask ${rubyString(token)} do`,
       "  download_url = on_arch_conditional(",
-      `    arm:   ${rubyString(arm.url)},`,
-      `    intel: ${rubyString(intel.url)},`,
+      `    arm:   ${rubyString(`${LATEST_DOWNLOAD_BASE_URL}${versionlessName(arm.name)}`)},`,
+      `    intel: ${rubyString(`${LATEST_DOWNLOAD_BASE_URL}${versionlessName(intel.name)}`)},`,
       "  )",
       "",
       `  version ${rubyString(metadata.appVersion)}`,

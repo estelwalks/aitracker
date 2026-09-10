@@ -101,7 +101,7 @@ npx --yes @estelwalks/aitracker@latest
 
 이 명령은 데스크톱 설치 파일을 다운로드하여 엽니다. `@latest`는 항상 최신 정식 버전을
 따르므로 수정할 필요가 없습니다. 특정 빌드를 재현하려면 버전을 고정하세요
-(`@estelwalks/aitracker@1.0.2`). 베타 버전은 `@beta`로 배포됩니다.
+(`@estelwalks/aitracker@1.0.3`). 베타 버전은 `@beta`로 배포됩니다.
 
 사용 중인 npm 미러에 이 패키지가 없다면 공식 npm registry를 명시하세요.
 
