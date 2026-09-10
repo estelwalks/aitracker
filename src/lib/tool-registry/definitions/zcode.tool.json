@@ -60,7 +60,7 @@
       "reader": "generic-sqlite",
       "paths": [
         {
-          "targets": ["macos", "windows10", "windows11"],
+          "targets": ["macos", "windows10", "windows11", "linux"],
           "base": "home",
           "path": ".zcode/cli/db",
           "glob": "db.sqlite",

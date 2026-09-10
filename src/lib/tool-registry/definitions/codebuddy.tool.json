@@ -41,7 +41,7 @@
       "reader": "codebuddy-log-v1",
       "paths": [
         {
-          "targets": ["macos", "windows10", "windows11"],
+          "targets": ["macos", "windows10", "windows11", "linux"],
           "base": "home",
           "path": ".codebuddy/projects",
           "glob": "**/*.jsonl",

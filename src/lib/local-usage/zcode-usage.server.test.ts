@@ -137,6 +137,9 @@ test("zcode usage adapter reads model_usage rows with decomposed tokens", async 
       homeDirectory: root,
       cacheDirectory: join(root, ".cache"),
       lookbackDays: 3650,
+      // The registry declares this adapter for linux too, and the scan must not
+      // depend on the OS running the suite.
+      platform: "linux" as const,
     });
     const zcode = snapshot.sources.find((source) => source.source === "zcode");
     assert.ok(zcode, "zcode source must be reported");
@@ -209,6 +212,7 @@ test("zcode WAL-mode database re-parses when only the -wal file changed", async 
       homeDirectory: root,
       cacheDirectory: join(root, ".cache"),
       lookbackDays: 3650,
+      platform: "linux" as const,
     };
     const first = await scanLocalUsage(options);
     const firstZcode = first.sources.find(
@@ -270,6 +274,7 @@ test("zcode data-directory override rebases usage roots to the chosen dir", asyn
       homeDirectory: root,
       cacheDirectory: join(root, ".cache"),
       lookbackDays: 3650,
+      platform: "linux" as const,
       toolDataRoots: new Map([["zcode", dataDir]]),
     });
     const zcode = snapshot.sources.find((source) => source.source === "zcode");

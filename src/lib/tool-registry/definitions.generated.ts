@@ -1387,7 +1387,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "targets": [
               "macos",
               "windows10",
-              "windows11"
+              "windows11",
+              "linux"
             ],
             "base": "home",
             "path": ".codebuddy/projects",
@@ -2188,7 +2189,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "targets": [
               "macos",
               "windows10",
-              "windows11"
+              "windows11",
+              "linux"
             ],
             "base": "home",
             "path": ".craft-agent/workspaces",
@@ -2760,7 +2762,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "targets": [
               "macos",
               "windows10",
-              "windows11"
+              "windows11",
+              "linux"
             ],
             "base": "home",
             "path": ".zcode/cli/db",
@@ -4171,4 +4174,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "1d20f9c61c5a1509";
+export const TOOL_REGISTRY_VERSION: string = "ee3def31c4a4c154";
