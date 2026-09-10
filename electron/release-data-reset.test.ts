@@ -191,7 +191,21 @@ test("a ~/.aitracker symlink is unlinked without touching its destination", asyn
     await mkdir(external, { recursive: true });
     await writeFile(externalFile, "safe");
     const target = join(options.homeDirectory, ".aitracker");
-    await symlink(external, target, "dir");
+    try {
+      await symlink(external, target, "dir");
+    } catch (error) {
+      // Directory symlinks need the SeCreateSymbolicLink privilege on
+      // Windows; junctions do not and lstat/unlink them identically, so they
+      // still exercise the same "never descend into the destination" guard.
+      if (
+        process.platform === "win32" &&
+        (error as NodeJS.ErrnoException).code === "EPERM"
+      ) {
+        await symlink(external, target, "junction");
+      } else {
+        throw error;
+      }
+    }
 
     await prepareReleaseDataReset(options);
     await assert.rejects(lstat(target), { code: "ENOENT" });

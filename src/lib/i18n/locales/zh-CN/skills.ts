@@ -291,6 +291,7 @@ export const skills = {
     detected: "已扫描",
     risks: "不安全",
     localSkillsHint: "分发到 {count} 个已安装位",
+    localAssetsHint: "按内容去重 · {names} 个名称 · 分发到 {installs} 个安装位",
     distilledHint: "由会话提炼生成",
     detectedHint: "覆盖 {pct}%",
     risksHint: "建议立即处理",

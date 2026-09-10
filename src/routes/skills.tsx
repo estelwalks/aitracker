@@ -9,8 +9,10 @@ import {
   type Currency,
   type Locale,
 } from "../lib/i18n/locale";
-import { getSkillWorkspace } from "../modules/skill-catalog/query";
-import type { SkillHubData } from "../modules/skill-distribution/presentation/SkillHubPage";
+import {
+  getSkillHubPageData,
+  type SkillHubData,
+} from "../modules/skill-distribution/query";
 
 /** Compatibility for pre-split `?tab=market` deep links (market moved to /market). */
 type SkillsSearchParams = {
@@ -38,11 +40,7 @@ function safeSkillSearch(value: unknown): string | undefined {
   return skill;
 }
 
-interface SkillsLoader extends SkillHubData {
-  readonly locale: Locale;
-}
-
-// The page component lives in skills.lazy.tsx (P6-T6-04 route splitting).
+// Page component lives in skills.lazy.tsx (P6-T6-04).
 export const Route = createFileRoute("/skills")({
   validateSearch: (search: Record<string, unknown>): SkillsSearchParams => ({
     tab:
@@ -58,9 +56,11 @@ export const Route = createFileRoute("/skills")({
   loaderDeps: ({ search }) => ({
     locale: resolveLocaleFromSearch(search as Record<string, unknown>),
   }),
-  loader: async ({ deps }): Promise<SkillsLoader> => {
-    const workspace = await getSkillWorkspace();
-    return { locale: deps.locale, workspace };
+  loader: async ({ deps }): Promise<SkillHubData & { locale: Locale }> => {
+    // One server RPC owns the payload; scanner/DB modules stay server-side
+    // for client-side navigations too.
+    const data = await getSkillHubPageData();
+    return { locale: deps.locale, ...data };
   },
   staleTime: 30_000,
   gcTime: 5 * 60_000,

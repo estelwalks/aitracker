@@ -25,7 +25,10 @@ import { useVersionCheck } from "../../../lib/version-check";
 import {
   AUTO_UPDATE_PREFERENCE_KEY,
   DEFAULT_AUTO_UPDATE_ENABLED,
+  UPDATE_PROXY_ENABLED_KEY,
+  UPDATE_PROXY_KEY,
   parseAutoUpdateEnabled,
+  parseUpdateProxyEnabled,
 } from "../../../lib/update-preferences";
 import {
   listPreferences,
@@ -54,6 +57,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../../components/ui/dialog";
 import { Field, Toggle } from "./fields";
 import { ModelProfilesSection } from "./ModelProfilesSection";
 import { MenuBarAppSettingsSection } from "./MenuBarAppSettingsSection";
@@ -200,6 +210,20 @@ export function SettingsPage({
     >();
   const [autoUpdatePreferenceLoaded, setAutoUpdatePreferenceLoaded] =
     useState(false);
+  /** Manual "check for updates" result dialog (desktop): offer the download. */
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  /** Desktop-only proxy override for update checks/downloads (off by default). */
+  const [proxyEnabled, setProxyEnabled] = useState(false);
+  const [proxyValue, setProxyValue] = useState("");
+  const [proxySaving, setProxySaving] = useState(false);
+  const [proxyDialogOpen, setProxyDialogOpen] = useState(false);
+  /** "enable" keeps the dialog on the enable-intent path; "edit" edits only. */
+  const [proxyDialogIntent, setProxyDialogIntent] = useState<"enable" | "edit">(
+    "edit",
+  );
+  const [proxyDraft, setProxyDraft] = useState("");
+  /** True between "restart & update" and the installer closing this app. */
+  const [restarting, setRestarting] = useState(false);
   const {
     result: versionResult,
     loading: versionLoading,
@@ -265,14 +289,20 @@ export function SettingsPage({
     void (async () => {
       try {
         if (api) {
-          const [preference, state] = await Promise.all([
+          const [preference, state, preferences] = await Promise.all([
             api.getAutoUpdate(),
             api.getUpdateState(),
+            api.getPreferences(),
           ]);
           if (cancelled) return;
           setAutoUpdateEnabled(preference.enabled);
           setAutoUpdateSupported(preference.supported);
           setDesktopUpdateState(state);
+          const proxy = preferences[UPDATE_PROXY_KEY];
+          setProxyEnabled(
+            parseUpdateProxyEnabled(preferences[UPDATE_PROXY_ENABLED_KEY]),
+          );
+          setProxyValue(typeof proxy === "string" ? proxy : "");
         } else {
           const preference = await getPreference(AUTO_UPDATE_PREFERENCE_KEY);
           if (cancelled) return;
@@ -394,7 +424,10 @@ export function SettingsPage({
   const handleCheckForUpdates = async () => {
     try {
       if (desktopApi) {
-        setDesktopUpdateState(await desktopApi.checkForUpdates());
+        const next = await desktopApi.checkForUpdates();
+        setDesktopUpdateState(next);
+        // Offer the download in a dialog instead of an inline card.
+        if (next.status === "available") setUpdateDialogOpen(true);
       } else {
         await versionRefresh();
       }
@@ -406,21 +439,97 @@ export function SettingsPage({
   const handleDownloadUpdate = async () => {
     if (!desktopApi) return;
     try {
-      setDesktopUpdateState(await desktopApi.downloadUpdate());
+      const next = await desktopApi.downloadUpdate();
+      setDesktopUpdateState(next);
+      if (next.status === "error") {
+        setUpdateDialogOpen(false);
+        toast.error(t("settings.toast.updateDownloadFailed"));
+      } else if (next.status === "downloaded") {
+        // The global DesktopUpdateDialogs prompt takes over from here.
+        setUpdateDialogOpen(false);
+      }
     } catch {
+      setUpdateDialogOpen(false);
       toast.error(t("settings.toast.updateDownloadFailed"));
     }
   };
 
-  const handleInstallUpdate = async () => {
+  const handleRestartNow = async () => {
     if (!desktopApi) return;
     try {
-      const result = await desktopApi.installUpdate();
-      if (!result.opened) toast.error(t("settings.toast.updateInstallFailed"));
+      const result = await desktopApi.restartToInstall();
+      if (!result.started) {
+        toast.error(t("settings.toast.updateRestartFailed"));
+        return;
+      }
+      // The silent installer closes this app itself; when this page is still
+      // alive after the timeout the hand-off never happened.
+      setRestarting(true);
+      toast.success(t("settings.toast.updateInstalling"));
+      window.setTimeout(() => {
+        setRestarting(false);
+        toast.message(t("settings.toast.updateInstallTimeout"));
+      }, 90_000);
     } catch {
-      toast.error(t("settings.toast.updateInstallFailed"));
+      toast.error(t("settings.toast.updateRestartFailed"));
     }
   };
+
+  const saveProxyConfig = async (enabled: boolean, proxy: string) => {
+    if (!desktopApi) return;
+    setProxySaving(true);
+    try {
+      const result = await desktopApi.setUpdateProxy({ enabled, proxy });
+      setProxyEnabled(result.enabled);
+      setProxyValue(result.proxy);
+      setProxyDialogOpen(false);
+      toast.success(t("settings.toast.updateProxySaved"));
+    } catch {
+      toast.error(t("settings.toast.updateProxySaveFailed"));
+    } finally {
+      setProxySaving(false);
+    }
+  };
+
+  const handleEnableProxy = () => {
+    if (!desktopApi) return;
+    if (proxyValue.trim().length > 0) {
+      void saveProxyConfig(true, proxyValue);
+      return;
+    }
+    // Enabling requires an address: collect one in the dialog first.
+    setProxyDraft("");
+    setProxyDialogIntent("enable");
+    setProxyDialogOpen(true);
+  };
+
+  const handleDisableProxy = () => {
+    if (!desktopApi) return;
+    void saveProxyConfig(false, proxyValue);
+  };
+
+  const handleEditProxy = () => {
+    setProxyDraft(proxyValue);
+    setProxyDialogIntent("edit");
+    setProxyDialogOpen(true);
+  };
+
+  const handleSaveProxyDialog = () => {
+    const enableAfterSave = proxyDialogIntent === "enable";
+    void saveProxyConfig(
+      enableAfterSave ? true : proxyEnabled,
+      proxyDraft.trim(),
+    );
+  };
+
+  // Close the manual dialog whenever the flow left the downloadable states
+  // through another path (periodic auto-download, errors, re-checks).
+  useEffect(() => {
+    if (!updateDialogOpen) return;
+    const status = desktopUpdateState?.status;
+    if (status === "available" || status === "downloading") return;
+    setUpdateDialogOpen(false);
+  }, [updateDialogOpen, desktopUpdateState?.status]);
 
   const shownUpdate = desktopApi
     ? desktopUpdateState
@@ -445,7 +554,6 @@ export function SettingsPage({
   const updateChecking = desktopApi
     ? desktopUpdateState?.status === "checking"
     : versionLoading;
-  const updateDownloaded = shownUpdate?.status === "downloaded";
 
   const autoLaunchHint =
     autoLaunchStatus === "浏览器不可用"
@@ -1017,6 +1125,98 @@ export function SettingsPage({
                   ariaLabel={t("settings.autoUpdate")}
                 />
               </Field>
+              {desktopApi && (
+                <Field label={t("settings.updateProxy")}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1 text-left">
+                      <span className="aitracker-text-body-sm block truncate">
+                        {proxyEnabled
+                          ? proxyValue.length > 0
+                            ? proxyValue
+                            : t("settings.updateProxyMissing")
+                          : t("settings.updateProxyNotEnabled")}
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 justify-end gap-1.5">
+                      <AITrackerButton
+                        size="sm"
+                        variant={proxyEnabled ? "ghost" : "primary"}
+                        onClick={
+                          proxyEnabled
+                            ? () => void handleDisableProxy()
+                            : handleEnableProxy
+                        }
+                        disabled={proxySaving}
+                      >
+                        {proxyEnabled
+                          ? t("settings.updateProxyDisable")
+                          : t("settings.updateProxyEnable")}
+                      </AITrackerButton>
+                      <AITrackerButton
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleEditProxy}
+                        disabled={proxySaving}
+                      >
+                        {t("settings.updateProxyEdit")}
+                      </AITrackerButton>
+                    </div>
+                  </div>
+                  <Dialog
+                    open={proxyDialogOpen}
+                    onOpenChange={setProxyDialogOpen}
+                  >
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>{t("settings.updateProxy")}</DialogTitle>
+                      </DialogHeader>
+                      <input
+                        type="text"
+                        inputMode="url"
+                        autoFocus
+                        value={proxyDraft}
+                        onChange={(event) => setProxyDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === "Enter" &&
+                            !proxySaving &&
+                            proxyDraft.trim().length > 0
+                          ) {
+                            event.preventDefault();
+                            handleSaveProxyDialog();
+                          }
+                        }}
+                        placeholder={t("settings.updateProxyPlaceholder")}
+                        spellCheck={false}
+                        autoComplete="off"
+                        className="aitracker-text-body h-8 w-full rounded-sm border border-border bg-surface-2 px-2 text-foreground"
+                      />
+                      <DialogFooter>
+                        <AITrackerButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setProxyDialogOpen(false)}
+                          disabled={proxySaving}
+                        >
+                          {t("common.cancel")}
+                        </AITrackerButton>
+                        <AITrackerButton
+                          variant="primary"
+                          size="sm"
+                          onClick={handleSaveProxyDialog}
+                          disabled={
+                            proxySaving || proxyDraft.trim().length === 0
+                          }
+                        >
+                          {proxySaving
+                            ? t("settings.savingProxy")
+                            : t("settings.saveProxy")}
+                        </AITrackerButton>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </Field>
+              )}
               <Field label={t("settings.checkUpdate")}>
                 <div className="flex items-center gap-2">
                   <AITrackerButton
@@ -1037,25 +1237,44 @@ export function SettingsPage({
                           ? t("settings.updateFound", {
                               version: shownUpdate.latestVersion ?? "",
                             })
-                          : shownUpdate.status === "error" &&
-                              shownUpdate.errorCode === "no-asset"
-                            ? t("settings.updateNoAsset", {
-                                version: shownUpdate.latestVersion ?? "",
-                              })
-                            : shownUpdate.status === "current"
-                              ? t("settings.upToDate")
-                              : shownUpdate.status === "downloading"
-                                ? t("settings.downloading")
-                                : t("settings.updateFailed")}
+                          : shownUpdate.status === "downloading"
+                            ? t("settings.downloading")
+                            : shownUpdate.status === "error" &&
+                                shownUpdate.errorCode === "no-asset"
+                              ? t("settings.updateNoAsset", {
+                                  version: shownUpdate.latestVersion ?? "",
+                                })
+                              : shownUpdate.status === "error"
+                                ? t("settings.updateFailed")
+                                : shownUpdate.status === "current"
+                                  ? t("settings.upToDate")
+                                  : null}
                     </span>
                   )}
+                  {desktopApi && shownUpdate?.status === "downloaded" && (
+                    <AITrackerButton
+                      variant="primary"
+                      size="sm"
+                      onClick={() => void handleRestartNow()}
+                      disabled={restarting}
+                    >
+                      {restarting
+                        ? t("settings.updateInstallingShort")
+                        : t("settings.updateRestartNow")}
+                    </AITrackerButton>
+                  )}
+                  {desktopApi &&
+                    shownUpdate?.status === "downloading" &&
+                    shownUpdate.progress && (
+                      <DownloadProgress
+                        downloadedBytes={shownUpdate.progress.downloadedBytes}
+                        totalBytes={shownUpdate.progress.totalBytes}
+                      />
+                    )}
                 </div>
-                {shownUpdate &&
-                  (shownUpdate.status === "available" ||
-                    shownUpdate.status === "downloading" ||
-                    shownUpdate.status === "downloaded" ||
-                    (shownUpdate.status === "error" &&
-                      shownUpdate.errorCode === "no-asset")) && (
+                {!desktopApi &&
+                  shownUpdate?.status === "available" &&
+                  shownUpdate.downloadUrl && (
                     <div className="mt-2 rounded-sm border border-primary/30 bg-primary/5 p-3">
                       {shownUpdate.changelog && (
                         <p className="aitracker-text-body-sm leading-relaxed text-muted-foreground">
@@ -1069,44 +1288,15 @@ export function SettingsPage({
                           })}
                         </p>
                       )}
-                      {shownUpdate.status === "available" && desktopApi && (
-                        <AITrackerButton
-                          variant="primary"
-                          size="sm"
-                          onClick={() => void handleDownloadUpdate()}
-                          className="mt-2"
-                        >
-                          {t("settings.downloadUpdate")}
-                        </AITrackerButton>
-                      )}
-                      {shownUpdate.status === "available" &&
-                        !desktopApi &&
-                        shownUpdate.downloadUrl && (
-                          <a
-                            href={shownUpdate.downloadUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="aitracker-text-body-sm mt-2 inline-flex items-center gap-1 text-primary hover:underline"
-                          >
-                            <ExternalLink className="size-3" />
-                            {t("settings.downloadUpdate")}
-                          </a>
-                        )}
-                      {shownUpdate.status === "downloading" && (
-                        <span className="aitracker-text-body-sm mt-2 inline-flex text-muted-foreground">
-                          {t("settings.downloading")}
-                        </span>
-                      )}
-                      {updateDownloaded && desktopApi && (
-                        <AITrackerButton
-                          variant="primary"
-                          size="sm"
-                          onClick={() => void handleInstallUpdate()}
-                          className="mt-2"
-                        >
-                          {t("settings.installUpdate")}
-                        </AITrackerButton>
-                      )}
+                      <a
+                        href={shownUpdate.downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="aitracker-text-body-sm mt-2 inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        <ExternalLink className="size-3" />
+                        {t("settings.downloadUpdate")}
+                      </a>
                       {shownUpdate.releaseUrl && (
                         <a
                           href={shownUpdate.releaseUrl}
@@ -1120,6 +1310,12 @@ export function SettingsPage({
                       )}
                     </div>
                   )}
+                <UpdateAvailableDialog
+                  open={updateDialogOpen}
+                  state={desktopUpdateState}
+                  onOpenChange={setUpdateDialogOpen}
+                  onDownload={() => void handleDownloadUpdate()}
+                />
               </Field>
               <Field label={t("settings.sourceRepo")}>
                 <a
@@ -1137,5 +1333,128 @@ export function SettingsPage({
         </Panel>
       </div>
     </>
+  );
+}
+
+type DesktopUpdateState = Awaited<
+  ReturnType<NonNullable<Window["desktopApi"]>["getUpdateState"]>
+>;
+
+/**
+ * Manual "check for updates" dialog (desktop only): shows the version and
+ * release notes and offers the download. While downloading it stays open with
+ * progress text; once downloaded it closes and the global restart prompt
+ * takes over.
+ */
+function UpdateAvailableDialog({
+  open,
+  state,
+  onOpenChange,
+  onDownload,
+}: {
+  readonly open: boolean;
+  readonly state?: DesktopUpdateState;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onDownload: () => void;
+}) {
+  const { t } = useI18n();
+  const downloading = state?.status === "downloading";
+  const latestVersion = state?.latestVersion ?? null;
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {latestVersion
+              ? t("settings.updateFound", { version: latestVersion })
+              : t("settings.checkUpdate")}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {downloading ? (
+              <span className="inline-flex items-center gap-2">
+                {t("settings.downloading")}
+                {state?.progress && (
+                  <DownloadProgress
+                    downloadedBytes={state.progress.downloadedBytes}
+                    totalBytes={state.progress.totalBytes}
+                  />
+                )}
+              </span>
+            ) : (
+              <>
+                {state?.changelog && (
+                  <span className="block whitespace-pre-line">
+                    {state.changelog}
+                  </span>
+                )}
+                {state?.assetName && (
+                  <span className="mt-1 block">
+                    {t("settings.updateAsset", { asset: state.assetName })}
+                  </span>
+                )}
+                {state?.releaseUrl && (
+                  <a
+                    href={state.releaseUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <ExternalLink className="size-3" />
+                    {t("settings.viewRelease")}
+                  </a>
+                )}
+              </>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => onOpenChange(false)}>
+            {downloading ? t("common.close") : t("common.cancel")}
+          </AlertDialogCancel>
+          <AITrackerButton
+            variant="primary"
+            size="sm"
+            onClick={onDownload}
+            disabled={downloading}
+          >
+            {t("settings.downloadUpdate")}
+          </AITrackerButton>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+/** Throttled download progress bar + percentage (driven by main-process state). */
+function DownloadProgress({
+  downloadedBytes,
+  totalBytes,
+}: {
+  readonly downloadedBytes: number;
+  readonly totalBytes: number;
+}) {
+  const percent =
+    totalBytes > 0
+      ? Math.min(
+          100,
+          Math.max(0, Math.round((downloadedBytes / totalBytes) * 100)),
+        )
+      : 0;
+  return (
+    <span
+      className="inline-flex items-center gap-2"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+    >
+      <span className="h-1.5 w-24 overflow-hidden rounded-full bg-border/60">
+        <span
+          className="block h-full rounded-full bg-primary transition-[width] duration-200"
+          style={{ width: `${percent}%` }}
+        />
+      </span>
+      <span className="aitracker-num aitracker-text-caption">{percent}%</span>
+    </span>
   );
 }

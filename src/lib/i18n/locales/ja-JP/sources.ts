@@ -41,6 +41,8 @@ export const sources = {
   },
   scanning: "スキャン中",
   rescan: "再スキャン",
+  refreshNow: "今すぐ更新",
+  refreshing: "更新中",
   empty: {
     title: "一致するツールがありません",
     desc: "フィルター条件や検索キーワードを調整して再試行してください。",

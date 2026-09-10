@@ -27,6 +27,22 @@
       }
     ]
   },
+  "storage": {
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "home",
+          "path": ".workbuddy/skills"
+        },
+        {
+          "base": "home",
+          "path": ".workbuddy/plugins/cache"
+        }
+      ],
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 8
+    }
+  },
   "capabilities": {
     "usage": {
       "mode": "native",
@@ -46,12 +62,13 @@
         }
       ]
     },
-    "skills": "unsupported",
+    "skills": "read-write",
     "agents": "unsupported",
     "sessions": {
-      "mode": "unsupported"
+      "mode": "read",
+      "reader": "workbuddy-session-v1"
     },
-    "market": "unsupported",
+    "market": "install-target",
     "security": "unsupported"
   },
   "modelObservation": {

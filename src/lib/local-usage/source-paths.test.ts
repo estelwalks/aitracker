@@ -45,13 +45,11 @@ test("reference agents expose their actual platform-specific directories", () =>
   );
   assert.deepEqual(
     sourcePathsForPlatform("qodercn", "windows", "C:\\Users\\tester"),
-    ["~/AppData/Roaming/QoderCN/SharedClientCache/cache/db/local.db"],
+    ["~/AppData/Roaming/QoderCN/SharedClientCache/cache/db"],
   );
   assert.deepEqual(
     sourcePathsForPlatform("qodercn", "macos", "/Users/tester"),
-    [
-      "~/Library/Application Support/QoderCN/SharedClientCache/cache/db/local.db",
-    ],
+    ["~/Library/Application Support/QoderCN/SharedClientCache/cache/db"],
   );
 });
 

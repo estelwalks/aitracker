@@ -13,9 +13,11 @@ const EXPECTED_SKILL_LABELS = [
   "OpenCode",
   "Grok Build",
   "Hermes Agent",
+  "WorkBuddy",
   "OpenClaw",
   "Antigravity",
   "AiPy",
+  "ZCode",
 ] as const;
 
 const EXPECTED_SKILL_TOOL_IDS = [
@@ -26,9 +28,11 @@ const EXPECTED_SKILL_TOOL_IDS = [
   "opencode",
   "grok",
   "hermes",
+  "workbuddy",
   "openclaw",
   "antigravity",
   "aipy",
+  "zcode",
 ] as const;
 
 test("AI_TOOLS catalogs all built-in tools with stable ids", () => {
@@ -42,7 +46,7 @@ test("AI_TOOLS catalogs all built-in tools with stable ids", () => {
 });
 
 test("SKILL_AGENT_RULES covers the verified skill agents in UI order", () => {
-  assert.equal(SKILL_AGENT_RULES.length, 10);
+  assert.equal(SKILL_AGENT_RULES.length, 12);
   assert.deepEqual(
     SKILL_AGENT_RULES.map((rule) => rule.toolId),
     [...EXPECTED_SKILL_TOOL_IDS],

@@ -28,21 +28,35 @@
       {
         "targets": ["windows10", "windows11"],
         "base": "userProfile",
-        "path": "hermes"
+        "path": "Local/hermes"
       },
       {
         "targets": ["windows10", "windows11"],
         "base": "userProfile",
-        "path": "hermes/state.db"
+        "path": "Local/hermes/state.db"
       }
     ]
   },
   "storage": {
+    "dataRoots": [
+      {
+        "base": "home",
+        "path": ".hermes"
+      },
+      {
+        "base": "userProfile",
+        "path": "Local/hermes"
+      }
+    ],
     "skills": {
       "rootSpecs": [
         {
           "base": "home",
           "path": ".hermes/skills"
+        },
+        {
+          "base": "userProfile",
+          "path": "Local/hermes/skills"
         }
       ],
       "markers": ["SKILL.md", "skill.md"],
@@ -71,14 +85,14 @@
         {
           "targets": ["windows10", "windows11"],
           "base": "userProfile",
-          "path": "hermes",
+          "path": "Local/hermes",
           "glob": "state.db",
           "format": "sqlite"
         },
         {
           "targets": ["windows10", "windows11"],
           "base": "userProfile",
-          "path": "hermes",
+          "path": "Local/hermes",
           "glob": "profiles/*/state.db",
           "format": "sqlite"
         }
@@ -101,7 +115,8 @@
     "skills": "read-write",
     "agents": "unsupported",
     "sessions": {
-      "mode": "unsupported"
+      "mode": "read",
+      "reader": "hermes-session-v1"
     },
     "market": "install-target",
     "security": "unsupported"

@@ -39,7 +39,18 @@ test("registry tools match the frozen baseline (TC-REG-001)", () => {
     assert.ok(def, `tool "${expected.id}" missing from registry`);
     assert.equal(def.display.nameZh, expected.nameZh);
     const expectedRoots =
-      expected.id === "gemini-cli" ? [".gemini/tmp"] : expected.detectRoots;
+      expected.id === "gemini-cli"
+        ? [".gemini/tmp"]
+        : // Expected diff (CodeBuddy detection tightened): the legacy
+          // ~/.codebuddy home is shared with the WorkBuddy family's CLI core
+          // and can no longer prove a CodeBuddy install; see the canonical
+          // note in __baseline__/baseline.test.ts.
+          expected.id === "codebuddy"
+          ? [
+              "AppData/Local/CodeBuddyExtension/Logs",
+              "Library/Application Support/CodeBuddyExtension/Logs",
+            ]
+          : expected.detectRoots;
     for (const root of expectedRoots) {
       assert.ok(
         def.detection.roots.includes(root),
@@ -82,6 +93,12 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "openclaw",
     "antigravity",
     "aipy",
+    // Deliberate post-baseline addition: WorkBuddy stores user skills under
+    // ~/.workbuddy/skills and is a market install target like the others.
+    "workbuddy",
+    // Deliberate post-baseline addition: ZCode discovers user skills under
+    // ~/.zcode/skills (SKILL.md format) and is a market install target.
+    "zcode",
   ];
   // Native readers plus registry-declared generic adapters are supported.
   const BASELINE_USAGE_NATIVE = new Set([
@@ -97,6 +114,20 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     // native readers over their ~/.pi and ~/.omp session logs.
     "pi",
     "omp",
+    // Deliberate post-baseline addition: Zed Agent gained a native threads.db
+    // usage reader.
+    "zed",
+    // Deliberate post-baseline additions (TokenTracker-sourced, native readers):
+    // Droid (settings.json, mtime timestamps) and CodeBuddy (projects JSONL with
+    // per-message usage arithmetic).
+    "droid",
+    "codebuddy",
+    // Deliberate post-baseline addition (TokenTracker-sourced): Every Code
+    // shares the Codex rollout family (~/.code/sessions rollout-*.jsonl).
+    "every-code",
+    // Deliberate post-baseline addition (TokenTracker-sourced): Kilo Code
+    // tasks ui_messages.json (Cline family) native reader.
+    "kilocode",
   ]);
   const BASELINE_USAGE_ADAPTER = new Set([
     "cursor",
@@ -114,6 +145,26 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     // Issue #31 companion: Hermes Agent gained a generic-sqlite usage adapter
     // (sessions in state.db; default DB plus profiles/<name>/state.db).
     "hermes",
+    // Deliberate post-baseline addition: ZCode gained a generic-sqlite usage
+    // adapter over model_usage rows in ~/.zcode/cli/db/db.sqlite.
+    "zcode",
+    // Deliberate post-baseline additions (TokenTracker-sourced): Goose and
+    // Qoder CN gained generic-sqlite usage adapters over sessions.db /
+    // QoderCN local.db.
+    "goose",
+    "qodercn",
+    // Deliberate post-baseline addition (TokenTracker-sourced): AnythingLLM
+    // Desktop gained a generic-sqlite usage adapter over its anythingllm.db.
+    "anythingllm",
+    // Deliberate post-baseline addition (TokenTracker-sourced): Kiro gained a
+    // generic-sqlite usage adapter over its tokens_generated table.
+    "kiro",
+    // Deliberate post-baseline addition (TokenTracker-sourced): Mimo Code
+    // gained a generic-sqlite usage adapter over its mimocode.db messages.
+    "mimo",
+    // Deliberate post-baseline addition (TokenTracker-sourced): Craft Agents
+    // exposes session-header cumulative snapshots via generic-jsonl.
+    "craft",
   ]);
   const BASELINE_SESSIONS_RESUME = new Set([
     "claude-code",
@@ -144,7 +195,15 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
       def.capabilities.sessions.mode,
       BASELINE_SESSIONS_RESUME.has(def.id)
         ? "resume"
-        : def.id === "aipy" || def.id === "pi" || def.id === "omp"
+        : // Deliberate post-baseline additions: Hermes Agent and WorkBuddy
+          // gained read-only session support (state.db / projects JSONL);
+          // ZCode sessions are read from its SQLite session database.
+          def.id === "aipy" ||
+            def.id === "pi" ||
+            def.id === "omp" ||
+            def.id === "hermes" ||
+            def.id === "workbuddy" ||
+            def.id === "zcode"
           ? "read"
           : "unsupported",
     );

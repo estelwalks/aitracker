@@ -8,7 +8,10 @@ import {
   APP_ICON_FILENAMES,
   findAppIconPath,
   findTrayIconPath,
+  findTrayRetinaIconPath,
+  MAC_TRAY_ICON_FILENAMES,
   TRAY_ICON_FILENAMES,
+  WINDOWS_APP_ICON_FILENAMES,
   WINDOWS_TRAY_ICON_FILENAMES,
 } from "./tray-icon.js";
 
@@ -21,30 +24,14 @@ test("the canonical light and dark SVG assets are scalable square icons", () => 
   }
 });
 
-test("packaging generates and preserves both native icon appearances", () => {
+test("packaging uses the generated native containers and preserves runtime assets", () => {
   const builderConfig = readFileSync(
     join(projectRoot, "electron-builder.yml"),
     "utf8",
   );
-  const generator = readFileSync(
-    join(projectRoot, "scripts", "generate-native-icons.mjs"),
-    "utf8",
-  );
-
   assert.match(builderConfig, /from: build\/native-icons\s+to: native-icons/u);
-  assert.match(builderConfig, /icon: public\/favicon\.svg/u);
-  for (const filename of [
-    ...Object.values(TRAY_ICON_FILENAMES),
-    ...Object.values(WINDOWS_TRAY_ICON_FILENAMES),
-    ...Object.values(APP_ICON_FILENAMES),
-  ]) {
-    assert.match(generator, new RegExp(filename.replace(".", "\\."), "u"));
-  }
-  assert.match(generator, /TRAY_ARTWORK_VIEW_BOX = "52 52 920 920"/u);
-  assert.match(generator, /WINDOWS_TRAY_ARTWORK_VIEW_BOX = "80 80 864 864"/u);
-  assert.match(generator, /join\(trayIconSet, "16x16\.png"\)/u);
-  assert.match(generator, /join\(trayIconSet, "32x32\.png"\)/u);
-  assert.match(generator, /join\(appIconSet, "512x512\.png"\)/u);
+  assert.match(builderConfig, /icon: build\/native-icons\/icon\.icns/u);
+  assert.match(builderConfig, /icon: build\/native-icons\/icon\.ico/u);
 });
 
 test("development paths select light and dark generated icons", () => {
@@ -70,7 +57,7 @@ test("development paths select light and dark generated icons", () => {
   }
 });
 
-test("Windows development paths select the tighter tray icon crop", () => {
+test("Windows development paths select the multi-resolution ICO", () => {
   for (const appearance of ["light", "dark"] as const) {
     const trayPath = join(
       projectRoot,
@@ -90,6 +77,46 @@ test("Windows development paths select the tighter tray icon crop", () => {
         (candidate) => candidate === trayPath,
       ),
       trayPath,
+    );
+  }
+});
+
+test("macOS Retina paths resolve the 32×32 menu-bar icon next to 16px", () => {
+  const retinaPath = join(
+    projectRoot,
+    "build",
+    "native-icons",
+    MAC_TRAY_ICON_FILENAMES.retina,
+  );
+  assert.equal(
+    findTrayRetinaIconPath(
+      {
+        isPackaged: false,
+        resourcesPath: "/unused",
+        appPath: projectRoot,
+      },
+      (candidate) => candidate === retinaPath,
+    ),
+    retinaPath,
+  );
+});
+
+test("macOS uses the same template mask for either appearance", () => {
+  const input = {
+    isPackaged: true,
+    resourcesPath: "/Applications/AITracker.app/Contents/Resources",
+    appPath: "/unused",
+    platform: "darwin" as const,
+  };
+  const templatePath = join(
+    input.resourcesPath,
+    "native-icons",
+    "trayTemplate.png",
+  );
+  for (const appearance of ["light", "dark"] as const) {
+    assert.equal(
+      findTrayIconPath(input, appearance, (path) => path === templatePath),
+      templatePath,
     );
   }
 });
@@ -114,6 +141,29 @@ test("packaged paths select the theme-aware app icon", () => {
   );
 });
 
+test("Windows windows and taskbar resolve the same multi-resolution glyph as the tray", () => {
+  for (const appearance of ["light", "dark"] as const) {
+    const appIconPath = join(
+      "C:\\Program Files\\AITracker\\resources",
+      "native-icons",
+      WINDOWS_APP_ICON_FILENAMES[appearance],
+    );
+    assert.equal(
+      findAppIconPath(
+        {
+          isPackaged: true,
+          resourcesPath: "C:\\Program Files\\AITracker\\resources",
+          appPath: "/unused",
+          platform: "win32",
+        },
+        appearance,
+        (candidate) => candidate === appIconPath,
+      ),
+      appIconPath,
+    );
+  }
+});
+
 test("missing generated icon returns null without a path warning", () => {
   assert.equal(
     findTrayIconPath(
@@ -125,5 +175,25 @@ test("missing generated icon returns null without a path warning", () => {
       "light",
     ),
     null,
+  );
+});
+
+test("Windows startup uses a large PNG in the app appearance", () => {
+  const input = {
+    isPackaged: false,
+    resourcesPath: "/unused",
+    appPath: projectRoot,
+    platform: "win32" as const,
+    surface: "startup" as const,
+  };
+  const path = join(
+    projectRoot,
+    "build",
+    "native-icons",
+    APP_ICON_FILENAMES.light,
+  );
+  assert.equal(
+    findAppIconPath(input, "light", (candidate) => candidate === path),
+    path,
   );
 });

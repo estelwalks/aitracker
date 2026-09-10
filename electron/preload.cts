@@ -12,6 +12,7 @@ import {
   type LocalePreferences,
   type RuntimeInfo,
   type DesktopUpdateState,
+  type UpdateProxyConfig,
   type SecurityRuntimeCapability,
   type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
@@ -39,6 +40,11 @@ const desktopApi: DesktopApi = Object.freeze({
       desktopIpc.setAutoUpdate,
       enabled,
     ) as Promise<AutoUpdateState>,
+  setUpdateProxy: (config: UpdateProxyConfig) =>
+    ipcRenderer.invoke(desktopIpc.setUpdateProxy, config) as Promise<{
+      enabled: boolean;
+      proxy: string;
+    }>,
   getUpdateState: () =>
     ipcRenderer.invoke(
       desktopIpc.getUpdateState,
@@ -51,9 +57,9 @@ const desktopApi: DesktopApi = Object.freeze({
     ipcRenderer.invoke(
       desktopIpc.downloadUpdate,
     ) as Promise<DesktopUpdateState>,
-  installUpdate: () =>
-    ipcRenderer.invoke(desktopIpc.installUpdate) as Promise<{
-      opened: boolean;
+  restartToInstall: () =>
+    ipcRenderer.invoke(desktopIpc.restartToInstall) as Promise<{
+      started: boolean;
     }>,
   onUpdateStateChanged: (callback: (state: DesktopUpdateState) => void) => {
     const listener = (_event: unknown, state: unknown) => {

@@ -19,6 +19,7 @@ import type {
   DashboardV2View,
 } from "../contracts.ts";
 import type { MonitoringStatus } from "../../monitoring/index.ts";
+import type { SecurityOverviewReadModel } from "../../security-assessment/overview.contracts.ts";
 
 // Window definitions for the dashboard presentation ("recent/live" and
 // "heartbeat" buckets). These are view semantics, NOT freshness policies —
@@ -387,6 +388,8 @@ function validDateTime(value: string | undefined): number | null {
 export function createDashboardV2HeroView(input: {
   readonly snapshot: DashboardV2Snapshot;
   readonly monitoring: MonitoringStatus | null;
+  /** Canonical security overview (engine-scoped); optional for legacy callers. */
+  readonly securityOverview?: SecurityOverviewReadModel | null;
   readonly activeInsightCount: number;
   readonly now?: Date;
 }): DashboardV2HeroView {
@@ -516,17 +519,24 @@ export function createDashboardV2HeroView(input: {
           : undefined,
     });
   }
-  if (input.monitoring?.security) {
-    const riskCount =
-      input.monitoring.security.suspiciousCount +
-      input.monitoring.security.dangerousCount;
+  if (
+    input.securityOverview?.summary != null ||
+    input.monitoring?.security != null
+  ) {
+    // Canonical overview first (engine-scoped); monitoring summary only when
+    // no engine exists. This keeps the Jarvis copy's scanned/risk counts on
+    // the same basis as the posture cards.
+    const summary =
+      input.securityOverview?.summary ?? input.monitoring!.security;
+    const riskCount = summary!.suspiciousCount + summary!.dangerousCount;
     insights.push({
       id: "security",
       kind: "security",
       riskCount,
-      scanned: input.snapshot.skills.available
-        ? input.snapshot.skills.count
-        : null,
+      scanned:
+        input.securityOverview?.available === true
+          ? input.securityOverview.coverage
+          : summary!.assessedAssetCount,
     });
   }
   insights.push({ id: "monitoring", kind: "monitoring" });

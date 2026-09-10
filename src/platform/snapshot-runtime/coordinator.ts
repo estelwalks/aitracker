@@ -34,6 +34,13 @@ export interface SnapshotReadView<T> {
   readonly warningCodes: readonly string[];
   /** True when the data is stale but still readable (last-known-good). */
   readonly staleReadable: boolean;
+  /**
+   * The source identity stamped by the collector that produced this snapshot
+   * (null for the empty envelope). Consumers compare it against the current
+   * input identity — e.g. a tool-registry fingerprint — so stale facts are
+   * never served as fresh after a definitions upgrade.
+   */
+  readonly sourceFingerprint: string | null;
 }
 
 export interface SnapshotCoordinator<T> {
@@ -115,6 +122,7 @@ export function createSnapshotCoordinator<T>(
       lastAttemptAt: envelope.diagnostics.lastAttemptAt,
       warningCodes: envelope.diagnostics.warningCodes,
       staleReadable: envelope.data != null,
+      sourceFingerprint: envelope.sourceFingerprint ?? null,
     };
   };
 

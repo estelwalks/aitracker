@@ -16,31 +16,22 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos"
-        ],
+        "targets": ["macos"],
         "base": "appData",
         "path": "Code/User/globalStorage/kilocode.kilo-code"
       },
       {
-        "targets": [
-          "windows10",
-          "windows11"
-        ],
+        "targets": ["windows10", "windows11"],
         "base": "appDataRoaming",
         "path": "Code/User/globalStorage/kilocode.kilo-code"
       },
       {
-        "targets": [
-          "linux"
-        ],
+        "targets": ["linux"],
         "base": "configHome",
         "path": "Code/User/globalStorage/kilocode.kilo-code"
       },
       {
-        "targets": [
-          "linux"
-        ],
+        "targets": ["linux"],
         "base": "home",
         "path": ".vscode-server/data/User/globalStorage/kilocode.kilo-code"
       }
@@ -48,7 +39,151 @@
   },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "native",
+      "reader": "kilocode-task-v1",
+      "paths": [
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "Code/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "Code - Insiders/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "Cursor/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "CodeBuddy/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "Windsurf/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "VSCodium/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "Trae/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "Trae CN/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "Code/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "Code - Insiders/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "Cursor/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "CodeBuddy/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "Windsurf/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "VSCodium/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["linux"],
+          "base": "configHome",
+          "path": "Code/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["linux"],
+          "base": "configHome",
+          "path": "Code - Insiders/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["linux"],
+          "base": "configHome",
+          "path": "Cursor/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["linux"],
+          "base": "configHome",
+          "path": "CodeBuddy/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["linux"],
+          "base": "configHome",
+          "path": "Windsurf/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        },
+        {
+          "targets": ["linux"],
+          "base": "configHome",
+          "path": "VSCodium/User/globalStorage/kilocode.kilo-code/tasks",
+          "glob": "**/ui_messages.json",
+          "format": "json"
+        }
+      ],
+      "maxFileSizeBytes": 67108864
     },
     "skills": "unsupported",
     "agents": "unsupported",

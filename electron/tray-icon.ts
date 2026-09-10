@@ -9,14 +9,27 @@ export const TRAY_ICON_FILENAMES = {
 } as const;
 
 export const WINDOWS_TRAY_ICON_FILENAMES = {
-  light: "favicon-light-windows.png",
-  dark: "favicon-dark-windows.png",
+  light: "favicon-light-windows.ico",
+  dark: "favicon-dark-windows.ico",
+} as const;
+
+/** One alpha mask; AppKit supplies the color for the actual menu-bar background. */
+export const MAC_TRAY_ICON_FILENAMES = {
+  standard: "trayTemplate.png",
+  retina: "trayTemplate@2x.png",
 } as const;
 
 export const APP_ICON_FILENAMES = {
-  light: "favicon-light-512.png",
-  dark: "favicon-dark-512.png",
+  light: "favicon-light-1024.png",
+  dark: "favicon-dark-1024.png",
 } as const;
+
+/**
+ * Windows taskbar/window icons are plate-free glyphs (no white/blue square
+ * behind the mark). The ICO contains separately rasterized frames for the
+ * taskbar and window sizes at each Windows display scale.
+ */
+export const WINDOWS_APP_ICON_FILENAMES = WINDOWS_TRAY_ICON_FILENAMES;
 
 function findNativeIconPath(
   input: {
@@ -33,7 +46,7 @@ function findNativeIconPath(
   return fileExists(candidate) ? candidate : null;
 }
 
-/** Resolve the platform-specific 16px tray/menu-bar icon. */
+/** Resolve a native ICO on Windows, an AppKit template on macOS, or a PNG. */
 export function findTrayIconPath(
   input: {
     readonly isPackaged: boolean;
@@ -44,11 +57,30 @@ export function findTrayIconPath(
   appearance: NativeIconAppearance,
   fileExists: (path: string) => boolean = existsSync,
 ): string | null {
+  if (input.platform === "darwin") {
+    return findNativeIconPath(
+      input,
+      MAC_TRAY_ICON_FILENAMES.standard,
+      fileExists,
+    );
+  }
   const filenames =
     input.platform === "win32"
       ? WINDOWS_TRAY_ICON_FILENAMES
       : TRAY_ICON_FILENAMES;
   return findNativeIconPath(input, filenames[appearance], fileExists);
+}
+
+/** Resolve the Retina (@2x) menu-bar icon next to the 16px one on macOS. */
+export function findTrayRetinaIconPath(
+  input: {
+    readonly isPackaged: boolean;
+    readonly resourcesPath: string;
+    readonly appPath: string;
+  },
+  fileExists: (path: string) => boolean = existsSync,
+): string | null {
+  return findNativeIconPath(input, MAC_TRAY_ICON_FILENAMES.retina, fileExists);
 }
 
 /** Resolve the large runtime icon used by the macOS Dock and Windows windows. */
@@ -57,9 +89,15 @@ export function findAppIconPath(
     readonly isPackaged: boolean;
     readonly resourcesPath: string;
     readonly appPath: string;
+    readonly platform?: NodeJS.Platform;
+    readonly surface?: "window" | "startup";
   },
   appearance: NativeIconAppearance,
   fileExists: (path: string) => boolean = existsSync,
 ): string | null {
-  return findNativeIconPath(input, APP_ICON_FILENAMES[appearance], fileExists);
+  const filenames =
+    input.platform === "win32" && input.surface !== "startup"
+      ? WINDOWS_APP_ICON_FILENAMES
+      : APP_ICON_FILENAMES;
+  return findNativeIconPath(input, filenames[appearance], fileExists);
 }

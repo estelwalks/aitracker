@@ -8,7 +8,18 @@ describe("P4-T4 session whitelist derivation", () => {
   it("session sources derive from the registry session capability", () => {
     assert.deepEqual(
       [...listSessionTools()],
-      ["claude-code", "codex", "omp", "grok", "pi", "dsh", "aipy"],
+      [
+        "claude-code",
+        "codex",
+        "hermes",
+        "omp",
+        "workbuddy",
+        "grok",
+        "pi",
+        "zcode",
+        "dsh",
+        "aipy",
+      ],
     );
   });
 

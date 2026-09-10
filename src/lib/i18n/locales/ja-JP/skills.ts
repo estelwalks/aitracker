@@ -308,6 +308,7 @@ export const skills = {
     detected: "スキャン済み",
     risks: "安全でない",
     localSkillsHint: "{count} 箇所に配布",
+    localAssetsHint: "内容で重複排除 · 名称 {names} 件 · {installs} 箇所に配布",
     distilledHint: "セッションから抽出",
     detectedHint: "カバレッジ {pct}%",
     risksHint: "対応を推奨",

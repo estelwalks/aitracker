@@ -45,10 +45,8 @@ export {
   parseScanRequest,
 } from "./application/index";
 export type { SecurityAssessmentViewModel } from "./presentation";
-export {
-  useSecurityScanOverview,
-  type SecurityScanOverview,
-} from "./query/use-security-scan-overview";
+export type { SecurityOverviewReadModel } from "./overview.contracts";
+export { getSecurityOverview } from "./overview-query";
 export {
   getSecuritySkillVerdicts,
   type SecuritySkillVerdictReadModel,
@@ -63,6 +61,7 @@ export {
   EMPTY_SECURITY_TOTALS,
   dedupeHistoryByContentHash,
   detectedRiskCount,
+  historyForCurrentSkills,
   summarizeReports,
   unresolvedScanCount,
   securityHistoryEntryIsSafe,

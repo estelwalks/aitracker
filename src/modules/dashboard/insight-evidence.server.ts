@@ -19,7 +19,6 @@ import {
   metricValue,
   statusEvidence,
 } from "../../app/insights/evidence-util.server.ts";
-import { getMonitoringSecuritySummary } from "../../app/security-summary.server.ts";
 import type {
   InsightCandidate,
   InsightEvidenceBundle,
@@ -252,13 +251,20 @@ async function loadDashboardEvidence(scope: InsightScope) {
     );
   }
 
-  const securitySummary = await getMonitoringSecuritySummary();
+  // Canonical security overview (same source as the dashboard posture cards);
+  // its summary carries the assessed/risk counts and assessment freshness.
+  const { resolveSecurityOverview } =
+    await import("../security-assessment/overview.server.ts");
+  const overview = await resolveSecurityOverview().catch(() => null);
+  const securitySummary = overview?.summary ?? null;
   if (securitySummary != null) {
     const security = securitySummary;
     evidence.push(
       metricEvidence(
         "dashboard.securityAssessed",
-        security.assessedAssetCount,
+        overview?.available === true
+          ? overview.coverage
+          : security.assessedAssetCount,
         observedAt,
         freshnessOf(security.assessedAt, nowMs),
         "count",

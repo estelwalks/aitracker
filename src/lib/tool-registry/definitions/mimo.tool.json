@@ -16,17 +16,12 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "linux"
-        ],
+        "targets": ["macos", "linux"],
         "base": "dataHome",
         "path": "mimocode"
       },
       {
-        "targets": [
-          "macos"
-        ],
+        "targets": ["macos"],
         "base": "appData",
         "path": "orca/mimocode-hooks/shared/data"
       }
@@ -34,7 +29,37 @@
   },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "adapter",
+      "reader": "generic-sqlite",
+      "paths": [
+        {
+          "targets": ["macos", "linux"],
+          "base": "dataHome",
+          "path": "mimocode",
+          "glob": "mimocode.db",
+          "format": "sqlite"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "mimocode",
+          "glob": "mimocode.db",
+          "format": "sqlite"
+        }
+      ],
+      "mapping": {
+        "timestamp": ["timestamp"],
+        "sessionId": ["sessionId"],
+        "model": ["model"],
+        "project": ["project"],
+        "inputTokens": ["inputTokens"],
+        "cachedInputTokens": ["cachedInputTokens"],
+        "cacheCreationInputTokens": ["cacheCreationInputTokens"],
+        "outputTokens": ["outputTokens"],
+        "reasoningOutputTokens": ["reasoningOutputTokens"]
+      },
+      "maxFileSizeBytes": 536870912,
+      "query": "SELECT\n  COALESCE(NULLIF(m.session_id, ''), NULLIF(json_extract(m.data, '$.sessionID'), '')) AS sessionId,\n  CAST(CASE WHEN COALESCE(NULLIF(m.time_updated, 0), json_extract(m.data, '$.time.completed'), json_extract(m.data, '$.time.created')) < 1000000000000 THEN COALESCE(NULLIF(m.time_updated, 0), json_extract(m.data, '$.time.completed'), json_extract(m.data, '$.time.created')) * 1000 ELSE COALESCE(NULLIF(m.time_updated, 0), json_extract(m.data, '$.time.completed'), json_extract(m.data, '$.time.created')) END AS INTEGER) AS timestamp,\n  COALESCE(NULLIF(json_extract(m.data, '$.modelID'), ''), NULLIF(json_extract(m.data, '$.model.id'), ''), 'unknown') AS model,\n  COALESCE(NULLIF(json_extract(m.data, '$.path.cwd'), ''), 'unknown') AS project,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.input'), 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.cache.read'), 0) AS INTEGER) AS cachedInputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.cache.write'), 0) AS INTEGER) AS cacheCreationInputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.output'), 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.reasoning'), 0) AS INTEGER) AS reasoningOutputTokens\nFROM message AS m\nWHERE json_valid(m.data) = 1\n  AND json_extract(m.data, '$.role') = 'assistant'\n  AND lower(trim(COALESCE(NULLIF(json_extract(m.data, '$.providerID'), ''), NULLIF(json_extract(m.data, '$.model.providerID'), ''), ''))) IN ('mimo', 'xiaomi')\n  AND (COALESCE(json_extract(m.data, '$.tokens.input'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.output'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.reasoning'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.cache.read'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.cache.write'), 0) > 0)"
     },
     "skills": "unsupported",
     "agents": "unsupported",

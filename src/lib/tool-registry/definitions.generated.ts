@@ -418,7 +418,69 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "Kiro/User/globalStorage/kiro.kiroagent/dev_data",
+            "glob": "devdata.sqlite",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "Kiro/User/globalStorage/kiro.kiroagent/dev_data",
+            "glob": "devdata.sqlite",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "Kiro/User/globalStorage/kiro.kiroagent/dev_data",
+            "glob": "devdata.sqlite",
+            "format": "sqlite"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "project"
+          ],
+          "inputTokens": [
+            "inputTokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  CAST(tg.id AS TEXT) AS sessionId,\n  CAST(strftime('%s', tg.timestamp) * 1000 AS INTEGER) AS timestamp,\n  COALESCE(NULLIF(tg.model, ''), 'kiro-agent') AS model,\n  'unknown' AS project,\n  CAST(COALESCE(tg.tokens_prompt, 0) AS INTEGER) AS inputTokens,\n  0 AS cachedInputTokens,\n  0 AS cacheCreationInputTokens,\n  CAST(COALESCE(tg.tokens_generated, 0) AS INTEGER) AS outputTokens,\n  0 AS reasoningOutputTokens\nFROM tokens_generated tg\nWHERE tg.timestamp IS NOT NULL\n  AND (COALESCE(tg.tokens_prompt, 0) > 0 OR COALESCE(tg.tokens_generated, 0) > 0)"
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -741,7 +803,22 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "every-code-rollout-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11"
+            ],
+            "base": "home",
+            "path": ".code/sessions",
+            "glob": "**/rollout-*.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -798,7 +875,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "windows11"
           ],
           "base": "userProfile",
-          "path": "hermes"
+          "path": "Local/hermes"
         },
         {
           "targets": [
@@ -806,16 +883,30 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "windows11"
           ],
           "base": "userProfile",
-          "path": "hermes/state.db"
+          "path": "Local/hermes/state.db"
         }
       ]
     },
     "storage": {
+      "dataRoots": [
+        {
+          "base": "home",
+          "path": ".hermes"
+        },
+        {
+          "base": "userProfile",
+          "path": "Local/hermes"
+        }
+      ],
       "skills": {
         "rootSpecs": [
           {
             "base": "home",
             "path": ".hermes/skills"
+          },
+          {
+            "base": "userProfile",
+            "path": "Local/hermes/skills"
           }
         ],
         "markers": [
@@ -860,7 +951,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
               "windows11"
             ],
             "base": "userProfile",
-            "path": "hermes",
+            "path": "Local/hermes",
             "glob": "state.db",
             "format": "sqlite"
           },
@@ -870,7 +961,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
               "windows11"
             ],
             "base": "userProfile",
-            "path": "hermes",
+            "path": "Local/hermes",
             "glob": "profiles/*/state.db",
             "format": "sqlite"
           }
@@ -913,7 +1004,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "skills": "read-write",
       "agents": "unsupported",
       "sessions": {
-        "mode": "unsupported"
+        "mode": "read",
+        "reader": "hermes-session-v1"
       },
       "market": "install-target",
       "security": "unsupported"
@@ -1259,16 +1351,6 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "locations": [
         {
           "targets": [
-            "macos",
-            "windows10",
-            "windows11",
-            "linux"
-          ],
-          "base": "home",
-          "path": ".codebuddy"
-        },
-        {
-          "targets": [
             "macos"
           ],
           "base": "appData",
@@ -1289,11 +1371,32 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           "base": "dataHome",
           "path": "CodeBuddyExtension/Logs"
         }
-      ]
+      ],
+      "executable": {
+        "shared": [
+          "codebuddy"
+        ]
+      }
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "codebuddy-log-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".codebuddy/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -1336,6 +1439,25 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
         }
       ]
     },
+    "storage": {
+      "skills": {
+        "rootSpecs": [
+          {
+            "base": "home",
+            "path": ".workbuddy/skills"
+          },
+          {
+            "base": "home",
+            "path": ".workbuddy/plugins/cache"
+          }
+        ],
+        "markers": [
+          "SKILL.md",
+          "skill.md"
+        ],
+        "maxDepth": 8
+      }
+    },
     "capabilities": {
       "usage": {
         "mode": "native",
@@ -1355,12 +1477,13 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           }
         ]
       },
-      "skills": "unsupported",
+      "skills": "read-write",
       "agents": "unsupported",
       "sessions": {
-        "mode": "unsupported"
+        "mode": "read",
+        "reader": "workbuddy-session-v1"
       },
-      "market": "unsupported",
+      "market": "install-target",
       "security": "unsupported"
     },
     "modelObservation": {
@@ -1589,7 +1712,197 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "kilocode-task-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "Code/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "Code - Insiders/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "Cursor/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "CodeBuddy/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "Windsurf/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "VSCodium/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "Trae/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "Trae CN/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "Code/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "Code - Insiders/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "Cursor/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "CodeBuddy/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "Windsurf/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "VSCodium/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "Code/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "Code - Insiders/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "Cursor/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "CodeBuddy/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "Windsurf/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "VSCodium/User/globalStorage/kilocode.kilo-code/tasks",
+            "glob": "**/ui_messages.json",
+            "format": "json"
+          }
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -1869,7 +2182,58 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".craft-agent/workspaces",
+            "glob": "**/session.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "lastMessageAt",
+            "lastUsedAt",
+            "createdAt"
+          ],
+          "sessionId": [
+            "id",
+            "sdkSessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "cwd"
+          ],
+          "inputTokens": [
+            "tokenUsage.inputTokens"
+          ],
+          "cachedInputTokens": [
+            "tokenUsage.cacheReadTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "tokenUsage.cacheCreationTokens"
+          ],
+          "outputTokens": [
+            "tokenUsage.outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "tokenUsage.reasoningTokens"
+          ],
+          "totalTokens": [
+            "tokenUsage.totalTokens"
+          ]
+        },
+        "maxFileSizeBytes": 67108864
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -2001,7 +2365,39 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "zed-threads-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "Zed/threads",
+            "glob": "threads.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "userProfile",
+            "path": "Local/Zed/threads",
+            "glob": "threads.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "dataHome",
+            "path": "zed/threads",
+            "glob": "threads.db",
+            "format": "sqlite"
+          }
+        ],
+        "maxFileSizeBytes": 536870912
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -2054,7 +2450,60 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "goose/sessions",
+            "glob": "sessions.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "goose/sessions",
+            "glob": "sessions.db",
+            "format": "sqlite"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "project"
+          ],
+          "inputTokens": [
+            "inputTokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  s.id AS sessionId,\n  CAST(strftime('%s', s.created_at) * 1000 AS INTEGER) AS timestamp,\n  COALESCE(NULLIF(CASE WHEN json_valid(s.model_config_json) = 1 THEN json_extract(s.model_config_json, '$.model_name') END, ''), 'unknown') AS model,\n  'unknown' AS project,\n  CAST(COALESCE(s.accumulated_input_tokens, s.input_tokens, 0) AS INTEGER) AS inputTokens,\n  0 AS cachedInputTokens,\n  0 AS cacheCreationInputTokens,\n  CAST(COALESCE(s.accumulated_output_tokens, s.output_tokens, 0) AS INTEGER) AS outputTokens,\n  CAST(MAX(0, COALESCE(s.accumulated_total_tokens, s.total_tokens, 0) - COALESCE(s.accumulated_input_tokens, s.input_tokens, 0) - COALESCE(s.accumulated_output_tokens, s.output_tokens, 0)) AS INTEGER) AS reasoningOutputTokens\nFROM sessions s\nWHERE json_valid(s.model_config_json) = 1\n  AND trim(json_extract(s.model_config_json, '$.model_name')) <> ''\n  AND (COALESCE(s.accumulated_total_tokens, s.total_tokens, 0) > 0\n       OR COALESCE(s.accumulated_input_tokens, s.input_tokens, 0) > 0\n       OR COALESCE(s.accumulated_output_tokens, s.output_tokens, 0) > 0)"
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -2099,7 +2548,23 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "droid-settings-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".factory/sessions",
+            "glob": "**/*.settings.json",
+            "format": "json"
+          }
+        ],
+        "maxFileSizeBytes": 67108864
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -2149,7 +2614,61 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "linux"
+            ],
+            "base": "dataHome",
+            "path": "mimocode",
+            "glob": "mimocode.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "mimocode",
+            "glob": "mimocode.db",
+            "format": "sqlite"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "project"
+          ],
+          "inputTokens": [
+            "inputTokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  COALESCE(NULLIF(m.session_id, ''), NULLIF(json_extract(m.data, '$.sessionID'), '')) AS sessionId,\n  CAST(CASE WHEN COALESCE(NULLIF(m.time_updated, 0), json_extract(m.data, '$.time.completed'), json_extract(m.data, '$.time.created')) < 1000000000000 THEN COALESCE(NULLIF(m.time_updated, 0), json_extract(m.data, '$.time.completed'), json_extract(m.data, '$.time.created')) * 1000 ELSE COALESCE(NULLIF(m.time_updated, 0), json_extract(m.data, '$.time.completed'), json_extract(m.data, '$.time.created')) END AS INTEGER) AS timestamp,\n  COALESCE(NULLIF(json_extract(m.data, '$.modelID'), ''), NULLIF(json_extract(m.data, '$.model.id'), ''), 'unknown') AS model,\n  COALESCE(NULLIF(json_extract(m.data, '$.path.cwd'), ''), 'unknown') AS project,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.input'), 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.cache.read'), 0) AS INTEGER) AS cachedInputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.cache.write'), 0) AS INTEGER) AS cacheCreationInputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.output'), 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.reasoning'), 0) AS INTEGER) AS reasoningOutputTokens\nFROM message AS m\nWHERE json_valid(m.data) = 1\n  AND json_extract(m.data, '$.role') = 'assistant'\n  AND lower(trim(COALESCE(NULLIF(json_extract(m.data, '$.providerID'), ''), NULLIF(json_extract(m.data, '$.model.providerID'), ''), ''))) IN ('mimo', 'xiaomi')\n  AND (COALESCE(json_extract(m.data, '$.tokens.input'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.output'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.reasoning'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.cache.read'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.cache.write'), 0) > 0)"
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -2184,8 +2703,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           "targets": [
             "macos",
             "windows10",
-            "windows11",
-            "linux"
+            "windows11"
           ],
           "base": "home",
           "path": ".zcode"
@@ -2194,38 +2712,111 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           "targets": [
             "macos",
             "windows10",
-            "windows11",
-            "linux"
+            "windows11"
           ],
           "base": "home",
-          "path": ".zcode/projects"
+          "path": ".zcode/cli"
         },
         {
           "targets": [
             "macos",
             "windows10",
-            "windows11",
-            "linux"
+            "windows11"
           ],
           "base": "home",
           "path": ".zcode/cli/db/db.sqlite"
         }
       ]
     },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "home",
+          "path": ".zcode"
+        }
+      ],
+      "skills": {
+        "rootSpecs": [
+          {
+            "base": "home",
+            "path": ".zcode/skills"
+          },
+          {
+            "base": "home",
+            "path": ".zcode/cli/plugins/cache"
+          }
+        ],
+        "markers": [
+          "SKILL.md",
+          "skill.md"
+        ],
+        "maxDepth": 8
+      }
+    },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".zcode/cli/db",
+            "glob": "db.sqlite",
+            "format": "sqlite"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "project"
+          ],
+          "inputTokens": [
+            "inputTokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  mu.session_id AS sessionId,\n  COALESCE(mu.completed_at, mu.started_at) AS timestamp,\n  COALESCE(NULLIF(s.directory, ''), 'unknown') AS project,\n  COALESCE(NULLIF(mu.model_id, ''), 'unknown') AS model,\n  CAST(MAX(0, COALESCE(mu.input_tokens, 0) - COALESCE(mu.cache_read_input_tokens, 0) - COALESCE(mu.cache_creation_input_tokens, 0)) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(mu.cache_read_input_tokens, 0) AS INTEGER) AS cachedInputTokens,\n  CAST(COALESCE(mu.cache_creation_input_tokens, 0) AS INTEGER) AS cacheCreationInputTokens,\n  CAST(MAX(0, COALESCE(mu.output_tokens, 0) - COALESCE(mu.reasoning_tokens, 0)) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(mu.reasoning_tokens, 0) AS INTEGER) AS reasoningOutputTokens\nFROM model_usage mu\nLEFT JOIN session s ON s.id = mu.session_id\nWHERE mu.session_id IS NOT NULL AND mu.session_id <> ''"
       },
-      "skills": "unsupported",
+      "skills": "read-write",
       "agents": "unsupported",
       "sessions": {
-        "mode": "unsupported"
+        "mode": "read",
+        "reader": "zcode-session-v1"
       },
-      "market": "unsupported",
+      "market": "install-target",
       "security": "unsupported"
     },
     "modelObservation": {
-      "modelField": "model"
+      "modelField": "model",
+      "tokenSemantics": {
+        "reasoningIncludedInOutput": true
+      }
     }
   },
   {
@@ -2271,7 +2862,69 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "anythingllm-desktop/storage",
+            "glob": "anythingllm.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "anythingllm-desktop/storage",
+            "glob": "anythingllm.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "anythingllm-desktop/storage",
+            "glob": "anythingllm.db",
+            "format": "sqlite"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "project"
+          ],
+          "inputTokens": [
+            "inputTokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  CAST(ws.id AS TEXT) AS sessionId,\n  CASE\n    WHEN typeof(ws.createdAt) IN ('integer', 'real') THEN CAST(CASE WHEN ws.createdAt < 100000000000 THEN ws.createdAt * 1000 ELSE ws.createdAt END AS INTEGER)\n    WHEN ws.createdAt GLOB '[0-9]*' AND ws.createdAt NOT GLOB '*[^0-9]*' THEN CAST(CASE WHEN CAST(ws.createdAt AS NUMERIC) < 100000000000 THEN CAST(ws.createdAt AS NUMERIC) * 1000 ELSE CAST(ws.createdAt AS NUMERIC) END AS INTEGER)\n    ELSE CAST(strftime('%s', ws.createdAt) * 1000 AS INTEGER)\n  END AS timestamp,\n  COALESCE(NULLIF(CASE WHEN json_valid(ws.response) = 1 THEN json_extract(ws.response, '$.metrics.model') END, ''), 'unknown') AS model,\n  'unknown' AS project,\n  CAST(COALESCE(CASE WHEN json_valid(ws.response) = 1 THEN json_extract(ws.response, '$.metrics.prompt_tokens') END, 0) AS INTEGER) AS inputTokens,\n  0 AS cachedInputTokens,\n  0 AS cacheCreationInputTokens,\n  CAST(COALESCE(CASE WHEN json_valid(ws.response) = 1 THEN json_extract(ws.response, '$.metrics.completion_tokens') END, 0) AS INTEGER) AS outputTokens,\n  CAST(MAX(0, COALESCE(CASE WHEN json_valid(ws.response) = 1 THEN json_extract(ws.response, '$.metrics.total_tokens') END, 0) - COALESCE(CASE WHEN json_valid(ws.response) = 1 THEN json_extract(ws.response, '$.metrics.prompt_tokens') END, 0) - COALESCE(CASE WHEN json_valid(ws.response) = 1 THEN json_extract(ws.response, '$.metrics.completion_tokens') END, 0)) AS INTEGER) AS reasoningOutputTokens\nFROM workspace_chats ws\nWHERE COALESCE(ws.include, 1) = 1\n  AND json_valid(ws.response) = 1\n  AND (COALESCE(CASE WHEN json_valid(ws.response) = 1 THEN json_extract(ws.response, '$.metrics.prompt_tokens') END, 0) > 0\n       OR COALESCE(CASE WHEN json_valid(ws.response) = 1 THEN json_extract(ws.response, '$.metrics.completion_tokens') END, 0) > 0)"
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -2837,7 +3490,69 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "QoderCN/SharedClientCache/cache/db",
+            "glob": "local.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "QoderCN/SharedClientCache/cache/db",
+            "glob": "local.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "QoderCN/SharedClientCache/cache/db",
+            "glob": "local.db",
+            "format": "sqlite"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "project"
+          ],
+          "inputTokens": [
+            "inputTokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  COALESCE(NULLIF(cm.session_id, ''), CAST(cm.rowid AS TEXT)) AS sessionId,\n  CAST(CASE WHEN cm.gmt_create < 1000000000000 THEN cm.gmt_create * 1000 ELSE cm.gmt_create END AS INTEGER) AS timestamp,\n  COALESCE(\n    CASE WHEN json_valid(cm.model_info) = 1 THEN json_extract(cm.model_info, '$.model_key') END,\n    CASE WHEN json_valid(cm.model_info) = 1 THEN json_extract(cm.model_info, '$.modelKey') END,\n    CASE WHEN json_valid(cr.extra) = 1 THEN json_extract(cr.extra, '$.modelConfig.key') END,\n    CASE WHEN json_valid(cr.extra) = 1 THEN json_extract(cr.extra, '$.model_config.key') END,\n    CASE WHEN json_valid(cs.preferred_model_info) = 1 THEN json_extract(cs.preferred_model_info, '$.model_key') END,\n    CASE WHEN json_valid(cs.preferred_model_info) = 1 THEN json_extract(cs.preferred_model_info, '$.modelKey') END,\n    CASE WHEN json_valid(cs.preferred_model_info) = 1 THEN json_extract(cs.preferred_model_info, '$.preferred_model') END,\n    CASE WHEN json_valid(cs.preferred_model_info) = 1 THEN json_extract(cs.preferred_model_info, '$.preferredModel') END,\n    'qoder-agent'\n  ) AS model,\n  COALESCE(\n    NULLIF(cs.project_name, ''),\n    CASE WHEN substr(cs.project_uri, 1, 7) = 'file://' THEN substr(cs.project_uri, 8) ELSE cs.project_uri END,\n    cm.session_id,\n    'unknown'\n  ) AS project,\n  CAST(MAX(0, COALESCE(json_extract(cm.token_info, '$.prompt_tokens'), 0) - COALESCE(json_extract(cm.token_info, '$.cached_tokens'), 0)) AS INTEGER) AS inputTokens,\n  CAST(MIN(COALESCE(json_extract(cm.token_info, '$.prompt_tokens'), 0), COALESCE(json_extract(cm.token_info, '$.cached_tokens'), 0)) AS INTEGER) AS cachedInputTokens,\n  0 AS cacheCreationInputTokens,\n  CAST(COALESCE(json_extract(cm.token_info, '$.completion_tokens'), 0) AS INTEGER) AS outputTokens,\n  0 AS reasoningOutputTokens\nFROM chat_message cm\nLEFT JOIN chat_record cr ON cr.request_id = cm.request_id\nLEFT JOIN chat_session cs ON cs.session_id = cm.session_id\nWHERE cm.role = 'assistant'\n  AND json_valid(cm.token_info) = 1\n  AND trim(cm.token_info) NOT IN ('', '{}')\n  AND cm.gmt_create IS NOT NULL\nORDER BY cm.gmt_create, cm.rowid"
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -3251,9 +3966,11 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
       "opencode",
       "grok",
       "hermes",
+      "workbuddy",
       "openclaw",
       "antigravity",
-      "aipy"
+      "aipy",
+      "zcode"
     ],
     "defaultMarkers": [
       "SKILL.md",
@@ -3457,4 +4174,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "bcbee2b9f33f3202";
+export const TOOL_REGISTRY_VERSION: string = "ee3def31c4a4c154";

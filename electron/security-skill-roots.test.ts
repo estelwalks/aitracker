@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import test from "node:test";
 
+import { DEFAULT_MAX_DEPTH } from "../src/lib/local-skills/agent-rules.ts";
 import { SKILL_AGENT_RULES } from "../src/lib/local-skills/skill-rules.server.ts";
 import {
   MANAGED_SKILL_ROOTS,
+  DEFAULT_DISCOVERY_DEPTH,
   parseToolDataRootsEnvForSecurity,
   resolveManagedSkillRoots,
 } from "./security-scanner-service.ts";
@@ -23,7 +25,10 @@ test("managed security skill roots include Hermes Agent", () => {
   );
   assert.ok(hermes, "Hermes Agent must be a managed security skill root");
   assert.equal(hermes.agent, "Hermes Agent");
-  assert.deepEqual([...hermes.suffixes], [".hermes/skills"]);
+  assert.deepEqual(
+    [...hermes.suffixes],
+    [".hermes/skills", "AppData/Local/hermes/skills"],
+  );
 });
 
 test("managed skill roots stay in sync with the registry skill rules", () => {
@@ -40,7 +45,31 @@ test("managed skill roots stay in sync with the registry skill rules", () => {
       [...rule.roots].sort(),
       `roots for ${definition.toolId} must match the registry`,
     );
+    // Discovery depth must match too, or deeply nested installations (e.g.
+    // WorkBuddy's plugin cache) silently drop out of security scanning while
+    // remaining visible in the Skill management workspace.
+    assert.equal(
+      definition.maxDepth ?? DEFAULT_DISCOVERY_DEPTH,
+      rule.maxDepth ?? DEFAULT_MAX_DEPTH,
+      `discovery depth for ${definition.toolId} must match the registry`,
+    );
   }
+});
+
+test("WorkBuddy nests cached Skills deeper than the default discovery depth", () => {
+  const workbuddy = MANAGED_SKILL_ROOTS.find(
+    (definition) => definition.toolId === "workbuddy",
+  );
+  assert.ok(workbuddy, "WorkBuddy must be a managed security skill root");
+  assert.deepEqual(
+    [...workbuddy.suffixes],
+    [".workbuddy/skills", ".workbuddy/plugins/cache"],
+  );
+  assert.equal(
+    workbuddy.maxDepth,
+    8,
+    "cached WorkBuddy Skills sit below the default 3-level walk",
+  );
 });
 
 test("security scanner resolves Hermes skills under an override directory", () => {
@@ -65,7 +94,7 @@ test("security scanner honours the env seam including drive-letter paths", () =>
     AITRACKER_TOOL_DATA_DIRS: "hermes=D:/hermes",
   });
   const hermes = roots.find((entry) => entry.agent === "Hermes Agent");
-  assert.equal(hermes?.root, "D:/hermes/skills");
+  assert.equal(hermes?.root, join("D:/hermes", "skills"));
 });
 
 test("per-tool override wins over envHome, defaults unchanged otherwise", () => {

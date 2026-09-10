@@ -35,7 +35,7 @@ import {
 import { InsightCard } from "../../insights/index.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
-import type { SecurityScanOverview } from "../../security-assessment/index.ts";
+import type { SecurityOverviewReadModel } from "../../security-assessment/index.ts";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import type {
   DashboardV2BreakdownRow,
@@ -112,7 +112,7 @@ export function DashboardTrustHero({
   today: DashboardV2View;
   hero: DashboardV2HeroView;
   security?: MonitoringStatus["security"];
-  securityScan: SecurityScanOverview;
+  securityScan: SecurityOverviewReadModel;
 }) {
   const { t, format } = useI18n();
   const distill = view.outputAvailability.distillationOutputs;
@@ -132,10 +132,12 @@ export function DashboardTrustHero({
     distilledMemoryCount == null
       ? t("dashboard.kpi.unavailable")
       : t("dashboard.v2.assetMemoryCount", { count: distilledMemoryCount });
+  // The overview arrives server-composed with the rest of the summary:
+  // "X/Y" always reads scanned/discovered and never flashes a different
+  // caliber (the monitoring fallback only applies when no engine exists at
+  // all, which is a terminal state).
   const securityScanReal =
-    securityScan.available &&
-    !securityScan.loading &&
-    securityScan.totalSkills > 0;
+    securityScan.available && securityScan.totalSkills > 0;
   const securityValue = securityScanReal
     ? `${format.formatNumber(securityScan.coverage)}/${format.formatNumber(securityScan.totalSkills)}`
     : security == null
@@ -265,7 +267,7 @@ export function DashboardMetricGrid({
   view: DashboardV2View;
   monitoring: DashboardV2HeroView["monitoring"];
   security?: MonitoringStatus["security"];
-  securityScan: SecurityScanOverview;
+  securityScan: SecurityOverviewReadModel;
   /**
    * Comparison-baseline label for cards that show a delta (e.g. "vs. previous 30 days").
    * Only delta cards append it to their hint line, matching the reference.
@@ -274,10 +276,10 @@ export function DashboardMetricGrid({
 }) {
   const { t, format } = useI18n();
   const unavailable = t("dashboard.kpi.unavailable");
-  // After the real scan history (Electron IPC / local companion API) is parsed successfully, the security scan card
-  // Display the cumulative number of scans (runCount), no longer use the monitoring placeholder summary; when parsing fails
-  // Keep the original server rollback and never make up numbers out of thin air.
-  const securityRunsReal = securityScan.available && !securityScan.loading;
+  // The real scan overview arrives server-composed; this card shows the
+  // cumulative scan count (runCount), and only falls back to the monitoring
+  // placeholder when no engine exists at all.
+  const securityRunsReal = securityScan.available;
   // Hibernation = Detected − Active in this cycle (consistent with the toolCountHint caliber of the system snapshot card,
   // Ensure that "active + dormant = detected" is self-consistent; no need for real-time liveTools to avoid caliber fights)
   const dormantTools = Math.max(0, monitoring.detectedTools - view.activeTools);
@@ -468,7 +470,7 @@ export function DashboardMetricGrid({
             }),
       delta: null,
     },
-  ] as const;
+  ];
   return (
     <TooltipProvider>
       <section

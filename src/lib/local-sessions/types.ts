@@ -18,9 +18,12 @@
 export const SESSION_TOOL_IDS = [
   "claude-code",
   "codex",
+  "hermes",
   "omp",
+  "workbuddy",
   "grok",
   "pi",
+  "zcode",
   "dsh",
   "aipy",
 ] as const;

@@ -4,6 +4,7 @@ import {
   Boxes,
   ExternalLink,
   FolderOpen,
+  RefreshCw,
   Search,
   Settings2,
   TriangleAlert,
@@ -238,16 +239,37 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
         ]}
       />
 
-      <ChipTabs
-        value={statusFilter}
-        onChange={(value) => {
-          setStatusFilter(value);
-        }}
-        options={STATUS_FILTERS.map((filter) => ({
-          value: filter.key,
-          label: `${t(filter.labelKey)} ${format.formatNumber(filter.key === "all" ? summary.entries.length : statusCounts[filter.key])}`,
-        }))}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <ChipTabs
+          className="min-w-0 flex-1"
+          value={statusFilter}
+          onChange={(value) => {
+            setStatusFilter(value);
+          }}
+          options={STATUS_FILTERS.map((filter) => ({
+            value: filter.key,
+            label: `${t(filter.labelKey)} ${format.formatNumber(filter.key === "all" ? summary.entries.length : statusCounts[filter.key])}`,
+          }))}
+        />
+        <button
+          type="button"
+          disabled={refreshing}
+          title={t("sources.refreshNow")}
+          aria-label={t(
+            refreshing ? "sources.refreshing" : "sources.refreshNow",
+          )}
+          onClick={() => void handleRefresh()}
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-card px-3.5 py-2 text-[12.5px] font-medium transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RefreshCw
+            className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+            strokeWidth={1.8}
+          />
+          <span className="truncate">
+            {t(refreshing ? "sources.refreshing" : "sources.refreshNow")}
+          </span>
+        </button>
+      </div>
 
       <Card
         title={t("sources.agentEcosystem", {

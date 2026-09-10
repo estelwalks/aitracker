@@ -79,11 +79,13 @@ test("T3-03: runtime refresh commits sanitized facts", async () => {
           { id: "codex", installed: false, paths: [], executableFound: false },
         ],
       },
+      sourceFingerprint: "registry-fp-abc",
     }),
   });
   await runtime.refreshNow();
   const latest = runtime.readLatest();
   assert.equal(latest.status, "fresh");
+  assert.equal(latest.sourceFingerprint, "registry-fp-abc");
   assert.equal(latest.data?.facts.length, 2);
   const claude = latest.data?.facts.find((fact) => fact.id === "claude-code");
   assert.ok(claude);

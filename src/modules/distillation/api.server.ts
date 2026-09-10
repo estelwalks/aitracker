@@ -384,7 +384,7 @@ export async function saveCandidateAsSkill(
     return { ok: false, errorCode: "errors.distillation.invalidAgent" };
 
   const { ENV } = await import("../../lib/app-config.ts");
-  const { resolveAgentRoots } =
+  const { resolveAgentRoots, chooseSkillWriteRoot } =
     await import("../../lib/local-skills/scanner.server.ts");
   // `AITRACKER_USAGE_HOME` mirrors the composition root's data-root override
   // (and keeps the write testable in isolation); unset → the real home.
@@ -396,7 +396,10 @@ export async function saveCandidateAsSkill(
     process.env,
     await registeredToolDataRoots(),
   );
-  const agentRoot = roots[input.targetAgent]?.[0];
+  const agentRoot = await chooseSkillWriteRoot(
+    roots[input.targetAgent] ?? [],
+    home,
+  );
   if (!agentRoot)
     return { ok: false, errorCode: "errors.distillation.invalidAgent" };
 

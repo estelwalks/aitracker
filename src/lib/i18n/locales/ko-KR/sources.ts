@@ -41,6 +41,8 @@ export const sources = {
   },
   scanning: "검사 중",
   rescan: "다시 검사",
+  refreshNow: "지금 새로고침",
+  refreshing: "새로고침 중",
   empty: {
     title: "일치하는 도구가 없습니다",
     desc: "필터 조건이나 검색 키워드를 조정한 후 다시 시도하세요.",

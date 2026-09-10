@@ -89,11 +89,56 @@ export function resolveAgentRoots(
     const overridden =
       overrideDir ??
       (envValue !== undefined && envValue !== "" ? envValue : null);
-    roots[SKILL_AGENTS[i]] = rule.roots.map((suffix) =>
-      overridden ? join(overridden, basename(suffix)) : join(home, suffix),
-    );
+    roots[SKILL_AGENTS[i]] = [
+      ...new Set(
+        rule.roots.map((suffix) =>
+          overridden ? join(overridden, basename(suffix)) : join(home, suffix),
+        ),
+      ),
+    ];
   }
   return roots;
+}
+
+/**
+ * Choose the agent directory that receives skill writes. Single-root agents
+ * keep their historic `roots[0]` behaviour with no filesystem access. The
+ * primary root (`roots[0]`, the user-managed skill home) wins whenever it
+ * exists; on Windows an existing `AppData/`-anchored root (Hermes Agent
+ * stores its skills under `%LOCALAPPDATA%\hermes\skills`) is preferred over
+ * creating a never-used `~/.hermes`, and otherwise the primary root is
+ * created. Additional roots (e.g. WorkBuddy's `plugins/cache` store) are
+ * discovery-only and never receive writes.
+ */
+export async function chooseSkillWriteRoot(
+  roots: readonly string[],
+  homeDirectory?: string,
+): Promise<string> {
+  if (roots.length <= 1) return roots[0] ?? "";
+  const primary = roots[0] ?? "";
+  if (await skillRootDirectoryExists(primary)) return primary;
+  if (process.platform === "win32" && homeDirectory != null) {
+    for (const root of roots) {
+      if (root === primary) continue;
+      const relativeRoot = relative(homeDirectory, root).split(sep).join("/");
+      if (
+        relativeRoot.startsWith("AppData/") &&
+        (await skillRootDirectoryExists(root))
+      ) {
+        return root;
+      }
+    }
+  }
+  return primary;
+}
+
+async function skillRootDirectoryExists(candidate: string): Promise<boolean> {
+  try {
+    const info = await lstat(candidate);
+    return info.isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -1183,8 +1228,9 @@ async function copySkillToAgent(
   await assertTargetToolInstalled(input.targetAgent, options);
 
   const dataRootOverrides = await currentToolDataRoots(options);
+  const homeDirectory = options.homeDirectory ?? homedir();
   const roots = resolveAgentRoots(
-    options.homeDirectory ?? homedir(),
+    homeDirectory,
     process.env,
     dataRootOverrides,
   );
@@ -1196,7 +1242,10 @@ async function copySkillToAgent(
   if (sourceStat.isSymbolicLink())
     throw new AppError("errors.skills.copySymlinkForbidden");
   const extension = sourceStat.isFile() ? ".md" : "";
-  const targetRoot = roots[input.targetAgent][0];
+  const targetRoot = await chooseSkillWriteRoot(
+    roots[input.targetAgent],
+    homeDirectory,
+  );
   const targetPath = join(targetRoot, `${name}${extension}`);
   if (!isPathInside(targetRoot, targetPath))
     throw new AppError("errors.skills.invalidTargetPath");

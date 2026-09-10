@@ -6,6 +6,7 @@ import type { LocalUsageTotals } from "../../lib/local-usage/types.ts";
 import type { Locale } from "../../lib/i18n/locale.ts";
 import type { UsagePeriod } from "../../lib/local-usage/presentation.ts";
 import type { MonitoringStatus } from "../monitoring/contracts.ts";
+import type { SecurityOverviewReadModel } from "../security-assessment/overview.contracts.ts";
 import type {
   DashboardV2Tool,
   DashboardV2OutputAvailability,
@@ -109,12 +110,18 @@ export interface DashboardSummaryReadModel extends WithReadModelMeta {
   readonly hero: DashboardV2HeroView;
   /** Renderer-safe monitoring status (for security cards). */
   readonly monitoring: MonitoringStatus | null;
+  /**
+   * Canonical security overview resolved against the in-process engine; the
+   * dashboard security cards read it like any other server-composed field, so
+   * they paint with the rest of the summary instead of a second lazy request.
+   */
+  readonly security: SecurityOverviewReadModel;
 }
 
-/** Projector core; hero/monitoring are attached by the query adapter (T1-04). */
+/** Projector core; hero/monitoring/security are attached by the query adapter (T1-04). */
 export type DashboardSummaryCore = Omit<
   DashboardSummaryReadModel,
-  "hero" | "monitoring"
+  "hero" | "monitoring" | "security"
 >;
 
 /** Assembles a renderer view from a pre-aggregated window (T1-04). */

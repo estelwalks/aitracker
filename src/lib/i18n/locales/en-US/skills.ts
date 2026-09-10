@@ -305,6 +305,8 @@ export const skills = {
     detected: "Scanned",
     risks: "Unsafe",
     localSkillsHint: "Distributed to {count} install slots",
+    localAssetsHint:
+      "Content-deduplicated · {names} names · {installs} install slots",
     distilledHint: "Distilled from sessions",
     detectedHint: "Coverage {pct}%",
     risksHint: "Review recommended",

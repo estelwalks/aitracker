@@ -80,7 +80,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "adapter",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -164,7 +164,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "native",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -188,7 +188,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "usage": "adapter",
         "skills": "read-write",
         "agents": "unsupported",
-        "sessions": "unsupported",
+        "sessions": "read",
         "market": "install-target",
         "security": "unsupported"
       }
@@ -269,7 +269,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "native",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -291,10 +291,10 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       },
       "capabilities": {
         "usage": "native",
-        "skills": "unsupported",
+        "skills": "read-write",
         "agents": "unsupported",
-        "sessions": "unsupported",
-        "market": "unsupported",
+        "sessions": "read",
+        "market": "install-target",
         "security": "unsupported"
       }
     },
@@ -353,7 +353,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "native",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -416,7 +416,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "adapter",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -458,7 +458,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "native",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -479,7 +479,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "adapter",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -500,7 +500,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "native",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -521,7 +521,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "adapter",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -542,11 +542,11 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
-        "skills": "unsupported",
+        "usage": "adapter",
+        "skills": "read-write",
         "agents": "unsupported",
-        "sessions": "unsupported",
-        "market": "unsupported",
+        "sessions": "read",
+        "market": "install-target",
         "security": "unsupported"
       }
     },
@@ -563,7 +563,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "adapter",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -712,7 +712,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "adapter",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -771,8 +771,10 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
     "opencode",
     "grok",
     "hermes",
+    "workbuddy",
     "openclaw",
     "antigravity",
-    "aipy"
+    "aipy",
+    "zcode"
   ]
 };

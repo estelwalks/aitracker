@@ -84,7 +84,14 @@ test("relative paths pass through untouched on both implementations", () => {
   );
 });
 
-test("canonicalizes home/absolute path variants to one Git repository identity", async () => {
+test("canonicalizes home/absolute path variants to one Git repository identity", async (t) => {
+  // Exercises the POSIX path implementation against the real filesystem; on
+  // Windows the fixture paths are drive-less and would be reinterpreted as
+  // root-relative. The POSIX behavior is covered on the Linux CI runner.
+  if (process.platform === "win32") {
+    t.skip("POSIX filesystem fixture is not representable on Windows");
+    return;
+  }
   const root = await mkdtemp(join(tmpdir(), "aitracker-project-path-"));
   const homeDirectory = join(root, "home");
   const repositoryRoot = join(homeDirectory, "Documents", "Dev", "repo");

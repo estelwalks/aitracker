@@ -47,6 +47,7 @@ export interface InstallationSnapshotRuntime {
     readonly generatedAt: string | null;
     readonly lastSuccessAt: string | null;
     readonly warningCodes: readonly string[];
+    readonly sourceFingerprint: string | null;
   };
   refreshNow(signal?: AbortSignal): Promise<{
     readonly data: InstallationSnapshotData | null;
@@ -55,6 +56,7 @@ export interface InstallationSnapshotRuntime {
     readonly generatedAt: string | null;
     readonly lastSuccessAt: string | null;
     readonly warningCodes: readonly string[];
+    readonly sourceFingerprint: string | null;
   }>;
   requestRefresh(request: {
     reason: "startup" | "schedule" | "manual" | "event" | "empty";
@@ -76,6 +78,10 @@ export function createInstallationSnapshotRuntime(
       const { AI_TOOLS } = await import("../../lib/tools/catalog.ts");
       const { detectToolInstallations } =
         await import("../../lib/tools/detection.server.ts");
+      const { computeToolRegistryVersion } =
+        await import("../../lib/tool-registry/fingerprint.server.ts");
+      const { getDefaultRegistry } =
+        await import("../../lib/tool-registry/registry.ts");
       const homeDirectory = options.homeDirectory?.() ?? homedir();
       const dataRootOverrides =
         (await options.dataRootOverrides?.()) ?? new Map<string, string>();
@@ -98,7 +104,12 @@ export function createInstallationSnapshotRuntime(
             executableFound: fact.detectedPaths.length > 0,
           })),
         },
-        sourceFingerprint: homeDirectory,
+        // The registry fingerprint that produced these probe roots. A
+        // definitions upgrade (roots/executables/capabilities changed while
+        // the tool-id set stayed the same) must not keep serving facts probed
+        // against the previous shape: Sources compares this stamp and asks for
+        // a refresh when it differs.
+        sourceFingerprint: computeToolRegistryVersion(getDefaultRegistry()),
         scannedItems: facts.length,
       };
     });
@@ -123,6 +134,7 @@ export function createInstallationSnapshotRuntime(
     generatedAt: view.generatedAt,
     lastSuccessAt: view.lastSuccessAt,
     warningCodes: view.warningCodes,
+    sourceFingerprint: view.sourceFingerprint,
   });
 
   return {

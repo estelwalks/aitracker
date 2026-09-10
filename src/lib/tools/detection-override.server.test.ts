@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import test from "node:test";
 
 import { AI_TOOLS } from "./catalog.ts";
@@ -13,6 +13,15 @@ function tool(id: string) {
   const found = AI_TOOLS.find((candidate) => candidate.id === id);
   assert.ok(found, `catalog tool ${id} missing`);
   return found;
+}
+
+/**
+ * `detectionCandidatesForTool` preserves POSIX separators for POSIX-style
+ * homes (pure projection tests and macOS scanner inputs) while real Windows
+ * homes keep the native implementation — mirror that rule in expectations.
+ */
+function homeJoin(root: string, suffix: string): string {
+  return root.startsWith("/") ? posix.join(root, suffix) : join(root, suffix);
 }
 
 test("detection candidates rebase HOME roots under the override directory", () => {
@@ -33,8 +42,8 @@ test("detection candidates stay default when no override is configured", () => {
   const home = "/home/alice";
   const candidates = detectionCandidatesForTool(tool("hermes"), "macos", home);
   assert.deepEqual(candidates, [
-    join(home, ".hermes"),
-    join(home, ".hermes/state.db"),
+    homeJoin(home, ".hermes"),
+    homeJoin(home, ".hermes/state.db"),
   ]);
 });
 

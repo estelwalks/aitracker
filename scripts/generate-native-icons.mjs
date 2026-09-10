@@ -9,10 +9,11 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { crc32 } from "node:zlib";
 
-import { runIconsTool } from "../node_modules/app-builder-lib/out/toolsets/icons.js";
+import { Resvg } from "@resvg/resvg-js";
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const buildRoot = join(projectRoot, "build");
@@ -21,23 +22,109 @@ const sources = {
   light: join(projectRoot, "public", "favicon.svg"),
   dark: join(projectRoot, "public", "favicon-dark.svg"),
 };
-// Electron's recommended macOS tray canvas is 16×16 (32×32 @2x). The app
-// artwork leaves generous breathing room for window-sized rendering, so crop
-// that margin only for the tray export. Windows uses an even tighter crop
-// because its notification area gives the icon a fixed 16×16 slot.
-const TRAY_ARTWORK_VIEW_BOX = "52 52 920 920";
-const WINDOWS_TRAY_ARTWORK_VIEW_BOX = "80 80 864 864";
+
+// Include the intermediate Windows DPI sizes; a 16px-only PNG is upscaled at
+// 125/150/200%. Each frame is rasterized directly at its final size.
+export const WINDOWS_ICON_SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
+const ICNS_ENTRIES = [
+  ["icp4", 16],
+  ["icp5", 32],
+  ["icp6", 64],
+  ["ic07", 128],
+  ["ic08", 256],
+  ["ic09", 512],
+  ["ic10", 1024],
+  ["ic11", 32],
+  ["ic12", 64],
+  ["ic13", 512],
+  ["ic14", 1024],
+];
 const outputNames = [
-  "favicon-light.png",
-  "favicon-light@2x.png",
-  "favicon-light-windows.png",
-  "favicon-light-512.png",
-  "favicon-dark.png",
-  "favicon-dark@2x.png",
-  "favicon-dark-windows.png",
-  "favicon-dark-512.png",
+  "trayTemplate.png",
+  "trayTemplate@2x.png",
+  "icon.ico",
+  "icon.icns",
+  ...Object.keys(sources).flatMap((appearance) => [
+    `favicon-${appearance}.png`,
+    `favicon-${appearance}@2x.png`,
+    `favicon-${appearance}-windows.ico`,
+    `favicon-${appearance}-512.png`,
+    `favicon-${appearance}-1024.png`,
+  ]),
   "manifest.json",
 ];
+
+/** Extract the complete transparent mark, including its three light trails. */
+export function compactArtwork(source, { template = false } = {}) {
+  const mark = source.match(
+    /<symbol id="native-mark" viewBox="0 0 16 16">([\s\S]*?)<\/symbol>/u,
+  )?.[1];
+  const color = source.match(/<svg\b[^>]*\bcolor="(#[0-9a-f]{6})"/iu)?.[1];
+  if (!mark || !color) {
+    throw new Error("Canonical SVG must define native-mark and its ink color");
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" color="${template ? "#000000" : color}">${mark}</svg>`;
+}
+
+/** Retain physical density as well as Electron's @2x filename convention. */
+export function renderPng(svg, size, dpi = 72) {
+  const png = new Resvg(svg, {
+    fitTo: { mode: "width", value: size },
+    font: { loadSystemFonts: false },
+  })
+    .render()
+    .asPng();
+  const density = Buffer.alloc(9);
+  density.writeUInt32BE(Math.round(dpi / 0.0254), 0);
+  density.writeUInt32BE(Math.round(dpi / 0.0254), 4);
+  density[8] = 1;
+  const chunk = Buffer.alloc(21);
+  chunk.writeUInt32BE(9, 0);
+  chunk.write("pHYs", 4, "ascii");
+  density.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(chunk.subarray(4, 17)), 17);
+  // PNG signature + IHDR. Resvg emits no existing pHYs chunk.
+  return Buffer.concat([png.subarray(0, 33), chunk, png.subarray(33)]);
+}
+
+export function packIco(frames) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(frames.length, 4);
+  let offset = 6 + frames.length * 16;
+  const entries = frames.map(({ size, png }) => {
+    const entry = Buffer.alloc(16);
+    entry[0] = entry[1] = size === 256 ? 0 : size;
+    entry.writeUInt16LE(1, 4);
+    entry.writeUInt16LE(32, 6);
+    entry.writeUInt32LE(png.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += png.length;
+    return entry;
+  });
+  return Buffer.concat([header, ...entries, ...frames.map(({ png }) => png)]);
+}
+
+function packIcns(svg) {
+  const bySize = new Map(
+    [...new Set(ICNS_ENTRIES.map(([, size]) => size))].map((size) => [
+      size,
+      renderPng(svg, size),
+    ]),
+  );
+  const chunks = ICNS_ENTRIES.flatMap(([type, size]) => {
+    const png = bySize.get(size);
+    const header = Buffer.alloc(8);
+    header.write(type, 0, "ascii");
+    header.writeUInt32BE(8 + png.length, 4);
+    return [header, png];
+  });
+  const body = Buffer.concat(chunks);
+  const header = Buffer.alloc(8);
+  header.write("icns", 0, "ascii");
+  header.writeUInt32BE(8 + body.length, 4);
+  return Buffer.concat([header, body]);
+}
 
 async function sha256(path) {
   return createHash("sha256")
@@ -56,9 +143,10 @@ async function exists(path) {
 
 async function currentManifest() {
   return {
-    version: 2,
-    trayArtworkViewBox: TRAY_ARTWORK_VIEW_BOX,
-    windowsTrayArtworkViewBox: WINDOWS_TRAY_ARTWORK_VIEW_BOX,
+    version: 4,
+    generator: await sha256(fileURLToPath(import.meta.url)),
+    windowsSizes: WINDOWS_ICON_SIZES,
+    macTemplateSizes: [16, 32],
     sources: {
       light: await sha256(sources.light),
       dark: await sha256(sources.dark),
@@ -86,101 +174,117 @@ async function isCurrent(manifest) {
   }
 }
 
-async function generateAppearance(stagingDirectory, appearance, source) {
-  const appIconSet = join(stagingDirectory, `${appearance}-app-set`);
-  await runIconsTool({
-    inputFile: source,
-    outputFormat: "set",
-    outDir: appIconSet,
-  });
+/** Guard every recursive removal so only this generator's build directories qualify. */
+async function removeGeneratedDirectory(directory) {
+  const target = resolve(directory);
+  if (
+    dirname(target) !== resolve(buildRoot) ||
+    (basename(target) !== "native-icons" &&
+      !basename(target).startsWith(".native-icons-"))
+  ) {
+    throw new Error(`Refusing to remove non-generated directory: ${target}`);
+  }
+  await rm(target, { recursive: true, force: true });
+}
 
-  const traySource = join(stagingDirectory, `${appearance}-tray.svg`);
-  const traySvg = (await readFile(source, "utf8")).replace(
-    'viewBox="0 0 1024 1024"',
-    `viewBox="${TRAY_ARTWORK_VIEW_BOX}"`,
-  );
-  await writeFile(traySource, traySvg, "utf8");
-  const trayIconSet = join(stagingDirectory, `${appearance}-tray-set`);
-  const windowsTraySource = join(
-    stagingDirectory,
-    `${appearance}-windows-tray.svg`,
-  );
-  const windowsTraySvg = (await readFile(source, "utf8")).replace(
-    'viewBox="0 0 1024 1024"',
-    `viewBox="${WINDOWS_TRAY_ARTWORK_VIEW_BOX}"`,
-  );
-  await writeFile(windowsTraySource, windowsTraySvg, "utf8");
-  const windowsTrayIconSet = join(
-    stagingDirectory,
-    `${appearance}-windows-tray-set`,
+async function generateAppearance(stagingDirectory, appearance, svg) {
+  const glyph = compactArtwork(svg);
+  const windowsIcon = packIco(
+    WINDOWS_ICON_SIZES.map((size) => ({
+      size,
+      png: renderPng(glyph, size, 96),
+    })),
   );
   await Promise.all([
-    runIconsTool({
-      inputFile: traySource,
-      outputFormat: "set",
-      outDir: trayIconSet,
-    }),
-    runIconsTool({
-      inputFile: windowsTraySource,
-      outputFormat: "set",
-      outDir: windowsTrayIconSet,
-    }),
-  ]);
-
-  await Promise.all([
-    copyFile(
-      join(trayIconSet, "16x16.png"),
+    writeFile(
       join(stagingDirectory, `favicon-${appearance}.png`),
+      renderPng(glyph, 16),
     ),
-    copyFile(
-      join(trayIconSet, "32x32.png"),
+    writeFile(
       join(stagingDirectory, `favicon-${appearance}@2x.png`),
+      renderPng(glyph, 32, 144),
     ),
-    copyFile(
-      join(windowsTrayIconSet, "16x16.png"),
-      join(stagingDirectory, `favicon-${appearance}-windows.png`),
+    writeFile(
+      join(stagingDirectory, `favicon-${appearance}-windows.ico`),
+      windowsIcon,
     ),
-    copyFile(
-      join(appIconSet, "512x512.png"),
+    writeFile(
       join(stagingDirectory, `favicon-${appearance}-512.png`),
+      renderPng(svg, 512),
     ),
-  ]);
-  await Promise.all([
-    rm(appIconSet, { recursive: true, force: true }),
-    rm(trayIconSet, { recursive: true, force: true }),
-    rm(traySource, { force: true }),
-    rm(windowsTrayIconSet, { recursive: true, force: true }),
-    rm(windowsTraySource, { force: true }),
+    writeFile(
+      join(stagingDirectory, `favicon-${appearance}-1024.png`),
+      renderPng(svg, 1024, 144),
+    ),
   ]);
 }
 
-async function main() {
+export async function generateNativeIcons() {
   const manifest = await currentManifest();
   if (await isCurrent(manifest)) {
     console.log("Native app icons are up to date.");
     return;
   }
-
+  const artworks = Object.fromEntries(
+    await Promise.all(
+      Object.entries(sources).map(async ([appearance, path]) => [
+        appearance,
+        await readFile(path, "utf8"),
+      ]),
+    ),
+  );
+  // Theme changes must never move the frame or the three points.
+  if (
+    compactArtwork(artworks.light, { template: true }) !==
+    compactArtwork(artworks.dark, { template: true })
+  ) {
+    throw new Error("Light and dark native marks must have identical geometry");
+  }
   await mkdir(buildRoot, { recursive: true });
   const stagingDirectory = await mkdtemp(join(buildRoot, ".native-icons-"));
   try {
     await Promise.all(
-      Object.entries(sources).map(([appearance, source]) =>
-        generateAppearance(stagingDirectory, appearance, source),
+      Object.entries(artworks).map(([appearance, svg]) =>
+        generateAppearance(stagingDirectory, appearance, svg),
       ),
     );
-    await writeFile(
-      join(stagingDirectory, "manifest.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      "utf8",
-    );
-    await rm(outputDirectory, { recursive: true, force: true });
+    const template = compactArtwork(artworks.light, { template: true });
+    await Promise.all([
+      writeFile(
+        join(stagingDirectory, "trayTemplate.png"),
+        renderPng(template, 16),
+      ),
+      writeFile(
+        join(stagingDirectory, "trayTemplate@2x.png"),
+        renderPng(template, 32, 144),
+      ),
+      writeFile(join(stagingDirectory, "icon.icns"), packIcns(artworks.light)),
+      // Pinned shortcuts and the EXE use the same transparent artwork as the
+      // running window. Never reintroduce a background during packaging.
+      copyFile(
+        join(stagingDirectory, "favicon-light-windows.ico"),
+        join(stagingDirectory, "icon.ico"),
+      ),
+      writeFile(
+        join(stagingDirectory, "manifest.json"),
+        `${JSON.stringify(manifest, null, 2)}\n`,
+        "utf8",
+      ),
+    ]);
+    await removeGeneratedDirectory(outputDirectory);
     await rename(stagingDirectory, outputDirectory);
-    console.log("Generated native app icons from public/favicon*.svg.");
+    console.log(
+      "Generated native icons: macOS templates/ICNS and Windows multi-size ICOs.",
+    );
   } catch (error) {
-    await rm(stagingDirectory, { recursive: true, force: true });
+    await removeGeneratedDirectory(stagingDirectory);
     throw error;
   }
 }
 
-await main();
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
+  await generateNativeIcons();
+}

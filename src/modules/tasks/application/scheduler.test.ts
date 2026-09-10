@@ -79,6 +79,25 @@ function harness() {
   return { runs, prefs, repository };
 }
 
+/**
+ * Poll until `condition` holds. Fixed sleeps around scheduler concurrency are
+ * unreliable under slow Windows runners (timer granularity, GC pauses); a
+ * bounded poll keeps the assertion deterministic on every platform.
+ */
+async function waitFor(
+  condition: () => boolean,
+  message: string,
+  timeoutMs = 2_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() >= deadline) {
+      throw new assert.AssertionError({ message });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 test("defaults installation refresh on and excludes duplicate security scheduling", async () => {
   assert.equal(
     JOB_DEFINITIONS.some((definition) => definition.id === "security.monitor"),
@@ -776,6 +795,7 @@ test("T5-06: heavy collectors share the global heavy permit (max 1 concurrent)",
   const h = harness();
   let activeHeavy = 0;
   let peakHeavy = 0;
+  let heavyAcquires = 0;
   let releaseFirst!: () => void;
   const firstGate = new Promise<void>((resolve) => {
     releaseFirst = resolve;
@@ -789,6 +809,7 @@ test("T5-06: heavy collectors share the global heavy permit (max 1 concurrent)",
         await new Promise((resolve) => setTimeout(resolve, 1));
       }
       heavyInFlight += 1;
+      heavyAcquires += 1;
       activeHeavy += 1;
       peakHeavy = Math.max(peakHeavy, activeHeavy);
       let released = false;
@@ -824,12 +845,19 @@ test("T5-06: heavy collectors share the global heavy permit (max 1 concurrent)",
   });
   assert.equal(first.status, "queued");
   assert.equal(second.status, "queued");
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  // The first heavy task acquires the single permit and stays in flight.
+  await waitFor(
+    () => activeHeavy === 1 && heavyAcquires === 1,
+    "first heavy task never acquired the permit",
+  );
   // The second heavy task must wait for the first permit.
-  assert.equal(activeHeavy, 1);
   assert.equal(peakHeavy, 1);
   releaseFirst();
-  await new Promise((resolve) => setTimeout(resolve, 30));
+  // Once the first task completes, the second task runs and releases again.
+  await waitFor(
+    () => activeHeavy === 0 && heavyAcquires === 2,
+    "second heavy task never ran after the permit was released",
+  );
   // Both completed; no permit leaked.
   assert.equal(activeHeavy, 0);
   assert.equal(peakHeavy, 1);

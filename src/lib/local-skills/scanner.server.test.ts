@@ -101,7 +101,7 @@ test("scans common agent roots without treating mtime as usage evidence", async 
   });
 
   // All verified Skill installation targets are exposed, including AiPy.
-  assert.equal(Object.keys(snapshot.roots).length, 10);
+  assert.equal(Object.keys(snapshot.roots).length, 12);
   assert.equal(snapshot.agents["AiPy"].installed, true);
   assert.equal(snapshot.skills.length, 1);
   assert.equal(snapshot.skills[0].installations.length, 3);

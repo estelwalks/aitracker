@@ -9,6 +9,7 @@ import {
   type SecurityVerdict,
 } from "../modules/security-assessment/presentation/security-view.ts";
 import { historyView } from "../modules/security-assessment/query/desktop-client.ts";
+import type { SecurityHistoryView } from "../modules/security-assessment/presentation/security-view.ts";
 
 export interface SecuritySkillVerdictReadModel {
   readonly byName: Readonly<Record<string, SecurityVerdict>>;
@@ -33,6 +34,22 @@ export interface SecuritySkillVerdictReadModel {
  * separate refresh/event plumbing is required. When neither source exists the
  * result is `null` (honest "unknown", never a fabricated zero).
  */
+/**
+ * Reads the persisted scanner history (mirrored into the server DB by the
+ * desktop/dev persistence adapters) as renderer-safe view rows. Empty when no
+ * scan has ever completed or the preference row is unreadable.
+ */
+export async function readSecurityHistoryViews(): Promise<
+  readonly SecurityHistoryView[]
+> {
+  const { getCompositionRoot } = await import("./composition.server.ts");
+  const root = await getCompositionRoot();
+  const raw =
+    root.database.features.appPreferences.get(DESKTOP_HISTORY_KEY)?.value;
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  return (raw as unknown as SecurityScanHistoryEntry[]).map(historyView);
+}
+
 export async function getMonitoringSecuritySummary(): Promise<MonitoringSecuritySummary | null> {
   const { getCompositionRoot } = await import("./composition.server.ts");
   const root = await getCompositionRoot();
