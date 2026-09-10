@@ -72,11 +72,13 @@ npm run dev:desktop
 최신 릴리스의 설치 파일을 직접 다운로드할 수도 있습니다:
 
 - macOS(Apple Silicon):
-  [AITracker-1.0.0-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.0-arm64.dmg)
+  [AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)
 - macOS(Intel):
-  [AITracker-1.0.0-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.0-x64.dmg)
+  [AITracker-1.0.1-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-x64.dmg)
 - Windows(x64):
-  [AITracker-Setup-1.0.0-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.0-x64.exe)
+  [AITracker-Setup-1.0.1-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.1-x64.exe)
+- Windows(ARM64): ARM64 설치 프로그램은 다음 태그 릴리스부터 제공됩니다.
+  [Releases 페이지](https://github.com/estelwalks/aitracker/releases/latest)를 확인하세요.
 
 모든 버전은 [Releases 페이지](https://github.com/estelwalks/aitracker/releases/latest)에서 확인할 수 있습니다.
 

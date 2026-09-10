@@ -98,7 +98,7 @@ AITracker 当前通过 Electron Builder 生成 macOS DMG 和 Windows NSIS 安装
 flowchart LR
     Tag[受保护版本标签] --> Gate[质量与版本门禁]
     Gate --> Mac[macOS x64/arm64 构建、稳定版签名公证]
-    Gate --> Win[Windows x64 构建、稳定版签名]
+    Gate --> Win[Windows x64/arm64 构建、稳定版签名]
     Mac --> Meta[Release Metadata 生成器]
     Win --> Meta
     Meta --> GH[GitHub Draft Release]
@@ -156,6 +156,14 @@ flowchart LR
       "url": "<immutable-url>",
       "sha256": "<hex>",
       "size": 0
+    },
+    "win32-arm64": {
+      "name": "AITracker-Setup-1.0.0-arm64.exe",
+      "url": "<immutable-url>",
+      "sha256": "<hex>",
+      "size": 0,
+      "installerType": "nullsoft",
+      "scope": "machine"
     },
     "win32-x64": {
       "name": "AITracker-Setup-1.0.0-x64.exe",
@@ -225,11 +233,11 @@ Cask 使用当前两份版本化 DMG，并通过 `arch` 为 Apple Silicon/Intel 
 
 ### 7.3 WinGet
 
-使用现有 Windows x64 NSIS 安装器，首期 PackageIdentifier 建议为 `estelwalks.AITracker`，最终 Publisher 字段必须与 Windows“应用和功能”中安装器写入的 Publisher 完全一致。
+使用现有 Windows x64/arm64 NSIS 安装器，首期 PackageIdentifier 建议为 `estelwalks.AITracker`，最终 Publisher 字段必须与 Windows“应用和功能”中安装器写入的 Publisher 完全一致。
 
 生成三文件 manifest：version、installer、defaultLocale。关键字段包括：
 
-- `Architecture: x64`
+- `Architecture: x64`、`Architecture: arm64`
 - `InstallerType: nullsoft`
 - `Scope: machine`（与当前 Electron Builder `perMachine: true` 一致）
 - 版本化 `InstallerUrl` 和 `InstallerSha256`

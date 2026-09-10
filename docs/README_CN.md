@@ -70,11 +70,13 @@ npm run dev:desktop
 也可以直接下载最新 Release 的安装包：
 
 - macOS（Apple Silicon）：
-  [AITracker-1.0.0-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.0-arm64.dmg)
+  [AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)
 - macOS（Intel）：
-  [AITracker-1.0.0-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.0-x64.dmg)
+  [AITracker-1.0.1-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-x64.dmg)
 - Windows（x64）：
-  [AITracker-Setup-1.0.0-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.0-x64.exe)
+  [AITracker-Setup-1.0.1-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.1-x64.exe)
+- Windows（ARM64）：ARM64 安装包从下一个 tag 版本开始发布，见
+  [Releases 页面](https://github.com/estelwalks/aitracker/releases/latest)
 
 所有版本可以在 [Releases 页面](https://github.com/estelwalks/aitracker/releases/latest) 查看。
 

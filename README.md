@@ -75,11 +75,14 @@ To run the browser development server only, use `npm run dev`.
 You can download the installer of the latest release directly:
 
 - macOS (Apple Silicon):
-  [AITracker-1.0.0-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.0-arm64.dmg)
+  [AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)
 - macOS (Intel):
-  [AITracker-1.0.0-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.0-x64.dmg)
+  [AITracker-1.0.1-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-x64.dmg)
 - Windows (x64):
-  [AITracker-Setup-1.0.0-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.0-x64.exe)
+  [AITracker-Setup-1.0.1-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.1-x64.exe)
+- Windows (ARM64): the ARM64 installer is published from the next tagged
+  release onward —
+  [Releases page](https://github.com/estelwalks/aitracker/releases/latest)
 
 All releases are listed on the
 [Releases page](https://github.com/estelwalks/aitracker/releases/latest).
@@ -134,12 +137,13 @@ npm run test:all            # Unit, tooling, database, and scanner tests
 npm run check:opensource-hygiene
 ```
 
-Platform installers can be produced with `npm run dist:mac` or
-`npm run dist:win:x64`. Signing and notarization credentials are not stored in
-this repository.
+Platform installers can be produced with `npm run dist:mac`,
+`npm run dist:win:x64`, or `npm run dist:win:arm64`. Signing and notarization
+credentials are not stored in this repository.
 
 The standalone installer launcher is packaged as `aitracker` and supports
-macOS arm64/x64 and Windows x64. Linux is not supported by the launcher.
+macOS arm64/x64 and Windows x64/arm64 (including Windows on ARM). Linux is not
+supported by the launcher.
 
 See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
 generated-file policy, and repository layout.

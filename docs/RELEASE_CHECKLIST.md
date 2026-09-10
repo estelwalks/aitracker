@@ -40,10 +40,10 @@ npm run test:e2e:offline
 - Build the target installer with the appropriate `dist:*` command. Experimental
   beta releases may remain unsigned; stable releases must be signed and
   notarized/smoke-tested for the target platform.
-- For Phase 1, confirm the target set is macOS x64/arm64 and Windows x64;
-  Linux is out of scope. Keep the beta channel separate from stable.
+- For Phase 1, confirm the target set is macOS x64/arm64 and Windows
+  x64/arm64; Linux is out of scope. Keep the beta channel separate from stable.
 - The tag-triggered [unsigned beta release workflow](../.github/workflows/release.yml)
-  runs the version gate first, builds the three installers on platform
+  runs the version gate first, builds the four installers on platform
   runners, verifies their electron-builder names, and generates
   `release/release-metadata.json` plus `release/checksums.txt`.
 - The workflow creates a draft prerelease and uploads assets without the

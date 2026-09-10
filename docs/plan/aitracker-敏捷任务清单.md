@@ -28,11 +28,11 @@
 
 **目标用户：** Node.js 开发者、macOS Homebrew 用户、Windows WinGet 用户、AITracker 发布维护者。
 
-**范围：** macOS arm64/x64、Windows x64；稳定版和 beta 频道；GitHub Releases、npm、Homebrew Cask、WinGet Community Repository。
+**范围：** macOS arm64/x64、Windows x64/arm64；稳定版和 beta 频道；GitHub Releases、npm、Homebrew Cask、WinGet Community Repository。
 
-**不在本期：** Linux、Mac App Store/Microsoft Store、Windows ARM64、企业私有源、完全无确认的系统级静默安装、独立 CDN。
+**不在本期：** Linux、Mac App Store/Microsoft Store、企业私有源、完全无确认的系统级静默安装、独立 CDN。
 
-**当前交付边界：** 本轮只实现未签名 beta 的 npx CLI 和自有 Homebrew Tap 的本地生成/安装入口。GitHub Actions 已准备未签名 beta 的版本门禁、三平台构建、metadata/checksum 生成和 draft Release；npm 真实发布、远程 Tap 同步、稳定版签名、官方 Cask、WinGet 以及真实平台安装冒烟均未完成。
+**当前交付边界：** 本轮只实现未签名 beta 的 npx CLI 和自有 Homebrew Tap 的本地生成/安装入口。GitHub Actions 已准备未签名 beta 的版本门禁、四平台构建（含在 x64 runner 上交叉构建的 Windows arm64）、metadata/checksum 生成和 draft Release；npm 真实发布、远程 Tap 同步、稳定版签名、官方 Cask、WinGet 以及真实平台安装冒烟均未完成。
 
 ## 2. 优先级和里程碑
 
@@ -67,7 +67,7 @@ Story 开始前必须具备：
 **验收标准：**
 
 - `package.json` 版本、Git tag、制品文件名和 metadata 版本不一致时 CI 失败。
-- metadata 覆盖 darwin-arm64、darwin-x64、win32-x64，含不可变 URL、SHA-256 和大小。
+- metadata 覆盖 darwin-arm64、darwin-x64、win32-x64、win32-arm64，含不可变 URL、SHA-256 和大小。
 - 对缺失制品、重复平台、非法 host、非法 hash 有单元测试。
 
 #### Tasks
@@ -92,9 +92,10 @@ Story 开始前必须具备：
 #### Tasks
 
 - [ ] T-0021：重构 macOS 构建为 CI 可执行的 x64/arm64 矩阵并接入签名、公证 — macOS 发布 — 1.5 人日
-- [ ] T-0022：重构 Windows x64 NSIS 构建并接入 Authenticode 签名 — Windows 发布 — 1.5 人日
+- [ ] T-0022：重构 Windows x64/arm64 NSIS 构建并接入 Authenticode 签名 — Windows 发布 — 1.5 人日
 - [x] T-0023：新增未签名 beta draft Release 上传、metadata 汇总和门禁 — DevOps — 1 人日
 - [ ] T-0024：按频道在干净 runner 验证签名（稳定版）或安全提示（beta）、安装、首次启动和卸载 — QA/DevOps — 1 人日
+- [x] T-0025：新增 Windows arm64 NSIS 目标、release metadata/schema 第四平台、CLI 平台选择和 CI 矩阵项 — Windows 发布 — 0.5 人日
 
 ### Story S-101：创建独立 npx 安装器 CLI
 
@@ -106,7 +107,7 @@ Story 开始前必须具备：
 **验收标准：**
 
 - 根 Electron 包继续保持 private；公开 npm 包只有 CLI 运行所需文件。
-- macOS arm64/x64 和 Windows x64 可正确选择同版本制品。
+- macOS arm64/x64 和 Windows x64/arm64 可正确选择同版本制品。
 - checksum、host、大小或平台检查失败时返回非零状态且不启动安装器。
 - 第一阶段未签名 beta 可以继续进入安装器，但 CLI 和 README 必须明确可能出现的 macOS Gatekeeper/Windows 安全提示。
 - 支持 stable、beta、精确 npm 版本、`--dry-run` 和 `--download-only`。

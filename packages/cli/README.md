@@ -14,7 +14,7 @@ npx @estelwalks/aitracker --download-only ./downloads # save verified installer 
 npx @estelwalks/aitracker --download-only=./downloads # equivalent directory form
 ```
 
-The CLI supports macOS arm64/x64 and Windows x64. Linux and unsupported
+The CLI supports macOS arm64/x64 and Windows x64/arm64. Linux and unsupported
 architectures are rejected; the installer is selected from the public GitHub
 Release metadata, streamed with a 30-minute total timeout and a two-minute
 no-progress timeout, and verified with its SHA-256 and byte size before it is

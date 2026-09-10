@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   ERROR_CODES,
   EXIT_CODES,
@@ -12,6 +14,11 @@ import {
   validateReleaseContract,
   verifyReleaseContract,
 } from "./verify-release-contract.mjs";
+
+const SCRIPT = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "verify-release-contract.mjs",
+);
 
 const betaPackages = {
   rootPackage: { version: "1.0.0-beta.1" },
@@ -28,6 +35,10 @@ test("accepts matching strict-semver packages and derives beta contract", () => 
     [
       { platform: "darwin-arm64", name: "AITracker-1.0.0-beta.1-arm64.dmg" },
       { platform: "darwin-x64", name: "AITracker-1.0.0-beta.1-x64.dmg" },
+      {
+        platform: "win32-arm64",
+        name: "AITracker-Setup-1.0.0-beta.1-arm64.exe",
+      },
       {
         platform: "win32-x64",
         name: "AITracker-Setup-1.0.0-beta.1-x64.exe",
@@ -169,7 +180,21 @@ test("checks only the matrix platform when requested, while aggregate checks rem
   }
 });
 
-test("checks all three artifacts only when release-dir is explicitly supplied", async () => {
+test("the CLI entry point actually runs when invoked as a script", () => {
+  // Guards against the Windows-only regression where the entry check compared
+  // import.meta.url against `file://${process.argv[1]}` and therefore never
+  // matched, making every `npm run verify:release-contract` invocation exit 0
+  // without checking anything.
+  const result = spawnSync(
+    process.execPath,
+    [SCRIPT, "--platform", "linux-x64"],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, EXIT_CODES.usage);
+  assert.match(result.stderr, /RC_PLATFORM_INVALID/);
+});
+
+test("checks all four artifacts only when release-dir is explicitly supplied", async () => {
   const rootDir = await mkdtemp(join(tmpdir(), "aitracker-contract-test-"));
   const releaseDir = join(rootDir, "release");
   try {
@@ -184,7 +209,7 @@ test("checks all three artifacts only when release-dir is explicitly supplied", 
     );
 
     const withoutDirectory = await verifyReleaseContract({ rootDir });
-    assert.equal(withoutDirectory.artifacts.length, 3);
+    assert.equal(withoutDirectory.artifacts.length, 4);
     await assert.rejects(
       () => verifyReleaseContract({ rootDir, releaseDir, cwd: rootDir }),
       (error) => error.errorCode === ERROR_CODES.artifactDirectory,

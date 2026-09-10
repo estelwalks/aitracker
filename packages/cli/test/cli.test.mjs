@@ -40,6 +40,15 @@ const metadata = {
       sha256,
       size: bytes.length,
     },
+    "win32-arm64": {
+      name: "AITracker-Setup-1.0.0-beta.3-arm64.exe",
+      url: artifactUrl.replace(
+        "AITracker-1.0.0-beta.3-arm64.dmg",
+        "AITracker-Setup-1.0.0-beta.3-arm64.exe",
+      ),
+      sha256,
+      size: bytes.length,
+    },
     "win32-x64": {
       name: "AITracker-Setup-1.0.0-beta.3-x64.exe",
       url: artifactUrl.replace(
@@ -286,6 +295,21 @@ test("rejects malicious final response hosts while allowing GitHub release asset
         },
       }),
     /must resolve to github\.com, release-assets\.githubusercontent\.com, or objects\.githubusercontent\.com/,
+  );
+});
+
+test("selects the Windows arm64 installer for win32/arm64", async () => {
+  const { fetchImpl } = fakeFetch();
+  const resolved = await resolveRelease({
+    channel: "beta",
+    version: "1.0.0-beta.3",
+    platform: "win32",
+    arch: "arm64",
+    fetchImpl,
+  });
+  assert.equal(
+    resolved.artifact.name,
+    "AITracker-Setup-1.0.0-beta.3-arm64.exe",
   );
 });
 
