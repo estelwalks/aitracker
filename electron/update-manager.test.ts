@@ -361,32 +361,30 @@ test("metadata may use the versionless URL while the release lists its tag URL",
   );
 });
 
-test("a 1.0.2 release listing all four platforms is accepted", async () => {
-  // release-metadata.json always carries all four platforms, so requiring only
-  // three keys rejected every 1.0.2 release: the fourth key (win32-arm64, which
-  // joined the contract in 1.0.2) made the document "unknown" and the update
-  // failed with metadata-invalid before a single byte was downloaded. This is
-  // the shape scripts/release-metadata.mjs produces for the tag.
+test("the released metadata shape is accepted for a 1.0.1 client", async () => {
+  // release-metadata.json lists three platforms and names versioned installers
+  // at tag-addressed URLs. Both halves are load-bearing:
+  //  - three keys, because a client released before 1.0.2 rejects the whole
+  //    document when it carries a platform key it does not know (win32-arm64),
+  //    which would stop those installs from updating themselves;
+  //  - versioned names and `releases/download/v<version>/<name>` URLs, because
+  //    those clients compare the URL to that exact string and require the asset
+  //    to exist.
+  // Requiring all four keys here once rejected every release that omitted
+  // win32-arm64, and versionless names broke the older clients.
   const base =
     "https://github.com/estelwalks/aitracker/releases/download/v1.0.2";
   const payload = Buffer.from("installer-bytes-1.0.2");
   const sha256 = createHash("sha256").update(payload).digest("hex");
   const names: Record<string, string> = {
-    "darwin-arm64": "AITracker-arm64.dmg",
-    "darwin-x64": "AITracker-x64.dmg",
-    "win32-arm64": "AITracker-Setup-arm64.exe",
-    "win32-x64": "AITracker-Setup-x64.exe",
+    "darwin-arm64": "AITracker-1.0.2-arm64.dmg",
+    "darwin-x64": "AITracker-1.0.2-x64.dmg",
+    "win32-x64": "AITracker-Setup-1.0.2-x64.exe",
   };
   const artifacts = Object.fromEntries(
     Object.entries(names).map(([key, name]) => [
       key,
-      {
-        name,
-        // What the generator writes for a versionless installer name.
-        url: `https://github.com/estelwalks/aitracker/releases/latest/download/${name}`,
-        sha256,
-        size: payload.byteLength,
-      },
+      { name, url: `${base}/${name}`, sha256, size: payload.byteLength },
     ]),
   );
   const manager = new UpdateManager({
@@ -407,6 +405,11 @@ test("a 1.0.2 release listing all four platforms is accepted", async () => {
                 name,
                 browser_download_url: `${base}/${name}`,
               })),
+              // Attached but not listed in the metadata.
+              {
+                name: "AITracker-Setup-1.0.2-arm64.exe",
+                browser_download_url: `${base}/AITracker-Setup-1.0.2-arm64.exe`,
+              },
               {
                 name: "release-metadata.json",
                 browser_download_url: `${base}/release-metadata.json`,
@@ -434,8 +437,85 @@ test("a 1.0.2 release listing all four platforms is accepted", async () => {
   const state = await manager.startAutomaticCheck();
   assert.equal(state.status, "downloaded");
   assert.equal(state.latestVersion, "1.0.2");
-  assert.equal(state.assetName, "AITracker-x64.dmg");
-  assert.equal(state.downloadUrl, `${base}/AITracker-x64.dmg`);
+  assert.equal(state.assetName, "AITracker-1.0.2-x64.dmg");
+  assert.equal(state.downloadUrl, `${base}/AITracker-1.0.2-x64.dmg`);
+});
+
+test("a document listing an unknown platform is still rejected", async () => {
+  // The three known keys plus win32-arm64 are accepted; anything else means the
+  // document is not ours. Covered by the metadata shape test above together
+  // with the fixtures, and asserted here through a bogus platform key.
+  const base =
+    "https://github.com/estelwalks/aitracker/releases/download/v1.0.2";
+  const payload = Buffer.from("bytes");
+  const sha256 = createHash("sha256").update(payload).digest("hex");
+  const names: Record<string, string> = {
+    "darwin-arm64": "AITracker-1.0.2-arm64.dmg",
+    "darwin-x64": "AITracker-1.0.2-x64.dmg",
+    "win32-x64": "AITracker-Setup-1.0.2-x64.exe",
+  };
+  const manager = new UpdateManager({
+    currentVersion: "1.0.1",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) {
+        return response([
+          {
+            tag_name: "v1.0.2",
+            prerelease: false,
+            assets: [
+              ...Object.values(names).map((name) => ({
+                name,
+                browser_download_url: `${base}/${name}`,
+              })),
+              {
+                name: "release-metadata.json",
+                browser_download_url: `${base}/release-metadata.json`,
+              },
+            ],
+          },
+        ]);
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response({
+          schemaVersion: 1,
+          appVersion: "1.0.2",
+          channel: "stable",
+          repository: "estelwalks/aitracker",
+          gitTag: "v1.0.2",
+          artifacts: {
+            ...Object.fromEntries(
+              Object.entries(names).map(([key, name]) => [
+                key,
+                {
+                  name,
+                  url: `${base}/${name}`,
+                  sha256,
+                  size: payload.byteLength,
+                },
+              ]),
+            ),
+            "linux-x64": {
+              name: "AITracker.AppImage",
+              url: `${base}/AITracker.AppImage`,
+              sha256,
+              size: payload.byteLength,
+            },
+          },
+        });
+      }
+      return new Response(payload, { status: 200 });
+    },
+    mkdirFn: async () => undefined,
+    writeFileFn: async () => undefined,
+  });
+
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "error");
+  assert.equal(state.errorCode, "download");
 });
 
 test("release selection rejects tags that are not strict semver", async () => {

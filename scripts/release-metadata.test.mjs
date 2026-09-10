@@ -18,13 +18,21 @@ const SCRIPT = join(
   "release-metadata.mjs",
 );
 
-// Versionless by contract: releases/latest/download/<name> only stays stable
-// while the installer names never change between releases.
-const files = [
+// The pipeline publishes both namings: the versionless ones are what the
+// README and releases/latest/download serve, and the versioned copies are what
+// release-metadata.json names so clients released before 1.0.2 (which require
+// `releases/download/v<version>/<name>`) can still update themselves.
+const versionlessFiles = [
   "AITracker-arm64.dmg",
   "AITracker-x64.dmg",
   "AITracker-Setup-arm64.exe",
   "AITracker-Setup-x64.exe",
+];
+const files = [
+  ...versionlessFiles,
+  "AITracker-1.0.0-beta.1-arm64.dmg",
+  "AITracker-1.0.0-beta.1-x64.dmg",
+  "AITracker-Setup-1.0.0-beta.1-x64.exe",
 ];
 
 async function fixtureDirectory() {
@@ -59,18 +67,39 @@ test("builds metadata and checksums using electron-builder names", async () => {
         size,
       })),
       [
-        { platform: "darwin-arm64", name: files[0], size: 10 },
-        { platform: "darwin-x64", name: files[1], size: 10 },
-        { platform: "win32-arm64", name: files[2], size: 10 },
-        { platform: "win32-x64", name: files[3], size: 10 },
+        {
+          platform: "darwin-arm64",
+          name: "AITracker-1.0.0-beta.1-arm64.dmg",
+          size: 10,
+        },
+        {
+          platform: "darwin-x64",
+          name: "AITracker-1.0.0-beta.1-x64.dmg",
+          size: 10,
+        },
+        {
+          platform: "win32-x64",
+          name: "AITracker-Setup-1.0.0-beta.1-x64.exe",
+          size: 10,
+        },
       ],
     );
+    // Each versioned copy holds the same bytes as its versionless sibling.
     for (const [index, artifact] of Object.values(
       metadata.artifacts,
     ).entries()) {
       assert.equal(
         artifact.sha256,
-        createHash("sha256").update(`artifact-${index}`).digest("hex"),
+        createHash("sha256")
+          .update(`artifact-${index + versionlessFiles.length}`)
+          .digest("hex"),
+      );
+    }
+    for (const artifact of Object.values(metadata.artifacts)) {
+      assert.match(artifact.name, /-1\.0\.0-beta\.1-/u);
+      assert.match(
+        artifact.url,
+        /^https:\/\/github\.com\/estelwalks\/aitracker\/releases\/download\/v1\.0\.0-beta\.1\//u,
       );
     }
     assert.match(
@@ -105,7 +134,7 @@ test("writes independently selectable metadata and checksum outputs", async () =
       (
         await readFile(join(outputDirectory, "nested", "checksums.txt"), "utf8")
       ).split("\n").length,
-      5,
+      4,
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -116,7 +145,8 @@ test("writes independently selectable metadata and checksum outputs", async () =
 test("rejects missing artifacts and malformed generator options", async () => {
   const directory = await fixtureDirectory();
   try {
-    await rm(join(directory, files[1]));
+    // Removing a versioned copy must be detected, since the metadata names it.
+    await rm(join(directory, "AITracker-1.0.0-beta.1-x64.dmg"));
     await assert.rejects(
       () =>
         buildReleaseMetadata({

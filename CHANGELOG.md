@@ -15,7 +15,7 @@ uses semantic versioning for published releases.
 - macOS updates no longer need a manual drag into Applications: restarting mounts, replaces and relaunches the app on its own (macOS asks for a one-time confirmation on first launch)
 - Added an update proxy setting (off by default) for networks that cannot reach GitHub directly
 - Added a Windows ARM64 installer
-- Installer names no longer carry a version, so the download links always point at the newest release and never need editing per release
+- Installs from 1.0.0 and 1.0.1 can update themselves again: each release carries both a versionless installer (what the README links) and a versioned copy that older clients require
 - The macOS app icon is now a white rounded tile
 - Skill directories are scanned concurrently, so a large catalog refreshes faster
 
@@ -57,20 +57,26 @@ uses semantic versioning for published releases.
   which would have failed every update to this release with "invalid release
   metadata"; it now expects exactly the four platforms the pipeline publishes.
 - Installer names no longer carry the version (`AITracker-arm64.dmg`,
-  `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
-  `AITracker-Setup-arm64.exe`). GitHub resolves
+  `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`). GitHub resolves
   `/releases/latest/download/<name>` against the newest release, so the README
-  download links keep pointing at the current build without a documentation
-  edit per release, and the same names are reused by every release instead of
-  being duplicated as extra assets. The version still travels in the app bundle
-  and in `release-metadata.json` (`appVersion`, `gitTag`), and
-  `checksums.txt` covers the exact bytes of each release. The updater and the
-  `npx` launcher now take the metadata URL from the selected release's own
-  asset list, and `scripts/verify-release-artifact-names.mjs` fails CI if a
-  version placeholder or a renamed template ever returns to
-  `electron-builder.yml`. Clients older than 1.0.2 expect the version inside
-  the asset name and therefore cannot auto-update to this release; install it
-  manually once.
+  download links and `npx --yes @estelwalks/aitracker@latest` keep pointing at
+  the current build without a documentation edit per release.
+- Every release publishes each installer twice: under that versionless name and
+  under a versioned copy (`AITracker-1.0.2-x64.dmg`). `release-metadata.json`
+  names the versioned copies at `releases/download/v<version>/<name>` URLs
+  specifically so installs from 1.0.0 and 1.0.1 - which compare the URL to that
+  exact string and require the matching asset - can update themselves instead of
+  needing a manual download. `checksums.txt` lists the versionless names, which
+  are the files the README hands out; both namings carry identical bytes.
+- `release-metadata.json` lists three platforms again (macOS arm64/x64, Windows
+  x64). Windows arm64 is still built and attached to the release, but a client
+  released before 1.0.2 rejects the whole document when it carries a platform
+  key it does not know, so listing it would stop those installs from updating.
+  Windows on ARM users download the installer from the release page.
+- The updater and the `npx` launcher take the metadata URL from the selected
+  release's own asset list, and `scripts/verify-release-artifact-names.mjs`
+  fails CI if a version placeholder or a renamed template ever returns to
+  `electron-builder.yml`.
 - GitHub release notes are now extracted from this changelog, so the published
   notes for a tag are that version's `CHANGELOG.md` section rather than a
   hard-coded template.

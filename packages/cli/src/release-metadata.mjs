@@ -267,7 +267,13 @@ export function validateReleaseMetadata(metadata) {
     }
     assertArtifact(metadata.artifacts[key], key, metadata.appVersion);
   }
+  // darwin-arm64, darwin-x64 and win32-x64 are always published. win32-arm64 is
+  // optional: releases before 1.0.2 did not list it, and listing it again would
+  // make a pre-1.0.2 desktop client reject the whole document, which stops those
+  // installs from updating themselves. When present it is validated like any
+  // other platform (see the artifact loop above).
   for (const key of SUPPORTED_PLATFORMS) {
+    if (key === "win32-arm64") continue;
     if (!Object.prototype.hasOwnProperty.call(metadata.artifacts, key)) {
       throw new Error(`missing artifact platform: ${key}`);
     }

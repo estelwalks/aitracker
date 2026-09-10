@@ -41,6 +41,20 @@ export const DOWNLOAD_IDLE_TIMEOUT_MS = timeoutFromEnv(
 const MAX_METADATA_BYTES = 8 * 1024 * 1024;
 const SAFE_INSTALLER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:dmg|exe)$/u;
 
+/**
+ * The name users recognise: releases carry both a versioned installer (what
+ * release-metadata.json names, and what clients older than 1.0.2 require) and
+ * the versionless one the README links to. Report and save under the
+ * versionless name so the CLI matches the download page.
+ */
+function versionlessName(name) {
+  const match =
+    /^(.*?)-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-(arm64|x64)\.(dmg|exe)$/u.exec(
+      name,
+    );
+  return match ? `${match[1]}-${match[2]}.${match[3]}` : name;
+}
+
 function timeoutFromEnv(name, fallback) {
   const value = Number(process.env[name]);
   return Number.isSafeInteger(value) && value > 0 && value <= MAX_TIMEOUT_MS
@@ -613,7 +627,7 @@ export function formatArtifactSummary({ metadata, artifact, platform }) {
   return [
     `AITracker ${metadata.appVersion} (${metadata.channel})`,
     `Platform: ${platform}`,
-    `Installer: ${artifact.name}`,
+    `Installer: ${versionlessName(artifact.name)}`,
     `URL: ${artifact.url}`,
     `SHA-256: ${artifact.sha256}`,
     `Size: ${artifact.size} bytes`,
@@ -686,7 +700,8 @@ export async function runCli(
     );
   }
   if (options.dryRun) return 0;
-  assertSafeInstallerName(resolved.artifact.name);
+  const installerName = versionlessName(resolved.artifact.name);
+  assertSafeInstallerName(installerName);
   const explicitDownloadDirectory = options.downloadDirectory
     ? await prepareDownloadDirectory(options.downloadDirectory)
     : undefined;
@@ -695,7 +710,7 @@ export async function runCli(
     : await mkdtemp(join(tmpdir(), "aitracker-"));
   const installerPath = join(
     explicitDownloadDirectory ?? tempDirectory,
-    resolved.artifact.name,
+    installerName,
   );
   const reportProgress = createDownloadProgressReporter(stdout);
   try {

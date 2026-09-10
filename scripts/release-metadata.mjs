@@ -8,21 +8,53 @@ import {
   assertAllowedDownloadUrl,
   assertValidChannel,
   assertValidVersion,
-  LATEST_DOWNLOAD_BASE_URL,
+  metadataUrlForRelease,
   REPOSITORY,
   validateReleaseMetadata,
 } from "../packages/cli/src/release-metadata.mjs";
 
 /**
- * Installer names are versionless on purpose: `releases/latest/download/<name>`
- * is a stable URL only while the name never changes between releases.
+ * The three platforms `release-metadata.json` lists, down to the file each one
+ * uses. Installer names are versionless, so `releases/latest/download/<name>`
+ * stays valid across releases and is what the READMEs and downloads use; the
+ * release also carries a versioned copy of each name, because every client
+ * released before 1.0.2 accepts only
+ * `releases/download/v<version>/<name>` and requires that asset to exist.
+ *
+ * Windows on ARM is built and attached to the release, but is deliberately not
+ * listed here: a pre-1.0.2 client rejects the whole document when it carries a
+ * platform key it does not know, so listing it would stop those installs from
+ * updating themselves. v1.0.0 and v1.0.1 published three platforms too.
  */
 const TARGET_FILES = Object.freeze([
   ["darwin-arm64", "AITracker-arm64.dmg"],
   ["darwin-x64", "AITracker-x64.dmg"],
-  ["win32-arm64", "AITracker-Setup-arm64.exe"],
   ["win32-x64", "AITracker-Setup-x64.exe"],
 ]);
+
+/** `AITracker-1.0.2-x64.dmg` -> `AITracker-x64.dmg`. */
+export function versionlessArtifactName(artifactName) {
+  const match =
+    /^(.*?)-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-(arm64|x64)\.(dmg|exe)$/u.exec(
+      artifactName,
+    );
+  if (!match) {
+    throw new Error(`cannot strip the version from: ${artifactName}`);
+  }
+  const [, product, arch, extension] = match;
+  return `${product}-${arch}.${extension}`;
+}
+
+/** `AITracker-x64.dmg` -> `AITracker-1.0.2-x64.dmg` for a given version. */
+export function versionedArtifactName(version, artifactName) {
+  assertValidVersion(version);
+  const match = /^(.*?)-(arm64|x64)\.(dmg|exe)$/u.exec(artifactName);
+  if (!match) {
+    throw new Error(`cannot version the artifact name: ${artifactName}`);
+  }
+  const [, product, arch, extension] = match;
+  return `${product}-${version}-${arch}.${extension}`;
+}
 
 export function parseReleaseMetadataArgs(argv) {
   const options = {
@@ -86,15 +118,15 @@ export async function buildReleaseMetadata({
     throw new Error(`repository must be ${REPOSITORY}`);
   const directory = resolve(releaseDir);
   const artifacts = {};
-  for (const [platform, name] of TARGET_FILES) {
+  for (const [platform, versionlessName] of TARGET_FILES) {
+    // The versioned copy carries the same bytes; the release uploads both.
+    const name = versionedArtifactName(version, versionlessName);
     const path = join(directory, name);
     const info = await requiredFile(path);
     const bytes = await readFile(path);
-    // Versionless, matching the installer name: the record pins the exact
-    // build through appVersion/gitTag plus sha256 and size, not through the
-    // URL. A tag-addressed URL would undo the point of dropping the version
-    // from the file names, because every consumer would need the tag first.
-    const url = `${LATEST_DOWNLOAD_BASE_URL}${name}`;
+    // Tag-addressed: pre-1.0.2 clients compare this URL to
+    // `releases/download/v<version>/<name>` and reject anything else.
+    const url = metadataUrlForRelease(version, name);
     assertAllowedDownloadUrl(url);
     artifacts[platform] = {
       name,
@@ -113,10 +145,19 @@ export async function buildReleaseMetadata({
   });
 }
 
+/**
+ * `checksums.txt` lists the name users actually download, which is the
+ * versionless installer the READMEs and `releases/latest/download` serve. The
+ * metadata names the versioned copy of the same bytes, so the version is
+ * stripped back out here; both files are byte-identical.
+ */
 export function formatChecksums(metadata) {
   validateReleaseMetadata(metadata);
   return `${Object.values(metadata.artifacts)
-    .map((artifact) => `${artifact.sha256}  ${artifact.name}`)
+    .map(
+      (artifact) =>
+        `${artifact.sha256}  ${versionlessArtifactName(artifact.name)}`,
+    )
     .join("\n")}\n`;
 }
 

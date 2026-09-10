@@ -163,6 +163,33 @@ jobs:
         shell: bash
         run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel "$RELEASE_CHANNEL" --release-dir release
 
+      # Every client released before 1.0.2 accepts only
+      # `releases/download/v<version>/<name>` and requires that asset to exist,
+      # so each installer is published twice: under its versionless name (what
+      # the README links and releases/latest/download use) and under a versioned
+      # copy that keeps older installs able to update themselves. The copies are
+      # byte-identical, and release-metadata.json names the versioned ones.
+      - name: Publish versioned installer copies
+        working-directory: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          for copy in \
+            "AITracker-arm64.dmg:AITracker-${version}-arm64.dmg" \
+            "AITracker-x64.dmg:AITracker-${version}-x64.dmg" \
+            "AITracker-Setup-arm64.exe:AITracker-Setup-${version}-arm64.exe" \
+            "AITracker-Setup-x64.exe:AITracker-Setup-${version}-x64.exe"; do
+            source="${copy%%:*}"
+            target="${copy#*:}"
+            cp --reflink=auto "$source" "$target"
+            cmp --silent "$source" "$target" || {
+              echo "::error::$target differs from $source"
+              exit 1
+            }
+          done
+          ls -1 AITracker-*
+
       - name: Generate release metadata and checksums
         shell: bash
         run: |
@@ -230,6 +257,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The globs cover both the versionless installers and their versioned
+          # copies; checksums.txt only lists the versionless names.
           gh release upload "$GITHUB_REF_NAME" \
             release/AITracker-*.dmg \
             release/AITracker-Setup-*.exe \

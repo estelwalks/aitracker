@@ -72,16 +72,25 @@ npm run test:e2e:offline
   option. If the tag, link or build gate fails, the draft-release job is not
   run and no release is published. An existing release name is refused rather
   than overwritten.
-- Installer assets are named without a version, which is what makes
-  `/releases/latest/download/<name>` — the URL the READMEs, the desktop updater
-  and the CLI resolve — keep working release after release. GitHub anchors
-  `latest` to the newest published, non-prerelease release, so a beta tag moves
-  it only after a stable release follows. The app version is unaffected: it
-  lives in `package.json` → `app.asar`'s Info.plist, and
-  `release-metadata.json` records `appVersion`/`gitTag`.
-- Because the names repeat every release, the previous release keeps its own
-  copies of the same four asset names; GitHub resolves them per release, and
-  `releases/latest/download/<name>` always lands on the newest one.
+- Each installer is published under two names, and both are required:
+  - the **versionless** name (`AITracker-x64.dmg`) is what
+    `/releases/latest/download/<name>`, the READMEs and `checksums.txt` use, so
+    those never need editing per release;
+  - the **versioned** copy (`AITracker-1.0.2-x64.dmg`) is what
+    `release-metadata.json` names, at
+    `releases/download/v<version>/<name>` URLs. Clients released before 1.0.2
+    compare an artifact URL to exactly that string and require the asset to
+    exist, so without the versioned copy those installs cannot update
+    themselves. Both namings carry identical bytes.
+    The app version is unaffected: it lives in `package.json` → `app.asar`'s
+    Info.plist, and `release-metadata.json` records `appVersion`/`gitTag`.
+- `release-metadata.json` lists **three** platforms (macOS arm64/x64, Windows
+  x64). The Windows arm64 installer is built and attached to the release but
+  must stay out of the metadata: a pre-1.0.2 client rejects the whole document
+  when it carries a platform key it does not know.
+- Because installers repeat across releases, each release keeps its own copies;
+  GitHub resolves them per release and `releases/latest/download/<name>` always
+  lands on the newest one.
 - Prepare local release metadata from the exact files in `release/`:
   `node scripts/release-metadata.mjs --release-dir release --version
 <version> --channel <stable|beta> --output release/release-metadata.json`. This

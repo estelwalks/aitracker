@@ -41,10 +41,31 @@ const VERSION_PLACEHOLDER = /\$\{[^}]*\bversion\b[^}]*\}/iu;
 
 const ARTIFACT_NAME_LINE = /^\s+artifactName:\s*(.+?)\s*$/gmu;
 
-/** Modules that must keep naming the four installers explicitly. */
+/**
+ * Modules that name the installers explicitly, with the names each one owns.
+ * The contract gate requires all four installers to exist in the release; the
+ * metadata generator lists only the three platforms release-metadata.json may
+ * carry (see TARGET_FILES there — Windows on ARM is attached but not listed,
+ * because a pre-1.0.2 client rejects a document with an unknown platform key).
+ */
 const ARTIFACT_NAME_SOURCES = Object.freeze([
-  "scripts/verify-release-contract.mjs",
-  "scripts/release-metadata.mjs",
+  {
+    path: "scripts/verify-release-contract.mjs",
+    names: [
+      "AITracker-arm64.dmg",
+      "AITracker-x64.dmg",
+      "AITracker-Setup-arm64.exe",
+      "AITracker-Setup-x64.exe",
+    ],
+  },
+  {
+    path: "scripts/release-metadata.mjs",
+    names: [
+      "AITracker-arm64.dmg",
+      "AITracker-x64.dmg",
+      "AITracker-Setup-x64.exe",
+    ],
+  },
 ]);
 
 export function inspectPackagingConfig({ config }) {
@@ -87,7 +108,7 @@ export async function verifyReleaseArtifactNames({
   }
   problems.push(...inspectPackagingConfig({ config }).problems);
 
-  for (const path of ARTIFACT_NAME_SOURCES) {
+  for (const { path, names } of ARTIFACT_NAME_SOURCES) {
     let text;
     try {
       text = await readFile(join(rootDir, path), "utf8");
@@ -97,7 +118,7 @@ export async function verifyReleaseArtifactNames({
       );
       continue;
     }
-    for (const name of EXPECTED_ARTIFACT_NAMES) {
+    for (const name of names) {
       if (!text.includes(`"${name}"`)) {
         problems.push(`${path} does not name ${name}`);
       }
