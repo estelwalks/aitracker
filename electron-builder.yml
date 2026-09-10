@@ -38,7 +38,8 @@ mac:
       arch:
         - x64
         - arm64
-  icon: build/native-icons/icon.icns
+  # Dock/Finder app icon has a white tile; menu-bar templates stay transparent.
+  icon: build/native-icons/mac-app.icns
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -51,6 +52,8 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
 dmg:
   artifactName: "${productName}-${version}-${arch}.${ext}"
+  # Explicit volume icon for the installer mounted on the desktop.
+  icon: build/native-icons/mac-app.icns
 win:
   target:
     - target: nsis

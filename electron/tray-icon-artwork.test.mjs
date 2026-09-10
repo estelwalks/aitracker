@@ -5,6 +5,7 @@ import test from "node:test";
 import { Resvg } from "@resvg/resvg-js";
 import {
   compactArtwork,
+  macAppArtwork,
   packIco,
   renderPng,
   WINDOWS_ICON_SIZES,
@@ -73,7 +74,7 @@ test("all three light trails remain visible in small native icons at every DPI",
   }
 });
 
-test("app icons and native glyphs share the same transparent artwork without a backplate", () => {
+test("shared web/Windows artwork stays transparent without a macOS backplate", () => {
   for (const source of [light, dark]) {
     const pixels = raster(source, 64);
     const nativePixels = raster(compactArtwork(source), 64);
@@ -94,6 +95,40 @@ test("app icons and native glyphs share the same transparent artwork without a b
         "space around and inside the mark must be transparent",
       );
     }
+  }
+});
+
+test("macOS app artwork has white space inside the mark and transparent outer corners", () => {
+  for (const size of [16, 32, 64, 128, 256, 512, 1024]) {
+    const pixels = raster(macAppArtwork(light), size);
+    for (const [x, y] of [
+      [6, 6],
+      [10, 10],
+      [8, 2],
+    ]) {
+      const offset =
+        (Math.floor((y * size) / 16) * size + Math.floor((x * size) / 16)) * 4;
+      assert.deepEqual(
+        [...pixels.subarray(offset, offset + 4)],
+        [255, 255, 255, 255],
+        `${size}px macOS tile must be opaque white around and inside the mark`,
+      );
+    }
+    for (const [x, y] of [
+      [0, 0],
+      [15, 0],
+      [0, 15],
+      [15, 15],
+    ]) {
+      assert.equal(alphaAt(pixels, size, x, y), 0);
+    }
+    assert.ok(
+      pixels.some(
+        (value, index) =>
+          index % 4 === 0 && value < 64 && pixels[index + 3] === 255,
+      ),
+      `${size}px tile must retain visible dark artwork`,
+    );
   }
 });
 

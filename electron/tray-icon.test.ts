@@ -9,6 +9,7 @@ import {
   findAppIconPath,
   findTrayIconPath,
   findTrayRetinaIconPath,
+  MAC_APP_ICON_FILENAME,
   MAC_TRAY_ICON_FILENAMES,
   TRAY_ICON_FILENAMES,
   WINDOWS_APP_ICON_FILENAMES,
@@ -30,7 +31,14 @@ test("packaging uses the generated native containers and preserves runtime asset
     "utf8",
   );
   assert.match(builderConfig, /from: build\/native-icons\s+to: native-icons/u);
-  assert.match(builderConfig, /icon: build\/native-icons\/icon\.icns/u);
+  assert.match(
+    builderConfig,
+    /mac:\n(?:(?!\n\S)[\s\S])*icon: build\/native-icons\/mac-app\.icns/u,
+  );
+  assert.match(
+    builderConfig,
+    /dmg:\n(?:(?!\n\S)[\s\S])*icon: build\/native-icons\/mac-app\.icns/u,
+  );
   assert.match(builderConfig, /icon: build\/native-icons\/icon\.ico/u);
 });
 
@@ -141,6 +149,28 @@ test("packaged paths select the theme-aware app icon", () => {
   );
 });
 
+test("macOS Dock uses the white-plate app icon in both appearances", () => {
+  for (const isPackaged of [false, true]) {
+    const input = {
+      isPackaged,
+      resourcesPath: "/Applications/AITracker.app/Contents/Resources",
+      appPath: projectRoot,
+      platform: "darwin" as const,
+    };
+    const path = join(
+      isPackaged ? input.resourcesPath : join(projectRoot, "build"),
+      "native-icons",
+      MAC_APP_ICON_FILENAME,
+    );
+    for (const appearance of ["light", "dark"] as const) {
+      assert.equal(
+        findAppIconPath(input, appearance, (candidate) => candidate === path),
+        path,
+      );
+    }
+  }
+});
+
 test("Windows windows and taskbar resolve the same multi-resolution glyph as the tray", () => {
   for (const appearance of ["light", "dark"] as const) {
     const appIconPath = join(
@@ -178,22 +208,26 @@ test("missing generated icon returns null without a path warning", () => {
   );
 });
 
-test("Windows startup uses a large PNG in the app appearance", () => {
-  const input = {
-    isPackaged: false,
-    resourcesPath: "/unused",
-    appPath: projectRoot,
-    platform: "win32" as const,
-    surface: "startup" as const,
-  };
-  const path = join(
-    projectRoot,
-    "build",
-    "native-icons",
-    APP_ICON_FILENAMES.light,
-  );
-  assert.equal(
-    findAppIconPath(input, "light", (candidate) => candidate === path),
-    path,
-  );
+test("Windows and macOS startup keep a large PNG in the app appearance", () => {
+  for (const platform of ["win32", "darwin"] as const) {
+    const input = {
+      isPackaged: false,
+      resourcesPath: "/unused",
+      appPath: projectRoot,
+      platform,
+      surface: "startup" as const,
+    };
+    for (const appearance of ["light", "dark"] as const) {
+      const path = join(
+        projectRoot,
+        "build",
+        "native-icons",
+        APP_ICON_FILENAMES[appearance],
+      );
+      assert.equal(
+        findAppIconPath(input, appearance, (candidate) => candidate === path),
+        path,
+      );
+    }
+  }
 });
