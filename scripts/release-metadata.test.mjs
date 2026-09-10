@@ -18,11 +18,13 @@ const SCRIPT = join(
   "release-metadata.mjs",
 );
 
+// Versionless by contract: releases/latest/download/<name> only stays stable
+// while the installer names never change between releases.
 const files = [
-  "AITracker-1.0.0-beta.1-arm64.dmg",
-  "AITracker-1.0.0-beta.1-x64.dmg",
-  "AITracker-Setup-1.0.0-beta.1-arm64.exe",
-  "AITracker-Setup-1.0.0-beta.1-x64.exe",
+  "AITracker-arm64.dmg",
+  "AITracker-x64.dmg",
+  "AITracker-Setup-arm64.exe",
+  "AITracker-Setup-x64.exe",
 ];
 
 async function fixtureDirectory() {

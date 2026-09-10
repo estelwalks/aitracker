@@ -114,23 +114,34 @@ export function parseReleaseContractArgs(argv) {
   return options;
 }
 
-export function expectedReleaseArtifacts(version, platform) {
+/**
+ * Installer names deliberately carry no version, so that
+ * `releases/latest/download/<name>` keeps resolving to the newest release and
+ * the READMEs, the updater and the CLI never need a version in the URL. The
+ * version is still recorded in the app bundle and in
+ * `release-metadata.json`'s appVersion/gitTag.
+ *
+ * scripts/verify-release-artifact-names.test.mjs pins this list against
+ * electron-builder.yml, where a reintroduced `${version}` placeholder would
+ * silently break every download URL.
+ */
+export function expectedReleaseArtifacts(platform) {
   const artifacts = [
     Object.freeze({
       platform: "darwin-arm64",
-      name: `AITracker-${version}-arm64.dmg`,
+      name: "AITracker-arm64.dmg",
     }),
     Object.freeze({
       platform: "darwin-x64",
-      name: `AITracker-${version}-x64.dmg`,
+      name: "AITracker-x64.dmg",
     }),
     Object.freeze({
       platform: "win32-arm64",
-      name: `AITracker-Setup-${version}-arm64.exe`,
+      name: "AITracker-Setup-arm64.exe",
     }),
     Object.freeze({
       platform: "win32-x64",
-      name: `AITracker-Setup-${version}-x64.exe`,
+      name: "AITracker-Setup-x64.exe",
     }),
   ];
   return Object.freeze(
@@ -195,7 +206,7 @@ export function validateReleaseContract({
     channel: channel ?? inferredChannel,
     tag: tag ?? `v${version}`,
     platform,
-    artifacts: expectedReleaseArtifacts(version, platform),
+    artifacts: expectedReleaseArtifacts(platform),
   };
 }
 

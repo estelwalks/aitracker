@@ -13,7 +13,6 @@ import { APP_REPO_URL } from "./app-config.js";
 const githubRepository = new URL(APP_REPO_URL);
 const githubPath = githubRepository.pathname.replace(/\/$/u, "");
 const GITHUB_RELEASES_URL = `https://api.github.com/repos${githubPath}/releases?per_page=100`;
-const GITHUB_DOWNLOAD_PREFIX = `${APP_REPO_URL}/releases/download/`;
 const RELEASE_REPOSITORY = "estelwalks/aitracker";
 const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES = 1024 * 1024;
@@ -188,9 +187,7 @@ function releaseDateOf(release: GitHubRelease): string | null {
 }
 
 function trustedDownloadUrl(value: unknown): value is string {
-  if (typeof value !== "string" || !value.startsWith(GITHUB_DOWNLOAD_PREFIX)) {
-    return false;
-  }
+  if (typeof value !== "string") return false;
   try {
     const url = new URL(value);
     return (
@@ -201,17 +198,18 @@ function trustedDownloadUrl(value: unknown): value is string {
       !url.password &&
       !url.search &&
       !url.hash &&
-      /^\/estelwalks\/aitracker\/releases\/download\/[^/?#]+\/[^/?#]+$/u.test(
-        url.pathname,
+      // Installer and metadata names carry no version, so an asset is reached
+      // either through the `latest` alias release or through the tag of the
+      // release it was listed in. Only this repository's own release paths are
+      // accepted; the sha256 check covers the delivered bytes.
+      url.pathname.startsWith(`${githubPath}/releases/`) &&
+      /^\/releases\/(?:latest\/download|download\/[^/?#]+)\/[^/?#]+$/u.test(
+        url.pathname.slice(githubPath.length),
       )
     );
   } catch {
     return false;
   }
-}
-
-function canonicalDownloadUrl(version: string, name: string): string {
-  return `${GITHUB_DOWNLOAD_PREFIX}v${version}/${name}`;
 }
 
 function canonicalArch(arch: string): string {
@@ -453,8 +451,12 @@ function metadataArtifactOf(
       typeof artifact.name !== "string" ||
       !isSafeAssetName(artifact.name) ||
       typeof artifact.url !== "string" ||
-      artifact.url !==
-        canonicalDownloadUrl(metadata.appVersion as string, artifact.name) ||
+      // The name and URL are pinned to the release tag instead of being
+      // derived from the version, because installer names no longer carry one.
+      // The byte-level guarantees stay here: the URL must be a trusted
+      // releases/latest or releases/download/<tag> URL for this repository, and
+      // the name/URL pair below must match a real asset of the selected
+      // release, whose sha256 is re-verified after the download.
       !trustedDownloadUrl(artifact.url) ||
       typeof artifact.sha256 !== "string" ||
       !/^[a-f0-9]{64}$/.test(artifact.sha256) ||
@@ -750,9 +752,10 @@ export class UpdateManager {
       );
       if (
         !metadataAsset ||
-        typeof metadataAsset.browser_download_url !== "string" ||
-        metadataAsset.browser_download_url !==
-          canonicalDownloadUrl(latestVersion, RELEASE_METADATA_NAME)
+        // The metadata asset name is versionless like the installer names, so
+        // the URL is taken from this release's own asset list (already filtered
+        // to non-draft semver tags) rather than rebuilt from a version.
+        !trustedDownloadUrl(metadataAsset.browser_download_url)
       ) {
         this.reportIntegrityFailure("metadata-missing", latestVersion);
         return this.setState({

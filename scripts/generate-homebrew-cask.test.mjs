@@ -29,26 +29,26 @@ function fixture(channel = "stable") {
     gitTag: `v${version}`,
     artifacts: {
       "darwin-arm64": {
-        name: `AITracker-${version}-arm64.dmg`,
-        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-${version}-arm64.dmg`,
+        name: "AITracker-arm64.dmg",
+        url: "https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg",
         sha256: ARM_SHA,
         size: 123456,
       },
       "darwin-x64": {
-        name: `AITracker-${version}-x64.dmg`,
-        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-${version}-x64.dmg`,
+        name: "AITracker-x64.dmg",
+        url: "https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg",
         sha256: INTEL_SHA,
         size: 123457,
       },
       "win32-arm64": {
-        name: `AITracker-Setup-${version}-arm64.exe`,
-        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-${version}-arm64.exe`,
+        name: "AITracker-Setup-arm64.exe",
+        url: "https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe",
         sha256: "d".repeat(64),
         size: 123459,
       },
       "win32-x64": {
-        name: `AITracker-Setup-${version}-x64.exe`,
-        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-${version}-x64.exe`,
+        name: "AITracker-Setup-x64.exe",
+        url: "https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe",
         sha256: "c".repeat(64),
         size: 123458,
       },
@@ -94,7 +94,7 @@ test("renders stable Cask with distinct arm/intel URL and SHA mappings", () => {
   assert.match(output, /version "1\.2\.3"/u);
   assert.match(
     output,
-    /on_arch_conditional\(\n\s+arm:\s+"https:\/\/github\.com\/estelwalks\/aitracker\/releases\/download\/v1\.2\.3\/AITracker-1\.2\.3-arm64\.dmg",\n\s+intel:\s+"https:\/\/github\.com\/estelwalks\/aitracker\/releases\/download\/v1\.2\.3\/AITracker-1\.2\.3-x64\.dmg",/u,
+    /on_arch_conditional\(\n\s+arm:\s+"https:\/\/github\.com\/estelwalks\/aitracker\/releases\/latest\/download\/AITracker-arm64\.dmg",\n\s+intel:\s+"https:\/\/github\.com\/estelwalks\/aitracker\/releases\/latest\/download\/AITracker-x64\.dmg",/u,
   );
   assert.match(
     output,
@@ -112,8 +112,10 @@ test("renders beta with its separate token and channel version", () => {
 
   assert.match(output, /^cask "aitracker-beta" do/u);
   assert.match(output, /version "1\.2\.3-beta\.1"/u);
-  assert.match(output, /AITracker-1\.2\.3-beta\.1-arm64\.dmg/u);
-  assert.match(output, /AITracker-1\.2\.3-beta\.1-x64\.dmg/u);
+  // Installer names are versionless on both channels; the Cask still pins the
+  // exact version through its own `version` stanza above.
+  assert.match(output, /AITracker-arm64\.dmg/u);
+  assert.match(output, /AITracker-x64\.dmg/u);
   assert.match(output, /name "AITracker Beta"/u);
   assert.match(
     output,

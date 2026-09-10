@@ -33,11 +33,13 @@ jobs:
       - name: Verify tag and package versions
         run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel "$RELEASE_CHANNEL"
 
-      # The READMEs link /releases/latest/download/<alias>; the build job below
-      # publishes those aliases. Fail before four runners start if the two
-      # sides have drifted apart.
-      - name: Verify README download links match the published aliases
-        run: npm run verify:readme-release-links
+      # Installer names are versionless so `releases/latest/download/<name>`
+      # stays valid across releases. Fail before four runners start if the
+      # packaging config, the release scripts or the READMEs have drifted.
+      - name: Verify versionless installer names and README download links
+        run: |
+          npm run verify:release-artifact-names
+          npm run verify:readme-release-links
 
   build:
     name: Build ${{ matrix.name }} installer
@@ -213,7 +215,7 @@ jobs:
 
           ### Direct downloads
 
-          Each release publishes versionless copies of its installers, so these URLs always resolve to the newest release:
+          Installer names carry no version, so these URLs always resolve to the newest release:
 
           - macOS (Apple Silicon): https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg
           - macOS (Intel): https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg
@@ -238,7 +240,7 @@ jobs:
 
           ## Release assets
 
-          This release includes unsigned macOS arm64/x64 DMG installers, Windows x64 and Windows arm64 NSIS installers, the four versionless aliases above, `release-metadata.json`, and `checksums.txt`. Verify the published SHA-256 checksums before installation.
+          This release includes unsigned macOS arm64/x64 DMG installers, Windows x64 and Windows arm64 NSIS installers, `release-metadata.json`, and `checksums.txt`. Installer names carry no version, so each URL keeps resolving to the newest release while `checksums.txt` covers the exact bytes of this one. Verify the published SHA-256 checksums before installation.
 
           macOS Gatekeeper or Windows SmartScreen may show a warning because these installers are not signed or notarized. Follow the operating system's normal per-file confirmation flow and do not disable global security settings.
 
@@ -265,44 +267,6 @@ jobs:
             release/AITracker-Setup-*.exe \
             release/release-metadata.json \
             release/checksums.txt
-
-      # The README links every platform through
-      # `releases/latest/download/<name>`, which GitHub resolves against the
-      # newest published, non-prerelease release. The versioned installers
-      # above cannot serve that role because their names change every release,
-      # so each release also carries a versionless copy of its own installers.
-      # The download URL is stable across releases; the bytes behind it always
-      # belong to the release the URL resolves to. Copies are sparse clones of
-      # the already-downloaded files, removed again before the job ends.
-      - name: Publish versionless installer aliases
-        working-directory: release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          cp --reflink=auto "AITracker-${version}-arm64.dmg" AITracker-arm64.dmg
-          cp --reflink=auto "AITracker-${version}-x64.dmg" AITracker-x64.dmg
-          cp --reflink=auto "AITracker-Setup-${version}-x64.exe" AITracker-Setup-x64.exe
-          cp --reflink=auto "AITracker-Setup-${version}-arm64.exe" AITracker-Setup-arm64.exe
-          for alias in AITracker-arm64.dmg AITracker-x64.dmg AITracker-Setup-x64.exe AITracker-Setup-arm64.exe; do
-            if [[ "$alias" == *.exe ]]; then
-              expected="AITracker-Setup-${version}-${alias#AITracker-Setup-}"
-            else
-              expected="AITracker-${version}-${alias#AITracker-}"
-            fi
-            if ! cmp --silent "$alias" "$expected"; then
-              echo "::error::$alias does not match $expected"
-              exit 1
-            fi
-          done
-          gh release upload "$GITHUB_REF_NAME" \
-            AITracker-arm64.dmg \
-            AITracker-x64.dmg \
-            AITracker-Setup-x64.exe \
-            AITracker-Setup-arm64.exe
-          rm -f AITracker-arm64.dmg AITracker-x64.dmg AITracker-Setup-x64.exe AITracker-Setup-arm64.exe
 
       - name: Confirm draft outcome
         run: echo "Draft release created for $RELEASE_CHANNEL channel. A maintainer must inspect it before publication."

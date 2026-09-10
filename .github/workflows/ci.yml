@@ -36,8 +36,13 @@ jobs:
       - name: Release contract gate
         run: npm run verify:release-contract
 
-      # Keeps the README download links pinned to the versionless aliases the
-      # release workflow publishes under /releases/latest/download/.
+      # Installer names carry no version so /releases/latest/download/<name>
+      # keeps resolving across releases; both sides of that contract are pinned
+      # by these two gates (electron-builder.yml + the release scripts, and the
+      # four READMEs).
+      - name: Release artifact names
+        run: npm run verify:release-artifact-names
+
       - name: README release links
         run: npm run verify:readme-release-links
 

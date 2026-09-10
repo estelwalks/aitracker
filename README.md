@@ -73,9 +73,8 @@ To run the browser development server only, use `npm run dev`.
 ### Install
 
 You can download the installer of the latest release directly. These links stay
-valid across releases and always resolve to the newest published one, because
-every release publishes versionless copies of its installers alongside the
-versioned files:
+valid across releases and always resolve to the newest published one: installer
+names carry no version, so the release tag is the only thing that changes.
 
 - macOS (Apple Silicon):
   [AITracker-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg)
@@ -86,9 +85,10 @@ versioned files:
 - Windows (ARM64):
   [AITracker-Setup-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe)
 
-The versioned installers (`AITracker-1.0.2-arm64.dmg` and so on),
-`release-metadata.json` and `checksums.txt` remain attached to each individual
-release; pin a versioned file when you need to reproduce an exact build.
+Each release lists its own `release-metadata.json` and `checksums.txt`, which
+record the exact version and SHA-256 of the files in that release. For a
+byte-exact build, take the file from the release whose tag you need instead of
+from `latest`.
 
 All releases are listed on the
 [Releases page](https://github.com/estelwalks/aitracker/releases/latest).

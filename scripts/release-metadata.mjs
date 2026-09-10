@@ -13,11 +13,15 @@ import {
   validateReleaseMetadata,
 } from "../packages/cli/src/release-metadata.mjs";
 
+/**
+ * Installer names are versionless on purpose: `releases/latest/download/<name>`
+ * is a stable URL only while the name never changes between releases.
+ */
 const TARGET_FILES = Object.freeze([
-  ["darwin-arm64", (version) => `AITracker-${version}-arm64.dmg`],
-  ["darwin-x64", (version) => `AITracker-${version}-x64.dmg`],
-  ["win32-arm64", (version) => `AITracker-Setup-${version}-arm64.exe`],
-  ["win32-x64", (version) => `AITracker-Setup-${version}-x64.exe`],
+  ["darwin-arm64", "AITracker-arm64.dmg"],
+  ["darwin-x64", "AITracker-x64.dmg"],
+  ["win32-arm64", "AITracker-Setup-arm64.exe"],
+  ["win32-x64", "AITracker-Setup-x64.exe"],
 ]);
 
 export function parseReleaseMetadataArgs(argv) {
@@ -82,8 +86,7 @@ export async function buildReleaseMetadata({
     throw new Error(`repository must be ${REPOSITORY}`);
   const directory = resolve(releaseDir);
   const artifacts = {};
-  for (const [platform, filenameForVersion] of TARGET_FILES) {
-    const name = filenameForVersion(version);
+  for (const [platform, name] of TARGET_FILES) {
     const path = join(directory, name);
     const info = await requiredFile(path);
     const bytes = await readFile(path);

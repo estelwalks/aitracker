@@ -51,7 +51,12 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
 dmg:
-  artifactName: "${productName}-${version}-${arch}.${ext}"
+  # Installer names carry no version: `releases/latest/download/<name>` is the
+  # stable URL the READMEs, the updater and `npx @estelwalks/aitracker` all
+  # rely on, and it only resolves while the asset name stays the same across
+  # releases. scripts/verify-release-artifact-names.mjs enforces that, and the
+  # app version inside the DMG/app.asar is unaffected.
+  artifactName: "${productName}-${arch}.${ext}"
   # Explicit volume icon for the installer mounted on the desktop.
   icon: build/native-icons/mac-app.icns
 win:
@@ -77,7 +82,8 @@ win:
   # The three light trails remain part of the artwork at every icon size.
   icon: build/native-icons/icon.ico
 nsis:
-  artifactName: "${productName}-Setup-${version}-${arch}.${ext}"
+  # Versionless for the same reason as the DMG name above.
+  artifactName: "${productName}-Setup-${arch}.${ext}"
   oneClick: false
   # Install for all users. Note the default directory, which comes from
   # electron-builder's multiUser.nsh: it only promotes $PROGRAMFILES to

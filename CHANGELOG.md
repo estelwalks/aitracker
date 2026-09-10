@@ -22,21 +22,29 @@ uses semantic versioning for published releases.
   for networks that cannot reach GitHub directly.
 - The tag-triggered release workflow now publishes a Windows arm64 NSIS
   installer alongside the existing macOS arm64/x64 and Windows x64 ones
-  (`AITracker-Setup-<version>-arm64.exe`). The Windows arm64 build is
-  cross-built on the x64 runner: NSIS embeds the native win32-arm64 Electron
-  payload while the installer stub itself stays x86 and runs under Windows'
-  x86 emulation, so no ARM64 runner is required.
+  (`AITracker-Setup-arm64.exe`). The Windows arm64 build is cross-built on the
+  x64 runner: NSIS embeds the native win32-arm64 Electron payload while the
+  installer stub itself stays x86 and runs under Windows' x86 emulation, so no
+  ARM64 runner is required.
 - `win32-arm64` joined the release contract: `release-metadata.json`, the
   `release-metadata.schema.json` artifact map, and the `npx` installer
   launcher now resolve Windows on ARM to its own installer instead of falling
   back to the x64 one.
-- Every release now also carries versionless copies of its four installers
-  (`AITracker-arm64.dmg`, `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
-  `AITracker-Setup-arm64.exe`). Because GitHub resolves
-  `/releases/latest/download/<name>` against the newest release, the README
-  download links are pinned to those names and no longer need editing on every
-  release. The versioned installers, `release-metadata.json` and
-  `checksums.txt` are unchanged.
+- Installer names no longer carry the version (`AITracker-arm64.dmg`,
+  `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
+  `AITracker-Setup-arm64.exe`). GitHub resolves
+  `/releases/latest/download/<name>` against the newest release, so the README
+  download links keep pointing at the current build without a documentation
+  edit per release, and the same names are reused by every release instead of
+  being duplicated as extra assets. The version still travels in the app bundle
+  and in `release-metadata.json` (`appVersion`, `gitTag`), and
+  `checksums.txt` covers the exact bytes of each release. The updater and the
+  `npx` launcher now take the metadata URL from the selected release's own
+  asset list, and `scripts/verify-release-artifact-names.mjs` fails CI if a
+  version placeholder or a renamed template ever returns to
+  `electron-builder.yml`. Clients older than 1.0.2 expect the version inside
+  the asset name and therefore cannot auto-update to this release; install it
+  manually once.
 - GitHub release notes are now extracted from this changelog, so the published
   notes for a tag are that version's `CHANGELOG.md` section rather than a
   hard-coded template.

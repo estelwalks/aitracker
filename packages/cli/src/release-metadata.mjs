@@ -3,6 +3,12 @@ import { URL } from "node:url";
 export const REPOSITORY = "estelwalks/aitracker";
 export const RELEASE_API_URL = `https://api.github.com/repos/${REPOSITORY}/releases?per_page=100`;
 export const RELEASE_DOWNLOAD_BASE_URL = `https://github.com/${REPOSITORY}/releases/download/`;
+/**
+ * Stable alias release. Installer and metadata asset names carry no version, so
+ * `releases/latest/download/<name>` is what the READMEs, the desktop updater
+ * and this CLI resolve against; a beta release is addressed by its own tag.
+ */
+export const LATEST_DOWNLOAD_BASE_URL = `https://github.com/${REPOSITORY}/releases/latest/download/`;
 const RELEASE_REDIRECT_HOSTS = new Set([
   "release-assets.githubusercontent.com",
   "objects.githubusercontent.com",
@@ -76,12 +82,19 @@ export function assertAllowedDownloadUrl(value, label = "url") {
     parsed.password ||
     parsed.search ||
     parsed.hash ||
-    !value.startsWith(RELEASE_DOWNLOAD_BASE_URL) ||
-    !/^\/estelwalks\/aitracker\/releases\/download\/[^/]+\/[^/]+$/.test(
+    !(
+      value.startsWith(RELEASE_DOWNLOAD_BASE_URL) ||
+      value.startsWith(LATEST_DOWNLOAD_BASE_URL)
+    ) ||
+    // releases/latest/download/<name> (versionless installers) or
+    // releases/download/v<version>/<name> (beta, or a pinned tag).
+    !/^\/estelwalks\/aitracker\/releases\/(?:latest\/download|download\/[^/]+)\/[^/]+$/u.test(
       parsed.pathname,
     )
   ) {
-    throw new Error(`${label} must be under ${RELEASE_DOWNLOAD_BASE_URL}`);
+    throw new Error(
+      `${label} must be under ${LATEST_DOWNLOAD_BASE_URL} or ${RELEASE_DOWNLOAD_BASE_URL}`,
+    );
   }
 
   return value;
@@ -155,10 +168,19 @@ function assertArtifact(artifact, key, appVersion) {
       `${prefix}.name must use the ${expectedExtension} extension for ${key}`,
     );
   }
-  const expectedUrl = metadataUrlForRelease(appVersion, artifact.name);
+  // Installer names carry no version, so the URL cannot be rebuilt from
+  // appVersion + name any more. Accept the two canonical shapes and verify the
+  // URL actually ends in this artifact's name; the sha256 and size below tie
+  // the record to the exact bytes.
+  const expectedUrls = [
+    `${LATEST_DOWNLOAD_BASE_URL}${artifact.name}`,
+    metadataUrlForRelease(appVersion, artifact.name),
+  ];
   assertAllowedDownloadUrl(artifact.url, `${prefix}.url`);
-  if (artifact.url !== expectedUrl) {
-    throw new Error(`${prefix}.url must match appVersion and name`);
+  if (!expectedUrls.includes(artifact.url)) {
+    throw new Error(
+      `${prefix}.url must be ${expectedUrls[0]} or ${expectedUrls[1]}`,
+    );
   }
   if (
     typeof artifact.sha256 !== "string" ||

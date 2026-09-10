@@ -7,26 +7,26 @@ import { fileURLToPath } from "node:url";
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
- * The four installer aliases every release publishes without a version in the
- * name. The READMEs link these through `/releases/latest/download/<name>`,
- * which GitHub resolves against the newest release.
+ * The four versionless installer names every release publishes. The READMEs
+ * link them through `/releases/latest/download/<name>`, which GitHub resolves
+ * against the newest release. `scripts/verify-release-artifact-names.mjs` pins
+ * these same names to electron-builder.yml, so a README can never document an
+ * installer the packaging step does not produce.
  */
-export const README_DOWNLOAD_ALIASES = Object.freeze([
+export const README_DOWNLOAD_NAMES = Object.freeze([
   "AITracker-arm64.dmg",
   "AITracker-x64.dmg",
   "AITracker-Setup-x64.exe",
   "AITracker-Setup-arm64.exe",
 ]);
 
-/** Paths whose links must stay on the versionless alias contract. */
+/** Paths whose links must stay on the versionless installer contract. */
 export const README_PATHS = Object.freeze([
   "README.md",
   "docs/README_CN.md",
   "docs/README_JA.md",
   "docs/README_KO.md",
 ]);
-
-const RELEASE_WORKFLOW = ".github/workflows/release.yml";
 
 const LATEST_DOWNLOAD_PREFIX =
   "https://github.com/estelwalks/aitracker/releases/latest/download/";
@@ -42,7 +42,7 @@ export function inspectReadme({ path, text }) {
     for (const match of line.matchAll(PINNED_DOWNLOAD_PATTERN)) {
       problems.push(
         `${path}:${lineNumber} pins a versioned installer URL (${match[0]}); ` +
-          `use ${LATEST_DOWNLOAD_PREFIX}<name> with one of: ${README_DOWNLOAD_ALIASES.join(", ")}`,
+          `use ${LATEST_DOWNLOAD_PREFIX}<name> with one of: ${README_DOWNLOAD_NAMES.join(", ")}`,
       );
     }
     let cursor = 0;
@@ -51,10 +51,10 @@ export function inspectReadme({ path, text }) {
       if (start === -1) break;
       cursor = start + LATEST_DOWNLOAD_PREFIX.length;
       const name = line.slice(cursor).match(/^[^\s)"'<>]+/u)?.[0] ?? "";
-      if (!README_DOWNLOAD_ALIASES.includes(name)) {
+      if (!README_DOWNLOAD_NAMES.includes(name)) {
         problems.push(
           `${path}:${lineNumber} links the unknown latest-release asset "${name}"; ` +
-            `published aliases are: ${README_DOWNLOAD_ALIASES.join(", ")}`,
+            `published installer names are: ${README_DOWNLOAD_NAMES.join(", ")}`,
         );
       }
     }
@@ -63,31 +63,7 @@ export function inspectReadme({ path, text }) {
   // that drops the download section entirely.
   if (!text.includes(LATEST_DOWNLOAD_PREFIX)) {
     problems.push(
-      `${path} contains no ${LATEST_DOWNLOAD_PREFIX} link; the install section must point at the release aliases`,
-    );
-  }
-  return problems;
-}
-
-export function inspectWorkflow({ workflow }) {
-  const problems = [];
-  const aliasDeclaration = workflow.match(/for alias in ([^\n;]+); do/u);
-  if (aliasDeclaration === null) {
-    return [
-      `${RELEASE_WORKFLOW} no longer declares an alias upload loop; the README links depend on it`,
-    ];
-  }
-  const declared = aliasDeclaration[1]
-    .trim()
-    .split(/\s+/u)
-    .map((name) => name.replace(/^["']|["']$/gu, ""));
-  const missing = README_DOWNLOAD_ALIASES.filter(
-    (alias) => !declared.includes(alias),
-  );
-  if (missing.length > 0) {
-    problems.push(
-      `${RELEASE_WORKFLOW} does not publish ${missing.join(", ")}; ` +
-        `${README_PATHS.join(", ")} link them through /releases/latest/download/`,
+      `${path} contains no ${LATEST_DOWNLOAD_PREFIX} link; the install section must point at the versionless installer names`,
     );
   }
   return problems;
@@ -112,25 +88,17 @@ export async function verifyReadmeReleaseLinks({
     problems.push(...inspectReadme({ path, text }));
   }
 
-  // Every alias must be reachable from at least one README; an alias nobody
-  // links is either a documentation gap or a leftover in the workflow.
+  // Every published installer must be reachable from at least one README; a
+  // name nobody links is a documentation gap.
   const joined = [...texts.values()].join("\n");
-  for (const alias of README_DOWNLOAD_ALIASES) {
-    if (!joined.includes(`${LATEST_DOWNLOAD_PREFIX}${alias}`)) {
+  for (const name of README_DOWNLOAD_NAMES) {
+    if (!joined.includes(`${LATEST_DOWNLOAD_PREFIX}${name}`)) {
       problems.push(
-        `no README links ${LATEST_DOWNLOAD_PREFIX}${alias}; document every published alias`,
+        `no README links ${LATEST_DOWNLOAD_PREFIX}${name}; document every published installer name`,
       );
     }
   }
 
-  try {
-    const workflow = await readFile(join(rootDir, RELEASE_WORKFLOW), "utf8");
-    problems.push(...inspectWorkflow({ workflow }));
-  } catch (error) {
-    problems.push(
-      `unable to read ${RELEASE_WORKFLOW}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
   return problems;
 }
 
@@ -149,7 +117,7 @@ if (
     process.exitCode = 1;
   } else {
     console.log(
-      `verify-readme-release-links: PASS (${README_PATHS.length} READMEs, ${README_DOWNLOAD_ALIASES.length} aliases)`,
+      `verify-readme-release-links: PASS (${README_PATHS.length} READMEs, ${README_DOWNLOAD_NAMES.length} installer names)`,
     );
   }
 }

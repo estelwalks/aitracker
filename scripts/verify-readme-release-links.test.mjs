@@ -7,8 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   inspectReadme,
-  inspectWorkflow,
-  README_DOWNLOAD_ALIASES,
+  README_DOWNLOAD_NAMES,
   README_PATHS,
   verifyReadmeReleaseLinks,
 } from "./verify-readme-release-links.mjs";
@@ -20,7 +19,7 @@ const SCRIPT = join(
 const REPOSITORY_ROOT = join(dirname(SCRIPT), "..");
 const BASE = "https://github.com/estelwalks/aitracker/releases/latest/download";
 
-const README_WITH_ALL_ALIASES = [
+const README_WITH_ALL_INSTALLERS = [
   "# AITracker",
   "",
   `- macOS: [AITracker-arm64.dmg](${BASE}/AITracker-arm64.dmg)`,
@@ -30,31 +29,14 @@ const README_WITH_ALL_ALIASES = [
   "",
 ].join("\n");
 
-function withAliases() {
-  return README_WITH_ALL_ALIASES;
-}
-
-function workflowText() {
-  return [
-    "      - name: Publish versionless installer aliases",
-    "        run: |",
-    `          for alias in ${README_DOWNLOAD_ALIASES.join(" ")}; do`,
-    '            test -n "$alias"',
-    "          done",
-    "",
-  ].join("\n");
+function installerReadme() {
+  return README_WITH_ALL_INSTALLERS;
 }
 
 async function fixtureRoot(options = {}) {
   const root = await mkdtemp(join(tmpdir(), "aitracker-readme-test-"));
   await mkdir(join(root, "docs"), { recursive: true });
-  await mkdir(join(root, ".github", "workflows"), { recursive: true });
-  await writeFile(
-    join(root, ".github/workflows/release.yml"),
-    options.workflow ?? workflowText(),
-    "utf8",
-  );
-  const readme = options.readme ?? withAliases();
+  const readme = options.readme ?? installerReadme();
   for (const path of README_PATHS) {
     await writeFile(join(root, path), readme, "utf8");
   }
@@ -69,7 +51,7 @@ test("the CLI entry point actually runs when invoked as a script", () => {
   assert.match(result.stdout, /verify-readme-release-links: PASS/u);
 });
 
-test("the shipped READMEs and release workflow satisfy the alias contract", async () => {
+test("the shipped READMEs satisfy the versionless installer contract", async () => {
   assert.deepEqual(
     await verifyReadmeReleaseLinks({ rootDir: REPOSITORY_ROOT }),
     [],
@@ -79,7 +61,7 @@ test("the shipped READMEs and release workflow satisfy the alias contract", asyn
 test("a versioned installer URL in a README is reported", () => {
   const problems = inspectReadme({
     path: "README.md",
-    text: `${withAliases()}\n[AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)\n`,
+    text: `${installerReadme()}\n[AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)\n`,
   });
   assert.equal(problems.length, 1);
   assert.match(problems[0], /pins a versioned installer URL/u);
@@ -88,7 +70,7 @@ test("a versioned installer URL in a README is reported", () => {
 test("an unknown latest-release asset name is reported", () => {
   const problems = inspectReadme({
     path: "docs/README_CN.md",
-    text: `${withAliases()}\n[AITracker-1.0.1-arm64.dmg](${BASE}/AITracker-1.0.1-arm64.dmg)\n`,
+    text: `${installerReadme()}\n[AITracker-1.0.1-arm64.dmg](${BASE}/AITracker-1.0.1-arm64.dmg)\n`,
   });
   assert.equal(problems.length, 1);
   assert.match(
@@ -106,31 +88,14 @@ test("a README without any latest-release download link is reported", () => {
   assert.match(problems[0], /contains no .*releases\/latest\/download/u);
 });
 
-test("a workflow that stops publishing an alias is reported", () => {
-  const problems = inspectWorkflow({
-    workflow: "for alias in AITracker-arm64.dmg AITracker-x64.dmg; do\ndone\n",
-  });
-  assert.equal(problems.length, 1);
-  assert.match(problems[0], /does not publish AITracker-Setup-x64\.exe/u);
-});
-
-test("a workflow with no alias loop and a README missing an alias both fail", async () => {
-  const partial = README_WITH_ALL_ALIASES.replace(
+test("a README that stops linking one installer is reported", async () => {
+  const partial = README_WITH_ALL_INSTALLERS.replace(
     `- Windows: [AITracker-Setup-arm64.exe](${BASE}/AITracker-Setup-arm64.exe)\n`,
     "",
   );
-  const root = await fixtureRoot({
-    readme: partial,
-    workflow: "name: Release\n",
-  });
+  const root = await fixtureRoot({ readme: partial });
   try {
     const problems = await verifyReadmeReleaseLinks({ rootDir: root });
-    assert.ok(
-      problems.some((problem) =>
-        /no longer declares an alias upload loop/u.test(problem),
-      ),
-      problems.join("\n"),
-    );
     assert.ok(
       problems.some((problem) =>
         /no README links .*AITracker-Setup-arm64\.exe/u.test(problem),

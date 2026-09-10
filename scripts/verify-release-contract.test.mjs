@@ -33,16 +33,10 @@ test("accepts matching strict-semver packages and derives beta contract", () => 
   assert.deepEqual(
     contract.artifacts.map(({ platform, name }) => ({ platform, name })),
     [
-      { platform: "darwin-arm64", name: "AITracker-1.0.0-beta.1-arm64.dmg" },
-      { platform: "darwin-x64", name: "AITracker-1.0.0-beta.1-x64.dmg" },
-      {
-        platform: "win32-arm64",
-        name: "AITracker-Setup-1.0.0-beta.1-arm64.exe",
-      },
-      {
-        platform: "win32-x64",
-        name: "AITracker-Setup-1.0.0-beta.1-x64.exe",
-      },
+      { platform: "darwin-arm64", name: "AITracker-arm64.dmg" },
+      { platform: "darwin-x64", name: "AITracker-x64.dmg" },
+      { platform: "win32-arm64", name: "AITracker-Setup-arm64.exe" },
+      { platform: "win32-x64", name: "AITracker-Setup-x64.exe" },
     ],
   );
 });
@@ -147,10 +141,7 @@ test("checks only the matrix platform when requested, while aggregate checks rem
       join(rootDir, "packages/cli/package.json"),
       JSON.stringify({ version: "1.0.0-beta.1" }),
     );
-    const arm64Artifact = expectedReleaseArtifacts(
-      "1.0.0-beta.1",
-      "darwin-arm64",
-    )[0];
+    const arm64Artifact = expectedReleaseArtifacts("darwin-arm64")[0];
     await writeFile(join(releaseDir, arm64Artifact.name), "installer");
 
     const matrixContract = await verifyReleaseContract({
@@ -216,7 +207,7 @@ test("checks all four artifacts only when release-dir is explicitly supplied", a
     );
 
     await mkdir(releaseDir);
-    for (const artifact of expectedReleaseArtifacts("1.0.0-beta.1")) {
+    for (const artifact of expectedReleaseArtifacts()) {
       await writeFile(join(releaseDir, artifact.name), "installer");
     }
     const withDirectory = await verifyReleaseContract({

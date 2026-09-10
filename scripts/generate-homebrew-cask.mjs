@@ -5,6 +5,7 @@ import {
   assertAllowedDownloadUrl,
   assertValidChannel,
   findArtifact,
+  LATEST_DOWNLOAD_BASE_URL,
   REPOSITORY,
   validateReleaseMetadata,
 } from "../packages/cli/src/release-metadata.mjs";
@@ -31,11 +32,12 @@ function fail(message) {
   throw new TypeError(`Invalid release metadata: ${message}`);
 }
 
-function validateArtifact(artifact, { key, expectedName, version }) {
+function validateArtifact(artifact, { key, expectedName }) {
   if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
     fail(`artifacts.${key} must be an object`);
   }
-  const { name, url, sha256, size } = artifact;
+  // sha256/size are validated by validateReleaseMetadata below.
+  const { name, url } = artifact;
   if (typeof name !== "string" || !SAFE_ARTIFACT_NAME.test(name)) {
     fail(`artifacts.${key}.name must be a safe file name`);
   }
@@ -47,11 +49,11 @@ function validateArtifact(artifact, { key, expectedName, version }) {
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
   }
-  if (
-    url !==
-    `https://github.com/${DEFAULT_REPOSITORY}/releases/download/v${version}/${name}`
-  ) {
-    fail(`artifacts.${key}.url must match appVersion and name`);
+  // Installer names carry no version, so the URL is the versionless
+  // releases/latest/download/<name> form: the Cask pins the exact version in
+  // its own `version` stanza and verifies bytes through `sha256`.
+  if (url !== `${LATEST_DOWNLOAD_BASE_URL}${name}`) {
+    fail(`artifacts.${key}.url must be ${LATEST_DOWNLOAD_BASE_URL}${name}`);
   }
 }
 
@@ -81,8 +83,7 @@ export function validateMetadata(metadata, { channel } = {}) {
   for (const [, , arch] of REQUIRED_DARWIN_ARTIFACTS) {
     validateArtifact(findArtifact(metadata, "darwin", arch), {
       key: `darwin-${arch}`,
-      expectedName: `AITracker-${metadata.appVersion}-${arch}.dmg`,
-      version: metadata.appVersion,
+      expectedName: `AITracker-${arch}.dmg`,
     });
   }
   return metadata;

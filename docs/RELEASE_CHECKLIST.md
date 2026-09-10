@@ -16,11 +16,16 @@ evidence without adding another CI workflow or slowing ordinary pull requests.
 - Run `npm ci` from a clean checkout.
 - Run the release contract gate against the exact tag:
   `npm run verify:release-contract -- --tag v<version> --channel <stable|beta>`.
-- Confirm the READMEs still point at the versionless download aliases:
-  `npm run verify:readme-release-links`. The install links in `README.md`,
-  `docs/README_CN.md`, `docs/README_JA.md` and `docs/README_KO.md` use
-  `/releases/latest/download/<alias>` and must not name a version again; the
-  `npx` examples in those files do carry the current version.
+- Confirm the installer names are still versionless and that the READMEs match:
+  `npm run verify:release-artifact-names` pins `electron-builder.yml` and the
+  release scripts to `AITracker-arm64.dmg`, `AITracker-x64.dmg`,
+  `AITracker-Setup-x64.exe`, `AITracker-Setup-arm64.exe`;
+  `npm run verify:readme-release-links` then confirms the install links in
+  `README.md`, `docs/README_CN.md`, `docs/README_JA.md` and `docs/README_KO.md`
+  use `/releases/latest/download/<name>` for exactly those four. A `${version}`
+  in an artifact name would silently break every one of those URLs, so the
+  guard fails on it. The `npx` examples in the READMEs still carry the current
+  version.
 
 ## Automated evidence
 
@@ -60,18 +65,16 @@ npm run test:e2e:offline
   option. If the tag, link or build gate fails, the draft-release job is not
   run and no release is published. An existing release name is refused rather
   than overwritten.
-- Every release also carries four versionless aliases
-  (`AITracker-arm64.dmg`, `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
-  `AITracker-Setup-arm64.exe`) copied byte-for-byte from that release's own
-  installers. They exist so `/releases/latest/download/<alias>` — the URL the
-  READMEs use — resolves against the newest release without any manual edit.
-  GitHub anchors that to the newest published, non-prerelease release, so beta
-  tags move it only after a stable one follows. Confirm the draft lists all
-  four alongside the versioned files.
-  `release-metadata.json` and `checksums.txt` intentionally cover only the
-  versioned installers: `release-metadata.schema.json` pins artifact URLs to
-  `/releases/download/v<version>/<name>`, and the updater and CLI must keep
-  resolving exact versions.
+- Installer assets are named without a version, which is what makes
+  `/releases/latest/download/<name>` — the URL the READMEs, the desktop updater
+  and the CLI resolve — keep working release after release. GitHub anchors
+  `latest` to the newest published, non-prerelease release, so a beta tag moves
+  it only after a stable release follows. The app version is unaffected: it
+  lives in `package.json` → `app.asar`'s Info.plist, and
+  `release-metadata.json` records `appVersion`/`gitTag`.
+- Because the names repeat every release, the previous release keeps its own
+  copies of the same four asset names; GitHub resolves them per release, and
+  `releases/latest/download/<name>` always lands on the newest one.
 - Prepare local release metadata from the exact files in `release/`:
   `node scripts/release-metadata.mjs --release-dir release --version
 <version> --channel <stable|beta> --output release/release-metadata.json`. This
@@ -113,10 +116,9 @@ release/release-metadata.json --channel <stable|beta> --token
 ## Publish
 
 - The workflow's draft Release is not a publication approval. An authorized
-  maintainer must manually inspect the exact tag, the four versioned
-  installers, the four versionless aliases, `release-metadata.json`, and
-  `checksums.txt`, then publish the draft only after the above evidence is
-  recorded.
+  maintainer must manually inspect the exact tag, the four versionless
+  installers, `release-metadata.json`, and `checksums.txt`, then publish the
+  draft only after the above evidence is recorded.
 - After publishing, verify the README links resolve to the new release, for
   example
   `curl -sIL -o /dev/null -w '%{http_code} %{url_effective}\n'

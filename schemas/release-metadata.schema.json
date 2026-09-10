@@ -57,7 +57,8 @@
         },
         "url": {
           "type": "string",
-          "pattern": "^https://github\\.com/estelwalks/aitracker/releases/download/v[^/?#]+/[^/?#]+$"
+          "pattern": "^https://github\\.com/estelwalks/aitracker/releases/(?:latest/download|download/v[^/?#]+)/[^/?#]+$",
+          "description": "releases/latest/download/<name> for the versionless installer names, or releases/download/v<version>/<name> when an exact tag must be pinned."
         },
         "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "size": { "type": "integer", "minimum": 1 }

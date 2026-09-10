@@ -16,7 +16,7 @@ import {
 const metadataUrl =
   "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.3/release-metadata.json";
 const artifactUrl =
-  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.3/AITracker-1.0.0-beta.3-arm64.dmg";
+  "https://github.com/estelwalks/aitracker/releases/download/v1.0.0-beta.3/AITracker-arm64.dmg";
 const bytes = Buffer.from("installer-bytes");
 const sha256 = createHash("sha256").update(bytes).digest("hex");
 const delay = (milliseconds) =>
@@ -29,31 +29,31 @@ const metadata = {
   gitTag: "v1.0.0-beta.3",
   artifacts: {
     "darwin-arm64": {
-      name: "AITracker-1.0.0-beta.3-arm64.dmg",
+      name: "AITracker-arm64.dmg",
       url: artifactUrl,
       sha256,
       size: bytes.length,
     },
     "darwin-x64": {
-      name: "AITracker-1.0.0-beta.3-x64.dmg",
+      name: "AITracker-x64.dmg",
       url: artifactUrl.replace("arm64", "x64"),
       sha256,
       size: bytes.length,
     },
     "win32-arm64": {
-      name: "AITracker-Setup-1.0.0-beta.3-arm64.exe",
+      name: "AITracker-Setup-arm64.exe",
       url: artifactUrl.replace(
-        "AITracker-1.0.0-beta.3-arm64.dmg",
-        "AITracker-Setup-1.0.0-beta.3-arm64.exe",
+        "AITracker-arm64.dmg",
+        "AITracker-Setup-arm64.exe",
       ),
       sha256,
       size: bytes.length,
     },
     "win32-x64": {
-      name: "AITracker-Setup-1.0.0-beta.3-x64.exe",
+      name: "AITracker-Setup-x64.exe",
       url: artifactUrl.replace(
-        "AITracker-1.0.0-beta.3-arm64.dmg",
-        "AITracker-Setup-1.0.0-beta.3-x64.exe",
+        "AITracker-arm64.dmg",
+        "AITracker-Setup-x64.exe",
       ),
       sha256,
       size: bytes.length,
@@ -274,7 +274,7 @@ test("rejects malicious final response hosts while allowing GitHub release asset
         : response;
     },
   });
-  assert.equal(resolved.artifact.name, "AITracker-1.0.0-beta.3-arm64.dmg");
+  assert.equal(resolved.artifact.name, "AITracker-arm64.dmg");
 
   const evilMetadata = fakeFetch();
   await assert.rejects(
@@ -307,10 +307,7 @@ test("selects the Windows arm64 installer for win32/arm64", async () => {
     arch: "arm64",
     fetchImpl,
   });
-  assert.equal(
-    resolved.artifact.name,
-    "AITracker-Setup-1.0.0-beta.3-arm64.exe",
-  );
+  assert.equal(resolved.artifact.name, "AITracker-Setup-arm64.exe");
 });
 
 test("rejects draft releases, unsupported platforms and bad release metadata", async () => {
