@@ -72,17 +72,23 @@ To run the browser development server only, use `npm run dev`.
 
 ### Install
 
-You can download the installer of the latest release directly:
+You can download the installer of the latest release directly. These links stay
+valid across releases and always resolve to the newest published one, because
+every release publishes versionless copies of its installers alongside the
+versioned files:
 
 - macOS (Apple Silicon):
-  [AITracker-1.0.1-arm64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-arm64.dmg)
+  [AITracker-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg)
 - macOS (Intel):
-  [AITracker-1.0.1-x64.dmg](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-1.0.1-x64.dmg)
+  [AITracker-x64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg)
 - Windows (x64):
-  [AITracker-Setup-1.0.1-x64.exe](https://github.com/estelwalks/aitracker/releases/download/v1.0.1/AITracker-Setup-1.0.1-x64.exe)
-- Windows (ARM64): the ARM64 installer is published from the next tagged
-  release onward —
-  [Releases page](https://github.com/estelwalks/aitracker/releases/latest)
+  [AITracker-Setup-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe)
+- Windows (ARM64):
+  [AITracker-Setup-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe)
+
+The versioned installers (`AITracker-1.0.2-arm64.dmg` and so on),
+`release-metadata.json` and `checksums.txt` remain attached to each individual
+release; pin a versioned file when you need to reproduce an exact build.
 
 All releases are listed on the
 [Releases page](https://github.com/estelwalks/aitracker/releases/latest).
@@ -96,7 +102,7 @@ and their corresponding distribution metadata have been published.
 With Node.js and npm installed, run:
 
 ```bash
-npx --yes @estelwalks/aitracker@1.0.1
+npx --yes @estelwalks/aitracker@1.0.2
 ```
 
 This command downloads and opens the desktop installer.
@@ -105,7 +111,7 @@ If your npm configuration uses a mirror that does not contain the package, use
 the official npm registry explicitly:
 
 ```bash
-npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.1
+npx --yes --registry=https://registry.npmjs.org @estelwalks/aitracker@1.0.2
 ```
 
 #### Homebrew (macOS)

@@ -36,6 +36,11 @@ jobs:
       - name: Release contract gate
         run: npm run verify:release-contract
 
+      # Keeps the README download links pinned to the versionless aliases the
+      # release workflow publishes under /releases/latest/download/.
+      - name: README release links
+        run: npm run verify:readme-release-links
+
       - name: Typecheck (app + Electron + scanner)
         run: npm run typecheck
 

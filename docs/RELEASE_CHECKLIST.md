@@ -5,13 +5,22 @@ evidence without adding another CI workflow or slowing ordinary pull requests.
 
 ## Before tagging
 
-- Confirm `package.json`, `package-lock.json`, and `src/lib/app-config.ts` use
-  the same semantic version (the current channel is `1.0.0-beta.1`).
-- Update `CHANGELOG.md` with user-facing changes and known limitations.
+- Confirm `package.json`, `package-lock.json`, and `packages/cli/package.json`
+  use the same semantic version. `src/lib/app-config.ts` reads the version from
+  the root `package.json`, so there is no separate constant to edit.
+- Update `CHANGELOG.md` with user-facing changes and known limitations. The
+  release workflow publishes that version's `## [<version>]` section verbatim
+  as the GitHub release notes and fails the tag when the section is missing or
+  empty — preview it locally with
+  `npm run release:notes -- --version <version> --output -`.
 - Run `npm ci` from a clean checkout.
-- Run the release contract gate against the exact beta tag. It checks that the
-  root and CLI package versions match and that the tag/channel are consistent:
-  `npm run verify:release-contract -- --tag v1.0.0-beta.1 --channel beta`.
+- Run the release contract gate against the exact tag:
+  `npm run verify:release-contract -- --tag v<version> --channel <stable|beta>`.
+- Confirm the READMEs still point at the versionless download aliases:
+  `npm run verify:readme-release-links`. The install links in `README.md`,
+  `docs/README_CN.md`, `docs/README_JA.md` and `docs/README_KO.md` use
+  `/releases/latest/download/<alias>` and must not name a version again; the
+  `npx` examples in those files do carry the current version.
 
 ## Automated evidence
 
@@ -24,6 +33,7 @@ npm run verify:sqlite-only
 npm run verify:bundle-no-sqlite
 npm run verify:bundle-budget
 npm run test:release
+npx prettier --check README.md CHANGELOG.md docs/RELEASE_CHECKLIST.md
 ```
 
 Run the relevant platform E2E configuration when changing desktop behavior:
@@ -42,31 +52,44 @@ npm run test:e2e:offline
   notarized/smoke-tested for the target platform.
 - For Phase 1, confirm the target set is macOS x64/arm64 and Windows
   x64/arm64; Linux is out of scope. Keep the beta channel separate from stable.
-- The tag-triggered [unsigned beta release workflow](../.github/workflows/release.yml)
-  runs the version gate first, builds the four installers on platform
-  runners, verifies their electron-builder names, and generates
+- The tag-triggered [unsigned release workflow](../.github/workflows/release.yml)
+  runs the version and README-link gates first, builds the four installers on
+  platform runners, verifies their electron-builder names, and generates
   `release/release-metadata.json` plus `release/checksums.txt`.
-- The workflow creates a draft prerelease and uploads assets without the
-  clobber option. If the tag or build gate fails, the draft-release job is not
-  run and no formal/stable channel is published. An existing release name is
-  refused rather than overwritten.
+- The workflow creates a draft release and uploads assets without the clobber
+  option. If the tag, link or build gate fails, the draft-release job is not
+  run and no release is published. An existing release name is refused rather
+  than overwritten.
+- Every release also carries four versionless aliases
+  (`AITracker-arm64.dmg`, `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
+  `AITracker-Setup-arm64.exe`) copied byte-for-byte from that release's own
+  installers. They exist so `/releases/latest/download/<alias>` — the URL the
+  READMEs use — resolves against the newest release without any manual edit.
+  GitHub anchors that to the newest published, non-prerelease release, so beta
+  tags move it only after a stable one follows. Confirm the draft lists all
+  four alongside the versioned files.
+  `release-metadata.json` and `checksums.txt` intentionally cover only the
+  versioned installers: `release-metadata.schema.json` pins artifact URLs to
+  `/releases/download/v<version>/<name>`, and the updater and CLI must keep
+  resolving exact versions.
 - Prepare local release metadata from the exact files in `release/`:
   `node scripts/release-metadata.mjs --release-dir release --version
-1.0.0-beta.1 --channel beta --output release/release-metadata.json`. This is
-  a local generation step, not evidence that metadata has been published.
+<version> --channel <stable|beta> --output release/release-metadata.json`. This
+  is a local generation step, not evidence that metadata has been published.
 - Inspect and create the CLI tarball locally with `npm pack ./packages/cli
 --dry-run --pack-destination release/cli` and, after review, `npm pack
 ./packages/cli --pack-destination release/cli`. Do not publish it from this
   checklist.
-- Generate the beta Cask from that metadata with `node
-scripts/generate-homebrew-cask.mjs --metadata release/release-metadata.json
---channel beta --token aitracker-beta --output release/aitracker-beta.rb`,
-  then run `brew style release/aitracker-beta.rb`
-  and `brew audit --cask release/aitracker-beta.rb` when the local Tap checkout
-  is available. Never hand-copy a URL or hash.
-- Run the CLI resolver in dry-run mode: `npx --no-install @estelwalks/aitracker@beta
---dry-run`; confirm it selects only the beta channel and does not download or
-  open an installer.
+- Generate the Cask for the channel being released from that metadata with
+  `node scripts/generate-homebrew-cask.mjs --metadata
+release/release-metadata.json --channel <stable|beta> --token
+<aitracker|aitracker-beta> --output release/<aitracker|aitracker-beta>.rb`,
+  then run `brew style` and `brew audit --cask` on the generated file when the
+  local Tap checkout is available. Never hand-copy a URL or hash.
+- Run the CLI resolver in dry-run mode:
+  `npx --no-install @estelwalks/aitracker@<channel> --dry-run`; confirm it
+  offers only that channel's installers and does not download or open an
+  installer.
 - Verify the installer starts on a clean user profile and can complete the
   first-run flow without an API key.
 - Verify update, export, database recovery, and configured-provider flows on
@@ -90,9 +113,15 @@ scripts/generate-homebrew-cask.mjs --metadata release/release-metadata.json
 ## Publish
 
 - The workflow's draft Release is not a publication approval. An authorized
-  maintainer must manually inspect the exact tag, three installers,
-  `release-metadata.json`, and `checksums.txt`, then publish the draft only
-  after the above evidence is recorded. Keep it marked as a prerelease beta.
+  maintainer must manually inspect the exact tag, the four versioned
+  installers, the four versionless aliases, `release-metadata.json`, and
+  `checksums.txt`, then publish the draft only after the above evidence is
+  recorded.
+- After publishing, verify the README links resolve to the new release, for
+  example
+  `curl -sIL -o /dev/null -w '%{http_code} %{url_effective}\n'
+https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg`
+  should end on the new tag's asset URL, not the previous release's.
 - This workflow does not publish npm packages, create or update a Homebrew Tap,
   sign artifacts, or notarize macOS builds. No external credentials should be
   added to this repository.

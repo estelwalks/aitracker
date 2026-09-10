@@ -5,6 +5,21 @@ uses semantic versioning for published releases.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-10
+
+- In-app updates are now a complete workflow instead of a manual check: the
+  desktop client checks GitHub every six hours while it runs, downloads a
+  verified installer silently in the background, and offers restart-to-install
+  through a global "update ready" dialog. Downloads survive slow connections
+  (separate connect and stream-idle timeouts), resume from a package already on
+  disk instead of transferring the same release twice, and report throttled
+  progress with a percentage in Settings and in the manual update dialog.
+  A deferral is remembered per version, and the Windows hand-off runs the
+  installer with `/S --updated --force-run` so it closes the running app and
+  relaunches the new build.
+- Added an update proxy setting (off by default, configured like model
+  profiles) that routes update traffic through a dedicated Electron session
+  for networks that cannot reach GitHub directly.
 - The tag-triggered release workflow now publishes a Windows arm64 NSIS
   installer alongside the existing macOS arm64/x64 and Windows x64 ones
   (`AITracker-Setup-<version>-arm64.exe`). The Windows arm64 build is
@@ -15,6 +30,23 @@ uses semantic versioning for published releases.
   `release-metadata.schema.json` artifact map, and the `npx` installer
   launcher now resolve Windows on ARM to its own installer instead of falling
   back to the x64 one.
+- Every release now also carries versionless copies of its four installers
+  (`AITracker-arm64.dmg`, `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
+  `AITracker-Setup-arm64.exe`). Because GitHub resolves
+  `/releases/latest/download/<name>` against the newest release, the README
+  download links are pinned to those names and no longer need editing on every
+  release. The versioned installers, `release-metadata.json` and
+  `checksums.txt` are unchanged.
+- GitHub release notes are now extracted from this changelog, so the published
+  notes for a tag are that version's `CHANGELOG.md` section rather than a
+  hard-coded template.
+- The macOS app icon is now a dedicated white rounded tile for the Dock,
+  Finder and the mounted installer volume, while the menu-bar template icon,
+  the Windows icon set and the web favicons keep their transparent artwork
+  (`icon.icns` became `mac-app.icns`).
+- Scanned every Skills directory concurrently with a bounded worker pool
+  instead of walking them serially, so the skill catalog refresh no longer
+  scales with the number of installed agents.
 
 ## [1.0.1] - 2026-09-08
 
