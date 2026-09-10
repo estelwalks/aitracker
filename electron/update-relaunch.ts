@@ -1,7 +1,7 @@
 import { spawn, type SpawnOptions } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { win32 } from "node:path";
 
 export interface InstallerHandoffResult {
   readonly launched: boolean;
@@ -163,7 +163,11 @@ export async function handOffInstaller(options: {
   if (platform === "win32") {
     const openPath = options.openPathFn;
     if (!openPath) return { launched: false, reason: "openPath unavailable" };
-    const commandPath = join(
+    // This path is handed to cmd.exe, so it must always use Windows
+    // separators. The plain `join` follows the host platform and would emit
+    // `C:\Temp/aitracker-update-handoff.cmd` when the process does not itself
+    // run on Windows.
+    const commandPath = win32.join(
       options.tempDirectory ?? tmpdir(),
       WINDOWS_HANDOFF_COMMAND_NAME,
     );
