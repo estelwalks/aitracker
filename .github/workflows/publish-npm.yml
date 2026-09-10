@@ -1,107 +1,81 @@
-name: Publish CLI
+name: Publish CLI to npm
 
-# Publishes @estelwalks/aitracker to npm so the documented
-# `npx --yes @estelwalks/aitracker@latest` resolves to this release. The tag
-# release job does not do this: npm needs a token that only a maintainer can
-# add (repository secret NPM_TOKEN, an automation token with publish access for
-# the @estelwalks scope).
+# Publishes @estelwalks/aitracker so the documented
+# `npx --yes @estelwalks/aitracker@latest` resolves to this release.
+#
+# Authentication uses npm trusted publishing: npm is configured with this
+# repository and workflow as a trusted publisher, so the OIDC token issued here
+# (id-token: write) authorizes the publish and the package is signed with
+# provenance. No NPM_TOKEN secret is involved.
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
+  # Lets a tag that predates this workflow still be published, for example
+  # `gh workflow run publish-npm.yml --ref v1.0.3`.
   workflow_dispatch:
-    inputs:
-      version:
-        description: Version to (re)publish, for example 1.0.3
-        required: true
-        type: string
 
 permissions:
   contents: read
-  # Required for `npm publish --provenance`: it attests that this tarball was
-  # built from this commit in this repository.
   id-token: write
 
 jobs:
   publish:
     name: Publish @estelwalks/aitracker
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          cache: npm
 
-      - name: Resolve the version to publish
-        id: version
+      - name: Install dependencies
+        run: npm ci --registry=https://registry.npmmirror.com
+
+      - name: Verify the tag matches the CLI version
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            version="${{ inputs.version }}"
-          else
-            version="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./packages/cli/package.json').version")"
+          echo "version=$version" >> "$GITHUB_ENV"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match packages/cli/package.json ($version)"
+              exit 1
+            fi
           fi
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::unexpected version: $version"
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Publishing version $version"
+          echo "Publishing @estelwalks/aitracker@$version"
 
-      - name: Verify the package version matches
-        shell: bash
-        run: |
-          actual="$(node -p "require('./packages/cli/package.json').version")"
-          if [[ "$actual" != "${{ steps.version.outputs.version }}" ]]; then
-            echo "::error::packages/cli/package.json is $actual, expected ${{ steps.version.outputs.version }}"
-            exit 1
-          fi
-
-      - name: Check whether npm already has this version
+      - name: Check whether npm already serves this version
         id: existing
         shell: bash
         run: |
-          if npm view "@estelwalks/aitracker@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
+          if npm view "@estelwalks/aitracker@${version}" version >/dev/null 2>&1; then
             echo "published=true" >> "$GITHUB_OUTPUT"
-            echo "npm already serves ${{ steps.version.outputs.version }}"
+            echo "npm already serves ${version}; nothing to publish"
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Only packages the CLI: `files` in packages/cli/package.json limits the
-      # tarball to bin/, src/ and README.md, so no build step is needed here.
-      - name: Publish
+      # `files` in packages/cli/package.json limits the tarball to bin/, src/
+      # and README.md, so the CLI needs no build step.
+      - name: Publish package
         if: steps.existing.outputs.published == 'false'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        shell: bash
-        run: |
-          if [[ -z "${NODE_AUTH_TOKEN}" ]]; then
-            echo "::error::The repository secret NPM_TOKEN is not set. Add an npm automation token with publish access for the @estelwalks scope (Settings > Secrets and variables > Actions)."
-            exit 1
-          fi
-          npm publish ./packages/cli --access public --provenance
+        run: npm publish ./packages/cli --provenance --access public
 
-      # `latest` and `beta` must follow the release: the READMEs and the release
-      # notes document `npx --yes @estelwalks/aitracker@latest`, which resolves
-      # through this dist-tag.
-      - name: Move the dist-tag
+      # `latest` and `beta` must follow the release: every README and the
+      # generated release notes document `npx --yes @estelwalks/aitracker@latest`,
+      # which resolves through the dist-tag.
+      - name: Point the dist-tag at this release
         if: steps.existing.outputs.published == 'false'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
         run: |
-          version="${{ steps.version.outputs.version }}"
-          if [[ "$version" == *-* ]]; then
-            tag=beta
-          else
-            tag=latest
-          fi
-          npm dist-tag add "@estelwalks/aitracker@${version}" "$tag"
-          echo "### Published @estelwalks/aitracker@${version} (dist-tag: $tag)" >> "$GITHUB_STEP_SUMMARY"
+          dist_tag=latest
+          if [[ "$version" == *-* ]]; then dist_tag=beta; fi
+          npm dist-tag add "@estelwalks/aitracker@${version}" "$dist_tag"
           npm dist-tag ls @estelwalks/aitracker >> "$GITHUB_STEP_SUMMARY"
