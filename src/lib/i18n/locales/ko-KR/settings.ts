@@ -252,7 +252,7 @@ export const settings = {
   updateRestartBody:
     "새 버전 v{version} 다운로드가 완료되었습니다. '지금 다시 시작하여 업데이트'를 누르면 앱이 종료되고 시스템 권한 확인 창이 나타납니다. '예/계속'을 선택하면 설치가 완료되고 앱이 자동으로 다시 열립니다.",
   updateRestartBodyMac:
-    "새 버전 v{version} 다운로드가 완료되었습니다. 앱이 종료되고 설치 이미지가 열립니다. 설치를 마친 후 앱을 다시 실행하세요.",
+    "새 버전 v{version} 다운로드가 완료되었습니다. '지금 다시 시작하여 업데이트'를 선택하면 앱이 종료되고 자동으로 설치한 뒤 다시 시작합니다. 처음 실행할 때 macOS 확인 창이 한 번 표시되면 '열기'를 선택하세요.",
   updateRestartNow: "지금 다시 시작하여 업데이트",
   updateInstallingShort: "설치 중…",
   updateLater: "나중에",

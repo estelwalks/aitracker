@@ -256,7 +256,7 @@ export const settings = {
   updateRestartBody:
     "Version v{version} is ready. Restarting now quits the app; the system then asks for permission — choose Yes/Continue to finish the install, and the app reopens automatically.",
   updateRestartBodyMac:
-    "Version v{version} is ready. Restarting now quits the app and opens the installer image; reopen the app once the install is finished.",
+    "Version v{version} is ready. Restarting now quits the app, installs the new version and starts it again. macOS asks you to confirm opening the downloaded app the first time.",
   updateRestartNow: "Restart & update now",
   updateInstallingShort: "Installing…",
   updateLater: "Later",

@@ -17,6 +17,15 @@ uses semantic versioning for published releases.
   A deferral is remembered per version, and the Windows hand-off runs the
   installer with `/S --updated --force-run` so it closes the running app and
   relaunches the new build.
+- macOS installs an update without the manual drag-and-drop step: "restart to
+  install" now quits the app, mounts the downloaded image, replaces the app
+  bundle and starts the new version again on its own. The update is validated
+  before anything moves (bundle structure, runnable executable, no downgrade),
+  the old bundle is kept aside until the new one starts, and any failure falls
+  back to the previous behaviour of opening the image for a manual install.
+  macOS still asks for the normal one-time confirmation when the downloaded app
+  first opens, because the packages remain unsigned and the quarantine flag is
+  never removed.
 - Added an update proxy setting (off by default, configured like model
   profiles) that routes update traffic through a dedicated Electron session
   for networks that cannot reach GitHub directly.

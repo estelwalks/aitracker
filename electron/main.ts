@@ -210,9 +210,11 @@ function startPeriodicUpdateChecks(): void {
  * generated `.cmd` hand-off script is opened through ShellExecute
  * (`shell.openPath`), which starts the silent installer with its UAC prompt;
  * the app keeps running because the elevated installer closes it (`--updated`)
- * and relaunches the new build (`--force-run`). On macOS the app quits and opens
- * the DMG so the user finishes the install from the mounted volume. Fails
- * closed when nothing is waiting.
+ * and relaunches the new build (`--force-run`). On macOS a detached script
+ * mounts the image, waits for this app to exit, swaps the bundle and relaunches
+ * it, so the update needs no manual drag-and-drop; when the app does not live
+ * in a writable bundle the image opens instead and the user installs it
+ * manually. Fails closed when nothing is waiting.
  */
 async function restartToInstallNow(): Promise<{ started: boolean }> {
   const manager = updateManager;
@@ -226,6 +228,8 @@ async function restartToInstallNow(): Promise<{ started: boolean }> {
     installerPath,
     appExecutablePath: process.execPath,
     processId: process.pid,
+    // The macOS script refuses to install a build older than this one.
+    currentVersion: manager.state.latestVersion ?? app.getVersion(),
     tempDirectory: app.getPath("temp"),
     openPathFn: (path) => shell.openPath(path),
   });
@@ -239,8 +243,10 @@ async function restartToInstallNow(): Promise<{ started: boolean }> {
     const opened = await shell.openPath(installerPath).catch(() => "failed");
     return { started: opened.length === 0 };
   }
-  if (process.platform !== "win32") {
-    // Outside Windows the artifact opens externally, so the app steps aside.
+  if (process.platform === "darwin") {
+    // Both macOS hand-offs run outside this process, which has to step aside:
+    // the auto-install script waits for this pid to exit before replacing the
+    // bundle, and the manual flow shows the mounted volume.
     isQuitting = true;
     app.quit();
   }
