@@ -4,10 +4,11 @@ export const desktopIpc = {
   setAutoLaunch: "desktop:set-auto-launch",
   getAutoUpdate: "desktop:get-auto-update",
   setAutoUpdate: "desktop:set-auto-update",
+  setUpdateProxy: "desktop:set-update-proxy",
   getUpdateState: "desktop:get-update-state",
   checkForUpdates: "desktop:check-for-updates",
   downloadUpdate: "desktop:download-update",
-  installUpdate: "desktop:install-update",
+  restartToInstall: "desktop:restart-to-install",
   updateStateChanged: "desktop:update-state-changed",
   showWindow: "desktop:show-window",
   openWindowRoute: "desktop:open-window-route",
@@ -103,6 +104,13 @@ export type DesktopUpdateLifecycle =
   | "error"
   | "unsupported";
 
+export interface DesktopUpdateProgress {
+  /** Bytes received so far (may trail the wall clock; throttled broadcast). */
+  readonly downloadedBytes: number;
+  /** Total installer size from the release metadata. */
+  readonly totalBytes: number;
+}
+
 export interface DesktopUpdateState {
   status: DesktopUpdateLifecycle;
   currentVersion: string;
@@ -112,6 +120,8 @@ export interface DesktopUpdateState {
   assetName: string | null;
   releaseUrl: string | null;
   changelog: string | null;
+  /** Present while `status === "downloading"` (kept at 100% when done). */
+  progress?: DesktopUpdateProgress;
   errorCode?:
     | "development"
     | "not-found"
@@ -120,6 +130,18 @@ export interface DesktopUpdateState {
     | "no-asset"
     | "download"
     | "install";
+}
+
+export interface UpdateProxyConfig {
+  /** Whether update checks/downloads use `proxy`. */
+  readonly enabled: boolean;
+  /** Normalized proxy URL ("" = follow the system proxy). */
+  readonly proxy: string;
+}
+
+export interface UpdateProxyState {
+  readonly enabled: boolean;
+  readonly proxy: string;
 }
 
 export type SecurityScanMode = "quick" | "full";
@@ -390,10 +412,24 @@ export interface DesktopApi {
   setAutoLaunch(enabled: boolean): Promise<AutoLaunchState>;
   getAutoUpdate(): Promise<AutoUpdateState>;
   setAutoUpdate(enabled: boolean): Promise<AutoUpdateState>;
+  /**
+   * Configure the proxy used by update checks and downloads. `enabled: true`
+   * requires a non-empty `proxy` (normalized/persisted); `enabled: false`
+   * restores the system proxy while keeping the address for later use.
+   * Invalid input rejects with a TypeError. Resolves with the stored state.
+   */
+  setUpdateProxy(config: UpdateProxyConfig): Promise<UpdateProxyState>;
   getUpdateState(): Promise<DesktopUpdateState>;
   checkForUpdates(): Promise<DesktopUpdateState>;
   downloadUpdate(): Promise<DesktopUpdateState>;
-  installUpdate(): Promise<{ opened: boolean }>;
+  /**
+   * Hand the downloaded installer over to the platform. On Windows this starts
+   * a silent install (the elevated installer closes this app and relaunches the
+   * new build itself); on macOS the app quits and opens the DMG. Resolves
+   * `{ started: false }` when no verified download is waiting or the hand-off
+   * could not be armed.
+   */
+  restartToInstall(): Promise<{ started: boolean }>;
   onUpdateStateChanged(
     callback: (state: DesktopUpdateState) => void,
   ): () => void;

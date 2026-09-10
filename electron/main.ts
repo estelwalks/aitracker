@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +15,7 @@ import {
   Notification,
   powerMonitor,
   safeStorage,
+  session,
   shell,
   screen,
   Tray,
@@ -31,6 +33,7 @@ import {
   type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
   type SecurityScanState,
+  type UpdateProxyState,
 } from "./contracts.js";
 import {
   createAutomaticSecurityScanScheduler,
@@ -63,6 +66,7 @@ import {
 } from "./prefs.js";
 import { APP_NAME, ENV } from "./app-config.js";
 import { SecurityScannerService } from "./security-scanner-service.js";
+import { registerDesktopSecurityScanner } from "./desktop-scanner-seam.js";
 import { isTrustedIpcSender } from "./ipc-security.js";
 import { DesktopStateBroker } from "./desktop-state-broker.js";
 import { createStartupDocument } from "./startup-screen.js";
@@ -79,6 +83,7 @@ import {
 import {
   findAppIconPath,
   findTrayIconPath,
+  findTrayRetinaIconPath,
   type NativeIconAppearance,
 } from "./tray-icon.js";
 import {
@@ -93,9 +98,14 @@ import { shouldHideWindowOnClose } from "./window-close.js";
 import { isReloadShortcut } from "./reload-shortcut.js";
 import {
   AUTO_UPDATE_PREFERENCE_KEY,
+  UPDATE_PROXY_ENABLED_KEY,
+  UPDATE_PROXY_KEY,
   parseAutoUpdateEnabled,
+  parseUpdateProxyEnabled,
 } from "./update-preferences.js";
 import { UpdateManager } from "./update-manager.js";
+import { handOffInstaller } from "./update-relaunch.js";
+import { normalizeUpdateProxy, updateProxyConfig } from "./update-proxy.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
@@ -128,6 +138,114 @@ let desktopStateBroker: DesktopStateBroker | null = null;
 let updateManager: UpdateManager | null = null;
 let startupDocument = "";
 let currentTrayTitle = TRAY_TITLE_PLACEHOLDER;
+
+/**
+ * Dedicated in-memory network session for update traffic. Its proxy is either
+ * the system proxy (default) or the user-configured update proxy, so update
+ * checks/downloads never disturb the main windows' network configuration.
+ */
+let updateFetchSession: Electron.Session | null = null;
+
+/** Fetch through the update session (Chromium network stack). */
+async function updateSessionFetch(
+  input: Parameters<typeof fetch>[0],
+  init?: Parameters<typeof fetch>[1],
+): Promise<Response> {
+  const activeSession = updateFetchSession;
+  if (!activeSession) throw new Error("Update network session unavailable");
+  const url =
+    typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url;
+  return (await activeSession.fetch(url, init)) as unknown as Response;
+}
+
+/** Apply a normalized proxy value ("" restores the system proxy). */
+async function applyUpdateProxy(proxy: string): Promise<void> {
+  const activeSession = updateFetchSession;
+  if (!activeSession) return;
+  await activeSession.setProxy(updateProxyConfig(proxy));
+}
+
+/**
+ * Periodic background update discovery while the app runs. Startup performs
+ * the first check; this timer only catches releases published afterwards.
+ */
+const UPDATE_AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1_000;
+let automaticUpdateTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Run the automatic update pass (check + background download when enabled).
+ * Skips while a download is in flight or an installer is already waiting for
+ * the user to restart, so periodic ticks never discard or re-download bytes.
+ */
+function runAutomaticUpdateCheck(): void {
+  const manager = updateManager;
+  if (!manager) return;
+  const status = manager.state.status;
+  if (
+    status === "checking" ||
+    status === "downloading" ||
+    status === "downloaded"
+  ) {
+    return;
+  }
+  void manager.startAutomaticCheck();
+}
+
+/** Arm the six-hourly check loop. Development builds never check GitHub. */
+function startPeriodicUpdateChecks(): void {
+  if (automaticUpdateTimer || !app.isPackaged) return;
+  automaticUpdateTimer = setInterval(
+    runAutomaticUpdateCheck,
+    UPDATE_AUTO_CHECK_INTERVAL_MS,
+  );
+  automaticUpdateTimer.unref();
+}
+
+/**
+ * Hand the verified downloaded installer over to the platform. On Windows a
+ * generated `.cmd` hand-off script is opened through ShellExecute
+ * (`shell.openPath`), which starts the silent installer with its UAC prompt;
+ * the app keeps running because the elevated installer closes it (`--updated`)
+ * and relaunches the new build (`--force-run`). On macOS the app quits and opens
+ * the DMG so the user finishes the install from the mounted volume. Fails
+ * closed when nothing is waiting.
+ */
+async function restartToInstallNow(): Promise<{ started: boolean }> {
+  const manager = updateManager;
+  if (!manager || manager.state.status !== "downloaded") {
+    return { started: false };
+  }
+  const installerPath = manager.downloadedInstallerPath;
+  if (!installerPath) return { started: false };
+  const result = await handOffInstaller({
+    platform: process.platform,
+    installerPath,
+    appExecutablePath: process.execPath,
+    processId: process.pid,
+    tempDirectory: app.getPath("temp"),
+    openPathFn: (path) => shell.openPath(path),
+  });
+  if (!result.launched) {
+    console.error(
+      "AITracker failed to hand the update over to the installer",
+      result.reason,
+    );
+    // Last resort: open the installer's own wizard so the user can still
+    // finish the update manually instead of being left with nothing.
+    const opened = await shell.openPath(installerPath).catch(() => "failed");
+    return { started: opened.length === 0 };
+  }
+  if (process.platform !== "win32") {
+    // Outside Windows the artifact opens externally, so the app steps aside.
+    isQuitting = true;
+    app.quit();
+  }
+  return { started: true };
+}
 /** Resolved at startup: manual preference > system mapping > fallback. */
 let currentPreferences: LocalePreferences = {
   locale: "zh-CN",
@@ -140,6 +258,15 @@ function nativeIconAppearance(): NativeIconAppearance {
   return nativeTheme.shouldUseDarkColors ? "dark" : "light";
 }
 
+function nativeSystemIconAppearance(): NativeIconAppearance {
+  // Windows lets the taskbar stay dark while application windows are light.
+  const useDarkColors =
+    process.platform === "win32"
+      ? nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
+      : nativeTheme.shouldUseDarkColors;
+  return useDarkColors ? "dark" : "light";
+}
+
 function nativeIconLocationInput() {
   return {
     isPackaged: app.isPackaged,
@@ -150,24 +277,34 @@ function nativeIconLocationInput() {
 }
 
 function currentAppIconPath(): string | null {
-  return findAppIconPath(nativeIconLocationInput(), nativeIconAppearance());
+  return findAppIconPath(
+    nativeIconLocationInput(),
+    process.platform === "win32"
+      ? nativeSystemIconAppearance()
+      : nativeIconAppearance(),
+  );
 }
 
-function loadCurrentAppIcon(): Electron.NativeImage | null {
-  const iconPath = currentAppIconPath();
-  if (!iconPath) return null;
-  const icon = nativeImage.createFromPath(iconPath);
+function loadStartupIcon(): Electron.NativeImage | null {
+  // The startup page follows the application theme and needs a large image,
+  // even when the Windows taskbar uses the opposite appearance.
+  const path = findAppIconPath(
+    { ...nativeIconLocationInput(), surface: "startup" },
+    nativeIconAppearance(),
+  );
+  if (!path) return null;
+  const icon = nativeImage.createFromPath(path);
   return icon.isEmpty() ? null : icon;
 }
 
 /** Apply the OS appearance variant to runtime Dock and taskbar surfaces. */
 function applyNativeAppIcon(): void {
-  const icon = loadCurrentAppIcon();
-  if (!icon) return;
+  const iconPath = currentAppIconPath();
+  if (!iconPath) return;
 
-  if (process.platform === "darwin") app.dock?.setIcon(icon);
+  if (process.platform === "darwin") app.dock?.setIcon(iconPath);
   for (const window of [mainWindow, widgetWindow]) {
-    if (window && !window.isDestroyed()) window.setIcon(icon);
+    if (window && !window.isDestroyed()) window.setIcon(iconPath);
   }
 }
 
@@ -660,6 +797,31 @@ function registerIpcHandlers(): void {
       return setAutoUpdateEnabled(enabled);
     },
   );
+  ipcMain.handle(
+    desktopIpc.setUpdateProxy,
+    async (event, raw: unknown): Promise<UpdateProxyState> => {
+      assertTrustedSender(event);
+      const config =
+        typeof raw === "object" && raw !== null
+          ? (raw as Record<string, unknown>)
+          : {};
+      const enabled = config.enabled === true;
+      const proxyValue = typeof config.proxy === "string" ? config.proxy : "";
+      const proxy = normalizeUpdateProxy(proxyValue);
+      if (enabled && proxy.length === 0) {
+        throw new TypeError(
+          "Enabling the update proxy requires a proxy address",
+        );
+      }
+      if (!desktopStateBroker) {
+        throw new Error("Desktop state broker unavailable");
+      }
+      await desktopStateBroker.setPreference(UPDATE_PROXY_ENABLED_KEY, enabled);
+      await desktopStateBroker.setPreference(UPDATE_PROXY_KEY, proxy);
+      await applyUpdateProxy(enabled ? proxy : "");
+      return { enabled, proxy };
+    },
+  );
   ipcMain.handle(desktopIpc.getUpdateState, (event): DesktopUpdateState => {
     assertTrustedSender(event);
     return updateManager?.state ?? emptyDesktopUpdateState();
@@ -679,10 +841,10 @@ function registerIpcHandlers(): void {
     },
   );
   ipcMain.handle(
-    desktopIpc.installUpdate,
-    async (event): Promise<{ opened: boolean }> => {
+    desktopIpc.restartToInstall,
+    async (event): Promise<{ started: boolean }> => {
       assertTrustedSender(event);
-      return (await updateManager?.installUpdate()) ?? { opened: false };
+      return restartToInstallNow();
     },
   );
   ipcMain.handle(desktopIpc.showWindow, (event): void => {
@@ -772,6 +934,8 @@ function registerIpcHandlers(): void {
         throw new Error("Desktop state broker unavailable");
       const result = await desktopStateBroker.resetPreferences();
       updateManager?.setEnabled(true);
+      // The proxy preference was cleared together with everything else.
+      await applyUpdateProxy("").catch(() => undefined);
       await securityScanner?.clear();
       return result;
     },
@@ -958,15 +1122,11 @@ async function applyPreferences(prefs: Record<string, unknown>): Promise<void> {
   }
 }
 
-/**
- * (Re)build the tray icon and its context menu in the current locale.
- * Language switches destroy and recreate the menu so labels and the
- * auto-launch checkbox state stay in sync.
- */
-function rebuildTray(): void {
+/** Load the native Windows ICO or the transparent macOS template with Retina pixels. */
+function loadNativeTrayIcon(): Electron.NativeImage | string {
   const trayIconPath = findTrayIconPath(
     nativeIconLocationInput(),
-    nativeIconAppearance(),
+    nativeSystemIconAppearance(),
   );
   if (!trayIconPath) {
     throw new Error(
@@ -977,7 +1137,24 @@ function rebuildTray(): void {
   if (trayIcon.isEmpty()) {
     throw new Error(`Native tray icon is invalid: ${trayIconPath}`);
   }
+  // Keep the ICO path so Windows can choose its native frame for the DPI.
+  if (process.platform === "win32") return trayIconPath;
+  if (process.platform === "darwin") {
+    const retinaIconPath = findTrayRetinaIconPath(nativeIconLocationInput());
+    if (retinaIconPath) {
+      trayIcon.addRepresentation({
+        scaleFactor: 2,
+        buffer: readFileSync(retinaIconPath),
+      });
+    }
+    trayIcon.setTemplateImage(true);
+  }
+  return trayIcon;
+}
 
+/** Rebuild the tray and localized menu after language or preference changes. */
+function rebuildTray(): void {
+  const trayIcon = loadNativeTrayIcon();
   const autoLaunch = getAutoLaunchState();
   const template: TrayTemplateItem[] = createTrayTemplate(
     currentPreferences.locale,
@@ -1080,7 +1257,7 @@ async function createMainWindow(): Promise<void> {
 
   // This local document gives immediate visual feedback. The application URL
   // is loaded separately once the local server and preference store are ready.
-  const startupIcon = loadCurrentAppIcon();
+  const startupIcon = loadStartupIcon();
   if (!startupIcon) {
     throw new Error(
       "Native startup icon is missing; run npm run generate:native-icons",
@@ -1197,6 +1374,10 @@ if (!hasSingleInstanceLock) {
     }
   });
   app.on("will-quit", () => {
+    if (automaticUpdateTimer) {
+      clearInterval(automaticUpdateTimer);
+      automaticUpdateTimer = null;
+    }
     automaticSecurityScanScheduler?.stop();
     powerMonitor.removeListener("suspend", suspendAutomaticSecurityScan);
     powerMonitor.removeListener("resume", resumeAutomaticSecurityScan);
@@ -1205,10 +1386,11 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
     ipcMain.removeHandler(desktopIpc.getAutoUpdate);
     ipcMain.removeHandler(desktopIpc.setAutoUpdate);
+    ipcMain.removeHandler(desktopIpc.setUpdateProxy);
     ipcMain.removeHandler(desktopIpc.getUpdateState);
     ipcMain.removeHandler(desktopIpc.checkForUpdates);
     ipcMain.removeHandler(desktopIpc.downloadUpdate);
-    ipcMain.removeHandler(desktopIpc.installUpdate);
+    ipcMain.removeHandler(desktopIpc.restartToInstall);
     ipcMain.removeHandler(desktopIpc.showWindow);
     ipcMain.removeHandler(desktopIpc.openWindowRoute);
     ipcMain.removeHandler(desktopIpc.openWidgetWindow);
@@ -1245,7 +1427,8 @@ if (!hasSingleInstanceLock) {
       applyNativeAppIcon();
       nativeTheme.on("updated", () => {
         applyNativeAppIcon();
-        if (tray) rebuildTray();
+        // Updating in place preserves tray position and any open context menu.
+        if (tray) tray.setImage(loadNativeTrayIcon());
       });
       app.on("activate", () => {
         if (mainWindow && !mainWindow.isDestroyed()) showMainWindow();
@@ -1298,6 +1481,12 @@ if (!hasSingleInstanceLock) {
           desktopStateBroker!.writeScheduleRuntime(runtime),
         attempt: (schedule) => runAutomaticSecurityScan(schedule),
       });
+      // Same-process server loaders (packaged local web server renders the SSR
+      // documents inside Electron main) resolve the canonical security
+      // overview straight from this scanner, so the dashboard and Skill
+      // management pages receive their numbers with the rest of the server
+      // data instead of a second renderer round-trip.
+      registerDesktopSecurityScanner(securityScanner);
       // The packaged Windows/Linux removes the default File/Edit/View menu bar (the title bar has been drawn by itself,
       // The menu bar is both blocked and ugly); development mode and macOS are retained: the macOS menu is in the system menu bar,
       // Development mode requires the default shortcut key (DevTools/Reload).
@@ -1353,13 +1542,30 @@ if (!hasSingleInstanceLock) {
         persistedPreferences,
         app.getLocale(),
       );
+      // Dedicated in-memory session for update traffic; honors the system
+      // proxy by default and any user-configured update proxy otherwise.
+      updateFetchSession = session.fromPartition("aitracker-update-fetch");
+      try {
+        const proxyEnabled = parseUpdateProxyEnabled(
+          persistedPreferences[UPDATE_PROXY_ENABLED_KEY],
+        );
+        const persistedProxy =
+          typeof persistedPreferences[UPDATE_PROXY_KEY] === "string"
+            ? (persistedPreferences[UPDATE_PROXY_KEY] as string)
+            : "";
+        const proxy = proxyEnabled ? normalizeUpdateProxy(persistedProxy) : "";
+        await applyUpdateProxy(proxy);
+      } catch (error) {
+        console.warn("AITracker update proxy preference is invalid", error);
+        await applyUpdateProxy("").catch(() => undefined);
+      }
       updateManager = new UpdateManager({
         currentVersion: app.getVersion(),
         isPackaged: app.isPackaged,
         platform: process.platform,
         arch: process.arch,
         tempDirectory: app.getPath("temp"),
-        openInstaller: (path) => shell.openPath(path),
+        fetchFn: updateSessionFetch,
       });
       updateManager.setEnabled(
         parseAutoUpdateEnabled(
@@ -1376,6 +1582,9 @@ if (!hasSingleInstanceLock) {
       // when the visible page needs those resources most.
       await loadMainWindow();
       void automaticSecurityScanScheduler.start();
+      // Startup performs the first update check; the timer then re-checks
+      // every six hours while the app stays open.
+      startPeriodicUpdateChecks();
       void updateManager.startAutomaticCheck();
     })
     .catch((error: unknown) => {

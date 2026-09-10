@@ -254,6 +254,23 @@ export const settings = {
   updateFailed: "バージョン情報を取得できませんでした",
   viewRelease: "リリースページを表示",
   sourceRepo: "ソースリポジトリ",
+  updateRestartTitle: "更新の準備ができました",
+  updateRestartBody:
+    "v{version} のダウンロードが完了しました。「今すぐ再起動して更新」をクリックするとアプリが終了し、続いてシステムの権限確認が表示されます。「はい／続行」を選ぶとインストールが完了し、アプリは自動的に再起動します。",
+  updateRestartBodyMac:
+    "v{version} のダウンロードが完了しました。アプリが終了してインストールイメージが開きます。インストール後にアプリを開き直してください。",
+  updateRestartNow: "今すぐ再起動して更新",
+  updateInstallingShort: "インストール中…",
+  updateLater: "あとで",
+  updateProxy: "更新用プロキシ",
+  updateProxyEnable: "有効にする",
+  updateProxyDisable: "無効にする",
+  updateProxyEdit: "編集",
+  updateProxyNotEnabled: "無効",
+  updateProxyMissing: "プロキシアドレス未設定",
+  updateProxyPlaceholder: "http://127.0.0.1:7890",
+  saveProxy: "保存",
+  savingProxy: "保存中…",
   insight: {
     enhanced: "AI 強化",
     enhance: "表現を強化",
@@ -378,6 +395,14 @@ export const settings = {
     updateCheckFailed: "更新の確認に失敗しました",
     updateDownloadFailed: "更新のダウンロードに失敗しました",
     updateInstallFailed: "インストーラーを開けませんでした",
+    updateRestartFailed:
+      "アップデータを起動できませんでした。後でもう一度お試しください",
+    updateInstalling:
+      "更新をインストールしています。完了するとアプリが自動的に再起動します",
+    updateInstallTimeout:
+      "インストールが確認できませんでした。もう一度お試しください",
+    updateProxySaved: "更新用プロキシを保存しました",
+    updateProxySaveFailed: "プロキシの形式が無効です。保存できませんでした",
     cleanupDone: "期限切れキャッシュ {count} 件を削除しました（{size}）",
     keepForever: "キャッシュを無期限で保持する設定にしました",
     retentionSaved: "キャッシュ保持ポリシーを保存しました",

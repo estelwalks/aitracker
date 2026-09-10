@@ -248,6 +248,23 @@ export const settings = {
   updateFailed: "버전 정보를 가져올 수 없습니다",
   viewRelease: "릴리스 페이지 보기",
   sourceRepo: "소스 저장소",
+  updateRestartTitle: "업데이트 준비 완료",
+  updateRestartBody:
+    "새 버전 v{version} 다운로드가 완료되었습니다. '지금 다시 시작하여 업데이트'를 누르면 앱이 종료되고 시스템 권한 확인 창이 나타납니다. '예/계속'을 선택하면 설치가 완료되고 앱이 자동으로 다시 열립니다.",
+  updateRestartBodyMac:
+    "새 버전 v{version} 다운로드가 완료되었습니다. 앱이 종료되고 설치 이미지가 열립니다. 설치를 마친 후 앱을 다시 실행하세요.",
+  updateRestartNow: "지금 다시 시작하여 업데이트",
+  updateInstallingShort: "설치 중…",
+  updateLater: "나중에",
+  updateProxy: "업데이트 프록시",
+  updateProxyEnable: "사용",
+  updateProxyDisable: "사용 안 함",
+  updateProxyEdit: "편집",
+  updateProxyNotEnabled: "사용 안 함",
+  updateProxyMissing: "프록시 주소 미설정",
+  updateProxyPlaceholder: "http://127.0.0.1:7890",
+  saveProxy: "저장",
+  savingProxy: "저장 중…",
   insight: {
     enhanced: "AI 강화",
     enhance: "표현 강화",
@@ -372,6 +389,13 @@ export const settings = {
     updateCheckFailed: "업데이트 확인에 실패했습니다",
     updateDownloadFailed: "업데이트 다운로드에 실패했습니다",
     updateInstallFailed: "설치 파일을 열지 못했습니다",
+    updateRestartFailed:
+      "업데이트 프로그램을 시작할 수 없습니다. 나중에 다시 시도하세요",
+    updateInstalling:
+      "업데이트를 설치하는 중입니다. 완료되면 앱이 자동으로 다시 열립니다",
+    updateInstallTimeout: "설치가 감지되지 않았습니다. 다시 시도하세요",
+    updateProxySaved: "업데이트 프록시가 저장되었습니다",
+    updateProxySaveFailed: "프록시 형식이 올바르지 않아 저장하지 못했습니다",
     cleanupDone: "만료된 캐시 파일 {count}개를 정리했습니다（{size}）",
     keepForever: "캐시를 무기한 보존하도록 설정했습니다",
     retentionSaved: "캐시 보존 정책을 저장했습니다",

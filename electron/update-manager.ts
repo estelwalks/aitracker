@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, stat, unlink, writeFile } from "node:fs/promises";
 import { finished } from "node:stream/promises";
 import { join } from "node:path";
 
@@ -17,6 +17,15 @@ const GITHUB_DOWNLOAD_PREFIX = `${APP_REPO_URL}/releases/download/`;
 const RELEASE_REPOSITORY = "estelwalks/aitracker";
 const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES = 1024 * 1024;
+/** How long the installer download may take before its headers arrive. */
+const DOWNLOAD_CONNECT_TIMEOUT_MS = 60_000;
+/**
+ * Maximum silence between installer download chunks. Slower-than-this
+ * transfers abort, but a steady trickle may run for as long as it needs.
+ */
+const DOWNLOAD_IDLE_TIMEOUT_MS = 60_000;
+/** Throttle for progress broadcasts while downloading. */
+const DOWNLOAD_PROGRESS_INTERVAL_MS = 200;
 const RELEASE_METADATA_NAME = "release-metadata.json";
 const STRICT_SEMVER_PATTERN =
   /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$/u;
@@ -70,11 +79,18 @@ export interface UpdateManagerOptions {
   readonly channel?: UpdateChannel;
   /** Defaults to 512 MiB. Useful for enforcing a tighter product limit. */
   readonly maxDownloadBytes?: number;
+  /** Download connect phase budget, until response headers arrive (default 60 s). */
+  readonly downloadConnectTimeoutMs?: number;
+  /**
+   * Maximum silence between download chunks before the transfer aborts
+   * (default 60 s). The total transfer may take much longer as long as data
+   * keeps flowing.
+   */
+  readonly downloadIdleTimeoutMs?: number;
   readonly fetchFn?: typeof fetch;
   readonly writeFileFn?: (path: string, data: Uint8Array) => Promise<void>;
   readonly mkdirFn?: (path: string) => Promise<void>;
   readonly unlinkFn?: (path: string) => Promise<void>;
-  readonly openInstaller?: (path: string) => Promise<string>;
 }
 
 export type UpdateStateListener = (state: DesktopUpdateState) => void;
@@ -237,6 +253,7 @@ function contentLengthOf(response: Response): number | null {
 async function readResponseBytes(
   response: Response,
   maxBytes: number,
+  onChunk?: (receivedBytes: number) => void,
 ): Promise<Uint8Array> {
   const declaredSize = contentLengthOf(response);
   if (
@@ -263,6 +280,7 @@ async function readResponseBytes(
       if (result.done) break;
       const chunk = result.value;
       total += chunk.byteLength;
+      onChunk?.(total);
       if (total > maxBytes) throw new Error("size-limit");
       chunks.push(chunk);
     }
@@ -288,6 +306,7 @@ async function streamResponseToFile(
   path: string,
   expectedSize: number,
   maxBytes: number,
+  onChunk?: (receivedBytes: number) => void,
 ): Promise<StreamDownloadResult> {
   if (!response.body) throw new Error("download-body");
 
@@ -309,6 +328,7 @@ async function streamResponseToFile(
       const chunk = result.value;
       if (outputError) throw outputError;
       total += chunk.byteLength;
+      onChunk?.(total);
       if (!Number.isSafeInteger(total) || total > maxBytes) {
         throw new Error("size-limit");
       }
@@ -555,6 +575,8 @@ export class UpdateManager {
   #state: DesktopUpdateState;
   #downloadedPath: string | null = null;
   #expectedArtifact: ExpectedArtifact | null = null;
+  #connectTimeoutMs: number;
+  #idleTimeoutMs: number;
 
   constructor(options: UpdateManagerOptions) {
     this.#options = options;
@@ -574,11 +596,32 @@ export class UpdateManager {
     ) {
       throw new TypeError("maxDownloadBytes must be a positive safe integer");
     }
+    this.#connectTimeoutMs =
+      options.downloadConnectTimeoutMs ?? DOWNLOAD_CONNECT_TIMEOUT_MS;
+    this.#idleTimeoutMs =
+      options.downloadIdleTimeoutMs ?? DOWNLOAD_IDLE_TIMEOUT_MS;
+    for (const [name, value] of [
+      ["downloadConnectTimeoutMs", this.#connectTimeoutMs],
+      ["downloadIdleTimeoutMs", this.#idleTimeoutMs],
+    ] as const) {
+      if (!Number.isSafeInteger(value) || value < 1) {
+        throw new TypeError(`${name} must be a positive safe integer`);
+      }
+    }
     this.#state = emptyState(options.currentVersion);
   }
 
   get state(): DesktopUpdateState {
     return { ...this.#state };
+  }
+
+  /**
+   * Path of the verified installer currently waiting for a restart
+   * (`null` unless the state is `downloaded`). Used by the main process to
+   * quit and launch the installer.
+   */
+  get downloadedInstallerPath(): string | null {
+    return this.#state.status === "downloaded" ? this.#downloadedPath : null;
   }
 
   setEnabled(enabled: boolean): void {
@@ -593,6 +636,10 @@ export class UpdateManager {
 
   async startAutomaticCheck(): Promise<DesktopUpdateState> {
     if (!this.#options.isPackaged || !this.#enabled) return this.state;
+    // A verified installer is already waiting for the user to restart: keep
+    // it. Periodic/startup checks must neither discard it nor re-download the
+    // same release while the user decides when to install.
+    if (this.#state.status === "downloaded") return this.state;
     const checked = await this.checkForUpdates();
     return checked.status === "available" ? this.downloadUpdate() : checked;
   }
@@ -611,12 +658,25 @@ export class UpdateManager {
       return this.state;
     }
     const previousDownloadedPath = this.#downloadedPath;
-    this.#downloadedPath = null;
-    this.#expectedArtifact = null;
-    this.setState(emptyState(this.#options.currentVersion, "checking"));
-    if (previousDownloadedPath) {
+    // A downloaded installer waiting for the restart survives a manual
+    // re-check: only a strictly newer release discards it, so checking for
+    // updates again never throws away the bytes already downloaded for the
+    // same version.
+    const waitingInstaller =
+      this.#state.status === "downloaded" && previousDownloadedPath != null;
+    if (waitingInstaller) {
+      if (!(await this.hasNewerRemoteRelease())) return this.state;
+      this.#downloadedPath = null;
+      this.#expectedArtifact = null;
       await this.unlinkBestEffort(previousDownloadedPath);
+    } else {
+      this.#downloadedPath = null;
+      this.#expectedArtifact = null;
+      if (previousDownloadedPath) {
+        await this.unlinkBestEffort(previousDownloadedPath);
+      }
     }
+    this.setState(emptyState(this.#options.currentVersion, "checking"));
     try {
       const response = await this.#fetch(GITHUB_RELEASES_URL, {
         headers: { Accept: "application/vnd.github+json" },
@@ -753,6 +813,43 @@ export class UpdateManager {
     }
   }
 
+  /**
+   * Whether the remote channel currently exposes a release strictly newer than
+   * the one already downloaded and waiting. Any network/feed problem resolves
+   * to `false` so a waiting installer is never discarded on transient errors.
+   */
+  private async hasNewerRemoteRelease(): Promise<boolean> {
+    const downloadedVersion = this.#state.latestVersion;
+    if (downloadedVersion == null) return false;
+    try {
+      const response = await this.#fetch(GITHUB_RELEASES_URL, {
+        headers: { Accept: "application/vnd.github+json" },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) return false;
+      const payload = (await response.json()) as unknown;
+      if (!Array.isArray(payload)) return false;
+      const release = payload
+        .filter(
+          (item): item is GitHubRelease =>
+            typeof item === "object" && item !== null,
+        )
+        .filter(
+          (item) =>
+            item.draft !== true &&
+            versionOf(item) != null &&
+            (this.#channel === "beta" || !isPrereleaseRelease(item)),
+        )
+        .sort((left, right) =>
+          compareVersions(versionOf(right)!, versionOf(left)!),
+        )[0];
+      if (!release) return false;
+      return compareVersions(versionOf(release)!, downloadedVersion) > 0;
+    } catch {
+      return false;
+    }
+  }
+
   async downloadUpdate(): Promise<DesktopUpdateState> {
     if (
       this.#state.status !== "available" ||
@@ -779,11 +876,74 @@ export class UpdateManager {
     }
     this.setState({ ...this.#state, status: "downloading" });
     let path: string | null = null;
+    // Reuse an installer left behind by an earlier attempt when it still
+    // matches the release metadata byte for byte: restarting the app must not
+    // re-download a large package that is already verified on disk.
+    const reusablePath = join(
+      this.#options.tempDirectory,
+      `aitracker-${assetName}`,
+    );
+    if (
+      !this.#options.writeFileFn &&
+      (await this.verifyInstallerOnDisk(reusablePath, expectedArtifact))
+    ) {
+      this.#downloadedPath = reusablePath;
+      return this.setState({
+        ...this.#state,
+        status: "downloaded",
+        progress: {
+          downloadedBytes: expectedArtifact.size,
+          totalBytes: expectedArtifact.size,
+        },
+      });
+    }
+    // The transfer budget is split in two: a connect phase that must finish
+    // within downloadConnectTimeoutMs, and an idle guard that aborts only
+    // when no chunk arrives for downloadIdleTimeoutMs. A slow but steady
+    // download is never cut off by a total wall-clock limit.
+    const controller = new AbortController();
+    const connectTimer = setTimeout(
+      () => controller.abort(),
+      this.#connectTimeoutMs,
+    );
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshIdleDeadline = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => controller.abort(), this.#idleTimeoutMs);
+    };
+    const clearTimers = () => {
+      clearTimeout(connectTimer);
+      if (idleTimer) clearTimeout(idleTimer);
+    };
+    // Throttled download progress broadcast (per-chunk state pushes would
+    // flood the IPC channel on fast connections).
+    let lastProgressEmitAt = 0;
+    const reportProgress = (receivedBytes: number) => {
+      refreshIdleDeadline();
+      const now = Date.now();
+      if (
+        receivedBytes < expectedArtifact.size &&
+        now - lastProgressEmitAt < DOWNLOAD_PROGRESS_INTERVAL_MS
+      ) {
+        return;
+      }
+      lastProgressEmitAt = now;
+      this.setState({
+        ...this.#state,
+        status: "downloading",
+        progress: {
+          downloadedBytes: receivedBytes,
+          totalBytes: expectedArtifact.size,
+        },
+      });
+    };
     try {
       const response = await this.#fetch(expectedArtifact.url, {
         headers: { Accept: "application/octet-stream" },
-        signal: AbortSignal.timeout(120_000),
+        signal: controller.signal,
       });
+      clearTimeout(connectTimer);
+      reportProgress(0);
       if (!response.ok || !isTrustedResponseUrl(response)) {
         throw new Error("download-response");
       }
@@ -800,7 +960,11 @@ export class UpdateManager {
       if (this.#options.writeFileFn) {
         // Keep the historical test seam working. Production has no injected
         // writeFileFn and therefore always uses streamResponseToFile below.
-        const data = await readResponseBytes(response, this.#maxDownloadBytes);
+        const data = await readResponseBytes(
+          response,
+          this.#maxDownloadBytes,
+          reportProgress,
+        );
         if (data.byteLength !== expectedArtifact.size) {
           throw new Error("size-mismatch");
         }
@@ -812,19 +976,32 @@ export class UpdateManager {
         }
         await this.#writeFile(path, data);
       } else {
+        // Remove a stale file left by an interrupted run; the
+        // exclusive-create stream below would otherwise fail with EEXIST.
+        await this.unlinkBestEffort(path);
         const result = await streamResponseToFile(
           response,
           path,
           expectedArtifact.size,
           this.#maxDownloadBytes,
+          reportProgress,
         );
         if (result.sha256 !== expectedArtifact.sha256) {
           throw new Error("checksum-mismatch");
         }
       }
+      clearTimers();
       this.#downloadedPath = path;
-      return this.setState({ ...this.#state, status: "downloaded" });
+      return this.setState({
+        ...this.#state,
+        status: "downloaded",
+        progress: {
+          downloadedBytes: expectedArtifact.size,
+          totalBytes: expectedArtifact.size,
+        },
+      });
     } catch (error) {
+      clearTimers();
       if (path) {
         await this.unlinkBestEffort(path);
       }
@@ -839,31 +1016,8 @@ export class UpdateManager {
         ...this.#state,
         status: "error",
         errorCode: "download",
+        progress: undefined,
       });
-    }
-  }
-
-  async installUpdate(): Promise<{ opened: boolean }> {
-    if (
-      this.#state.status !== "downloaded" ||
-      !this.#downloadedPath ||
-      !this.#expectedArtifact ||
-      !this.#options.openInstaller
-    ) {
-      return { opened: false };
-    }
-    if (this.#channel === "beta") {
-      console.info(
-        "AITracker beta update may trigger macOS Gatekeeper or Windows SmartScreen",
-      );
-    }
-    try {
-      const error = await this.#options.openInstaller(this.#downloadedPath);
-      if (error) throw new Error(error);
-      return { opened: true };
-    } catch {
-      this.setState({ ...this.#state, status: "error", errorCode: "install" });
-      return { opened: false };
     }
   }
 
@@ -879,6 +1033,28 @@ export class UpdateManager {
       await this.#unlink(path);
     } catch {
       // Cleanup must not mask the original update failure.
+    }
+  }
+
+  /**
+   * Whether `path` already holds this exact verified installer (size and
+   * SHA-256 from the release metadata). Streams the file so a large package
+   * never has to be buffered in memory.
+   */
+  private async verifyInstallerOnDisk(
+    path: string,
+    artifact: ExpectedArtifact,
+  ): Promise<boolean> {
+    try {
+      const info = await stat(path);
+      if (!info.isFile() || info.size !== artifact.size) return false;
+      const hash = createHash("sha256");
+      for await (const chunk of createReadStream(path)) {
+        hash.update(chunk as Uint8Array);
+      }
+      return hash.digest("hex") === artifact.sha256;
+    } catch {
+      return false;
     }
   }
 

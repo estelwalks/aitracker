@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import test from "node:test";
 
 import { UpdateManager, selectUpdateAsset } from "./update-manager.ts";
@@ -433,7 +434,7 @@ test("checksum and size limits reject downloads, and a write failure cleans up",
     "error",
   );
   assert.deepEqual(unlinked, [
-    "/tmp/aitracker-updates/aitracker-AITracker-2.0.0-x64.dmg",
+    join("/tmp/aitracker-updates", "aitracker-AITracker-2.0.0-x64.dmg"),
   ]);
 });
 
@@ -510,63 +511,6 @@ test("production downloads stream chunks, hash them, and clean failed files", as
   await rm(failedDirectory, { recursive: true, force: true });
 });
 
-test("a verified installer remains until opened, then is cleaned on the next check", async () => {
-  const unlinked: string[] = [];
-  let openedPath = "";
-  const manager = managerForRelease(
-    [release("2.0.0")],
-    metadataFor("2.0.0", "stable"),
-    {
-      writeFileFn: async (path) => undefined,
-      unlinkFn: async (path) => unlinked.push(path),
-      openInstaller: async (path) => {
-        openedPath = path;
-        return "";
-      },
-    },
-  );
-
-  assert.equal((await manager.startAutomaticCheck()).status, "downloaded");
-  assert.deepEqual(unlinked, []);
-  assert.deepEqual(await manager.installUpdate(), { opened: true });
-  assert.deepEqual(unlinked, []);
-  assert.ok(openedPath.endsWith("aitracker-AITracker-2.0.0-x64.dmg"));
-
-  await manager.checkForUpdates();
-  assert.deepEqual(unlinked, [openedPath]);
-});
-
-test("install only opens an integrity-verified installer", async () => {
-  let opened = 0;
-  const badManager = managerForRelease(
-    [release("2.0.0")],
-    metadataFor("2.0.0", "stable", { sha256: "f".repeat(64) }),
-    {
-      openInstaller: async () => {
-        opened += 1;
-        return "";
-      },
-    },
-  );
-  await badManager.startAutomaticCheck();
-  assert.deepEqual(await badManager.installUpdate(), { opened: false });
-  assert.equal(opened, 0);
-
-  const goodManager = managerForRelease(
-    [release("2.0.0")],
-    metadataFor("2.0.0", "stable"),
-    {
-      openInstaller: async () => {
-        opened += 1;
-        return "";
-      },
-    },
-  );
-  await goodManager.startAutomaticCheck();
-  assert.deepEqual(await goodManager.installUpdate(), { opened: true });
-  assert.equal(opened, 1);
-});
-
 test("disabled automatic updates do not perform a background check", async () => {
   let calls = 0;
   const manager = new UpdateManager({
@@ -602,4 +546,311 @@ test("development builds never query GitHub", async () => {
   assert.equal(state.status, "idle");
   assert.equal(calls, 0);
   assert.equal((await manager.checkForUpdates()).errorCode, "development");
+});
+
+test("automatic checks keep a waiting installer instead of re-downloading", async () => {
+  const writes: string[] = [];
+  const unlinked: string[] = [];
+  const manager = managerForRelease(
+    [release("2.0.0")],
+    metadataFor("2.0.0", "stable"),
+    {
+      writeFileFn: async (path) => {
+        writes.push(path);
+      },
+      unlinkFn: async (path) => {
+        unlinked.push(path);
+      },
+    },
+  );
+  assert.equal((await manager.startAutomaticCheck()).status, "downloaded");
+  assert.equal(writes.length, 1);
+  const second = await manager.startAutomaticCheck();
+  assert.equal(second.status, "downloaded");
+  assert.equal(writes.length, 1);
+  assert.deepEqual(unlinked, []);
+});
+
+test("manual re-check keeps a waiting installer when no newer release exists", async () => {
+  const unlinked: string[] = [];
+  const manager = managerForRelease(
+    [release("2.0.0")],
+    metadataFor("2.0.0", "stable"),
+    {
+      writeFileFn: async () => undefined,
+      unlinkFn: async (path) => {
+        unlinked.push(path);
+      },
+    },
+  );
+  assert.equal((await manager.startAutomaticCheck()).status, "downloaded");
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "downloaded");
+  assert.equal(state.latestVersion, "2.0.0");
+  assert.deepEqual(unlinked, []);
+});
+
+test("manual re-check replaces a waiting installer when a newer release appears", async () => {
+  const writes: string[] = [];
+  const unlinked: string[] = [];
+  let releases: unknown[] = [release("2.0.0")];
+  let metadata: unknown = metadataFor("2.0.0", "stable");
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    writeFileFn: async (path) => {
+      writes.push(path);
+    },
+    unlinkFn: async (path) => {
+      unlinked.push(path);
+    },
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) return response(releases);
+      if (url.endsWith("release-metadata.json")) return response(metadata);
+      return new Response(downloadedBytes);
+    },
+  });
+  assert.equal((await manager.startAutomaticCheck()).status, "downloaded");
+  assert.equal(writes.length, 1);
+
+  releases = [release("2.1.0")];
+  metadata = metadataFor("2.1.0", "stable");
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "available");
+  assert.equal(state.latestVersion, "2.1.0");
+  assert.deepEqual(unlinked, [
+    join("/tmp/aitracker-updates", "aitracker-AITracker-2.0.0-x64.dmg"),
+  ]);
+
+  const next = await manager.downloadUpdate();
+  assert.equal(next.status, "downloaded");
+  assert.equal(next.latestVersion, "2.1.0");
+  assert.equal(writes.length, 2);
+});
+
+test("re-download overwrites a stale installer file left in the temp directory", async () => {
+  const directory = await mkdtemp("/tmp/aitracker-update-stale-");
+  const stalePath = join(directory, "aitracker-AITracker-2.0.0-x64.dmg");
+  await writeFile(stalePath, new Uint8Array([9, 9, 9]));
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: directory,
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) return response([release("2.0.0")]);
+      if (url.endsWith("release-metadata.json")) {
+        return response(metadataFor("2.0.0", "stable"));
+      }
+      return new Response(downloadedBytes);
+    },
+  });
+  assert.equal((await manager.startAutomaticCheck()).status, "downloaded");
+  assert.deepEqual([...(await readFile(stalePath))], [...downloadedBytes]);
+  await rm(directory, { recursive: true, force: true });
+});
+
+test("a download that never answers aborts on the connect budget", async () => {
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    downloadConnectTimeoutMs: 25,
+    downloadIdleTimeoutMs: 60_000,
+    writeFileFn: async () => undefined,
+    fetchFn: async (url, init) => {
+      if (url.includes("api.github.com")) return response([release("2.0.0")]);
+      if (url.endsWith("release-metadata.json")) {
+        return response(metadataFor("2.0.0", "stable"));
+      }
+      // The peer never answers: the request hangs until aborted.
+      await new Promise<never>((_, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(new Error("aborted")),
+        );
+      });
+      throw new Error("unreachable");
+    },
+  });
+  const state = await manager.startAutomaticCheck();
+  assert.equal(state.status, "error");
+  assert.equal(state.errorCode, "download");
+});
+
+test("a download that stops sending data aborts on the idle budget", async () => {
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    downloadConnectTimeoutMs: 60_000,
+    downloadIdleTimeoutMs: 25,
+    writeFileFn: async () => undefined,
+    fetchFn: async (url, init) => {
+      if (url.includes("api.github.com")) return response([release("2.0.0")]);
+      if (url.endsWith("release-metadata.json")) {
+        return response(metadataFor("2.0.0", "stable"));
+      }
+      const signal = init?.signal;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1]));
+            signal?.addEventListener("abort", () =>
+              controller.error(new Error("aborted")),
+            );
+          },
+        }),
+        { status: 200 },
+      );
+    },
+  });
+  const state = await manager.startAutomaticCheck();
+  assert.equal(state.status, "error");
+  assert.equal(state.errorCode, "download");
+});
+
+test("a slow but steady download is not cut off by a wall-clock budget", async () => {
+  const streamedBytes = new Uint8Array([1, 2, 3, 4, 5, 6]);
+  const expectedHash = createHash("sha256").update(streamedBytes).digest("hex");
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    downloadConnectTimeoutMs: 60_000,
+    // Chunks arrive every 10 ms for ~30 ms total: far slower than a fixed
+    // total budget would allow, but never silent long enough to trip 25 ms.
+    downloadIdleTimeoutMs: 25,
+    writeFileFn: async () => undefined,
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) return response([release("2.0.0")]);
+      if (url.endsWith("release-metadata.json")) {
+        return response(
+          metadataFor("2.0.0", "stable", {
+            sha256: expectedHash,
+            size: streamedBytes.byteLength,
+          }),
+        );
+      }
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            let offset = 0;
+            const timer = setInterval(() => {
+              if (offset >= streamedBytes.length) {
+                clearInterval(timer);
+                controller.close();
+                return;
+              }
+              controller.enqueue(streamedBytes.slice(offset, offset + 2));
+              offset += 2;
+            }, 10);
+          },
+        }),
+        { status: 200 },
+      );
+    },
+  });
+  assert.equal((await manager.startAutomaticCheck()).status, "downloaded");
+});
+
+test("download progress is broadcast through the state listener", async () => {
+  const observed: Array<{ status: string; progress?: unknown }> = [];
+  const manager = managerForRelease(
+    [release("2.0.0")],
+    metadataFor("2.0.0", "stable"),
+    {
+      writeFileFn: async () => undefined,
+    },
+  );
+  manager.subscribe((state) => {
+    observed.push({ status: state.status, progress: state.progress });
+  });
+  assert.equal((await manager.startAutomaticCheck()).status, "downloaded");
+  const downloading = observed.find(
+    (entry) => entry.status === "downloading" && entry.progress !== undefined,
+  );
+  assert.ok(downloading, "expected a downloading progress broadcast");
+  assert.deepEqual(downloading.progress, {
+    downloadedBytes: 0,
+    totalBytes: downloadedBytes.byteLength,
+  });
+  const done = observed.at(-1);
+  assert.deepEqual(done?.progress, {
+    downloadedBytes: downloadedBytes.byteLength,
+    totalBytes: downloadedBytes.byteLength,
+  });
+});
+
+test("an already verified installer on disk is reused instead of re-downloaded", async () => {
+  const directory = await mkdtemp("/tmp/aitracker-update-reuse-");
+  let installerRequests = 0;
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: directory,
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) return response([release("2.0.0")]);
+      if (url.endsWith("release-metadata.json")) {
+        return response(metadataFor("2.0.0", "stable"));
+      }
+      installerRequests += 1;
+      return new Response(downloadedBytes);
+    },
+  });
+  // A previous attempt left the exact package behind.
+  await writeFile(
+    join(directory, "aitracker-AITracker-2.0.0-x64.dmg"),
+    downloadedBytes,
+  );
+  const state = await manager.startAutomaticCheck();
+  assert.equal(state.status, "downloaded");
+  assert.equal(installerRequests, 0, "must not re-download a verified package");
+  assert.deepEqual(state.progress, {
+    downloadedBytes: downloadedBytes.byteLength,
+    totalBytes: downloadedBytes.byteLength,
+  });
+  await rm(directory, { recursive: true, force: true });
+});
+
+test("a tampered file on disk is not reused", async () => {
+  const directory = await mkdtemp("/tmp/aitracker-update-reuse-bad-");
+  let installerRequests = 0;
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: directory,
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) return response([release("2.0.0")]);
+      if (url.endsWith("release-metadata.json")) {
+        return response(metadataFor("2.0.0", "stable"));
+      }
+      installerRequests += 1;
+      return new Response(downloadedBytes);
+    },
+  });
+  await writeFile(
+    join(directory, "aitracker-AITracker-2.0.0-x64.dmg"),
+    new Uint8Array([9, 9, 9]),
+  );
+  assert.equal((await manager.startAutomaticCheck()).status, "downloaded");
+  assert.equal(installerRequests, 1, "a mismatching file must be replaced");
+  assert.deepEqual(
+    [...(await readFile(join(directory, "aitracker-AITracker-2.0.0-x64.dmg")))],
+    [...downloadedBytes],
+  );
+  await rm(directory, { recursive: true, force: true });
 });

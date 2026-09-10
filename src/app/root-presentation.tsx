@@ -18,6 +18,7 @@ import {
 import { useI18n } from "../lib/i18n/context";
 import { useTheme } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
+import { DesktopUpdateDialogs } from "../components/DesktopUpdateDialogs";
 import { AppProviders } from "./providers";
 import type { QueryClient } from "@tanstack/react-query";
 import type { RootLoaderData } from "./root-route-config";
@@ -73,6 +74,7 @@ function RootAppContent() {
       <AppShell>
         <Outlet />
       </AppShell>
+      <DesktopUpdateDialogs />
       <Toaster
         position="top-right"
         theme={theme}
