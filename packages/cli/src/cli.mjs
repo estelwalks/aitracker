@@ -42,10 +42,10 @@ const MAX_METADATA_BYTES = 8 * 1024 * 1024;
 const SAFE_INSTALLER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:dmg|exe)$/u;
 
 /**
- * The name users recognise: releases carry both a versioned installer (what
- * release-metadata.json names, and what clients older than 1.0.2 require) and
- * the versionless one the README links to. Report and save under the
- * versionless name so the CLI matches the download page.
+ * Installer names carry no version, so this is normally a no-op. Releases
+ * published while the compatibility window was open (up to 1.0.3) named a
+ * versioned copy instead; those still resolve to the name the download page
+ * uses.
  */
 function versionlessName(name) {
   const match =

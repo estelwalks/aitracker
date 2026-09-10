@@ -5,6 +5,33 @@ uses semantic versioning for published releases.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-10
+
+### Highlights
+
+> Published as this release's GitHub notes; keep these short and user-facing.
+
+- The compatibility layer added in 1.0.3 is gone: installers are published under their versionless names only, so a release no longer attaches a duplicate copy of every installer
+- `release-metadata.json` lists all four platforms again, including the Windows ARM64 installer
+- Updates keep working: 1.0.3 resolves the new document, and later versions resolve it the same way
+
+### Details
+
+- Removed the compatibility layer that kept 1.0.0 and 1.0.1 updating
+  themselves. It was added in 1.0.3, whose release is the last one those
+  clients can reach, so it has served its purpose: releases no longer carry a
+  versioned copy of every installer, `release-metadata.json` names the
+  versionless files at `releases/latest/download/<name>` URLs, and the Windows
+  ARM64 installer is listed again (`win32-arm64` was withheld only because a
+  pre-1.0.2 client rejects a platform key it does not know).
+- An update is resolved from the record alone: the name is matched against the
+  selected release's own assets and the bytes are verified against `sha256`, so
+  the tag-addressed URL and the duplicate assets were never load-bearing for
+  1.0.3 and later.
+- `checksums.txt` names the same files as before, now simply the artifact names.
+  The CLI and the Cask generator accept both namings, so a release published
+  before this change (up to 1.0.3) can still be resolved and re-rendered.
+
 ## [1.0.3] - 2026-09-10
 
 ### Highlights

@@ -79,22 +79,18 @@ npm run test:e2e:offline
   option. If the tag, link or build gate fails, the draft-release job is not
   run and no release is published. An existing release name is refused rather
   than overwritten.
-- Each installer is published under two names, and both are required:
-  - the **versionless** name (`AITracker-x64.dmg`) is what
-    `/releases/latest/download/<name>`, the READMEs and `checksums.txt` use, so
-    those never need editing per release;
-  - the **versioned** copy (`AITracker-1.0.2-x64.dmg`) is what
-    `release-metadata.json` names, at
-    `releases/download/v<version>/<name>` URLs. Clients released before 1.0.2
-    compare an artifact URL to exactly that string and require the asset to
-    exist, so without the versioned copy those installs cannot update
-    themselves. Both namings carry identical bytes.
-    The app version is unaffected: it lives in `package.json` → `app.asar`'s
-    Info.plist, and `release-metadata.json` records `appVersion`/`gitTag`.
-- `release-metadata.json` lists **three** platforms (macOS arm64/x64, Windows
-  x64). The Windows arm64 installer is built and attached to the release but
-  must stay out of the metadata: a pre-1.0.2 client rejects the whole document
-  when it carries a platform key it does not know.
+- Installer names carry no version, which is what makes
+  `/releases/latest/download/<name>` — the URL the READMEs, the desktop updater
+  and the CLI resolve — keep working release after release. The compatibility
+  window that required a second, versioned copy of every installer closed at
+  1.0.3 (see the changelog): a release now attaches exactly four installers.
+  The app version is unaffected: it lives in `package.json` → `app.asar`'s
+  Info.plist, and `release-metadata.json` records `appVersion`/`gitTag`.
+- `release-metadata.json` lists exactly four platforms (macOS arm64/x64,
+  Windows x64/arm64) and each record must keep its `name`, `url`, `sha256` and
+  `size`, with the bytes matching. Adding a platform key strands every install
+  older than the release that introduces it, because those clients reject a
+  document carrying a key they do not know.
 - Because installers repeat across releases, each release keeps its own copies;
   GitHub resolves them per release and `releases/latest/download/<name>` always
   lands on the newest one.

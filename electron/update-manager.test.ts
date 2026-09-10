@@ -361,34 +361,36 @@ test("metadata may use the versionless URL while the release lists its tag URL",
   );
 });
 
-test("the released metadata shape is accepted for a 1.0.1 client", async () => {
-  // release-metadata.json lists three platforms and names versioned installers
-  // at tag-addressed URLs. Both halves are load-bearing:
-  //  - three keys, because a client released before 1.0.2 rejects the whole
-  //    document when it carries a platform key it does not know (win32-arm64),
-  //    which would stop those installs from updating themselves;
-  //  - versioned names and `releases/download/v<version>/<name>` URLs, because
-  //    those clients compare the URL to that exact string and require the asset
-  //    to exist.
-  // Requiring all four keys here once rejected every release that omitted
-  // win32-arm64, and versionless names broke the older clients.
-  const base =
-    "https://github.com/estelwalks/aitracker/releases/download/v1.0.2";
-  const payload = Buffer.from("installer-bytes-1.0.2");
+test("the released metadata shape is accepted", async () => {
+  // A release publishes four platforms under versionless names at the stable
+  // download URL, and release-metadata.json names exactly that. The record is
+  // what resolves an update: the name is matched against the selected
+  // release's assets and the bytes are verified against sha256.
+  const latestBase =
+    "https://github.com/estelwalks/aitracker/releases/latest/download";
+  const tagBase =
+    "https://github.com/estelwalks/aitracker/releases/download/v1.0.4";
+  const payload = Buffer.from("installer-bytes-1.0.4");
   const sha256 = createHash("sha256").update(payload).digest("hex");
   const names: Record<string, string> = {
-    "darwin-arm64": "AITracker-1.0.2-arm64.dmg",
-    "darwin-x64": "AITracker-1.0.2-x64.dmg",
-    "win32-x64": "AITracker-Setup-1.0.2-x64.exe",
+    "darwin-arm64": "AITracker-arm64.dmg",
+    "darwin-x64": "AITracker-x64.dmg",
+    "win32-arm64": "AITracker-Setup-arm64.exe",
+    "win32-x64": "AITracker-Setup-x64.exe",
   };
   const artifacts = Object.fromEntries(
     Object.entries(names).map(([key, name]) => [
       key,
-      { name, url: `${base}/${name}`, sha256, size: payload.byteLength },
+      {
+        name,
+        url: `${latestBase}/${name}`,
+        sha256,
+        size: payload.byteLength,
+      },
     ]),
   );
   const manager = new UpdateManager({
-    currentVersion: "1.0.1",
+    currentVersion: "1.0.3",
     isPackaged: true,
     platform: "darwin",
     arch: "x64",
@@ -397,22 +399,18 @@ test("the released metadata shape is accepted for a 1.0.1 client", async () => {
       if (url.includes("api.github.com")) {
         return response([
           {
-            tag_name: "v1.0.2",
+            tag_name: "v1.0.4",
             prerelease: false,
             draft: false,
             assets: [
+              // GitHub lists a release's assets under its own tag.
               ...Object.values(names).map((name) => ({
                 name,
-                browser_download_url: `${base}/${name}`,
+                browser_download_url: `${tagBase}/${name}`,
               })),
-              // Attached but not listed in the metadata.
-              {
-                name: "AITracker-Setup-1.0.2-arm64.exe",
-                browser_download_url: `${base}/AITracker-Setup-1.0.2-arm64.exe`,
-              },
               {
                 name: "release-metadata.json",
-                browser_download_url: `${base}/release-metadata.json`,
+                browser_download_url: `${tagBase}/release-metadata.json`,
               },
             ],
           },
@@ -421,10 +419,10 @@ test("the released metadata shape is accepted for a 1.0.1 client", async () => {
       if (url.endsWith("release-metadata.json")) {
         return response({
           schemaVersion: 1,
-          appVersion: "1.0.2",
+          appVersion: "1.0.4",
           channel: "stable",
           repository: "estelwalks/aitracker",
-          gitTag: "v1.0.2",
+          gitTag: "v1.0.4",
           artifacts,
         });
       }
@@ -436,9 +434,9 @@ test("the released metadata shape is accepted for a 1.0.1 client", async () => {
 
   const state = await manager.startAutomaticCheck();
   assert.equal(state.status, "downloaded");
-  assert.equal(state.latestVersion, "1.0.2");
-  assert.equal(state.assetName, "AITracker-1.0.2-x64.dmg");
-  assert.equal(state.downloadUrl, `${base}/AITracker-1.0.2-x64.dmg`);
+  assert.equal(state.latestVersion, "1.0.4");
+  assert.equal(state.assetName, "AITracker-x64.dmg");
+  assert.equal(state.downloadUrl, `${tagBase}/AITracker-x64.dmg`);
 });
 
 test("a document listing an unknown platform is still rejected", async () => {
@@ -605,6 +603,12 @@ function metadataFor(
       },
       // Every published release lists all four platforms, so the fixture does
       // too; a missing key is rejected by metadataArtifactOf.
+      "win32-arm64": {
+        name: "AITracker-Setup-arm64.exe",
+        url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-arm64.exe`,
+        sha256: downloadedSha256,
+        size: downloadedBytes.byteLength,
+      },
       "win32-arm64": {
         name: "AITracker-Setup-arm64.exe",
         url: `https://github.com/estelwalks/aitracker/releases/download/v${version}/AITracker-Setup-arm64.exe`,

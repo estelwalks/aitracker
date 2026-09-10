@@ -427,17 +427,20 @@ function metadataArtifactOf(
   )
     return null;
   const artifactMap = artifacts as Record<string, unknown>;
-  // The three platforms every release lists, plus win32-arm64 which a release
-  // may add. An unknown key still means the document is not ours.
-  //
-  // win32-arm64 must stay optional: a client released before 1.0.2 rejects the
-  // whole document when it carries a key it does not know, so a release that
-  // lists Windows on ARM cannot update those installs at all. Requiring it here
-  // (as an earlier revision did) rejected every release that omitted it.
-  const requiredKeys = ["darwin-arm64", "darwin-x64", "win32-x64"];
-  const allowedKeys = [...requiredKeys, "win32-arm64"];
+  // Exactly the platforms every release publishes, and no others. The
+  // compatibility window that let this be a subset closed at 1.0.3 (the last
+  // release 1.0.0 and 1.0.1 could update themselves from), so this is the
+  // 1.0.3-and-later contract and 1.0.3 itself accepts the same four keys.
+  // An unknown key still means the document is not ours; adding a fifth would
+  // strand every install older than the release that introduced it.
+  const requiredKeys = [
+    "darwin-arm64",
+    "darwin-x64",
+    "win32-arm64",
+    "win32-x64",
+  ];
   if (
-    Object.keys(artifactMap).some((key) => !allowedKeys.includes(key)) ||
+    Object.keys(artifactMap).some((key) => !requiredKeys.includes(key)) ||
     requiredKeys.some(
       (key) => !Object.prototype.hasOwnProperty.call(artifactMap, key),
     )
