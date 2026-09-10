@@ -40,11 +40,7 @@ function safeSkillSearch(value: unknown): string | undefined {
   return skill;
 }
 
-interface SkillsLoader extends SkillHubData {
-  readonly locale: Locale;
-}
-
-// Page component lives in skills.lazy.tsx (P6-T6-04 route splitting).
+// Page component lives in skills.lazy.tsx (P6-T6-04).
 export const Route = createFileRoute("/skills")({
   validateSearch: (search: Record<string, unknown>): SkillsSearchParams => ({
     tab:
@@ -60,9 +56,9 @@ export const Route = createFileRoute("/skills")({
   loaderDeps: ({ search }) => ({
     locale: resolveLocaleFromSearch(search as Record<string, unknown>),
   }),
-  loader: async ({ deps }): Promise<SkillsLoader> => {
-    // Whole page payload = one server RPC; scanner/DB modules stay out of the
-    // browser bundle (route loaders also run client-side on navigation).
+  loader: async ({ deps }): Promise<SkillHubData & { locale: Locale }> => {
+    // One server RPC owns the payload; scanner/DB modules stay server-side
+    // for client-side navigations too.
     const data = await getSkillHubPageData();
     return { locale: deps.locale, ...data };
   },
