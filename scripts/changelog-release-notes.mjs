@@ -64,7 +64,11 @@ export function extractReleaseNotes(changelog, version) {
     if (SUB_HEADING_PATTERN.test(section[index])) break;
     highlights.push(section[index]);
   }
-  const trimmed = trimBlankEdges(highlights);
+  // A leading blockquote is an editorial note (what this sub-section is
+  // for), not something a user should read on the release page.
+  const trimmed = trimBlankEdges(
+    highlights.filter((line) => !/^> /u.test(line)),
+  );
   if (trimmed.length === 0)
     throw new Error(
       `CHANGELOG.md "## [${version}]" has an empty "### Highlights" section; move the summary or remove the heading`,

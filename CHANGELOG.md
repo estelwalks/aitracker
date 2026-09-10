@@ -9,13 +9,15 @@ uses semantic versioning for published releases.
 
 ### Highlights
 
-- 应用内更新变成完整流程：每 6 小时检查、后台静默下载、重启即安装；慢速网络可续传，进度以百分比显示，延后可记住版本
-- macOS 更新不再需要手动拖入「应用程序」：点重启后自动挂载、替换、重启（首次启动需确认一次系统安全提示）
-- 新增更新代理设置（默认关闭），供无法直连 GitHub 的网络使用
-- 新增 Windows ARM64 安装包
-- 安装包文件名不再带版本号，下载链接永久指向最新版本，无需随版本更换
-- macOS 应用图标改为白色圆角底板
-- 技能目录改为并发扫描，技能目录越多扫描越快
+> Published as this release's GitHub notes; keep these short and user-facing.
+
+- In-app updates are now a complete workflow: check every six hours, download a verified installer silently in the background, restart to install, with progress and a per-version "later" that is remembered
+- macOS updates no longer need a manual drag into Applications: restarting mounts, replaces and relaunches the app on its own (macOS asks for a one-time confirmation on first launch)
+- Added an update proxy setting (off by default) for networks that cannot reach GitHub directly
+- Added a Windows ARM64 installer
+- Installer names no longer carry a version, so the download links always point at the newest release and never need editing per release
+- The macOS app icon is now a white rounded tile
+- Skill directories are scanned concurrently, so a large catalog refreshes faster
 
 ### Details
 

@@ -190,7 +190,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           if [[ "$RELEASE_CHANNEL" == "stable" ]]; then
             {
-              echo "## 更新内容"
+              echo "## What's changed"
               echo
             } > release-notes.md
             echo "RELEASE_TITLE=AITracker $GITHUB_REF_NAME" >> "$GITHUB_ENV"
@@ -208,11 +208,11 @@ jobs:
           # being read as command substitution.
           cat >> release-notes.md <<'EOF'
 
-          ## 下载
+          ## Download
 
-          安装包见下方 Assets：macOS 为 `AITracker-*.dmg`，Windows 为 `AITracker-Setup-*.exe`；`checksums.txt` 为对应 SHA-256 校验值。安装包未签名，首次启动时 macOS Gatekeeper 或 Windows SmartScreen 可能要求逐文件确认。
+          Installers are attached below: `AITracker-*.dmg` for macOS and `AITracker-Setup-*.exe` for Windows, with SHA-256 checksums in `checksums.txt`. The builds are unsigned, so macOS Gatekeeper or Windows SmartScreen may ask for a per-file confirmation on first launch.
 
-          安装命令与其他平台说明见 [README](https://github.com/estelwalks/aitracker#install)，也可直接运行 `npx --yes @estelwalks/aitracker@latest`。
+          Install commands and platform notes: see the [README](https://github.com/estelwalks/aitracker#install), or run `npx --yes @estelwalks/aitracker@latest`.
           EOF
 
       - name: Create draft release

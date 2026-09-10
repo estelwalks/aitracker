@@ -102,6 +102,23 @@ test("without highlights the whole section is still published", () => {
   );
 });
 
+test("a blockquote note above the highlights is not published", () => {
+  const noted = [
+    "## [1.0.2] - 2026-09-10",
+    "",
+    "### Highlights",
+    "",
+    "> Editorial note for maintainers",
+    "",
+    "- User-facing line",
+    "",
+    "## [1.0.1] - 2026-09-08",
+  ].join("\n");
+  const notes = extractReleaseNotes(noted, "1.0.2");
+  assert.equal(notes, "- User-facing line\n");
+  assert.doesNotMatch(notes, /Editorial note/u);
+});
+
 test("an empty Highlights heading is an error, not a blank release", () => {
   const empty = "## [1.0.2]\n\n### Highlights\n\n## [1.0.1]\n\n- older\n";
   assert.throws(
