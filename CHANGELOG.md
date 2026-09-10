@@ -5,7 +5,7 @@ uses semantic versioning for published releases.
 
 ## [Unreleased]
 
-## [1.0.2] - 2026-09-10
+## [1.0.3] - 2026-09-10
 
 ### Highlights
 
@@ -93,6 +93,13 @@ uses semantic versioning for published releases.
 - Scanned every Skills directory concurrently with a bounded worker pool
   instead of walking them serially, so the skill catalog refresh no longer
   scales with the number of installed agents.
+
+## [1.0.2] - 2026-09-10
+
+Never published: the tag `v1.0.2` was consumed by an immutable release, and
+GitHub refuses to reuse an immutable tag name. Its content ships as
+[1.0.3] below. Because the release contract requires the tag to equal
+`v<package.json version>`, the only way forward was the next version.
 
 ## [1.0.1] - 2026-09-08
 
