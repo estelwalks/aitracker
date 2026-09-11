@@ -143,21 +143,52 @@ test("parses options and rejects unknown flags", () => {
   assert.throws(() => parseReleaseNotesArgs(["--wat", "1"]), /unknown option/u);
 });
 
-test("the repository changelog holds the version its package.json declares", async () => {
-  const packageJson = JSON.parse(
-    await readFile(join(dirname(SCRIPT), "..", "package.json"), "utf8"),
-  );
+/**
+ * The changelog carries work in `## [Unreleased]` and only gets a numbered
+ * section at release time, when the whole section is retitled and tagged (see
+ * docs/RELEASE_CHECKLIST.md). So the invariant is not "package.json's version
+ * has a section" - in development it deliberately does not, and asking for its
+ * notes before the tag is prepared is the error the release job relies on.
+ *
+ * What must hold: every section the changelog *does* carry is a dated release
+ * section with extractable, non-blank notes, so a tag can never publish blank
+ * or malformed notes.
+ */
+test("every versioned section in the repository changelog is extractable", async () => {
   const changelog = await readFile(CHANGELOG, "utf8");
-  const notes = extractReleaseNotes(changelog, packageJson.version);
-  // The release workflow publishes exactly this text as the GitHub release
-  // body, so a missing section would ship an empty release.
-  assert.match(notes, /\S/u);
-  assert.match(
-    changelog,
-    new RegExp(
-      `^## \\[${packageJson.version.replaceAll(".", "\\.")}\\] - \\d{4}-\\d{2}-\\d{2}$`,
-      "mu",
-    ),
+  const headings = [...changelog.matchAll(/^## \[([^\]]+)\](.*)$/gmu)].map(
+    (match) => ({ version: match[1], suffix: match[2].trim() }),
+  );
+  assert.ok(headings.length >= 4, `expected sections, saw ${headings.length}`);
+
+  const versions = [];
+  for (const heading of headings) {
+    if (heading.version === "Unreleased") {
+      // Work in progress: no date, and it is never published under that name.
+      assert.equal(heading.suffix, "", "Unreleased must not carry a date");
+      continue;
+    }
+    assert.match(
+      heading.suffix,
+      /^-\s\d{4}-\d{2}-\d{2}$/u,
+      `## [${heading.version}] must be dated when it becomes a release section`,
+    );
+    const notes = extractReleaseNotes(changelog, heading.version);
+    assert.match(
+      notes,
+      /\S/u,
+      `## [${heading.version}] would publish blank release notes`,
+    );
+    versions.push(heading.version);
+  }
+
+  // The published set is exactly what the tags say; 1.0.4 must not appear here
+  // until it is released, or it reads as shipped while it is not.
+  assert.ok(versions.includes("1.0.3"), "the last release must be listed");
+  assert.equal(
+    versions.includes("1.0.4"),
+    false,
+    "1.0.4 is unreleased: its work belongs under Unreleased until it is tagged",
   );
 });
 

@@ -3,6 +3,25 @@
 This checklist is intentionally local/manual. It documents the release
 evidence without adding another CI workflow or slowing ordinary pull requests.
 
+## Changelog convention
+
+- Work in progress always goes under `## [Unreleased]`. A numbered section
+  (`## [X.Y.Z] - YYYY-MM-DD`) means that version is released, and is added
+  **at release time** by the `release: prepare vX.Y.Z` commit, which is also
+  what bumps `package.json`, `package-lock.json` and `packages/cli/package.json`
+  to that version and what the tag points at.
+- Preparing a release therefore moves the whole `[Unreleased]` body into the
+  new numbered heading and recreates `[Unreleased]` empty; nothing is left
+  behind under the old heading.
+- A numbered section for an untagged version is a bug, not staging: it reads
+  as shipped while the newest published version is older. Do not open one to
+  "reserve" a version.
+- `scripts/changelog-release-notes.test.mjs` enforces the shape: `[Unreleased]`
+  carries no date, every other heading is dated and extractable, and no
+  unreleased version is listed. The release job then extracts the tag's
+  section, so a tag whose section is missing or blank fails instead of
+  publishing empty notes.
+
 ## Before tagging
 
 - Confirm `package.json`, `package-lock.json`, and `packages/cli/package.json`

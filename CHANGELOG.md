@@ -6,16 +6,13 @@ uses semantic versioning for published releases.
 ## [Unreleased]
 
 <!--
-The sqlite usage work (#42) is not listed here on purpose: this checkout
-already declares 1.0.4 in package.json and carries its section below, but no
-v1.0.4 tag or release exists yet - the latest published version is 1.0.3. Those
-changes therefore land in the 1.0.4 section, which is what the release workflow
-publishes, and this heading is left empty for work that starts after 1.0.4 is
-tagged. Keeping both in sync matters: `scripts/changelog-release-notes.mjs`
-fails the build when package.json names a version with no dated section.
+Work in progress lives here. At release time the whole section is retitled
+`## [X.Y.Z] - YYYY-MM-DD`, its `### Highlights` list becomes the GitHub
+release body, and this heading is recreated empty - see
+docs/RELEASE_CHECKLIST.md. Keeping a numbered section for a version that has
+no tag is what made 1.0.4 look released while the newest published version
+was still 1.0.3.
 -->
-
-## [1.0.4] - 2026-09-10
 
 ### Highlights
 
@@ -44,7 +41,7 @@ fails the build when package.json names a version with no dated section.
   The CLI and the Cask generator accept both namings, so a release published
   before this change (up to 1.0.3) can still be resolved and re-rendered.
 
-### Sqlite usage reads (issue #42)
+### Fixes (issue #42)
 
 - Fixed usage collection for sqlite-backed tools whose database passes the
   adapter's `maxFileSizeBytes` cap. ZCode keeps every session's message/part
