@@ -15,9 +15,21 @@ import { listTools } from "./registry.ts";
  * 1. The query must prepare against the schema it targets. `ORDER BY <alias>`
  *    only resolves when the alias is in scope, so a later edit can turn a
  *    working query into a hard SQL error.
- * 2. The query must return newest-first. The row budget keeps the rows it sees
- *    first, so without an ordering the budget would silently retain the OLDEST
- *    events of a long-lived database and drop everything recent.
+ * 2. The query must return newest-first. The row budget keeps the newest rows
+ *    of the whole source (P2-1), and the scanner abandons a database at the
+ *    first row the budget cannot take: that is only safe while every later row
+ *    of that read is older. Without the ordering the read would have to be
+ *    consumed to the end for the same answer - and the same budget stop would
+ *    silently drop the newer rows that followed it.
+ *
+ * ORDER BY is also what makes the budget expensive, and the cost cannot be
+ * pushed elsewhere (P2-2, measured on a 5M-row fixture with a 365-day window):
+ * the ordering is a computed timestamp expression, so no index can serve it -
+ * with `sessions(ended_at)` indexed the plan is still `SCAN` + `USE TEMP
+ * B-TREE FOR ORDER BY` - and a `LIMIT` pushdown makes the scan slower (10.2 s
+ * against 7.0 s) rather than bounding the sort. The lever that does work is the
+ * window filter asserted below, which keeps out-of-window rows out of the
+ * sorter.
  */
 
 /** Minimal schemas holding exactly the columns each query references. */
@@ -116,8 +128,9 @@ test("every sqlite usage query opens newest-first and prepares", () => {
       .map((line) => line.trim())
       .find((line) => line.toUpperCase().startsWith("ORDER BY"));
     assert.ok(ordering, `${tool.id}: sqlite query must declare an ORDER BY`);
-    // The scanner's row budget keeps the rows it sees first, so the newest row
-    // must come first. A DESC on the leading term is what guarantees it.
+    // The scanner's row budget keeps the newest rows of the source and stops
+    // reading a database at the first row it cannot take, so the newest row has
+    // to come first. A DESC on the leading term is what guarantees it.
     const leadingTerm = ordering.replace(/^ORDER BY\s+/iu, "").split(",")[0]!;
     assert.match(
       leadingTerm,
@@ -139,6 +152,12 @@ test("every sqlite usage query opens newest-first and prepares", () => {
  * again. Nothing else would catch that regression, so it is asserted here -
  * measured on a 634 MB / 5M-row fixture, a 365-day scan drops from 13.4 s to
  * 27.0 s when the filter is removed.
+ *
+ * It is also the only performance lever that works (P2-2): the sort the scan
+ * pays for cannot be indexed away (the ordering is a computed expression) and
+ * cannot be limited away (a `LIMIT` pushdown measures slower, because sqlite
+ * still sorts the whole filtered result before honouring it). What the filter
+ * buys is exactly the rows that never enter the sorter.
  */
 test("every sqlite adapter pushes the scan window into its query", () => {
   const definitions = listTools().filter(

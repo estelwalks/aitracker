@@ -407,18 +407,101 @@ async function createSharedBudgetFixture(
  * Scan the fixture with the process cache enabled (the default) and the shared
  * row cap under test.
  */
-async function scanSharedBudgetFixture(root: string) {
+async function scanSharedBudgetFixture(
+  root: string,
+  maxSqliteRowsPerSource = SHARED_BUDGET,
+) {
   const snapshot = await scanLocalUsage({
     homeDirectory: root,
     cacheDirectory: join(root, ".cache"),
     lookbackDays: 3650,
     platform: "linux" as const,
-    maxSqliteRowsPerSource: SHARED_BUDGET,
+    maxSqliteRowsPerSource,
   });
   const hermes = snapshot.sources.find((source) => source.source === "hermes");
   assert.ok(hermes, "hermes source must be reported");
   return { snapshot, hermes };
 }
+
+/**
+ * P2-1: the shared budget has to keep the newest events of the entire source.
+ * The walk reads the most recently modified database first, and a database's
+ * mtime says when it was last written - not how old the sessions inside it are.
+ * A profile touched a minute ago that only holds day-old sessions therefore
+ * spent the whole budget and hid another profile's ten-minute-old sessions
+ * completely: with a cap of four, the scan reported four day-old events and
+ * dropped all three recent ones.
+ */
+test("the shared budget keeps the newest events across profiles", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-hermes-budget-order-"));
+  try {
+    const hermesDir = join(root, ".hermes");
+    const staleDb = join(hermesDir, "profiles", "stale", "state.db");
+    const freshDb = join(hermesDir, "profiles", "fresh", "state.db");
+    await mkdir(join(hermesDir, "profiles", "stale"), { recursive: true });
+    await mkdir(join(hermesDir, "profiles", "fresh"), { recursive: true });
+    const now = Math.floor(Date.now() / 1000);
+    const row = (id: string, secondsAgo: number) => [
+      id,
+      "hermes-agent",
+      now - secondsAgo - 30,
+      now - secondsAgo,
+      1_000,
+      100,
+      0,
+      0,
+      0,
+      1,
+    ];
+    // Five day-old sessions in the profile that was written last, three
+    // ten-minute-old sessions in the profile that was written long ago.
+    const stale = Array.from({ length: 5 }, (_, index) =>
+      row(`stale-${index + 1}`, 90_000 + index * 600),
+    );
+    const fresh = [
+      row("fresh-1", 600),
+      row("fresh-2", 900),
+      row("fresh-3", 1_200),
+    ];
+    createHermesDb(staleDb, stale);
+    createHermesDb(freshDb, fresh);
+    const base = Date.now();
+    const pinned = async (path: string, ageMs: number) => {
+      const at = new Date(base - ageMs);
+      await utimes(path, at, at);
+    };
+    await pinned(staleDb, 30_000);
+    await pinned(freshDb, 900_000);
+
+    const { snapshot, hermes } = await scanSharedBudgetFixture(root, 4);
+    assert.equal(hermes.events, 4, "four rows fit the cap");
+    const kept = new Set(
+      snapshot.details
+        .filter((event) => event.source === "hermes")
+        .map((event) => event.sessionId),
+    );
+    for (const id of ["fresh-1", "fresh-2", "fresh-3"]) {
+      assert.equal(
+        kept.has(sessionIdFromStructuredValue("hermes", id)!),
+        true,
+        `${id} is among the newest sessions of the source`,
+      );
+    }
+    // Only the newest day-old session may fill the remaining row.
+    assert.equal(
+      kept.has(sessionIdFromStructuredValue("hermes", "stale-1")!),
+      true,
+      "the newest of the older profile fills the last row",
+    );
+    assert.equal(
+      kept.has(sessionIdFromStructuredValue("hermes", "stale-2")!),
+      false,
+      "older rows of the first-read profile do not survive newer ones",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 /**
  * P1 cache review: a cache hit returned the entry's events without paying the
@@ -438,13 +521,14 @@ test("a cache-reused profile still pays the shared sqlite row budget", async () 
     assert.equal(cold.hermes.events, SHARED_BUDGET, "the cap holds cold");
 
     // Nothing changed: every database is served from the cache, and the rows a
-    // reused parse holds are charged back so the walk still ends at the cap.
+    // reused entry holds are offered to the shared budget again, so the walk
+    // still ends at the cap.
     const warm = await scanSharedBudgetFixture(root);
     assert.equal(warm.hermes.filesReused, 3, "an unchanged scan reuses all");
     assert.equal(warm.hermes.events, SHARED_BUDGET, "the cap holds warm");
 
-    // Update the profile the walk now reads first, so a freshly parsed database
-    // and a cache-reused one share the budget exactly as in the report.
+    // Update the profile the walk now reads first, so a freshly read database
+    // and cache-reused ones share the budget exactly as in the report.
     insertHermesRows(personalDb, [
       sessionRow("personal-4", 4),
       sessionRow("personal-5", 5),
@@ -455,11 +539,13 @@ test("a cache-reused profile still pays the shared sqlite row budget", async () 
       SHARED_BUDGET,
       "a reused database plus an updated one must not exceed the source cap",
     );
-    // The updated profile parses; the profile behind it was cached while the
-    // budget was already spent, so it must be re-read under the budget it
-    // actually has - and the last one may still be reused as-is.
-    assert.equal(afterUpdate.hermes.filesParsed, 2);
-    assert.equal(afterUpdate.hermes.filesReused, 1);
+    // A budget-cut database holds the rows its siblings left it (P2-1), so one
+    // changed database makes the whole set stale: every profile is read again
+    // rather than reusing a distribution the new file set no longer produces.
+    // That read stays cheap - a database that can no longer contribute is
+    // abandoned at its first row that cannot win.
+    assert.equal(afterUpdate.hermes.filesParsed, 3);
+    assert.equal(afterUpdate.hermes.filesReused, 0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -533,12 +619,142 @@ test("a profile skipped by a spent budget is re-parsed once the budget frees up"
       SHARED_BUDGET,
       "the skipped profile must be re-read, not served as zero events",
     );
+    // Both surviving entries were cut by the budget, and the database that
+    // shaped that cut is gone: the set no longer reproduces, so both are read
+    // again - and the first of them now keeps the rows it was denied before.
     assert.equal(
       afterDelete.hermes.filesParsed,
-      1,
-      "the profile skipped by the spent budget must be parsed again",
+      2,
+      "the profiles the spent budget cut must be read again",
     );
-    assert.equal(afterDelete.hermes.filesReused, 1);
+    assert.equal(afterDelete.hermes.filesReused, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * P2-2 review: a complete cached database whose rows a newer sibling pushes out
+ * of the budget ends up truncated, but its cached diagnostics were kept as they
+ * were - so events were dropped with no `query-truncated` warning at all, and
+ * the source looked complete. It is the same loss a fresh read stopped by the
+ * cap reports, so it has to be reported the same way.
+ */
+test("a cached database pushed out of the budget warns about the rows it lost", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-hermes-budget-warn-"));
+  try {
+    const hermesDir = join(root, ".hermes");
+    const workDb = join(hermesDir, "profiles", "work", "state.db");
+    const defaultDb = join(hermesDir, "state.db");
+    await mkdir(join(hermesDir, "profiles", "work"), { recursive: true });
+    const now = Math.floor(Date.now() / 1000);
+    const row = (id: string, secondsAgo: number) => [
+      id,
+      "hermes-agent",
+      now - secondsAgo - 30,
+      now - secondsAgo,
+      1_000,
+      100,
+      0,
+      0,
+      0,
+      1,
+    ];
+    // Three rows fit the cap exactly: "work" holds two old sessions, "default"
+    // one newer one, and nothing is dropped - so neither entry is truncated.
+    createHermesDb(workDb, [row("work-1", 50_000), row("work-2", 50_600)]);
+    createHermesDb(defaultDb, [row("default-1", 10_000)]);
+    const base = Date.now();
+    const pinned = async (path: string, ageMs: number) => {
+      const at = new Date(base - ageMs);
+      await utimes(path, at, at);
+    };
+    await pinned(workDb, 30_000);
+    await pinned(defaultDb, 900_000);
+
+    const cold = await scanSharedBudgetFixture(root, 3);
+    assert.equal(cold.hermes.events, 3, "the cap holds cold");
+    assert.equal(
+      (cold.hermes.diagnostics ?? []).filter(
+        (entry) => entry.code === "query-truncated",
+      ).length,
+      0,
+      "nothing was dropped, so nothing warns",
+    );
+
+    // "default" gains two sessions newer than everything "work" holds. It is
+    // re-read, its rows take the whole cap, and "work" - unchanged, complete,
+    // and reused from the cache - loses both of its events to them.
+    insertHermesRows(defaultDb, [row("default-2", 500), row("default-3", 600)]);
+    const afterUpdate = await scanSharedBudgetFixture(root, 3);
+    assert.equal(afterUpdate.hermes.events, 3, "three rows still fit the cap");
+    const kept = new Set(
+      afterUpdate.snapshot.details
+        .filter((event) => event.source === "hermes")
+        .map((event) => event.sessionId),
+    );
+    for (const id of ["default-1", "default-2", "default-3"]) {
+      assert.equal(
+        kept.has(sessionIdFromStructuredValue("hermes", id)!),
+        true,
+        `${id} is newer than everything the cached profile holds`,
+      );
+    }
+    assert.equal(
+      kept.has(sessionIdFromStructuredValue("hermes", "work-1")!),
+      false,
+      "the cached profile's events are displaced by the newer ones",
+    );
+    assert.equal(
+      (afterUpdate.hermes.diagnostics ?? []).filter(
+        (entry) => entry.code === "query-truncated",
+      ).length,
+      1,
+      "dropping the cached profile's rows must warn",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * The other half of the same rule: a warning must not outlive the truncation it
+ * describes. Raising the cap above what the source holds makes every database
+ * complete again, and the source has to stop claiming rows were dropped.
+ */
+test("a raised budget clears the truncation warning it no longer needs", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-hermes-budget-clear-"));
+  try {
+    const { workDb } = await createSharedBudgetFixture(root);
+
+    const capped = await scanSharedBudgetFixture(root);
+    assert.equal(capped.hermes.events, SHARED_BUDGET, "the cap holds");
+    assert.equal(
+      (capped.hermes.diagnostics ?? []).filter(
+        (entry) => entry.code === "query-truncated",
+      ).length,
+      1,
+      "a capped source reports the rows it dropped",
+    );
+    assert.equal(
+      workDb.endsWith("state.db"),
+      true,
+      "the fixture holds three databases of three rows",
+    );
+
+    const uncapped = await scanSharedBudgetFixture(root, 100);
+    assert.equal(
+      uncapped.hermes.events,
+      9,
+      "every session of every profile fits the raised cap",
+    );
+    assert.equal(
+      (uncapped.hermes.diagnostics ?? []).filter(
+        (entry) => entry.code === "query-truncated",
+      ).length,
+      0,
+      "nothing is dropped now, so nothing may warn",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
