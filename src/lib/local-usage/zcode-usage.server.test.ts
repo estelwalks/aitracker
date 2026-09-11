@@ -415,10 +415,19 @@ test("sqlite row budget keeps the newest rows and reports truncation", async () 
     assert.equal(zcode.events, 3, "the budget must cap the collected events");
 
     const truncated = (zcode.diagnostics ?? []).find(
-      (entry) => entry.code === "file-too-large",
+      (entry) => entry.code === "query-truncated",
     );
     assert.ok(truncated, "truncation must be visible, never silent");
     assert.match(truncated.message, /3 行读取上限/u);
+    // A row-count cap must never be reported as a size problem: the file is
+    // fine, and a size diagnostic sends debugging back to the byte cap.
+    assert.equal(
+      (zcode.diagnostics ?? []).some(
+        (entry) => entry.code === "file-too-large",
+      ),
+      false,
+      "a row budget must not be reported as file-too-large",
+    );
 
     const events = snapshot.details.filter((event) => event.source === "zcode");
     // The three newest completions (hours 4, 3 and 2), never the two oldest.

@@ -31,6 +31,14 @@ export type LocalUsageDiagnosticCode =
   | "field-mismatch"
   | "malformed-json"
   | "query-failed"
+  /**
+   * Emitted when a sqlite query returned more rows than the scanner's row
+   * budget, so the walk stopped and only the newest rows were counted. Kept
+   * distinct from `file-too-large` because the file itself is fine: reporting
+   * a size problem for a row-count problem sends anyone debugging it back to
+   * the byte cap, which does not apply to sqlite reads at all (issue #42).
+   */
+  | "query-truncated"
   | "read-failed"
   /**
    * Emitted by the usage collector when a source that previously reported

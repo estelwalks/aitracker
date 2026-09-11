@@ -3419,7 +3419,7 @@ function parseZedThreadsDb(
       diagnostics.push(
         diagnostic(
           adapter,
-          "file-too-large",
+          "query-truncated",
           file.path,
           `SQLite 查询结果超过 ${maxSqliteRows} 行读取上限，其余记录未统计。`,
         ),
@@ -4725,7 +4725,7 @@ async function parseGenericFile(
         diagnostics.push(
           diagnostic(
             adapter,
-            "file-too-large",
+            "query-truncated",
             file.path,
             `SQLite 查询结果超过 ${maxSqliteRows} 行读取上限，其余记录未统计。`,
           ),
