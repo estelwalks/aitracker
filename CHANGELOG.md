@@ -6,12 +6,14 @@ uses semantic versioning for published releases.
 ## [Unreleased]
 
 <!--
-Work in progress lives here. At release time the whole section is retitled
-`## [X.Y.Z] - YYYY-MM-DD`, its `### Highlights` list becomes the GitHub
-release body, and this heading is recreated empty - see
-docs/RELEASE_CHECKLIST.md. Keeping a numbered section for a version that has
-no tag is what made 1.0.4 look released while the newest published version
-was still 1.0.3.
+Work in progress lives here. The release branch retitles this whole section
+`## [X.Y.Z] - YYYY-MM-DD` and bumps the package versions in the same commit,
+which is the commit the tag points at; its `### Highlights` list then becomes
+the GitHub release body. See docs/RELEASE_CHECKLIST.md.
+
+That is why a version can be declared in package.json without a section here:
+the declaration and the section are created together on the release branch, so
+a feature branch never touches either.
 -->
 
 ### Highlights

@@ -145,14 +145,18 @@ test("parses options and rejects unknown flags", () => {
 
 /**
  * The changelog carries work in `## [Unreleased]` and only gets a numbered
- * section at release time, when the whole section is retitled and tagged (see
- * docs/RELEASE_CHECKLIST.md). So the invariant is not "package.json's version
- * has a section" - in development it deliberately does not, and asking for its
- * notes before the tag is prepared is the error the release job relies on.
+ * section when the release is prepared, when the whole section is retitled and
+ * tagged (see docs/RELEASE_CHECKLIST.md). `package.json` names the version
+ * being prepared, so mid-release-cycle the repository is expected to declare a
+ * version that has no section yet - asking for its notes before the prepare
+ * commit is the error the release job relies on.
  *
- * What must hold: every section the changelog *does* carry is a dated release
- * section with extractable, non-blank notes, so a tag can never publish blank
- * or malformed notes.
+ * The invariant here is version-independent, so it holds before and after a
+ * release: every section the changelog carries is either `[Unreleased]`
+ * without a date, or a dated release section with extractable, non-blank
+ * notes. A numbered section is a claim that the version shipped, and the
+ * release job fails the tag when the section for its version is missing or
+ * blank.
  */
 test("every versioned section in the repository changelog is extractable", async () => {
   const changelog = await readFile(CHANGELOG, "utf8");
@@ -161,7 +165,6 @@ test("every versioned section in the repository changelog is extractable", async
   );
   assert.ok(headings.length >= 4, `expected sections, saw ${headings.length}`);
 
-  const versions = [];
   for (const heading of headings) {
     if (heading.version === "Unreleased") {
       // Work in progress: no date, and it is never published under that name.
@@ -179,17 +182,57 @@ test("every versioned section in the repository changelog is extractable", async
       /\S/u,
       `## [${heading.version}] would publish blank release notes`,
     );
-    versions.push(heading.version);
   }
 
-  // The published set is exactly what the tags say; 1.0.4 must not appear here
-  // until it is released, or it reads as shipped while it is not.
-  assert.ok(versions.includes("1.0.3"), "the last release must be listed");
-  assert.equal(
-    versions.includes("1.0.4"),
-    false,
-    "1.0.4 is unreleased: its work belongs under Unreleased until it is tagged",
+  // The version being prepared and the changelog section for it are created
+  // together on the release branch, so mid-cycle this repository legitimately
+  // declares a version with no section yet. Both states are pinned here by
+  // relation rather than by naming a version, so the guard does not have to be
+  // edited for every release:
+  //   - no section for the declared version => every listed version is older
+  //     than it, i.e. the section is still to be written on the release branch;
+  //   - a section for it => it must carry notes, because that is what the
+  //     release job publishes.
+  const numbered = headings
+    .map((heading) => heading.version)
+    .filter((version) => version !== "Unreleased");
+  assert.ok(numbered.length >= 3, "the released history must be listed");
+  assert.ok(numbered.includes("1.0.3"), "a published release is missing");
+
+  const packageJson = JSON.parse(
+    await readFile(join(dirname(SCRIPT), "..", "package.json"), "utf8"),
   );
+  if (numbered.includes(packageJson.version)) {
+    assert.match(
+      extractReleaseNotes(changelog, packageJson.version),
+      /\S/u,
+      `## [${packageJson.version}] exists, so it must carry notes`,
+    );
+  } else {
+    // Compare on the numeric core only: a prerelease such as `1.0.0-beta.1`
+    // belongs to its base version, and the point here is to catch a section
+    // that claims a release newer than the one being prepared.
+    const numeric = (value) =>
+      value
+        .split("-")[0]
+        .split(".")
+        .map((part) => Number(part));
+    const [declaredMajor, declaredMinor, declaredPatch] = numeric(
+      packageJson.version,
+    );
+    for (const version of numbered) {
+      const [major, minor, patch] = numeric(version);
+      const older =
+        major < declaredMajor ||
+        (major === declaredMajor &&
+          (minor < declaredMinor ||
+            (minor === declaredMinor && patch <= declaredPatch)));
+      assert.ok(
+        older,
+        `## [${version}] is newer than the declared ${packageJson.version} but has no preparation`,
+      );
+    }
+  }
 });
 
 test("writes notes to a file and rejects an unpublished version", async () => {
