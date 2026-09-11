@@ -244,6 +244,16 @@ test("baseline usage adapters remain represented (native sources included)", () 
     [
       { root: ".dsh/sessions", glob: "**/session.jsonl.zstd", format: "jsonl" },
       { root: ".dsh/sessions", glob: "**/session.jsonl", format: "jsonl" },
+      // Post-baseline: the harness names a session log after the stored format
+      // generation, so generation 3+ (and every later one) is discovered too.
+      // `selectDshSessionLogs` then keeps only the highest generation per
+      // session directory.
+      {
+        root: ".dsh/sessions",
+        glob: "**/session.v*.jsonl.zstd",
+        format: "jsonl",
+      },
+      { root: ".dsh/sessions", glob: "**/session.v*.jsonl", format: "jsonl" },
     ],
   );
 });

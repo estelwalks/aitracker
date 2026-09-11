@@ -170,7 +170,6 @@ export const settings = {
   retentionForever: "永久",
   storage: "存储占用",
   dataDangerZone: "危险操作",
-  storageExceedsSoftCap: "（已超过 500MB，建议清理缓存）",
   clearCache: "清除缓存",
   clearCacheHint:
     "仅删除当前 {appName} 数据目录下的缓存；不会删除本地采集数据、AI 工具日志、适配器配置或安全历史",

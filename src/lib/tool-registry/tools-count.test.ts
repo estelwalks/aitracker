@@ -166,12 +166,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     // exposes session-header cumulative snapshots via generic-jsonl.
     "craft",
   ]);
-  const BASELINE_SESSIONS_RESUME = new Set([
-    "claude-code",
-    "codex",
-    "grok",
-    "dsh",
-  ]);
+  const BASELINE_SESSIONS_RESUME = new Set(["claude-code", "codex", "grok"]);
   for (const def of registry.definitions) {
     const isSkill = BASELINE_SKILL_IDS.includes(def.id);
     assert.equal(
@@ -189,7 +184,8 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
         : "unsupported";
     assert.equal(def.capabilities.usage.mode, expectedUsage);
     // agents/security unsupported for every tool; sessions include the
-    // read-only AiPy and pi sources in addition to the four resumable tools.
+    // read-only AiPy, pi, Hermes, WorkBuddy, ZCode and dsh sources in
+    // addition to the three resumable tools.
     assert.equal(def.capabilities.agents.mode, "unsupported");
     assert.equal(
       def.capabilities.sessions.mode,
@@ -197,13 +193,16 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
         ? "resume"
         : // Deliberate post-baseline additions: Hermes Agent and WorkBuddy
           // gained read-only session support (state.db / projects JSONL);
-          // ZCode sessions are read from its SQLite session database.
+          // ZCode sessions are read from its SQLite session database; dsh
+          // sessions are listed read-only because current harnesses ship no
+          // resume entry point to launch.
           def.id === "aipy" ||
             def.id === "pi" ||
             def.id === "omp" ||
             def.id === "hermes" ||
             def.id === "workbuddy" ||
-            def.id === "zcode"
+            def.id === "zcode" ||
+            def.id === "dsh"
           ? "read"
           : "unsupported",
     );

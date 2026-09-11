@@ -55,6 +55,30 @@
           "path": ".dsh/sessions",
           "glob": "**/session.jsonl",
           "format": "jsonl"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".dsh/sessions",
+          "glob": "**/session.v*.jsonl.zstd",
+          "format": "jsonl"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".dsh/sessions",
+          "glob": "**/session.v*.jsonl",
+          "format": "jsonl"
         }
       ],
       "maxFileSizeBytes": 67108864
@@ -62,15 +86,8 @@
     "skills": "unsupported",
     "agents": "unsupported",
     "sessions": {
-      "mode": "resume",
-      "reader": "dsh-session-v1",
-      "command": [
-        "dsh",
-        "--profile",
-        "tui",
-        "--resume",
-        "{sessionId}"
-      ]
+      "mode": "read",
+      "reader": "dsh-session-v1"
     },
     "market": "unsupported",
     "security": "unsupported"

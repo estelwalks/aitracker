@@ -8,7 +8,9 @@ import { zstdDecompressSync } from "node:zlib";
 import { ENV } from "../../../lib/app-config.ts";
 import {
   decodeZstdSessionLogWithBounds,
+  parseDshLogFilename,
   scanZstdFrames,
+  selectDshSessionLogs,
   ZSTD_MAGIC_BYTES,
 } from "../../../lib/local-usage/dsh-zstd.ts";
 import {
@@ -733,19 +735,22 @@ async function readAipyTranscript(
 
 // ---------------------------------------------------------------------------
 // DSH (DeepSeek Harness) — ~/.dsh/sessions/<workspace>/<session-id>/
-// session.jsonl[.zstd]. The container is a concatenated-zstd JSONL log where
-// every record is one event; conversation text lives in `user/message`
-// (data.content blocks) and `assistant/message` (data.message.content blocks,
-// reasoning included) records. Streamed `assistant/chunk` / `reasoning-chunks`
-// / `text-chunks` events are deliberately ignored — the complete message
-// records already carry the final text, so no stream merging is needed.
+// session.jsonl[.zstd] for format generation 0, or the generation-addressed
+// session.v<N>.jsonl[.zstd] once the harness versioned its stored session
+// format. The container is a concatenated-zstd JSONL log where every record is
+// one event; conversation text lives in `user/message` (data.content blocks)
+// and `assistant/message` (data.message.content blocks, reasoning included)
+// records. Streamed `assistant/chunk` / `reasoning-chunks` / `text-chunks`
+// events are deliberately ignored — the complete message records already carry
+// the final text, so no stream merging is needed, and the text-bearing records
+// are identical in every generation.
 // ---------------------------------------------------------------------------
 
-const DSH_LOG_FILE_NAMES = ["session.jsonl", "session.jsonl.zstd"] as const;
-
 /**
- * Collect one session-log container per dsh session directory (zstd preferred
- * when both forms exist), mirroring the metadata scanner's layout rules.
+ * Collect one session-log container per dsh session directory, mirroring the
+ * metadata scanner's layout rules: the directory is resolved to its highest
+ * canonical format generation (zstd preferred within one generation), so a
+ * migrated session's transcript is read from the log that is still live.
  */
 async function collectDshSessionLogs(
   sessionsRoot: string,
@@ -773,24 +778,13 @@ async function collectDshSessionLogs(
         continue;
       }
       if (!entry.isFile()) continue;
-      if (!DSH_LOG_FILE_NAMES.includes(entry.name as never)) continue;
+      if (parseDshLogFilename(entry.name) == null) continue;
       candidates.push({ path: entryPath });
-      if (candidates.length >= maxFiles) return candidates;
+      if (candidates.length >= maxFiles) break;
     }
+    if (candidates.length >= maxFiles) break;
   }
-  // A session dir holds one container; prefer zstd when both forms exist.
-  const byDirectory = new Map<string, string>();
-  for (const candidate of candidates) {
-    const directory = dirname(candidate.path);
-    const existing = byDirectory.get(directory);
-    if (
-      existing == null ||
-      (!existing.endsWith(".zstd") && candidate.path.endsWith(".zstd"))
-    ) {
-      byDirectory.set(directory, candidate.path);
-    }
-  }
-  return [...byDirectory.values()].map((path) => ({ path }));
+  return selectDshSessionLogs(candidates);
 }
 
 /** Read one dsh log (zstd container or plaintext JSONL) into UTF-8 text. */

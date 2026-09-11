@@ -22,6 +22,7 @@ opened early. Individual fixes do not have to touch this file.
 - Updates keep working: 1.0.3 resolves the new document, and later versions resolve it the same way
 - ZCode usage is collected again: a `db.sqlite` past 512 MB was skipped as "no logs", and a heavily used install reaches that within weeks
 - Usage scans no longer read a whole database history: the scan window is pushed into the query, and a history that outgrows one scan is capped in rows with a visible warning instead of reading without bound
+- DeepSeek Harness sessions are collected again: a harness update moved its session logs to a versioned file name, and usage, the session list, and transcripts looked only for the old one
 
 ### Details
 
@@ -93,6 +94,47 @@ opened early. Individual fixes do not have to touch this file.
   profile Hermes install no longer multiplies it; and a cached sqlite parse
   records the lookback it was windowed to, so widening the window re-parses
   instead of serving a narrower cache.
+
+### Fixes (DeepSeek Harness session format 3)
+
+- Fixed DeepSeek Harness collection after the harness began versioning its
+  stored session format. DSH names a session log after the format generation
+  it holds - `session.jsonl[.zstd]` for generation 0, `session.v<N>.jsonl`
+  afterwards - and an upgrade that advances the format starts writing the new
+  name while leaving the older generation's file in place. Harness 0.1.5
+  stores generation 3, so every session it wrote was invisible to a scanner
+  that matched the generation-0 name only: usage collection reported the
+  install as detected with zero events, and the session list showed nothing
+  for the day.
+- Usage discovery, the session list, and the transcript reader now resolve a
+  session directory to its **highest canonical generation** instead of
+  matching one literal file name. The newest generation is a complete
+  re-encoding of the same session - the same events under new sequence
+  numbers - so it supersedes the older files rather than extending them, and a
+  migrated directory is read once. Reading both would have counted every
+  migrated turn and token twice, which the previous "prefer zstd" dedupe could
+  not prevent once a directory held two generations.
+- The registry discovers generation-addressed logs through
+  `**/session.v*.jsonl[.zstd]` path entries; the generation-0 entries are
+  unchanged, and a name outside the canonical set (a writer temp, a backup, a
+  `session.lock`) is dropped rather than read.
+- The records the readers depend on are generation-independent - the session
+  header, `turn/start`, `tool/call`, and `assistant/message` with the same
+  usage fields all survive - so only discovery changed. Later generations
+  simply stop persisting the streaming chunk records the readers never used.
+- A future generation can no longer go quiet. Generation 3 is the newest one
+  whose records these readers have been verified against, and a newer log that
+  yields no usage at all now reports a field mismatch instead of leaving a
+  detected-but-empty source that looks exactly like a harness collecting
+  nothing. A newer generation that keeps the record vocabulary is read as
+  before and stays silent, which is what makes 0.1.3's generation 2 and
+  0.1.5's generation 3 work without generation-specific code.
+- `dsh` sessions are now listed read-only instead of advertising a resume
+  command. Current harnesses ship no resume entry point: the profile templates
+  are `acp`/`web`/`headless`/`sdk`/`sdk-minimal`, `dsh web` takes no session
+  argument, and the `dsh --profile tui --resume <id>` command the definition
+  carried fails with `profile "tui" does not exist`. Resuming a session
+  happens in the harness's own Web UI.
 
 ## [1.0.3] - 2026-09-10
 

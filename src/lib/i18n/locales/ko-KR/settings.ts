@@ -176,7 +176,6 @@ export const settings = {
   retentionForever: "무기한",
   storage: "저장 공간 사용량",
   dataDangerZone: "위험 작업",
-  storageExceedsSoftCap: "（500MB 초과, 캐시 정리를 권장합니다）",
   clearCache: "캐시 정리",
   clearCacheHint:
     "현재 {appName} 데이터 디렉터리 안의 캐시만 삭제합니다. 로컬 수집 데이터, AI 도구 로그, 어댑터 설정, 보안 기록은 삭제하지 않습니다",

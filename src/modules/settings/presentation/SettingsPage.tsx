@@ -923,14 +923,8 @@ export function SettingsPage({
               </Field>
               <Field label={t("settings.storage")}>
                 {storageUsage ? (
-                  <span
-                    className={`aitracker-num aitracker-text-body ${storageUsage.exceedsSoftCap ? "text-warn" : ""}`}
-                  >
-                    {format.formatBytes(storageUsage.bytes)} /{" "}
-                    {format.formatBytes(storageUsage.softCapBytes)}
-                    {storageUsage.exceedsSoftCap
-                      ? t("settings.storageExceedsSoftCap")
-                      : ""}
+                  <span className="aitracker-num aitracker-text-body">
+                    {format.formatBytes(storageUsage.bytes)}
                   </span>
                 ) : loaderData.storageError ? (
                   <span className="aitracker-text-body text-warn">

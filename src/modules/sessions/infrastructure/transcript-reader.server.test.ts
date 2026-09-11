@@ -535,6 +535,100 @@ test("DSH: reads a zstd session log whose directory predates header ids", async 
   });
 });
 
+test("DSH: reads a generation-addressed log (session.v3.jsonl.zstd)", async () => {
+  await withTempHome(async (home) => {
+    // A harness that advanced its stored session format writes the log under a
+    // generation-addressed name; the records the transcript reader needs are
+    // unchanged.
+    const sessionDir = join(
+      home,
+      ".dsh",
+      "sessions",
+      "aitracker_webapp",
+      DSH_TEST_SESSION_ID,
+    );
+    await mkdir(sessionDir, { recursive: true });
+    const frame = (text: string) =>
+      zstdCompressSync(Buffer.from(text, "utf8"), {
+        params: { [constants.ZSTD_c_checksumFlag]: 1 },
+      });
+    const lines = dshTranscriptLines(DSH_TEST_SESSION_ID).split("\n");
+    const header = lines[0] ?? "";
+    const events = lines.slice(1).join("\n");
+    await writeFile(
+      join(sessionDir, "session.v3.jsonl.zstd"),
+      Buffer.concat([frame(`${header}\n`), frame(events)]),
+    );
+
+    const transcript = await loadSessionTranscript(
+      { source: "dsh", sessionId: DSH_TEST_SESSION_ID },
+      { homeDirectory: home },
+    );
+
+    assert.equal(transcript.source, "dsh");
+    assert.deepEqual(
+      transcript.messages.map((message) => message.role),
+      ["user", "assistant", "user"],
+    );
+    assert.equal(transcript.messages[0]?.text, "修复登录问题");
+    assert.equal(transcript.messages[1]?.text, "修复完成（重试后的最终结果）");
+  });
+});
+
+test("DSH: a migrated session's transcript comes from its highest generation", async () => {
+  await withTempHome(async (home) => {
+    const sessionDir = join(
+      home,
+      ".dsh",
+      "sessions",
+      "aitracker_webapp",
+      DSH_TEST_SESSION_ID,
+    );
+    await mkdir(sessionDir, { recursive: true });
+    const frame = (text: string) =>
+      zstdCompressSync(Buffer.from(text, "utf8"), {
+        params: { [constants.ZSTD_c_checksumFlag]: 1 },
+      });
+    const container = (jsonl: string) => {
+      const lines = jsonl.split("\n");
+      return Buffer.concat([
+        frame(`${lines[0] ?? ""}\n`),
+        frame(lines.slice(1).join("\n")),
+      ]);
+    };
+
+    // Generation 0: the frozen pre-upgrade log.
+    const legacy = dshTranscriptLines(DSH_TEST_SESSION_ID).replace(
+      "修复登录问题",
+      "迁移前的旧内容",
+    );
+    await writeFile(join(sessionDir, "session.jsonl.zstd"), container(legacy));
+    // Generation 3: the same conversation re-encoded under the new format
+    // version. Both files carry the same session header id, so a reader that
+    // took the directory at face value would read the session twice and show
+    // the superseded text.
+    const current = dshTranscriptLines(DSH_TEST_SESSION_ID)
+      .replace('"version":0', '"version":3')
+      .replace("修复登录问题", "迁移后的最新内容");
+    await writeFile(
+      join(sessionDir, "session.v3.jsonl.zstd"),
+      container(current),
+    );
+
+    const transcript = await loadSessionTranscript(
+      { source: "dsh", sessionId: DSH_TEST_SESSION_ID },
+      { homeDirectory: home },
+    );
+
+    assert.deepEqual(
+      transcript.messages.map((message) => message.role),
+      ["user", "assistant", "user"],
+    );
+    assert.equal(transcript.messages.length, 3, "generations are not merged");
+    assert.equal(transcript.messages[0]?.text, "迁移后的最新内容");
+  });
+});
+
 test("reading a transcript produces zero disk side effects", async () => {
   await withTempHome(async (home) => {
     const sessionId = "claude-side-aaaaaaaaaaaaaaaaaaaaaa";

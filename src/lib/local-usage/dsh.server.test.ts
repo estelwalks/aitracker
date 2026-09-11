@@ -536,6 +536,250 @@ test("DSH usage scan index survives a simulated restart via snapshot/hydrate", a
   }
 });
 
+test("DSH reader discovers generation-addressed logs (session.v3.jsonl.zstd)", async () => {
+  const f = await fixture();
+  const project = join(f.homeDirectory, "project-gen3");
+  const sessionDir = join(
+    f.homeDirectory,
+    ".dsh",
+    "sessions",
+    "project-gen3",
+    "session-77777777-7777-7777-7777-777777777777",
+  );
+  await mkdir(sessionDir, { recursive: true });
+  // A harness that advanced its stored session format writes the same log
+  // under a generation-addressed name; nothing else about the log changes.
+  const header = {
+    ...(JSON.parse(HEADER(project)) as Record<string, unknown>),
+    version: 3,
+  };
+  await writeFile(
+    join(sessionDir, "session.v3.jsonl.zstd"),
+    sessionLog(JSON.stringify(header), [
+      JSON.stringify({
+        type: "assistant/message",
+        seq: 1,
+        time: TIME,
+        data: {
+          turn: 1,
+          step: 1,
+          message: { role: "assistant", content: [] },
+          usage: { inputTokens: 12, outputTokens: 4, cacheReadTokens: 0 },
+        },
+      }),
+    ]),
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    });
+    const summary = snapshot.sources.find((s) => s.source === "dsh");
+    assert.ok(summary);
+    assert.equal(summary.detected, true);
+    assert.equal(summary.filesConsidered, 1);
+    assert.equal(summary.filesParsed, 1);
+    assert.equal(summary.events, 1);
+
+    const events = snapshot.details.filter((e) => e.source === "dsh");
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.inputTokens, 12);
+    assert.equal(events[0]?.outputTokens, 4);
+    assert.equal(events[0]?.project, "~/project-gen3");
+    assert.ok(isPrivateSessionId(events[0]!.sessionId));
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("DSH reader reads only the highest format generation of one session", async () => {
+  const f = await fixture();
+  const project = join(f.homeDirectory, "project-supersede");
+  const sessionDir = join(
+    f.homeDirectory,
+    ".dsh",
+    "sessions",
+    "project-supersede",
+    "session-88888888-8888-8888-8888-888888888888",
+  );
+  await mkdir(sessionDir, { recursive: true });
+  const usageEvent = (seq: number, inputTokens: number, outputTokens: number) =>
+    JSON.stringify({
+      type: "assistant/message",
+      seq,
+      time: TIME + seq * 1000,
+      data: {
+        turn: 1,
+        step: seq,
+        message: { role: "assistant", content: [] },
+        usage: { inputTokens, outputTokens, cacheReadTokens: 0 },
+      },
+    });
+
+  // Generation 0: the log as it stood before the format advanced.
+  await writeFile(
+    join(sessionDir, "session.jsonl.zstd"),
+    sessionLog(HEADER(project), [usageEvent(10, 100, 20)]),
+  );
+  // Generation 3: the SAME session re-encoded — sequence numbers restart, so
+  // these events do not collide with generation 0's identities — plus the
+  // events written after the migration.
+  const header = {
+    ...(JSON.parse(HEADER(project)) as Record<string, unknown>),
+    version: 3,
+  };
+  await writeFile(
+    join(sessionDir, "session.v3.jsonl.zstd"),
+    sessionLog(JSON.stringify(header), [
+      usageEvent(1, 100, 20),
+      usageEvent(2, 7, 3),
+    ]),
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    });
+    const summary = snapshot.sources.find((s) => s.source === "dsh");
+    assert.ok(summary);
+    // The superseded file is not considered at all, so it cannot contribute.
+    assert.equal(summary.filesConsidered, 1);
+    assert.equal(summary.filesParsed, 1);
+    assert.equal(summary.events, 2);
+
+    const totals = snapshot.bySource.find((b) => b.key === "dsh");
+    assert.ok(totals);
+    assert.equal(totals.inputTokens, 107);
+    assert.equal(totals.outputTokens, 23);
+    assert.equal(totals.events, 2);
+
+    const eventTotals = snapshot.details
+      .filter((e) => e.source === "dsh")
+      .map((e) => e.totalTokens ?? 0);
+    assert.deepEqual(
+      [...eventTotals].sort((left, right) => left - right),
+      [10, 120],
+    );
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("DSH reader reads a future generation that keeps the record vocabulary", async () => {
+  const f = await fixture();
+  const project = join(f.homeDirectory, "project-gen4");
+  const sessionDir = join(
+    f.homeDirectory,
+    ".dsh",
+    "sessions",
+    "project-gen4",
+    "session-99999999-9999-9999-9999-999999999999",
+  );
+  await mkdir(sessionDir, { recursive: true });
+  // Generation 4 does not exist yet. A later generation is discovered and read
+  // like any other, so as long as it still carries `assistant/message` with a
+  // `usage` envelope, collection keeps working with no change here.
+  const header = {
+    ...(JSON.parse(HEADER(project)) as Record<string, unknown>),
+    version: 4,
+  };
+  await writeFile(
+    join(sessionDir, "session.v4.jsonl.zstd"),
+    sessionLog(JSON.stringify(header), [
+      JSON.stringify({
+        type: "assistant/message",
+        seq: 1,
+        time: TIME,
+        data: {
+          turn: 1,
+          step: 1,
+          message: { role: "assistant", content: [] },
+          usage: { inputTokens: 21, outputTokens: 5, cacheReadTokens: 0 },
+        },
+      }),
+    ]),
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    });
+    const summary = snapshot.sources.find((s) => s.source === "dsh");
+    assert.ok(summary);
+    assert.equal(summary.events, 1);
+    assert.equal(
+      snapshot.details.filter((e) => e.source === "dsh")[0]?.inputTokens,
+      21,
+    );
+    assert.ok(
+      !summary.diagnostics?.some((d) => d.code === "field-mismatch"),
+      "a compatible future generation must not warn",
+    );
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("DSH reader reports a field mismatch when a future generation renames usage", async () => {
+  const f = await fixture();
+  const project = join(f.homeDirectory, "project-gen4-drift");
+  const sessionDir = join(
+    f.homeDirectory,
+    ".dsh",
+    "sessions",
+    "project-gen4-drift",
+    "session-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  );
+  await mkdir(sessionDir, { recursive: true });
+  // The failure this guards against: a harness that is collecting normally,
+  // whose newer generation carries a usage envelope this reader no longer
+  // recognizes. Without the tripwire the source is detected, empty and silent.
+  const header = {
+    ...(JSON.parse(HEADER(project)) as Record<string, unknown>),
+    version: 4,
+  };
+  await writeFile(
+    join(sessionDir, "session.v4.jsonl.zstd"),
+    sessionLog(JSON.stringify(header), [
+      JSON.stringify({
+        type: "assistant/message",
+        seq: 1,
+        time: TIME,
+        data: {
+          turn: 1,
+          step: 1,
+          message: { role: "assistant", content: [] },
+          usage: { promptTokens: 21, completionTokens: 5 },
+        },
+      }),
+    ]),
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory: f.homeDirectory,
+      cacheDirectory: f.cacheDirectory,
+      now: NOW,
+    });
+    const summary = snapshot.sources.find((s) => s.source === "dsh");
+    assert.ok(summary);
+    assert.equal(summary.detected, true);
+    assert.equal(summary.events, 0);
+    assert.ok(
+      summary.diagnostics?.some((d) => d.code === "field-mismatch"),
+      "expected a field-mismatch diagnostic for the unreadable generation",
+    );
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
 test("dsh appears among KNOWN_LOCAL_USAGE_SOURCES and stays scannable via registry", async () => {
   const { KNOWN_LOCAL_USAGE_SOURCES } = await import("./types.ts");
   assert.ok(
