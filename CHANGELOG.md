@@ -5,6 +5,29 @@ uses semantic versioning for published releases.
 
 ## [Unreleased]
 
+### Fixes
+
+- Fixed usage collection for sqlite-backed tools whose database passes the
+  adapter's `maxFileSizeBytes` cap (issue #42). ZCode keeps every session's
+  message/part plaintext in `~/.zcode/cli/db/db.sqlite`, so a real install
+  passes 512 MB within weeks of heavy use; the whole file was skipped before
+  its read-only query ever ran, and the card reported "no logs" forever. The
+  byte cap is a budget for formats that are read in one piece (json/jsonl) and
+  no longer applies to `format: "sqlite"`, whose size says nothing about scan
+  memory. The same gate was removed from Zed's native `threads.db` reader; the
+  other seven sqlite adapters (AiPy, AnythingLLM, Goose, Hermes, Kiro, MiMo,
+  Qoder CN) share the generic reader and are fixed with it.
+- Bounded that read instead by row count: sqlite rows are now streamed through
+  `iterate()` instead of collected with `.all()`, so a large table no longer
+  materializes a second in-memory copy, and a shared `maxSqliteRows` budget
+  (500,000 events per source, declared in `_shared/scanner-policy.json`) caps
+  what a single database can contribute. Exceeding it emits a counted
+  diagnostic instead of failing silently.
+- Every sqlite usage query now ends with `ORDER BY <timestamp> DESC`, so the
+  row budget keeps the most recent events and drops the oldest instead of an
+  arbitrary prefix. A new contract test prepares each query against a fixture
+  schema and fails if the ordering is missing or no longer leads with `DESC`.
+
 ## [1.0.4] - 2026-09-10
 
 ### Highlights

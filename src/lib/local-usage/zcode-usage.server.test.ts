@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, open, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -283,6 +283,150 @@ test("zcode data-directory override rebases usage roots to the chosen dir", asyn
     const events = snapshot.details.filter((event) => event.source === "zcode");
     assert.equal(events.length, 1);
     assert.equal(events[0]!.inputTokens, 2000);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Issue #42: ZCode stores every session's message/part plaintext in the same
+ * `db.sqlite` as its usage rows, so a real install passes the adapter's
+ * 512 MB `maxFileSizeBytes` within weeks of heavy use. The byte cap belongs to
+ * formats that are buffered whole (json/jsonl); a sqlite database is queried
+ * through a prepared statement, and the cap used to skip the file before that
+ * query ever ran - a working adapter reported "no logs" forever.
+ */
+test("sqlite usage file above maxFileSizeBytes is still queried", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-zcode-oversize-"));
+  try {
+    const dbDir = join(root, ".zcode", "cli", "db");
+    await mkdir(dbDir, { recursive: true });
+    const databasePath = join(dbDir, "db.sqlite");
+    const base = Date.parse("2026-09-09T08:00:00.000Z");
+    createZcodeDb(
+      databasePath,
+      new Map([["sess-oversize-1111", join(root, "proj")]]),
+      [
+        {
+          sessionId: "sess-oversize-1111",
+          startedAt: base,
+          completedAt: base + 10_000,
+          input: 30_000,
+          output: 1_000,
+          reasoning: 200,
+          cacheRead: 20_000,
+        },
+      ],
+    );
+
+    // Grow the database past the adapter's 512 MB cap. Trailing bytes land on
+    // free pages after the last committed one, so the rows stay queryable and
+    // the assertion below can distinguish "read" from "silently skipped".
+    const cap = 536_870_912;
+    const handle = await open(databasePath, "r+");
+    try {
+      await handle.truncate(cap + 8 * 1024 * 1024);
+    } finally {
+      await handle.close();
+    }
+    const { size } = await stat(databasePath);
+    assert.ok(size > cap, "fixture must exceed the adapter byte cap");
+
+    const probe = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const rows = probe
+        .prepare("SELECT COUNT(*) AS n FROM model_usage")
+        .all() as Array<{ n: number }>;
+      assert.equal(rows[0]?.n, 1, "padded database must stay queryable");
+    } finally {
+      probe.close();
+    }
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+      platform: "linux" as const,
+    });
+    const zcode = snapshot.sources.find((source) => source.source === "zcode");
+    assert.ok(zcode, "zcode source must be reported");
+    assert.equal(
+      zcode.events,
+      1,
+      "an oversized sqlite file must still yield its rows",
+    );
+    assert.deepEqual(
+      zcode.diagnostics ?? [],
+      [],
+      "file size must not produce a file-too-large diagnostic for sqlite",
+    );
+    const events = snapshot.details.filter((event) => event.source === "zcode");
+    assert.equal(events.length, 1);
+    // Input excludes cached input, output excludes reasoning (unchanged).
+    assert.equal(events[0]!.inputTokens, 10_000);
+    assert.equal(events[0]!.cachedInputTokens, 20_000);
+    assert.equal(events[0]!.outputTokens, 800);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Issue #42, other half: lifting the byte cap must not mean "read without
+ * limit". The row budget is passed through `maxSqliteRowsPerSource` so this
+ * exercises the truncation path directly, and it pins the property that makes
+ * the budget safe: because every sqlite query now orders newest-first, the rows
+ * kept are the most recent ones and the oldest are the ones dropped. Without
+ * that ordering this test fails - the scan would keep the five oldest sessions
+ * and a heavy user would silently see stale numbers.
+ */
+test("sqlite row budget keeps the newest rows and reports truncation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-zcode-cap-"));
+  try {
+    const dbDir = join(root, ".zcode", "cli", "db");
+    await mkdir(dbDir, { recursive: true });
+    const base = Date.parse("2026-09-09T08:00:00.000Z");
+    const sessions = new Map<string, string>();
+    const rows: ZcodeUsageRow[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      const sessionId = `sess-cap-${index}`;
+      sessions.set(sessionId, join(root, "proj", `p${index}`));
+      rows.push({
+        sessionId,
+        startedAt: base,
+        // One hour apart so "newest" is unambiguous.
+        completedAt: base + index * 3_600_000,
+        input: 100,
+        output: 10,
+      });
+    }
+    createZcodeDb(join(dbDir, "db.sqlite"), sessions, rows);
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+      platform: "linux" as const,
+      // Fixture seam: the real budget is 500k rows.
+      maxSqliteRowsPerSource: 3,
+    });
+    const zcode = snapshot.sources.find((source) => source.source === "zcode");
+    assert.ok(zcode, "zcode source must be reported");
+    assert.equal(zcode.events, 3, "the budget must cap the collected events");
+
+    const truncated = (zcode.diagnostics ?? []).find(
+      (entry) => entry.code === "file-too-large",
+    );
+    assert.ok(truncated, "truncation must be visible, never silent");
+    assert.match(truncated.message, /3 行读取上限/u);
+
+    const events = snapshot.details.filter((event) => event.source === "zcode");
+    // The three newest completions (hours 4, 3 and 2), never the two oldest.
+    assert.deepEqual(events.map((event) => event.timestamp).sort(), [
+      new Date(base + 2 * 3_600_000).toISOString(),
+      new Date(base + 3 * 3_600_000).toISOString(),
+      new Date(base + 4 * 3_600_000).toISOString(),
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -178,6 +178,11 @@ const UsageCapabilitySchema = z
     reader: z.string().min(1).optional(),
     paths: z.array(RawUsagePathSchema).optional(),
     mapping: RawUsageMappingSchema.optional(),
+    /**
+     * Whole-file byte budget for paths read in one piece (json/jsonl). Ignored
+     * for `format: "sqlite"` paths, which are queried rather than buffered and
+     * are bounded by the scanner's row budget instead (issue #42).
+     */
     maxFileSizeBytes: z.number().int().positive().optional(),
     /** D9: sqlite queries are data; write/attach semantics rejected here. */
     query: z.string().optional(),
@@ -584,6 +589,14 @@ export const ScannerPolicySchema = z.object({
   maxFilesPerSource: z.number().int().positive(),
   maxDiscoveredEntriesPerSource: z.number().int().positive(),
   maxJsonlLineLength: z.number().int().positive(),
+  /**
+   * Row budget for a single read-only SQLite query (issue #42). A sqlite
+   * database is queried through a prepared statement, never buffered whole, so
+   * the per-file byte cap does not bound it: the row count does. Rows past the
+   * budget are dropped with a `file-too-large` diagnostic rather than growing
+   * the scan's event collection without limit.
+   */
+  maxSqliteRows: z.number().int().positive(),
   futureTimestampToleranceMs: z.number().int().positive(),
   cacheNote: z.string().optional(),
 });

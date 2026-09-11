@@ -34,6 +34,13 @@ export interface UsageAdapterContract {
   paths: UsageAdapterPath[];
   mapping: UsageFieldMapping;
   query?: string;
+  /**
+   * Whole-file byte budget for paths read in one piece (json/jsonl). It does
+   * not apply to `format: "sqlite"` paths: those run a prepared statement
+   * rather than buffering the file, so their size says nothing about scan
+   * memory (issue #42) - sqlite reads are bounded by the scanner's row budget
+   * instead.
+   */
   maxFileSizeBytes: number;
   kind: "builtin" | "external";
 }

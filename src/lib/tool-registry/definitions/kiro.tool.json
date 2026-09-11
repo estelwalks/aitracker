@@ -86,7 +86,7 @@
         "reasoningOutputTokens": ["reasoningOutputTokens"]
       },
       "maxFileSizeBytes": 536870912,
-      "query": "SELECT\n  CAST(tg.id AS TEXT) AS sessionId,\n  CAST(strftime('%s', tg.timestamp) * 1000 AS INTEGER) AS timestamp,\n  COALESCE(NULLIF(tg.model, ''), 'kiro-agent') AS model,\n  'unknown' AS project,\n  CAST(COALESCE(tg.tokens_prompt, 0) AS INTEGER) AS inputTokens,\n  0 AS cachedInputTokens,\n  0 AS cacheCreationInputTokens,\n  CAST(COALESCE(tg.tokens_generated, 0) AS INTEGER) AS outputTokens,\n  0 AS reasoningOutputTokens\nFROM tokens_generated tg\nWHERE tg.timestamp IS NOT NULL\n  AND (COALESCE(tg.tokens_prompt, 0) > 0 OR COALESCE(tg.tokens_generated, 0) > 0)"
+      "query": "SELECT\n  CAST(tg.id AS TEXT) AS sessionId,\n  CAST(strftime('%s', tg.timestamp) * 1000 AS INTEGER) AS timestamp,\n  COALESCE(NULLIF(tg.model, ''), 'kiro-agent') AS model,\n  'unknown' AS project,\n  CAST(COALESCE(tg.tokens_prompt, 0) AS INTEGER) AS inputTokens,\n  0 AS cachedInputTokens,\n  0 AS cacheCreationInputTokens,\n  CAST(COALESCE(tg.tokens_generated, 0) AS INTEGER) AS outputTokens,\n  0 AS reasoningOutputTokens\nFROM tokens_generated tg\nWHERE tg.timestamp IS NOT NULL\n  AND (COALESCE(tg.tokens_prompt, 0) > 0 OR COALESCE(tg.tokens_generated, 0) > 0)\nORDER BY timestamp DESC, tg.rowid DESC"
     },
 
     "skills": "unsupported",

@@ -89,6 +89,13 @@ const MAX_JSONL_LINE_LENGTH =
 // oversized line is already bounded by MAX_JSONL_LINE_LENGTH, but a
 // pathological file must never be pulled into the line reader at all.
 const MAX_JSONL_FILE_BYTES = 256 * 1024 * 1024;
+// Issue #42: a sqlite database is queried through a prepared statement instead
+// of being buffered whole, so `maxFileSizeBytes` - a budget for formats that
+// are read in one piece - never applies to it. A real ZCode `db.sqlite` holds
+// every session's messages and passes 512 MB within weeks of heavy use, and
+// skipping it meant "no logs" for an adapter that could read it fine. The
+// memory bound for sqlite is the row count, applied per statement below.
+const MAX_SQLITE_ROWS = SCANNER_POLICY?.maxSqliteRows ?? 500_000;
 const FUTURE_TIMESTAMP_TOLERANCE_MS =
   SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
 // Antigravity's estimated transcript events were added in v14. Rebuild once so cached Claude
@@ -140,6 +147,12 @@ export interface LocalUsageScanOptions {
   now?: Date;
   lookbackDays?: number;
   maxFilesPerSource?: number;
+  /**
+   * Row budget for one sqlite usage query (issue #42). Overrides the shared
+   * scanner-policy `maxSqliteRows`; present so tests can exercise the
+   * truncation path without seeding 500k rows.
+   */
+  maxSqliteRowsPerSource?: number;
   cacheDirectory?: string;
   disablePersistentCache?: boolean;
   /** Shared WSL topology (P3-T3-04); when absent the scanner enumerates once. */
@@ -3349,37 +3362,31 @@ function decodeZedThread(row: Record<string, unknown>):
 function parseZedThreadsDb(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   adapter: UsageAdapterContract,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  maxSqliteRows: number,
 ): {
   events: LocalUsageEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
 } {
   signal?.throwIfAborted();
-  if (file.size > adapter.maxFileSizeBytes) {
-    return {
-      events: [],
-      malformedLines: 0,
-      diagnostics: [
-        diagnostic(
-          adapter,
-          "file-too-large",
-          file.path,
-          `日志超过 ${adapter.maxFileSizeBytes} 字节读取上限，已跳过。`,
-        ),
-      ],
-    };
-  }
   const events: LocalUsageEvent[] = [];
   let malformedLines = 0;
   let database: DatabaseSync | undefined;
   try {
     database = new DatabaseSync(file.path, { readOnly: true });
-    const rows = database
+    // Issue #42: `threads.db` grows with every conversation, so its size must
+    // never gate the read - a sqlite file is queried, not buffered. Rows are
+    // streamed and the walk stops at the shared row budget.
+    let exceeded = false;
+    for (const row of database
       .prepare("SELECT id, updated_at, data_type, data FROM threads")
-      .all() as Array<Record<string, unknown>>;
-    for (const row of rows) {
+      .iterate() as IterableIterator<Record<string, unknown>>) {
       signal?.throwIfAborted();
+      if (events.length >= maxSqliteRows) {
+        exceeded = true;
+        break;
+      }
       let decoded;
       try {
         decoded = decodeZedThread(row);
@@ -3407,22 +3414,27 @@ function parseZedThreadsDb(
         totalTokens,
       });
     }
-    return {
-      events,
-      malformedLines,
-      diagnostics:
-        events.length === 0 && malformedLines > 0
-          ? [
-              {
-                source: adapter.source,
-                code: "malformed-json",
-                path: file.path,
-                count: malformedLines,
-                message: "threads.db 包含无法解码的线程记录。",
-              },
-            ]
-          : [],
-    };
+    const diagnostics: LocalUsageDiagnostic[] = [];
+    if (exceeded) {
+      diagnostics.push(
+        diagnostic(
+          adapter,
+          "file-too-large",
+          file.path,
+          `SQLite 查询结果超过 ${maxSqliteRows} 行读取上限，其余记录未统计。`,
+        ),
+      );
+    }
+    if (events.length === 0 && malformedLines > 0) {
+      diagnostics.push({
+        source: adapter.source,
+        code: "malformed-json",
+        path: file.path,
+        count: malformedLines,
+        message: "threads.db 包含无法解码的线程记录。",
+      });
+    }
+    return { events, malformedLines, diagnostics };
   } catch {
     return {
       events: [],
@@ -3456,8 +3468,9 @@ async function scanZedUsageAdapter(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
-  signal?: AbortSignal,
-  overrides?: UsageOverrideMap,
+  signal: AbortSignal | undefined,
+  overrides: UsageOverrideMap | undefined,
+  maxSqliteRows: number,
 ): Promise<SourceScanResult> {
   const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
   const placements = rebaseUsagePathConfigs(
@@ -3489,7 +3502,12 @@ async function scanZedUsageAdapter(
       entry = cached as PersistentGenericFileEntry;
       filesReused += 1;
     } else {
-      const parsed = await parseZedThreadsDb(file, adapter, signal);
+      const parsed = await parseZedThreadsDb(
+        file,
+        adapter,
+        signal,
+        maxSqliteRows,
+      );
       parsed.events = parsed.events.map((event) => ({
         ...event,
         project: normalizeProjectPath(event.project, homeDirectory),
@@ -4635,14 +4653,21 @@ async function parseGenericFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   adapter: UsageAdapterContract,
   fallbackSessionId: string,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  maxSqliteRows: number,
 ): Promise<{
   events: LocalUsageEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
 }> {
   signal?.throwIfAborted();
-  if (file.size > adapter.maxFileSizeBytes) {
+  // Issue #42: the byte cap belongs to formats read in one piece. A sqlite
+  // database only ever runs a prepared statement, so its file size says
+  // nothing about scan memory; MAX_SQLITE_ROWS bounds it below instead.
+  // Applying the cap here skipped the whole file before the `sqlite` branch
+  // below was ever reached, which is why a ~1.4 GB ZCode `db.sqlite` reported
+  // "no logs" for an adapter that could read it fine.
+  if (file.format !== "sqlite" && file.size > adapter.maxFileSizeBytes) {
     return {
       events: [],
       malformedLines: 0,
@@ -4677,28 +4702,41 @@ async function parseGenericFile(
     let database: DatabaseSync | undefined;
     try {
       database = new DatabaseSync(file.path, { readOnly: true });
-      const records = database.prepare(adapter.query).all() as Array<
-        Record<string, unknown>
-      >;
-      for (const record of records) {
+      // Rows are streamed instead of collected with `.all()` so a large table
+      // never materializes a second full copy of its records, and the walk
+      // stops at the row budget instead of building an unbounded event array.
+      // The cap counts mapped events, not raw rows: a query joins and filters,
+      // so rows and events are not the same unit.
+      let exceeded = false;
+      for (const record of database
+        .prepare(adapter.query)
+        .iterate() as IterableIterator<Record<string, unknown>>) {
+        signal?.throwIfAborted();
+        if (events.length >= maxSqliteRows) {
+          exceeded = true;
+          break;
+        }
         const event = eventFromMappedRecord(record, adapter, fallbackSessionId);
         if (event == null) mismatches += 1;
         else events.push(event);
       }
-      return {
-        events,
-        malformedLines: 0,
-        diagnostics:
-          events.length === 0
-            ? [
-                fieldMismatchDiagnostic(
-                  adapter,
-                  file.path,
-                  Math.max(1, mismatches),
-                ),
-              ]
-            : [],
-      };
+      const diagnostics: LocalUsageDiagnostic[] = [];
+      if (exceeded) {
+        diagnostics.push(
+          diagnostic(
+            adapter,
+            "file-too-large",
+            file.path,
+            `SQLite 查询结果超过 ${maxSqliteRows} 行读取上限，其余记录未统计。`,
+          ),
+        );
+      }
+      if (events.length === 0 && mismatches > 0) {
+        diagnostics.push(
+          fieldMismatchDiagnostic(adapter, file.path, mismatches),
+        );
+      }
+      return { events, malformedLines: 0, diagnostics };
     } catch {
       return {
         events: [],
@@ -4808,8 +4846,9 @@ async function runBoundedGenericAdapters(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
-  signal?: AbortSignal,
-  overrides?: UsageOverrideMap,
+  signal: AbortSignal | undefined,
+  overrides: UsageOverrideMap | undefined,
+  maxSqliteRows: number,
 ): Promise<SourceScanResult[]> {
   const results: SourceScanResult[] = new Array(adapters.length);
   let cursor = 0;
@@ -4831,6 +4870,7 @@ async function runBoundedGenericAdapters(
           cachedFiles,
           signal,
           overrides,
+          maxSqliteRows,
         ).catch((error) => sourceFailure(adapter.source, error));
       }
     },
@@ -4847,8 +4887,9 @@ async function scanGenericAdapter(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
-  signal?: AbortSignal,
-  overrides?: UsageOverrideMap,
+  signal: AbortSignal | undefined,
+  overrides: UsageOverrideMap | undefined,
+  maxSqliteRows: number,
 ): Promise<SourceScanResult> {
   const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
   const placements = rebaseUsagePathConfigs(
@@ -4888,6 +4929,7 @@ async function scanGenericAdapter(
           relative(homeDirectory, file.path),
         ),
         signal,
+        maxSqliteRows,
       );
       parsed.events = parsed.events.map((event) => ({
         ...event,
@@ -5034,6 +5076,12 @@ export async function scanLocalUsage(
       MAX_FILES_PER_SOURCE,
       Math.trunc(options.maxFilesPerSource ?? MAX_FILES_PER_SOURCE),
     ),
+  );
+  // Issue #42: the row budget is overridable so the truncation path is
+  // testable without a 500k-row fixture.
+  const maxSqliteRows = Math.max(
+    1,
+    Math.trunc(options.maxSqliteRowsPerSource ?? MAX_SQLITE_ROWS),
   );
   const isolatedUsageHome = process.env[ENV.USAGE_HOME]?.trim();
   const homeDirectory =
@@ -5288,6 +5336,7 @@ export async function scanLocalUsage(
       cachedFiles,
       options.signal,
       options.toolDataRoots,
+      maxSqliteRows,
     ).catch((error) => sourceFailure("zed", error)),
     scanDroidUsageAdapter(
       BUILTIN_USAGE_ADAPTERS.find(
@@ -5338,6 +5387,7 @@ export async function scanLocalUsage(
       cachedFiles,
       options.signal,
       options.toolDataRoots,
+      maxSqliteRows,
     )),
   ]);
 

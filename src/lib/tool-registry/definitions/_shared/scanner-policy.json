@@ -5,6 +5,7 @@
   "maxFilesPerSource": 1200,
   "maxDiscoveredEntriesPerSource": 30000,
   "maxJsonlLineLength": 16777216,
+  "maxSqliteRows": 500000,
   "futureTimestampToleranceMs": 86400000,
   "cacheNote": "The implementation cache version (PERSISTENT_CACHE_VERSION) and the registry fingerprint stay in TypeScript; changing either invalidates the persistent cache."
 }
