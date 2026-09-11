@@ -110,7 +110,9 @@ const MAX_SQLITE_ROWS = SCANNER_POLICY?.maxSqliteRows ?? 500_000;
 interface SqliteRowBudget {
   readonly limit: number;
   exhausted(): boolean;
-  take(): void;
+  /** Rows left before the source cap is reached. */
+  remaining(): number;
+  take(count?: number): void;
 }
 
 function createSqliteRowBudget(limit: number): SqliteRowBudget {
@@ -118,10 +120,29 @@ function createSqliteRowBudget(limit: number): SqliteRowBudget {
   return {
     limit,
     exhausted: () => used >= limit,
-    take: () => {
-      used += 1;
+    remaining: () => limit - used,
+    take: (count = 1) => {
+      // Clamped: the budget is a bound, so no caller can push it past its own
+      // limit into a state the file behind it would misread.
+      used = Math.min(limit, used + count);
     },
   };
+}
+
+/**
+ * Budget identity of one sqlite parse (P1 cache review). The row budget is
+ * created once per source scan and shared by that source's databases, so a
+ * parse that stopped at the budget holds a partial result *of the whole walk*:
+ * it is only valid where the budget was equally spent, and reusing it has to
+ * pay back the rows it took.
+ */
+interface SqliteBudgetIdentity {
+  /** Rows this parse took from the shared per-source budget. */
+  taken: number;
+  /** Rows the shared budget still had when this parse began. */
+  remainingAtStart: number;
+  /** Whether the budget cut the parse short with rows still unread. */
+  truncated: boolean;
 }
 const FUTURE_TIMESTAMP_TOLERANCE_MS =
   SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
@@ -136,7 +157,13 @@ const FUTURE_TIMESTAMP_TOLERANCE_MS =
 // v19 adds the sqlite window identity (`windowDays`): a windowed parse only
 // holds the rows inside the window it was run with, so the cached range has to
 // be compared against the requested one before reuse.
-const PERSISTENT_CACHE_VERSION = 19;
+// v20 adds the sqlite budget identity (`sqliteBudget`): a parse stopped by the
+// shared per-source row budget is a partial result of the other databases in
+// the same walk, so reuse has to compare the budget it was left with and pay
+// back the rows it took. Entries written before v20 carry no budget identity
+// and are re-parsed once rather than reused under a budget they cannot
+// describe.
+const PERSISTENT_CACHE_VERSION = 20;
 /**
  * Fingerprint of the tool-registry config that produced this cache. A config
  * change (paths, reader, command, pricing-rule set, or any JSON definition)
@@ -248,6 +275,15 @@ interface PersistentFileEntryBase {
    * back to a re-parse.
    */
   windowDays?: number;
+  /**
+   * Budget identity of a sqlite parse (P1 cache review, v20). A database whose
+   * parse stopped at the shared row budget only holds the rows the databases
+   * read before it left behind, so the entry may be reused only where the
+   * budget is equally spent and its own rows are charged back to it. Absent for
+   * non-sqlite entries and for entries written before v20, both of which fall
+   * back to a re-parse.
+   */
+  sqliteBudget?: SqliteBudgetIdentity;
 }
 
 interface PersistentClaudeFileEntry extends PersistentFileEntryBase {
@@ -350,6 +386,13 @@ function nonNegativeNumber(value: unknown): value is number {
 /** A lookback in days: a positive integer, as `scanLocalUsage` clamps it. */
 function positiveInteger(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+/** A row count, as the shared budget tracks it: a non-negative integer. */
+function nonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
     ? value
     : undefined;
 }
@@ -514,6 +557,26 @@ function cachedWalSignature(
   return { mtimeMs: wal.mtimeMs, size: wal.size };
 }
 
+/**
+ * Decode the persisted budget identity of a sqlite parse (P1 cache review).
+ * Malformed values degrade to `undefined` — the entry is re-parsed rather than
+ * reused under a budget it cannot describe.
+ */
+function cachedSqliteBudget(value: unknown): SqliteBudgetIdentity | undefined {
+  const identity = asObject(value);
+  if (identity == null) return undefined;
+  const taken = nonNegativeInteger(identity.taken);
+  const remainingAtStart = nonNegativeInteger(identity.remainingAtStart);
+  if (
+    taken == null ||
+    remainingAtStart == null ||
+    typeof identity.truncated !== "boolean"
+  ) {
+    return undefined;
+  }
+  return { taken, remainingAtStart, truncated: identity.truncated };
+}
+
 function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
   const entry = asObject(value);
   const path = stringValue(entry?.path);
@@ -535,6 +598,9 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
   // come back on every scan. Malformed values drop the field, which degrades
   // to a re-parse rather than a wrong reuse.
   const windowDays = positiveInteger(entry.windowDays);
+  // The shared budget a sqlite parse was left with; losing it re-parses that
+  // file once instead of reusing a partial result (P1 cache review).
+  const sqliteBudget = cachedSqliteBudget(entry.sqliteBudget);
 
   if (source === "claude-code") {
     if (!Array.isArray(entry.claudeEvents)) {
@@ -663,6 +729,7 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
     malformedLines: entry.malformedLines,
     ...(wal !== undefined ? { wal } : {}),
     ...(windowDays == null ? {} : { windowDays }),
+    ...(sqliteBudget == null ? {} : { sqliteBudget }),
     events: entry.events,
     ...(identities == null ? {} : { identities }),
     diagnostics,
@@ -849,6 +916,63 @@ function sqliteWalMatches(
     wal.modifiedAt === cached.mtimeMs &&
     wal.size === cached.size
   );
+}
+
+/**
+ * P1 cache review: the rows a cached sqlite parse still owes the shared
+ * per-source row budget, or `null` when the entry may not be reused where the
+ * walk has now reached.
+ *
+ * The budget is created once per source scan, so every database is read with
+ * whatever the databases before it left behind. A cache hit used to return the
+ * entry's events without paying for them, which let the database parsed after
+ * it start from a budget the reused one had already spent (two Hermes profiles
+ * under a cap of two returned four events), and it kept a profile that the
+ * spent budget had skipped cached as "zero events" after the database eating
+ * the budget was deleted. Reuse therefore has to reproduce the parse it
+ * replaces: it pays back `taken` rows, and an entry the budget cut short is
+ * reusable only while the same number of rows is left.
+ */
+function cacheBudgetCharge(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  entry: PersistentFileEntry | undefined,
+  budget: SqliteRowBudget,
+): number | null {
+  // Only a sqlite parse spends budget rows: the JSON/JSONL readers never take
+  // from it, so their cached events stay free to reuse.
+  if (file.format !== "sqlite") return 0;
+  const cached = entry?.sqliteBudget;
+  // No identity to compare (non-sqlite shape, pre-v20 entry, or a malformed one
+  // dropped on hydration) proves nothing: this file is re-parsed once.
+  if (cached == null) return null;
+  const remaining = budget.remaining();
+  // Paying more rows than are left would break the cap the budget exists to
+  // enforce, so the file is re-parsed under the budget it actually has.
+  if (cached.taken > remaining) return null;
+  if (cached.truncated && cached.remainingAtStart !== remaining) return null;
+  return cached.taken;
+}
+
+/**
+ * Persist the budget identity of a sqlite parse for the next scan's reuse
+ * decision. `remainingAtStart` is what the shared budget had left when this
+ * file's parse began; it is a parameter because the parse itself spends the
+ * budget.
+ */
+function sqliteBudgetIdentity(
+  parsed: {
+    events: LocalUsageEvent[];
+    diagnostics: LocalUsageDiagnostic[];
+  },
+  remainingAtStart: number,
+): SqliteBudgetIdentity {
+  return {
+    taken: parsed.events.length,
+    remainingAtStart,
+    truncated: parsed.diagnostics.some(
+      (item) => item.code === "query-truncated",
+    ),
+  };
 }
 
 /**
@@ -3608,14 +3732,20 @@ async function scanZedUsageAdapter(
   for (const file of selected.files) {
     signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
+    const budgetCharge = cacheBudgetCharge(file, cached, budget);
     let entry: PersistentGenericFileEntry;
     if (
+      budgetCharge != null &&
       fileSignatureMatches(file, cached, adapter.source) &&
       sqliteWalMatches(file, cached, lookbackDays)
     ) {
+      // P1: a cache hit pays the shared budget the rows a parse would have
+      // taken, so the budget one file spends is never invisible to the next.
+      budget.take(budgetCharge);
       entry = cached as PersistentGenericFileEntry;
       filesReused += 1;
     } else {
+      const remainingAtStart = budget.remaining();
       const parsed = await parseZedThreadsDb(
         file,
         adapter,
@@ -3642,6 +3772,9 @@ async function scanZedUsageAdapter(
               // How much history this parse actually holds, so a later scan
               // cannot reuse it for a wider window.
               windowDays: lookbackDays,
+              // And how much of the shared budget it holds, so a later scan
+              // cannot reuse a partial result the budget no longer explains.
+              sqliteBudget: sqliteBudgetIdentity(parsed, remainingAtStart),
             }
           : {}),
         events: parsed.events,
@@ -5061,14 +5194,20 @@ async function scanGenericAdapter(
   for (const file of selected.files) {
     signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
+    // P1: a cache hit has to pay the shared budget the rows its parse took and
+    // stay out of reach when this walk's budget cannot explain its result.
+    const budgetCharge = cacheBudgetCharge(file, cached, budget);
     let entry: PersistentGenericFileEntry;
     if (
+      budgetCharge != null &&
       fileSignatureMatches(file, cached, adapter.source) &&
       sqliteWalMatches(file, cached, lookbackDays)
     ) {
+      budget.take(budgetCharge);
       entry = cached as PersistentGenericFileEntry;
       filesReused += 1;
     } else {
+      const remainingAtStart = budget.remaining();
       const parsed = await parseGenericFile(
         file,
         adapter,
@@ -5099,6 +5238,10 @@ async function scanGenericAdapter(
               // How much history this parse actually holds, so a later scan
               // cannot reuse it for a wider window.
               windowDays: lookbackDays,
+              // And how much of the shared budget it holds, so a later scan
+              // cannot reuse a partial result the budget no longer explains:
+              // the same source's other databases decide what is left of it.
+              sqliteBudget: sqliteBudgetIdentity(parsed, remainingAtStart),
             }
           : {}),
         events: parsed.events,

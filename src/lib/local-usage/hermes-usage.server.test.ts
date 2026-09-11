@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, unlink, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -32,9 +32,8 @@ CREATE TABLE sessions (
 ) STRICT;
 `;
 
-function createHermesDb(path: string, rows: unknown[][]): void {
+function insertHermesRows(path: string, rows: unknown[][]): void {
   const db = new DatabaseSync(path);
-  db.exec(SESSIONS_SCHEMA);
   const insert = db.prepare(
     `INSERT INTO sessions (
        id, model, started_at, ended_at, input_tokens, output_tokens,
@@ -43,6 +42,13 @@ function createHermesDb(path: string, rows: unknown[][]): void {
   );
   for (const row of rows) insert.run(...(row as never[]));
   db.close();
+}
+
+function createHermesDb(path: string, rows: unknown[][]): void {
+  const db = new DatabaseSync(path);
+  db.exec(SESSIONS_SCHEMA);
+  db.close();
+  insertHermesRows(path, rows);
 }
 
 test("hermes data-directory override rebases usage roots to the chosen dir", async () => {
@@ -330,6 +336,209 @@ test("the sqlite row budget is shared across a source's databases", async () => 
       1,
       "a shared budget reports once, not once per file it stopped",
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** The cap every cache/share-budget test below runs the source with. */
+const SHARED_BUDGET = 2;
+
+interface SharedBudgetFixture {
+  defaultDb: string;
+  workDb: string;
+  personalDb: string;
+  sessionRow: (id: string, index: number) => unknown[];
+}
+
+/**
+ * Three profile databases plus pinned mtimes. `collectAdapterFiles` walks the
+ * most recently modified database first, so pinning the order makes "which
+ * profile spends the budget" a property of the fixture instead of the
+ * filesystem's directory order: work, then default, then personal.
+ */
+async function createSharedBudgetFixture(
+  root: string,
+  /**
+   * Session rows per profile. The default gives every database three rows - one
+   * more than the cap under test, so the walk is stopped by the budget; a
+   * smaller count makes that profile's parse complete instead.
+   */
+  rowsByProfile: { work?: number; default?: number; personal?: number } = {},
+): Promise<SharedBudgetFixture> {
+  const hermesDir = join(root, ".hermes");
+  const workDb = join(hermesDir, "profiles", "work", "state.db");
+  const personalDb = join(hermesDir, "profiles", "personal", "state.db");
+  const defaultDb = join(hermesDir, "state.db");
+  await mkdir(join(hermesDir, "profiles", "work"), { recursive: true });
+  await mkdir(join(hermesDir, "profiles", "personal"), { recursive: true });
+  const epoch = Math.floor(Date.now() / 1000) - 3_600;
+  const sessionRow = (id: string, index: number): unknown[] => [
+    id,
+    "hermes-agent",
+    epoch - index,
+    epoch - index + 10,
+    1_000 + index * 7,
+    100 + index,
+    0,
+    0,
+    0,
+    1,
+  ];
+  const sessions = (prefix: string, count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      sessionRow(`${prefix}-${index + 1}`, index + 1),
+    );
+  createHermesDb(workDb, sessions("work", rowsByProfile.work ?? 3));
+  createHermesDb(defaultDb, sessions("default", rowsByProfile.default ?? 3));
+  createHermesDb(personalDb, sessions("personal", rowsByProfile.personal ?? 3));
+  const base = Date.now();
+  const pinned = async (path: string, ageMs: number) => {
+    const at = new Date(base - ageMs);
+    await utimes(path, at, at);
+  };
+  await pinned(workDb, 60_000);
+  await pinned(defaultDb, 120_000);
+  await pinned(personalDb, 180_000);
+  return { defaultDb, workDb, personalDb, sessionRow };
+}
+
+/**
+ * Scan the fixture with the process cache enabled (the default) and the shared
+ * row cap under test.
+ */
+async function scanSharedBudgetFixture(root: string) {
+  const snapshot = await scanLocalUsage({
+    homeDirectory: root,
+    cacheDirectory: join(root, ".cache"),
+    lookbackDays: 3650,
+    platform: "linux" as const,
+    maxSqliteRowsPerSource: SHARED_BUDGET,
+  });
+  const hermes = snapshot.sources.find((source) => source.source === "hermes");
+  assert.ok(hermes, "hermes source must be reported");
+  return { snapshot, hermes };
+}
+
+/**
+ * P1 cache review: a cache hit returned the entry's events without paying the
+ * shared budget, so a reused database no longer consumed the rows it holds and
+ * the database parsed after it started from a budget that had already been
+ * spent. A cold scan of two capped profiles returned 2 events; the next scan,
+ * with one profile reused and the other updated, returned 4 - past the cap the
+ * per-source budget exists to enforce.
+ */
+test("a cache-reused profile still pays the shared sqlite row budget", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-hermes-budget-reuse-"));
+  try {
+    const { workDb, personalDb, sessionRow } =
+      await createSharedBudgetFixture(root);
+
+    const cold = await scanSharedBudgetFixture(root);
+    assert.equal(cold.hermes.events, SHARED_BUDGET, "the cap holds cold");
+
+    // Nothing changed: every database is served from the cache, and the rows a
+    // reused parse holds are charged back so the walk still ends at the cap.
+    const warm = await scanSharedBudgetFixture(root);
+    assert.equal(warm.hermes.filesReused, 3, "an unchanged scan reuses all");
+    assert.equal(warm.hermes.events, SHARED_BUDGET, "the cap holds warm");
+
+    // Update the profile the walk now reads first, so a freshly parsed database
+    // and a cache-reused one share the budget exactly as in the report.
+    insertHermesRows(personalDb, [
+      sessionRow("personal-4", 4),
+      sessionRow("personal-5", 5),
+    ]);
+    const afterUpdate = await scanSharedBudgetFixture(root);
+    assert.equal(
+      afterUpdate.hermes.events,
+      SHARED_BUDGET,
+      "a reused database plus an updated one must not exceed the source cap",
+    );
+    // The updated profile parses; the profile behind it was cached while the
+    // budget was already spent, so it must be re-read under the budget it
+    // actually has - and the last one may still be reused as-is.
+    assert.equal(afterUpdate.hermes.filesParsed, 2);
+    assert.equal(afterUpdate.hermes.filesReused, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * P1 cache review: a profile whose parse *completed* was reused without paying
+ * anything either, so every cached database looked free and the source could
+ * exceed its cap even with only one database left to read - the general case of
+ * the same defect, with no truncation involved.
+ */
+test("a fully cached profile still spends the rows it holds", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-hermes-budget-whole-"));
+  try {
+    // "work" is read first and holds one row, so its parse completes inside the
+    // cap instead of being cut off by it; "default" takes the rest.
+    const { defaultDb, sessionRow } = await createSharedBudgetFixture(root, {
+      work: 1,
+    });
+
+    const cold = await scanSharedBudgetFixture(root);
+    assert.equal(cold.hermes.events, SHARED_BUDGET, "the cap holds cold");
+    assert.equal(cold.hermes.filesParsed, 3, "every database is parsed first");
+
+    // Nothing changed: all three are reused, the first of them whole.
+    const warm = await scanSharedBudgetFixture(root);
+    assert.equal(warm.hermes.filesReused, 3, "an unchanged scan reuses all");
+    assert.equal(warm.hermes.events, SHARED_BUDGET, "the cap holds warm");
+
+    // The updated profile now leads the walk and spends the whole cap, so the
+    // cached whole profile behind it has nothing left to pay from.
+    insertHermesRows(defaultDb, [
+      sessionRow("default-4", 4),
+      sessionRow("default-5", 5),
+    ]);
+    const afterUpdate = await scanSharedBudgetFixture(root);
+    assert.equal(
+      afterUpdate.hermes.events,
+      SHARED_BUDGET,
+      "a whole cached database must not add rows on top of a fresh parse",
+    );
+    assert.equal(afterUpdate.hermes.filesParsed, 2);
+    assert.equal(afterUpdate.hermes.filesReused, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * P1 cache review: a profile that the walk skipped because the budget was
+ * already spent was cached as "zero events" - a partial result of the *whole*
+ * file set, not of that database. Deleting the database that had eaten the
+ * budget left that empty result in place and the source kept reporting 0
+ * events instead of re-reading a database the budget can now afford.
+ */
+test("a profile skipped by a spent budget is re-parsed once the budget frees up", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-hermes-budget-freed-"));
+  try {
+    const { workDb } = await createSharedBudgetFixture(root);
+
+    const cold = await scanSharedBudgetFixture(root);
+    assert.equal(cold.hermes.events, SHARED_BUDGET, "the cap holds cold");
+    assert.equal(cold.hermes.filesParsed, 3, "every database is parsed first");
+
+    // "work" is read first and takes the entire cap; the two profiles behind it
+    // are cached with zero events and one truncation.
+    await unlink(workDb);
+    const afterDelete = await scanSharedBudgetFixture(root);
+    assert.equal(
+      afterDelete.hermes.events,
+      SHARED_BUDGET,
+      "the skipped profile must be re-read, not served as zero events",
+    );
+    assert.equal(
+      afterDelete.hermes.filesParsed,
+      1,
+      "the profile skipped by the spent budget must be parsed again",
+    );
+    assert.equal(afterDelete.hermes.filesReused, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
