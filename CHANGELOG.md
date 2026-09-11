@@ -5,72 +5,15 @@ uses semantic versioning for published releases.
 
 ## [Unreleased]
 
-### Fixes
-
-- Fixed usage collection for sqlite-backed tools whose database passes the
-  adapter's `maxFileSizeBytes` cap (issue #42). ZCode keeps every session's
-  message/part plaintext in `~/.zcode/cli/db/db.sqlite`, so a real install
-  passes 512 MB within weeks of heavy use; the whole file was skipped before
-  its read-only query ever ran, and the card reported "no logs" forever. The
-  byte cap is a budget for formats that are read in one piece (json/jsonl) and
-  no longer applies to `format: "sqlite"`, whose size says nothing about scan
-  memory. The same gate was removed from Zed's native `threads.db` reader; the
-  other seven sqlite adapters (AiPy, AnythingLLM, Goose, Hermes, Kiro, MiMo,
-  Qoder CN) share the generic reader and are fixed with it.
-- Bounded that read instead by row count: sqlite rows are now streamed through
-  `iterate()` instead of collected with `.all()`, so a large table no longer
-  materializes a second in-memory copy, and a shared `maxSqliteRows` budget
-  (500,000 events per source, declared in `_shared/scanner-policy.json`) caps
-  what a single database can contribute. Exceeding it emits a counted
-  diagnostic instead of failing silently.
-- Every sqlite usage query now ends with `ORDER BY <timestamp> DESC`, so the
-  row budget keeps the most recent events and drops the oldest instead of an
-  arbitrary prefix. A new contract test prepares each query against a fixture
-  schema and fails if the ordering is missing or no longer leads with `DESC`.
-- The scan window now reaches sqlite instead of being applied afterwards. The
-  adapter query used to be a fixed string, so a scan read every historical row
-  and discarded the pre-cutoff ones in TypeScript: a multi-gigabyte database
-  cost the same whether the window was ten years or thirty days, and the row
-  budget filled with rows the window would have thrown away. Each sqlite
-  adapter now declares a `windowFilter` predicate, which the compiler applies
-  by wrapping its query in a subquery - filtering the adapter's own output
-  columns keeps the comparison in the units it already normalized to, so a
-  table storing text timestamps cannot coerce a millisecond parameter. The
-  TypeScript range check remains the authority for adapters without one. On a
-  634 MB / 5M-row fixture a 365-day scan drops from 27.0 s to 13.4 s and stops
-  truncating; at 90 and 30 days it drops to 0.9 s and 0.4 s.
-- A row-budget stop is reported as `query-truncated` rather than
-  `file-too-large`. The file is fine in that case - the query simply returned
-  more rows than one scan will carry - and reusing the size code sent anyone
-  debugging it back to the byte cap that no longer applies to sqlite reads.
-- The tool registry rejects a definition whose usage path format and reader
-  disagree. A `format: "sqlite"` path on a non-sqlite reader silently lost
-  both sqlite protections and reproduced the "no logs" failure #42 describes,
-  and validation previously accepted it without a diagnostic.
-
-### Review follow-ups
-
-- The new `query-truncated` code is registered in the persisted-index
-  validator. It was missing from that hand-written list, so the warning
-  survived the first scan and vanished on the next restart, turning a visible
-  truncation back into a silent one. The list is now typed against the
-  diagnostic union so an unclassified code fails the build, and a test reads
-  the union out of the source to cover the runtime half.
-- Zed's `threads.db` window compares an ISO-8601 TEXT column, so the numeric
-  cutoff was coerced to text and every date satisfied the comparison - the
-  window filtered nothing while appearing to. It now binds the same instant as
-  an ISO string as well, and orders `updated_at DESC, rowid DESC` so a capped
-  walk keeps the newest threads instead of the oldest.
-- The row budget is per source, not per file. Hermes keeps one `state.db` per
-  profile, and handing each file its own budget multiplied the documented
-  "500,000 rows per source" by the number of profiles, escaping the memory
-  bound the budget exists to enforce. One budget is now created per adapter
-  scan and shared by every file, with a single truncation diagnostic.
-- A cached sqlite parse records the lookback it was windowed to and is reused
-  only when that window covers the request; scanning 365 days and then 3650
-  would otherwise serve the narrower cache and silently under-report. The
-  window identity also survives index hydration, so entries are still reused
-  across restarts instead of re-parsing everything.
+<!--
+The sqlite usage work (#42) is not listed here on purpose: this checkout
+already declares 1.0.4 in package.json and carries its section below, but no
+v1.0.4 tag or release exists yet - the latest published version is 1.0.3. Those
+changes therefore land in the 1.0.4 section, which is what the release workflow
+publishes, and this heading is left empty for work that starts after 1.0.4 is
+tagged. Keeping both in sync matters: `scripts/changelog-release-notes.mjs`
+fails the build when package.json names a version with no dated section.
+-->
 
 ## [1.0.4] - 2026-09-10
 
@@ -98,6 +41,60 @@ uses semantic versioning for published releases.
 - `checksums.txt` names the same files as before, now simply the artifact names.
   The CLI and the Cask generator accept both namings, so a release published
   before this change (up to 1.0.3) can still be resolved and re-rendered.
+
+### Sqlite usage reads (issue #42)
+
+- Fixed usage collection for sqlite-backed tools whose database passes the
+  adapter's `maxFileSizeBytes` cap. ZCode keeps every session's message/part
+  plaintext in `~/.zcode/cli/db/db.sqlite`, so a real install passes 512 MB
+  within weeks of heavy use; the whole file was skipped before its read-only
+  query ever ran, and the card reported "no logs" forever. The byte cap is a
+  budget for formats that are read in one piece (json/jsonl) and no longer
+  applies to `format: "sqlite"`, whose size says nothing about scan memory. The
+  same gate was removed from Zed's native `threads.db` reader; the other seven
+  sqlite adapters (AiPy, AnythingLLM, Goose, Hermes, Kiro, MiMo, Qoder CN)
+  share the generic reader and are fixed with it.
+- Bounded that read instead by row count: sqlite rows are streamed through
+  `iterate()` instead of collected with `.all()`, so a large table no longer
+  materializes a second in-memory copy, and a shared `maxSqliteRows` budget
+  (500,000 events per source, declared in `_shared/scanner-policy.json`) caps
+  what a single source can contribute. Exceeding it emits a counted
+  diagnostic instead of failing silently.
+- Every sqlite usage query now ends with `ORDER BY <timestamp> DESC`, so the
+  row budget keeps the most recent events and drops the oldest instead of an
+  arbitrary prefix. A contract test prepares each query against a fixture
+  schema and fails if the ordering is missing or no longer leads with `DESC`.
+- The scan window now reaches sqlite instead of being applied afterwards. The
+  adapter query used to be a fixed string, so a scan read every historical row
+  and discarded the pre-cutoff ones in TypeScript: a multi-gigabyte database
+  cost the same whether the window was ten years or thirty days, and the row
+  budget filled with rows the window would have thrown away. Each sqlite
+  adapter now declares a `windowFilter` predicate, which the compiler applies
+  by wrapping its query in a subquery - filtering the adapter's own output
+  columns keeps the comparison in the units it already normalized to, so a
+  table storing text timestamps cannot coerce a millisecond parameter. The
+  TypeScript range check remains the authority for adapters without one. On a
+  634 MB / 5M-row fixture a 365-day scan drops from 27.0 s to 13.4 s and stops
+  truncating; at 90 and 30 days it drops to 0.9 s and 0.4 s.
+- A row-budget stop is reported as `query-truncated` rather than
+  `file-too-large`. The file is fine in that case - the query simply returned
+  more rows than one scan will carry - and reusing the size code sent anyone
+  debugging it back to the byte cap that no longer applies to sqlite reads.
+- The tool registry rejects a definition whose usage path format and reader
+  disagree. A `format: "sqlite"` path on a non-sqlite reader silently lost
+  both sqlite protections and reproduced the "no logs" failure #42 describes,
+  and validation previously accepted it without a diagnostic.
+- Review follow-ups: `query-truncated` is registered in the persisted-index
+  validator (it was missing from that hand-written list, so the warning
+  vanished one restart later - the list is now typed against the diagnostic
+  union so an unclassified code fails the build); Zed's `threads.db` window
+  compares an ISO-8601 TEXT column, so the numeric cutoff was coerced to text
+  and filtered nothing - it now binds the instant as an ISO string too and
+  orders `updated_at DESC, rowid DESC` so a capped walk keeps the newest
+  threads; the row budget is per source rather than per file, so a multi-
+  profile Hermes install no longer multiplies it; and a cached sqlite parse
+  records the lookback it was windowed to, so widening the window re-parses
+  instead of serving a narrower cache.
 
 ## [1.0.3] - 2026-09-10
 
