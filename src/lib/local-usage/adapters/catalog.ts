@@ -40,6 +40,7 @@ const REGISTRY_USAGE_ADAPTERS: UsageAdapterContract[] = listTools()
       kind: "builtin",
     };
     if (usage.query) entry.query = usage.query;
+    if (usage.windowFilter) entry.windowFilter = usage.windowFilter;
     return entry;
   });
 

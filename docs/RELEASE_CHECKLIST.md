@@ -3,6 +3,30 @@
 This checklist is intentionally local/manual. It documents the release
 evidence without adding another CI workflow or slowing ordinary pull requests.
 
+## Changelog convention
+
+- Work in progress always goes under `## [Unreleased]`. A numbered section
+  (`## [X.Y.Z] - YYYY-MM-DD`) means that version is released.
+- Both the numbered section and the version bump belong to the **release
+  branch**, not to the feature branch that produced the change and not to the
+  pull request. A feature branch adds its entry under `[Unreleased]` and stops
+  there; retitling the section, bumping `package.json`,
+  `package-lock.json` and `packages/cli/package.json`, and tagging are one
+  atomic act on that branch, which is why `main` can legitimately declare a
+  version whose section does not exist yet.
+- Preparing a release moves the whole `[Unreleased]` body into the new numbered
+  heading and recreates `[Unreleased]` empty; nothing is left behind under the
+  old heading.
+- A numbered section for a version with no tag is a bug, not staging: it reads
+  as shipped while the newest published version is older. Do not open one to
+  "reserve" a version.
+- `scripts/changelog-release-notes.test.mjs` enforces the shape without naming
+  a version, so it does not need editing per release: `[Unreleased]` carries no
+  date, every other heading is dated and extractable, and any version listed is
+  not newer than the one being prepared. The release job then extracts the
+  tag's section, so a tag whose section is missing or blank fails instead of
+  publishing empty notes.
+
 ## Before tagging
 
 - Confirm `package.json`, `package-lock.json`, and `packages/cli/package.json`

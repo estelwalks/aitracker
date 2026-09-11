@@ -49,16 +49,54 @@ function tokenValue(record: JsonObject, paths: string[] | undefined): number {
   return 0;
 }
 
+function mappedTimestampValue(
+  record: JsonObject,
+  mapping: UsageFieldMapping,
+): unknown {
+  const paths = mapping.timestamp;
+  if (paths == null) return undefined;
+  // A single undotted path is the whole catalog's shape and is read straight
+  // off the record: this runs once per row of a scanned database, so the path
+  // split `firstValue` does must not happen on that hot path.
+  if (paths.length === 1) {
+    const path = paths[0]!;
+    return path.includes(".") ? valueAtPath(record, path) : record[path];
+  }
+  return firstValue(record, paths);
+}
+
+/**
+ * The instant a mapped record carries, in milliseconds, or `undefined` when the
+ * record has no usable event time.
+ *
+ * The scanner ranks a row by this value *before* mapping it into a full event -
+ * its per-source row budget keeps the newest rows of the whole source (P2-1),
+ * and mapping every row it scans (each event derives a privacy-safe session id,
+ * which costs a hash) is far more expensive than ranking it. Both paths go
+ * through this function, so the ranking key and the event the row finally
+ * becomes can never disagree.
+ */
+export function recordTimestampMs(
+  record: JsonObject,
+  mapping: UsageFieldMapping,
+): number | undefined {
+  const raw = mappedTimestampValue(record, mapping);
+  if (typeof raw === "number") {
+    // `new Date(n)` is invalid outside the 8.64e15 ms range, and nothing else
+    // about a finite number depends on the Date round trip.
+    return Number.isFinite(raw) && Math.abs(raw) <= 8.64e15 ? raw : undefined;
+  }
+  if (typeof raw !== "string") return undefined;
+  const time = new Date(raw).getTime();
+  return Number.isNaN(time) ? undefined : time;
+}
+
 function timestampValue(
   record: JsonObject,
   mapping: UsageFieldMapping,
 ): Date | undefined {
-  const raw = firstValue(record, mapping.timestamp);
-  if (typeof raw !== "string" && typeof raw !== "number") {
-    return undefined;
-  }
-  const timestamp = new Date(raw);
-  return Number.isNaN(timestamp.getTime()) ? undefined : timestamp;
+  const time = recordTimestampMs(record, mapping);
+  return time == null ? undefined : new Date(time);
 }
 
 export function recordsFromJson(

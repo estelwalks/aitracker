@@ -54,8 +54,13 @@ import {
 import {
   eventFromMappedRecord,
   fieldMismatchDiagnostic,
+  recordTimestampMs,
   recordsFromJson,
 } from "./adapters/parser.ts";
+import {
+  createNewestSelection,
+  type NewestSelection,
+} from "./newest-selection.ts";
 import type {
   UsageAdapterContract,
   UsageAdapterPath,
@@ -89,6 +94,92 @@ const MAX_JSONL_LINE_LENGTH =
 // oversized line is already bounded by MAX_JSONL_LINE_LENGTH, but a
 // pathological file must never be pulled into the line reader at all.
 const MAX_JSONL_FILE_BYTES = 256 * 1024 * 1024;
+// Issue #42: a sqlite database is queried through a prepared statement instead
+// of being buffered whole, so `maxFileSizeBytes` - a budget for formats that
+// are read in one piece - never applies to it. A real ZCode `db.sqlite` holds
+// every session's messages and passes 512 MB within weeks of heavy use, and
+// skipping it meant "no logs" for an adapter that could read it fine.
+//
+// P2-2 review: this cap bounds what a source KEEPS (mapped events held in
+// memory) and what its scan materializes in JavaScript. It cannot bound what
+// sqlite spends producing those rows, and no query shape can: every adapter
+// orders by a computed timestamp expression (`COALESCE(ended_at, started_at)`,
+// `strftime(...)`), so no index on a raw column can serve the ORDER BY - with
+// an index on `sessions(ended_at)` present, the plan is still `SCAN sessions`
+// + `USE TEMP B-TREE FOR ORDER BY` - and a third-party database is opened
+// read-only, so the index cannot be added. Measured on a 5M-row / 406 MB
+// fixture with a 365-day window (4.2M rows in window), the sort costs 5.5 s
+// before the first row and the whole scan 7.0 s while the budget stops the
+// JavaScript side at 500k rows. The three ways out were measured too, and all
+// three lose:
+//   - `LIMIT <budget+1>` pushdown: 10.2 s and 9.0 s to the first row. sqlite
+//     still sorts the entire filtered result first, so the LIMIT only adds
+//     work; the sort is not bounded by it.
+//   - Dropping the ORDER BY and selecting in JavaScript: the sort disappears
+//     (first row in 47 ms) but every in-window row crosses the boundary, which
+//     costs 13.3 s - twice the scan - and retaining 500k raw rows instead of
+//     500k mapped events adds ~1.5 GB of RSS.
+//   - Keyset/cursor batches: without an index to seek, each batch repeats the
+//     same full sort.
+// The remaining lever is the window itself, which IS pushed into the query
+// (`windowFilter`) so sqlite drops out-of-window rows before sorting them;
+// `lookbackDays` defaults to ten years, which is what makes the sort large.
+// Sorter memory is bounded by sqlite's own spill policy (measured RSS delta
+// 23-34 MB); the temp-file bytes are not.
+const MAX_SQLITE_ROWS = SCANNER_POLICY?.maxSqliteRows ?? 500_000;
+
+/**
+ * Row budget shared by every sqlite file of one source (issue #42 review).
+ * Hermes keeps one `state.db` per profile and each is a separate file, so a
+ * per-file budget multiplied the advertised "500,000 rows per source" by the
+ * number of profiles and let one source exceed the memory bound the budget
+ * exists to enforce.
+ *
+ * P2-1 review: the budget is now spent through `createNewestSelection`, which
+ * keeps the newest rows of the whole source rather than the rows of whichever
+ * database the walk read first, so a database that can no longer contribute is
+ * abandoned at its first losing row. This type is what a single-database source
+ * (Zed's native reader) still uses for its sequential read.
+ */
+interface SqliteRowBudget {
+  readonly limit: number;
+  exhausted(): boolean;
+  /** Rows left before the source cap is reached. */
+  remaining(): number;
+  take(count?: number): void;
+}
+
+function createSqliteRowBudget(limit: number): SqliteRowBudget {
+  let used = 0;
+  return {
+    limit,
+    exhausted: () => used >= limit,
+    remaining: () => limit - used,
+    take: (count = 1) => {
+      // Clamped: the budget is a bound, so no caller can push it past its own
+      // limit into a state the file behind it would misread.
+      used = Math.min(limit, used + count);
+    },
+  };
+}
+
+/**
+ * Budget identity of one sqlite parse (P1/P2-1 cache review).
+ *
+ * A source's databases share one row budget, and the rows that survive it are
+ * the newest of the WHOLE source (P2-1), so what a database contributes is not
+ * a property of that database alone. An entry the budget cut short holds
+ * whatever the other databases left it, and it may be reused only while the
+ * whole sqlite file set reproduces (see `sqliteSetReproducible`); an entry that
+ * was not cut holds every row of its own window no matter what its siblings
+ * did, so it stays reusable on its own.
+ */
+interface SqliteBudgetIdentity {
+  /** Source row budget this selection was made under. */
+  limit: number;
+  /** Whether rows of this database were left uncounted by that budget. */
+  truncated: boolean;
+}
 const FUTURE_TIMESTAMP_TOLERANCE_MS =
   SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
 // Antigravity's estimated transcript events were added in v14. Rebuild once so cached Claude
@@ -99,7 +190,21 @@ const FUTURE_TIMESTAMP_TOLERANCE_MS =
 // the WAL companion signature (`wal`) to generic sqlite entries so a
 // WAL-mode database whose main file was not checkpointed yet is re-parsed
 // (fresh frames live in `db.sqlite-wal`, invisible to main-file mtime/size).
-const PERSISTENT_CACHE_VERSION = 18;
+// v19 adds the sqlite window identity (`windowDays`): a windowed parse only
+// holds the rows inside the window it was run with, so the cached range has to
+// be compared against the requested one before reuse.
+// v20 adds the sqlite budget identity (`sqliteBudget`): a parse stopped by the
+// shared per-source row budget is a partial result of the other databases in
+// the same walk, so reuse has to compare the budget it was left with and pay
+// back the rows it took. Entries written before v20 carry no budget identity
+// and are re-parsed once rather than reused under a budget they cannot
+// describe.
+// v21 records the identity as the budget the selection ran under plus whether
+// this database lost rows to it (P2-1): the budget now keeps the newest rows of
+// the whole source instead of the rows of whichever database was read first, so
+// what a truncated entry holds is decided by its siblings and not by how much
+// budget was left when its own read started.
+const PERSISTENT_CACHE_VERSION = 21;
 /**
  * Fingerprint of the tool-registry config that produced this cache. A config
  * change (paths, reader, command, pricing-rule set, or any JSON definition)
@@ -140,6 +245,12 @@ export interface LocalUsageScanOptions {
   now?: Date;
   lookbackDays?: number;
   maxFilesPerSource?: number;
+  /**
+   * Row budget for one sqlite usage query (issue #42). Overrides the shared
+   * scanner-policy `maxSqliteRows`; present so tests can exercise the
+   * truncation path without seeding 500k rows.
+   */
+  maxSqliteRowsPerSource?: number;
   cacheDirectory?: string;
   disablePersistentCache?: boolean;
   /** Shared WSL topology (P3-T3-04); when absent the scanner enumerates once. */
@@ -196,6 +307,24 @@ interface PersistentFileEntryBase {
    * the main database file has not been checkpointed (mtime/size unchanged).
    */
   wal?: { mtimeMs: number; size: number } | null;
+  /**
+   * Lookback the sqlite query was windowed to (issue #42). A windowed parse
+   * only holds the rows inside that window, so an entry may be reused only
+   * when its window is at least as wide as the request - a narrower cache
+   * would silently under-report after `lookbackDays` is widened. Absent for
+   * non-sqlite entries and for entries written before v19, both of which fall
+   * back to a re-parse.
+   */
+  windowDays?: number;
+  /**
+   * Budget identity of a sqlite parse (P1 cache review, v20). A database whose
+   * parse stopped at the shared row budget only holds the rows the databases
+   * read before it left behind, so the entry may be reused only where the
+   * budget is equally spent and its own rows are charged back to it. Absent for
+   * non-sqlite entries and for entries written before v20, both of which fall
+   * back to a re-parse.
+   */
+  sqliteBudget?: SqliteBudgetIdentity;
 }
 
 interface PersistentClaudeFileEntry extends PersistentFileEntryBase {
@@ -293,6 +422,20 @@ function tokenValue(value: unknown): number {
 
 function nonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/** A lookback in days: a positive integer, as `scanLocalUsage` clamps it. */
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+/** A row count, as the shared budget tracks it: a non-negative integer. */
+function nonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? value
+    : undefined;
 }
 
 function timestampValue(value: unknown): Date | undefined {
@@ -455,6 +598,21 @@ function cachedWalSignature(
   return { mtimeMs: wal.mtimeMs, size: wal.size };
 }
 
+/**
+ * Decode the persisted budget identity of a sqlite parse (P1 cache review).
+ * Malformed values degrade to `undefined` — the entry is re-parsed rather than
+ * reused under a budget it cannot describe.
+ */
+function cachedSqliteBudget(value: unknown): SqliteBudgetIdentity | undefined {
+  const identity = asObject(value);
+  if (identity == null) return undefined;
+  const limit = nonNegativeInteger(identity.limit);
+  if (limit == null || typeof identity.truncated !== "boolean") {
+    return undefined;
+  }
+  return { limit, truncated: identity.truncated };
+}
+
 function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
   const entry = asObject(value);
   const path = stringValue(entry?.path);
@@ -470,6 +628,15 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
     return undefined;
   }
   const wal = cachedWalSignature(entry.wal);
+  // The window a sqlite parse was run with. Losing it on hydration makes every
+  // sqlite entry look like it covers nothing, so the cache would never be
+  // reused after a restart - the read cost the window exists to bound would
+  // come back on every scan. Malformed values drop the field, which degrades
+  // to a re-parse rather than a wrong reuse.
+  const windowDays = positiveInteger(entry.windowDays);
+  // The shared budget a sqlite parse was left with; losing it re-parses that
+  // file once instead of reusing a partial result (P1 cache review).
+  const sqliteBudget = cachedSqliteBudget(entry.sqliteBudget);
 
   if (source === "claude-code") {
     if (!Array.isArray(entry.claudeEvents)) {
@@ -597,6 +764,8 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
     size: entry.size,
     malformedLines: entry.malformedLines,
     ...(wal !== undefined ? { wal } : {}),
+    ...(windowDays == null ? {} : { windowDays }),
+    ...(sqliteBudget == null ? {} : { sqliteBudget }),
     events: entry.events,
     ...(identities == null ? {} : { identities }),
     diagnostics,
@@ -610,15 +779,40 @@ function isLocalUsageSource(value: unknown): value is LocalUsageSource {
   );
 }
 
+/**
+ * Diagnostic codes that may be restored from the persisted scan index.
+ *
+ * This list is a validation gate, not documentation: a code missing here makes
+ * every persisted diagnostic carrying it vanish when the index is rehydrated,
+ * so a warning the user already saw silently disappears one restart later.
+ * `query-truncated` was lost exactly that way, which turned a visible
+ * truncation back into a silent one.
+ *
+ * `retained-previous` is deliberately absent: the collector synthesizes it
+ * when it merges previous evidence into a committed snapshot, so it is never a
+ * scan-time diagnostic.
+ *
+ * The annotation makes the compiler check this list against the union: adding
+ * a code to `LocalUsageDiagnosticCode` fails the build until it is classified
+ * here.
+ */
+const CACHED_DIAGNOSTIC_CODES: ReadonlySet<LocalUsageDiagnostic["code"]> =
+  new Set<LocalUsageDiagnostic["code"]>([
+    "config-invalid",
+    "file-too-large",
+    "field-mismatch",
+    "malformed-json",
+    "query-failed",
+    "query-truncated",
+    "read-failed",
+  ]);
+
 function isCachedDiagnostic(value: unknown): value is LocalUsageDiagnostic {
   const item = asObject(value);
   return (
     isLocalUsageSource(item?.source) &&
-    (item.code === "config-invalid" ||
-      item.code === "file-too-large" ||
-      item.code === "field-mismatch" ||
-      item.code === "malformed-json" ||
-      item.code === "read-failed") &&
+    typeof item.code === "string" &&
+    CACHED_DIAGNOSTIC_CODES.has(item.code as LocalUsageDiagnostic["code"]) &&
     nonNegativeNumber(item.count) &&
     typeof item.message === "string" &&
     (item.path == null || typeof item.path === "string")
@@ -731,9 +925,24 @@ function fileSignatureMatches(
 function sqliteWalMatches(
   candidate: FileCandidate & { format: UsageAdapterPath["format"] },
   entry: PersistentFileEntry | undefined,
+  /**
+   * Lookback the current scan was asked for. A sqlite entry is parsed through
+   * a windowed query, so it only holds the rows inside the window it was run
+   * with and may be reused only when that window covers this request.
+   * Widening the lookback must re-parse: the narrower cache does not contain
+   * the older events, and serving it would silently under-report (issue #42
+   * review). Non-sqlite callers omit it, which skips the check.
+   */
+  requestedWindowDays?: number,
 ): boolean {
   if (candidate.format !== "sqlite") return true;
   if (entry == null) return false;
+  if (
+    requestedWindowDays !== undefined &&
+    !(entry.windowDays != null && entry.windowDays >= requestedWindowDays)
+  ) {
+    return false;
+  }
   const cached = entry.wal;
   if (cached === undefined) return false;
   const wal = candidate.wal;
@@ -743,6 +952,67 @@ function sqliteWalMatches(
     wal.modifiedAt === cached.mtimeMs &&
     wal.size === cached.size
   );
+}
+
+/**
+ * P1/P2-1 cache review: whether the source's sqlite file set reproduces the
+ * selection its cached entries were built from.
+ *
+ * A database the budget cut short does not hold "its newest rows" - it holds
+ * the rows its siblings left it, because the budget keeps the newest rows of
+ * the whole source (P2-1). Such an entry may be reused only while every input
+ * of that selection is unchanged: the same set of databases, each with the same
+ * signature, WAL companion and window, all selected under the same budget. The
+ * selection is deterministic, so re-offering exactly those entries reproduces
+ * exactly the previous result - which is also why the whole set is checked at
+ * once rather than per file. An entry that was never cut needs none of this:
+ * it holds every row of its own window.
+ */
+function sqliteSetReproducible(
+  source: LocalUsageSource,
+  sqliteFiles: readonly (FileCandidate & {
+    format: UsageAdapterPath["format"];
+  })[],
+  cachedFiles: Map<string, PersistentFileEntry>,
+  lookbackDays: number,
+  limit: number,
+): boolean {
+  if (sqliteFiles.length === 0) return false;
+  // A database that disappeared, or one that appeared, changes what the budget
+  // had to distribute - and its own entry is still in the cache until this scan
+  // replaces the index, so the two sets are comparable.
+  const cachedSqlitePaths = new Set<string>();
+  for (const entry of cachedFiles.values()) {
+    if (entry.source !== source || entry.sqliteBudget == null) continue;
+    cachedSqlitePaths.add(entry.path);
+  }
+  if (cachedSqlitePaths.size !== sqliteFiles.length) return false;
+  for (const file of sqliteFiles) {
+    if (!cachedSqlitePaths.has(file.path)) return false;
+    const cached = cachedFiles.get(file.path);
+    if (
+      !fileSignatureMatches(file, cached, source) ||
+      !sqliteWalMatches(file, cached, lookbackDays) ||
+      cached?.sqliteBudget?.limit !== limit
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * The budget identity of a sqlite selection: the cap it ran under and whether
+ * this database lost rows to it. Rows lost because the budget is full, because
+ * newer rows of another database displaced them, or because the read stopped
+ * once this database could no longer contribute all mean the same thing for
+ * reuse - the entry no longer describes the database on its own.
+ */
+function sqliteBudgetIdentity(
+  limit: number,
+  truncated: boolean,
+): SqliteBudgetIdentity {
+  return { limit, truncated };
 }
 
 /**
@@ -3349,37 +3619,46 @@ function decodeZedThread(row: Record<string, unknown>):
 function parseZedThreadsDb(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   adapter: UsageAdapterContract,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  budget: SqliteRowBudget,
+  cutoffTime: number,
 ): {
   events: LocalUsageEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
 } {
   signal?.throwIfAborted();
-  if (file.size > adapter.maxFileSizeBytes) {
-    return {
-      events: [],
-      malformedLines: 0,
-      diagnostics: [
-        diagnostic(
-          adapter,
-          "file-too-large",
-          file.path,
-          `日志超过 ${adapter.maxFileSizeBytes} 字节读取上限，已跳过。`,
-        ),
-      ],
-    };
-  }
   const events: LocalUsageEvent[] = [];
   let malformedLines = 0;
   let database: DatabaseSync | undefined;
   try {
     database = new DatabaseSync(file.path, { readOnly: true });
-    const rows = database
-      .prepare("SELECT id, updated_at, data_type, data FROM threads")
-      .all() as Array<Record<string, unknown>>;
-    for (const row of rows) {
+    // Issue #42: `threads.db` grows with every conversation, so its size must
+    // never gate the read - a sqlite file is queried, not buffered. Rows are
+    // streamed and the walk stops at the shared row budget.
+    let exceeded = false;
+    // `updated_at` is an ISO-8601 TEXT column, so it is compared as text: the
+    // numeric cutoff has to be converted first, or SQLite applies TEXT
+    // affinity to the parameter and a lexicographic comparison makes every
+    // ISO date satisfy `>= "<digits>"`. Two bindings of the same value because
+    // the window is compared twice - once as the type the column stores, once
+    // as the same instant in milliseconds, so a row whose timestamp is a bare
+    // epoch (every other reader accepts both) is filtered either way.
+    const cutoffIso = new Date(cutoffTime).toISOString().replace(".000Z", "Z");
+    for (const row of database
+      .prepare(
+        `SELECT id, updated_at, data_type, data FROM threads
+         WHERE updated_at >= ? OR CAST(updated_at AS INTEGER) >= ?
+         ORDER BY updated_at DESC, rowid DESC`,
+      )
+      .iterate(cutoffIso, cutoffTime) as IterableIterator<
+      Record<string, unknown>
+    >) {
       signal?.throwIfAborted();
+      if (budget.exhausted()) {
+        exceeded = true;
+        break;
+      }
       let decoded;
       try {
         decoded = decodeZedThread(row);
@@ -3391,6 +3670,7 @@ function parseZedThreadsDb(
       const totals = decoded.totals;
       const totalTokens =
         totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
+      budget.take();
       events.push({
         source: adapter.source as LocalUsageSource,
         timestamp: decoded.updatedAt.toISOString(),
@@ -3407,22 +3687,27 @@ function parseZedThreadsDb(
         totalTokens,
       });
     }
-    return {
-      events,
-      malformedLines,
-      diagnostics:
-        events.length === 0 && malformedLines > 0
-          ? [
-              {
-                source: adapter.source,
-                code: "malformed-json",
-                path: file.path,
-                count: malformedLines,
-                message: "threads.db 包含无法解码的线程记录。",
-              },
-            ]
-          : [],
-    };
+    const diagnostics: LocalUsageDiagnostic[] = [];
+    if (exceeded) {
+      diagnostics.push(
+        diagnostic(
+          adapter,
+          "query-truncated",
+          file.path,
+          `SQLite 查询结果超过 ${budget.limit} 行读取上限，其余记录未统计。`,
+        ),
+      );
+    }
+    if (events.length === 0 && malformedLines > 0) {
+      diagnostics.push({
+        source: adapter.source,
+        code: "malformed-json",
+        path: file.path,
+        count: malformedLines,
+        message: "threads.db 包含无法解码的线程记录。",
+      });
+    }
+    return { events, malformedLines, diagnostics };
   } catch {
     return {
       events: [],
@@ -3456,8 +3741,10 @@ async function scanZedUsageAdapter(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
-  signal?: AbortSignal,
-  overrides?: UsageOverrideMap,
+  signal: AbortSignal | undefined,
+  overrides: UsageOverrideMap | undefined,
+  maxSqliteRows: number,
+  lookbackDays: number,
 ): Promise<SourceScanResult> {
   const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
   const placements = rebaseUsagePathConfigs(
@@ -3478,18 +3765,43 @@ async function scanZedUsageAdapter(
   let filesParsed = 0;
   let malformedLines = 0;
 
+  // Single-file source, but the budget is built the same shared way so the
+  // cap has one definition.
+  const budget = createSqliteRowBudget(maxSqliteRows);
+
   for (const file of selected.files) {
     signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
+    const identity = cached?.sqliteBudget;
+    // Zed is a one-database source, so its cached entry is the whole file set:
+    // it may be reused while its own signature, WAL companion and window match
+    // and the budget it was read under is the same. An entry the budget cut
+    // short still holds the newest rows of that database (nothing else competes
+    // for them), so it is the reason the identity is checked at all - and its
+    // rows are charged back to the budget below, or the next database would
+    // start from rows this one already spent.
+    const charge = (cached as PersistentGenericFileEntry | undefined)?.events
+      .length;
     let entry: PersistentGenericFileEntry;
     if (
+      identity != null &&
+      (identity.truncated === false || identity.limit === maxSqliteRows) &&
+      charge != null &&
+      charge <= budget.remaining() &&
       fileSignatureMatches(file, cached, adapter.source) &&
-      sqliteWalMatches(file, cached)
+      sqliteWalMatches(file, cached, lookbackDays)
     ) {
+      budget.take(charge);
       entry = cached as PersistentGenericFileEntry;
       filesReused += 1;
     } else {
-      const parsed = await parseZedThreadsDb(file, adapter, signal);
+      const parsed = await parseZedThreadsDb(
+        file,
+        adapter,
+        signal,
+        budget,
+        cutoffTime,
+      );
       parsed.events = parsed.events.map((event) => ({
         ...event,
         project: normalizeProjectPath(event.project, homeDirectory),
@@ -3506,6 +3818,17 @@ async function scanZedUsageAdapter(
                 file.wal == null
                   ? null
                   : { mtimeMs: file.wal.modifiedAt, size: file.wal.size },
+              // How much history this parse actually holds, so a later scan
+              // cannot reuse it for a wider window.
+              windowDays: lookbackDays,
+              // And what the budget did to it, so a later scan cannot reuse a
+              // partial result a different budget would not have produced.
+              sqliteBudget: sqliteBudgetIdentity(
+                maxSqliteRows,
+                parsed.diagnostics.some(
+                  (item) => item.code === "query-truncated",
+                ),
+              ),
             }
           : {}),
         events: parsed.events,
@@ -4631,17 +4954,67 @@ function diagnostic(
   return { source: adapter.source, code, path, count: 1, message };
 }
 
+/** The row-budget warning for one sqlite database: rows of it went uncounted. */
+function truncationWarning(
+  adapter: UsageAdapterContract,
+  path: string,
+  limit: number,
+): LocalUsageDiagnostic {
+  return diagnostic(
+    adapter,
+    "query-truncated",
+    path,
+    `本地用量扫描超过 ${limit} 行读取上限，较旧的记录未统计。`,
+  );
+}
+
+/**
+ * P2-2 review: the diagnostics a sqlite entry carries must describe the budget
+ * decision THIS scan reached, never the one the cache was written under.
+ *
+ * A reused entry's rows can still be displaced by a newer sibling - a complete
+ * database that loses rows that way is exactly as truncated as a fresh read
+ * stopped by the cap - so its warning is rebuilt from `truncated` instead of
+ * inherited. The same rule clears a warning the entry no longer deserves, which
+ * is what keeps "this source is complete" and "this source dropped rows" from
+ * disagreeing with each other.
+ */
+function withTruncationWarning(
+  adapter: UsageAdapterContract,
+  path: string,
+  diagnostics: readonly LocalUsageDiagnostic[],
+  truncated: boolean,
+  limit: number,
+): LocalUsageDiagnostic[] {
+  const kept = diagnostics.filter((item) => item.code !== "query-truncated");
+  if (truncated) kept.push(truncationWarning(adapter, path, limit));
+  return kept;
+}
+
+/**
+ * Reads one generic usage file that is NOT a sqlite database (json/jsonl),
+ * where every row of the file belongs to the file and no row budget is shared.
+ * Sqlite files are read by `selectSqliteFileRows` instead: their rows compete
+ * for the source's row budget with every other database of the same source.
+ */
 async function parseGenericFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   adapter: UsageAdapterContract,
   fallbackSessionId: string,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  cutoffTime: number,
 ): Promise<{
   events: LocalUsageEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
 }> {
   signal?.throwIfAborted();
+  // Issue #42: the byte cap belongs to formats read in one piece, which is
+  // every format that reaches this function. A sqlite database only ever runs a
+  // prepared statement, so its file size says nothing about scan memory and the
+  // cap never applied to it - applying it there skipped the whole file before
+  // its read-only query ran, which is why a ~1.4 GB ZCode `db.sqlite` reported
+  // "no logs" for an adapter that could read it fine.
   if (file.size > adapter.maxFileSizeBytes) {
     return {
       events: [],
@@ -4659,63 +5032,6 @@ async function parseGenericFile(
 
   const events: LocalUsageEvent[] = [];
   let mismatches = 0;
-  if (file.format === "sqlite") {
-    if (adapter.query == null) {
-      return {
-        events: [],
-        malformedLines: 0,
-        diagnostics: [
-          diagnostic(
-            adapter,
-            "query-failed",
-            file.path,
-            "SQLite 适配器缺少只读查询。",
-          ),
-        ],
-      };
-    }
-    let database: DatabaseSync | undefined;
-    try {
-      database = new DatabaseSync(file.path, { readOnly: true });
-      const records = database.prepare(adapter.query).all() as Array<
-        Record<string, unknown>
-      >;
-      for (const record of records) {
-        const event = eventFromMappedRecord(record, adapter, fallbackSessionId);
-        if (event == null) mismatches += 1;
-        else events.push(event);
-      }
-      return {
-        events,
-        malformedLines: 0,
-        diagnostics:
-          events.length === 0
-            ? [
-                fieldMismatchDiagnostic(
-                  adapter,
-                  file.path,
-                  Math.max(1, mismatches),
-                ),
-              ]
-            : [],
-      };
-    } catch {
-      return {
-        events: [],
-        malformedLines: 0,
-        diagnostics: [
-          diagnostic(
-            adapter,
-            "query-failed",
-            file.path,
-            "SQLite 只读查询执行失败，已跳过。",
-          ),
-        ],
-      };
-    } finally {
-      database?.close();
-    }
-  }
   if (file.format === "jsonl") {
     const { malformedLines, oversized } = await readJsonLines(
       file.path,
@@ -4793,6 +5109,127 @@ async function parseGenericFile(
 }
 
 /**
+ * What reading one sqlite database of a generic source contributed to the
+ * source-wide selection: the diagnostics of the read itself, how many of its
+ * rows could not become an event, and whether the read stopped early.
+ */
+interface SqliteReadOutcome {
+  diagnostics: LocalUsageDiagnostic[];
+  mismatches: number;
+  /** Rows were left unread because the selection could not take them. */
+  cut: boolean;
+}
+
+/**
+ * P2-1: reads one sqlite database newest-first and offers its events to the
+ * source's selection, which keeps the newest events of the whole source.
+ *
+ * A row is ranked by its own event time first, because that is a plain column
+ * read while turning it into an event derives a privacy-safe session id - a
+ * hash - and the read is abandoned at the first row the selection can no longer
+ * take: every later row of an ordered read is older still. A row only becomes
+ * an event once it is known to earn a place, so the rows of a database that
+ * cannot contribute at all are never mapped.
+ *
+ * Only events are retained (never the reader's row objects, which measure an
+ * order of magnitude larger), which keeps the scan's memory at the row budget
+ * this whole mechanism exists to enforce.
+ *
+ * The window filter is written against the adapter query's own output columns
+ * and applied by wrapping it in a subquery, which keeps the comparison in the
+ * units the adapter already normalized to. Adapters without one still work -
+ * the JavaScript range check stays the authority either way - they just pay the
+ * full read.
+ */
+async function selectSqliteFileRows(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  adapter: UsageAdapterContract,
+  selection: NewestSelection<LocalUsageEvent>,
+  fileIndex: number,
+  homeDirectory: string,
+  cutoffTime: number,
+  signal: AbortSignal | undefined,
+): Promise<SqliteReadOutcome> {
+  if (adapter.query == null) {
+    return {
+      diagnostics: [
+        diagnostic(
+          adapter,
+          "query-failed",
+          file.path,
+          "SQLite 适配器缺少只读查询。",
+        ),
+      ],
+      mismatches: 0,
+      cut: false,
+    };
+  }
+  let database: DatabaseSync | undefined;
+  try {
+    database = new DatabaseSync(file.path, { readOnly: true });
+    const windowFilter = adapter.windowFilter;
+    const statement =
+      windowFilter == null
+        ? database.prepare(adapter.query)
+        : database.prepare(
+            `SELECT * FROM (${adapter.query}) WHERE ${windowFilter}`,
+          );
+    // Rows are streamed instead of collected with `.all()` so a large table
+    // never materializes a second full copy of its records.
+    const rows =
+      windowFilter == null
+        ? statement.iterate()
+        : statement.iterate(cutoffTime);
+    const fallbackSessionId = sessionIdFromRelativeFile(
+      adapter.source,
+      relative(homeDirectory, file.path),
+    );
+    let mismatches = 0;
+    for (const record of rows as IterableIterator<JsonObject>) {
+      signal?.throwIfAborted();
+      const key = recordTimestampMs(record, adapter.mapping);
+      if (key == null) {
+        mismatches += 1;
+        continue;
+      }
+      if (selection.rejects(key)) {
+        return { diagnostics: [], mismatches, cut: true };
+      }
+      const event = eventFromMappedRecord(record, adapter, fallbackSessionId);
+      // A row that cannot become an event never takes a budget slot, exactly as
+      // it never took one before the budget was shared with the other
+      // databases of the source.
+      if (event == null) {
+        mismatches += 1;
+        continue;
+      }
+      // The mapping just built this object and nothing else holds it, so the
+      // path is normalized in place: at half a million retained rows, one saved
+      // allocation per row is tens of megabytes of heap the budget does not
+      // have to explain.
+      event.project = normalizeProjectPath(event.project, homeDirectory);
+      selection.offer(fileIndex, key, event);
+    }
+    return { diagnostics: [], mismatches, cut: false };
+  } catch {
+    return {
+      diagnostics: [
+        diagnostic(
+          adapter,
+          "query-failed",
+          file.path,
+          "SQLite 只读查询执行失败，已跳过。",
+        ),
+      ],
+      mismatches: 0,
+      cut: false,
+    };
+  } finally {
+    database?.close();
+  }
+}
+
+/**
  * P5-T5-07: runs the generic usage adapters through a bounded worker pool
  * (max GENERIC_ADAPTER_CONCURRENCY). Together with the 8 native readers this
  * keeps concurrent file reads within the `maxFileOperations: 16` runtime
@@ -4808,8 +5245,10 @@ async function runBoundedGenericAdapters(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
-  signal?: AbortSignal,
-  overrides?: UsageOverrideMap,
+  signal: AbortSignal | undefined,
+  overrides: UsageOverrideMap | undefined,
+  maxSqliteRows: number,
+  lookbackDays: number,
 ): Promise<SourceScanResult[]> {
   const results: SourceScanResult[] = new Array(adapters.length);
   let cursor = 0;
@@ -4831,6 +5270,8 @@ async function runBoundedGenericAdapters(
           cachedFiles,
           signal,
           overrides,
+          maxSqliteRows,
+          lookbackDays,
         ).catch((error) => sourceFailure(adapter.source, error));
       }
     },
@@ -4847,8 +5288,10 @@ async function scanGenericAdapter(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
-  signal?: AbortSignal,
-  overrides?: UsageOverrideMap,
+  signal: AbortSignal | undefined,
+  overrides: UsageOverrideMap | undefined,
+  maxSqliteRows: number,
+  lookbackDays: number,
 ): Promise<SourceScanResult> {
   const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
   const placements = rebaseUsagePathConfigs(
@@ -4869,50 +5312,210 @@ async function scanGenericAdapter(
   let filesParsed = 0;
   let malformedLines = 0;
 
+  // P2-1: one row budget for the whole source (several files - Hermes keeps one
+  // state.db per profile - share it), and the rows that survive it are the
+  // newest rows of the source, not of whichever database the walk read first.
+  // A database's file mtime says when it was written, not how old its rows are,
+  // so spending the budget in file order kept day-old sessions and hid the
+  // ten-minute-old ones in the profile behind it.
+  const sqliteFiles = selected.files.filter((file) => file.format === "sqlite");
+  const sqliteIndexes = new Map(
+    sqliteFiles.map((file, index) => [file.path, index] as const),
+  );
+  const selection = createNewestSelection<LocalUsageEvent>(
+    maxSqliteRows,
+    sqliteFiles.length,
+  );
+  // Whether the set of databases, and every one of their signatures, still
+  // reproduces the selection the cached entries were built from.
+  const reproducible = sqliteSetReproducible(
+    adapter.source,
+    sqliteFiles,
+    cachedFiles,
+    lookbackDays,
+    maxSqliteRows,
+  );
+  const sqliteReads = new Map<string, SqliteReadOutcome>();
+  const cachedTruncation = new Map<string, boolean>();
+  /** Databases whose cached entry the reproduced set carried over as it is. */
+  const carriedOver = new Set<string>();
+  // Entries are keyed by path and emitted in file order below, so the per-source
+  // dedupe keeps seeing the files in the same order it always has.
+  const entries = new Map<string, PersistentGenericFileEntry>();
+  let truncationReported = false;
+
   for (const file of selected.files) {
     signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
-    let entry: PersistentGenericFileEntry;
-    if (
+    const signatureMatches =
       fileSignatureMatches(file, cached, adapter.source) &&
-      sqliteWalMatches(file, cached)
-    ) {
-      entry = cached as PersistentGenericFileEntry;
-      filesReused += 1;
-    } else {
-      const parsed = await parseGenericFile(
-        file,
-        adapter,
-        sessionIdFromRelativeFile(
-          adapter.source,
-          relative(homeDirectory, file.path),
+      sqliteWalMatches(file, cached, lookbackDays);
+
+    if (file.format === "sqlite") {
+      const index = sqliteIndexes.get(file.path) ?? 0;
+      const identity = cached?.sqliteBudget;
+      // Reuse is safe when the whole set reproduces (the selection is
+      // deterministic, so its result comes back unchanged), or when this
+      // database was never cut by the budget and therefore holds every row of
+      // its own window no matter what its siblings did.
+      const reusableVerbatim =
+        reproducible && signatureMatches && identity != null;
+      const reusableAlone =
+        !reproducible && signatureMatches && identity?.truncated === false;
+      if (reusableVerbatim || reusableAlone) {
+        if (!reusableVerbatim) {
+          // A database that holds all of its own rows is a full input of the
+          // new selection, exactly like a fresh read would be.
+          const entry = cached as PersistentGenericFileEntry;
+          for (const event of entry.events) {
+            selection.offer(index, Date.parse(event.timestamp), event);
+          }
+        }
+        entries.set(file.path, cached as PersistentGenericFileEntry);
+        cachedTruncation.set(file.path, identity?.truncated ?? false);
+        if (reusableVerbatim) carriedOver.add(file.path);
+        sqliteReads.set(file.path, {
+          diagnostics: [],
+          mismatches: 0,
+          cut: false,
+        });
+        filesReused += 1;
+        continue;
+      }
+      sqliteReads.set(
+        file.path,
+        await selectSqliteFileRows(
+          file,
+          adapter,
+          selection,
+          index,
+          homeDirectory,
+          cutoffTime,
+          signal,
         ),
-        signal,
       );
-      parsed.events = parsed.events.map((event) => ({
-        ...event,
-        project: normalizeProjectPath(event.project, homeDirectory),
-      }));
-      entry = {
-        source: adapter.source as PersistentGenericFileEntry["source"],
-        path: file.path,
-        mtimeMs: file.modifiedAt,
-        size: file.size,
-        malformedLines: parsed.malformedLines,
-        ...(file.format === "sqlite"
-          ? {
-              wal:
-                file.wal == null
-                  ? null
-                  : { mtimeMs: file.wal.modifiedAt, size: file.wal.size },
-            }
-          : {}),
-        events: parsed.events,
-        diagnostics: parsed.diagnostics,
-      };
       filesParsed += 1;
+      continue;
     }
-    diagnostics.push(...entry.diagnostics);
+
+    if (signatureMatches) {
+      entries.set(file.path, cached as PersistentGenericFileEntry);
+      filesReused += 1;
+      continue;
+    }
+    const parsed = await parseGenericFile(
+      file,
+      adapter,
+      sessionIdFromRelativeFile(
+        adapter.source,
+        relative(homeDirectory, file.path),
+      ),
+      signal,
+      cutoffTime,
+    );
+    parsed.events = parsed.events.map((event) => ({
+      ...event,
+      project: normalizeProjectPath(event.project, homeDirectory),
+    }));
+    entries.set(file.path, {
+      source: adapter.source as PersistentGenericFileEntry["source"],
+      path: file.path,
+      mtimeMs: file.modifiedAt,
+      size: file.size,
+      malformedLines: parsed.malformedLines,
+      events: parsed.events,
+      diagnostics: parsed.diagnostics,
+    });
+    filesParsed += 1;
+  }
+
+  // Only now is it known what each database keeps: the budget is shared, so a
+  // database's rows survive only if no newer row of any other database takes
+  // their place.
+  const retained = selection.finish();
+  sqliteFiles.forEach((file, index) => {
+    const kept = retained.items[index] ?? [];
+    const read = sqliteReads.get(file.path) ?? {
+      diagnostics: [],
+      mismatches: 0,
+      cut: false,
+    };
+    const truncated =
+      (cachedTruncation.get(file.path) ?? false) ||
+      retained.truncated[index] === true ||
+      read.cut;
+    const reused = entries.get(file.path);
+    if (carriedOver.has(file.path)) {
+      // The whole set reproduced, so this entry is the answer the selection
+      // would compute again - it was never even offered.
+      return;
+    }
+    if (reused != null) {
+      // P2-2 review: a reused entry keeps everything the cache knew about the
+      // database (WAL companion, window, diagnostics), and only the rows the
+      // rest of the source left it can change. Its budget warning has to follow
+      // that change, though: a complete database whose rows a newer sibling
+      // pushed out of the budget drops events exactly like a fresh read that
+      // hit the cap, and staying silent about it reported a partial result as
+      // if it were whole. The warning is therefore rebuilt from `truncated`
+      // here, never inherited.
+      entries.set(file.path, {
+        ...reused,
+        events: kept,
+        sqliteBudget: sqliteBudgetIdentity(maxSqliteRows, truncated),
+        diagnostics: withTruncationWarning(
+          adapter,
+          file.path,
+          reused.diagnostics,
+          truncated,
+          maxSqliteRows,
+        ),
+      });
+      return;
+    }
+    const events = kept as LocalUsageEvent[];
+    const fileDiagnostics = [...read.diagnostics];
+    if (events.length === 0 && read.mismatches > 0) {
+      fileDiagnostics.push(
+        fieldMismatchDiagnostic(adapter, file.path, read.mismatches),
+      );
+    }
+    if (truncated)
+      fileDiagnostics.push(
+        truncationWarning(adapter, file.path, maxSqliteRows),
+      );
+    entries.set(file.path, {
+      source: adapter.source as PersistentGenericFileEntry["source"],
+      path: file.path,
+      mtimeMs: file.modifiedAt,
+      size: file.size,
+      malformedLines: 0,
+      wal:
+        file.wal == null
+          ? null
+          : { mtimeMs: file.wal.modifiedAt, size: file.wal.size },
+      // How much history this selection actually holds, so a later scan cannot
+      // reuse it for a wider window.
+      windowDays: lookbackDays,
+      // And what the shared budget did to it, so a later scan cannot reuse a
+      // partial result its siblings no longer explain.
+      sqliteBudget: sqliteBudgetIdentity(maxSqliteRows, truncated),
+      events,
+      diagnostics: fileDiagnostics,
+    });
+  });
+
+  for (const file of selected.files) {
+    const entry = entries.get(file.path);
+    if (entry == null) continue;
+    // A shared budget reports once, not once per database it stopped.
+    for (const item of entry.diagnostics) {
+      if (item.code === "query-truncated") {
+        if (truncationReported) continue;
+        truncationReported = true;
+      }
+      diagnostics.push(item);
+    }
     cacheEntries.push(entry);
     filesRead += 1;
     malformedLines += entry.malformedLines;
@@ -5034,6 +5637,12 @@ export async function scanLocalUsage(
       MAX_FILES_PER_SOURCE,
       Math.trunc(options.maxFilesPerSource ?? MAX_FILES_PER_SOURCE),
     ),
+  );
+  // Issue #42: the row budget is overridable so the truncation path is
+  // testable without a 500k-row fixture.
+  const maxSqliteRows = Math.max(
+    1,
+    Math.trunc(options.maxSqliteRowsPerSource ?? MAX_SQLITE_ROWS),
   );
   const isolatedUsageHome = process.env[ENV.USAGE_HOME]?.trim();
   const homeDirectory =
@@ -5288,6 +5897,8 @@ export async function scanLocalUsage(
       cachedFiles,
       options.signal,
       options.toolDataRoots,
+      maxSqliteRows,
+      lookbackDays,
     ).catch((error) => sourceFailure("zed", error)),
     scanDroidUsageAdapter(
       BUILTIN_USAGE_ADAPTERS.find(
@@ -5338,6 +5949,8 @@ export async function scanLocalUsage(
       cachedFiles,
       options.signal,
       options.toolDataRoots,
+      maxSqliteRows,
+      lookbackDays,
     )),
   ]);
 

@@ -206,3 +206,70 @@ test("agents read requires agent storage roots", () => {
   ]);
   assert.ok(diag.includes("agents-read-without-storage"));
 });
+
+/**
+ * Issue #42 follow-up: the sqlite read protections (no whole-file byte cap,
+ * bounded by the shared row budget) live in the sqlite-aware readers. A sqlite
+ * path declared on any other reader silently loses both and reproduces the
+ * "no logs" failure, so the mismatch is an error rather than a warning.
+ */
+test("sqlite usage paths require a sqlite-capable reader", () => {
+  const sqlitePath = {
+    root: ".newtool",
+    glob: "db.sqlite",
+    format: "sqlite" as const,
+  };
+
+  const mismatched = codes([
+    validDef({
+      capabilities: {
+        ...validDef().capabilities,
+        usage: {
+          mode: "adapter",
+          reader: "codex-rollout-v1",
+          paths: [sqlitePath],
+        },
+      },
+    }),
+  ]);
+  assert.ok(
+    mismatched.includes("sqlite-usage-reader-mismatch"),
+    `expected a mismatch diagnostic, got ${JSON.stringify(mismatched)}`,
+  );
+
+  // The reader must be known AND sqlite-capable.
+  assert.deepEqual(
+    codes([
+      validDef({
+        capabilities: {
+          ...validDef().capabilities,
+          usage: {
+            mode: "adapter",
+            reader: "zed-threads-v1",
+            paths: [sqlitePath],
+          },
+        },
+      }),
+    ]),
+    [],
+    "a sqlite reader on a sqlite path is valid",
+  );
+
+  // The reverse direction: a sqlite reader may not point at a non-sqlite path.
+  const reversed = codes([
+    validDef({
+      capabilities: {
+        ...validDef().capabilities,
+        usage: {
+          mode: "adapter",
+          reader: "generic-sqlite",
+          paths: [{ root: ".newtool", glob: "*.jsonl", format: "jsonl" }],
+        },
+      },
+    }),
+  ]);
+  assert.ok(
+    reversed.includes("sqlite-usage-reader-mismatch"),
+    `expected a mismatch diagnostic, got ${JSON.stringify(reversed)}`,
+  );
+});

@@ -199,6 +199,7 @@ function compileUsage(
       usage.maxFileSizeBytes ??
       packs.genericReaderDefaults.defaultMaxFileSizeBytes,
     ...(usage.query ? { query: usage.query } : {}),
+    ...(usage.windowFilter ? { windowFilter: usage.windowFilter } : {}),
   };
 }
 

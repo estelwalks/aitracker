@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, open, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -242,6 +242,160 @@ test("zed usage adapter reads threads.db rows with json and zstd thread blobs", 
     assert.equal(secondZed.filesParsed, 0);
     assert.equal(secondZed.filesReused, 1);
     assert.equal(secondZed.events, 3);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Issue #42, native-reader half: `threads.db` accumulates one row per
+ * conversation, so it can pass the adapter's 512 MB `maxFileSizeBytes` on a
+ * long-lived install. The native reader applies its own byte gate, which had
+ * the same effect as the generic one - the database was skipped before the
+ * thread query ran.
+ */
+test("zed threads.db above maxFileSizeBytes is still queried", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-zed-oversize-"));
+  try {
+    const threadsDir = join(root, "AppData", "Local", "Zed", "threads");
+    await mkdir(threadsDir, { recursive: true });
+    const databasePath = join(threadsDir, "threads.db");
+    createZedDb(databasePath, [
+      [
+        "th-oversize-1",
+        "2026-05-01T14:00:00Z",
+        "json",
+        threadJson({
+          provider: "zed.dev",
+          model: "claude-sonnet-4",
+          request: [
+            {
+              input_tokens: 100,
+              output_tokens: 20,
+              cache_read_input_tokens: 5,
+              cache_creation_input_tokens: 2,
+            },
+          ],
+        }),
+      ],
+    ]);
+
+    // Trailing bytes land on free pages, so the thread row stays queryable.
+    const cap = 536_870_912;
+    const handle = await open(databasePath, "r+");
+    try {
+      await handle.truncate(cap + 8 * 1024 * 1024);
+    } finally {
+      await handle.close();
+    }
+    const { size } = await stat(databasePath);
+    assert.ok(size > cap, "fixture must exceed the adapter byte cap");
+
+    const probe = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const rows = probe
+        .prepare("SELECT COUNT(*) AS n FROM threads")
+        .all() as Array<{ n: number }>;
+      assert.equal(rows[0]?.n, 1, "padded database must stay queryable");
+    } finally {
+      probe.close();
+    }
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+      platform: "win32",
+    });
+    const zed = snapshot.sources.find((source) => source.source === "zed");
+    assert.ok(zed, "zed source must be reported");
+    assert.equal(
+      zed.events,
+      1,
+      "an oversized threads.db must still yield its rows",
+    );
+    assert.deepEqual(
+      zed.diagnostics ?? [],
+      [],
+      "file size must not produce a file-too-large diagnostic for sqlite",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * Review finding: `updated_at` is an ISO TEXT column and the window bound was
+ * a numeric cutoff, so SQLite applied TEXT affinity to the parameter and
+ * compared lexicographically - "2020-01-01T00:00:00Z" >= "1786..." is true, so
+ * the filter matched history instead of excluding it and the window did
+ * nothing. The same query had no ORDER BY, so once the row budget stopped the
+ * walk it kept the OLDEST rows and dropped the newest.
+ */
+test("zed window excludes old threads and keeps the newest under a budget", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-zed-window-"));
+  try {
+    const threadsDir = join(root, "AppData", "Local", "Zed", "threads");
+    await mkdir(threadsDir, { recursive: true });
+    const now = new Date("2026-09-09T08:00:00.000Z");
+    const day = 86_400_000;
+    const thread = (input: number) =>
+      threadJson({
+        provider: "zed.dev",
+        model: "claude-sonnet-4",
+        request: [{ input_tokens: input, output_tokens: 1 }],
+      });
+    // Inserted oldest first, so an unordered walk under a budget keeps these.
+    createZedDb(join(threadsDir, "threads.db"), [
+      ["th-old", "2020-01-01T00:00:00Z", "json", thread(1_000)],
+      [
+        "th-mid",
+        new Date(now.getTime() - 100 * day).toISOString(),
+        "json",
+        thread(2_000),
+      ],
+      [
+        "th-new",
+        new Date(now.getTime() - 1 * day).toISOString(),
+        "json",
+        thread(3_000),
+      ],
+    ]);
+    const options = {
+      homeDirectory: root,
+      cacheDirectory: root,
+      platform: "win32" as const,
+      now,
+      disablePersistentCache: true,
+    };
+
+    // The 2020 row must be gone: a numeric comparison would have kept it.
+    const narrow = await scanLocalUsage({ ...options, lookbackDays: 30 });
+    const narrowEvents = narrow.details.filter((e) => e.source === "zed");
+    assert.equal(narrowEvents.length, 1, "only the recent thread is in window");
+    assert.equal(narrowEvents[0]!.inputTokens, 3_000);
+
+    // With a budget of two the newest two must survive, not the oldest two.
+    const capped = await scanLocalUsage({
+      ...options,
+      lookbackDays: 3650,
+      maxSqliteRowsPerSource: 2,
+    });
+    const cappedEvents = capped.details
+      .filter((e) => e.source === "zed")
+      .map((event) => event.inputTokens)
+      .sort((a, b) => a - b);
+    assert.deepEqual(
+      cappedEvents,
+      [2_000, 3_000],
+      "a capped walk must keep the newest threads",
+    );
+    assert.ok(
+      (capped.sources.find((s) => s.source === "zed")?.diagnostics ?? []).some(
+        (entry) => entry.code === "query-truncated",
+      ),
+      "truncation must be reported",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
