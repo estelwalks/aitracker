@@ -41,6 +41,18 @@ export const BUILTIN_USAGE_READERS: ReadonlySet<string> = new Set([
   "kilocode-task-v1",
 ]);
 
+/**
+ * Usage readers that can read a `format: "sqlite"` path. These open the
+ * database and run a prepared statement, so they are the only ones that carry
+ * the sqlite read protections (no whole-file byte cap, bounded by the shared
+ * row budget - issue #42). Kept next to BUILTIN_USAGE_READERS so a new sqlite
+ * reader is registered in both places at once.
+ */
+export const SQLITE_CAPABLE_USAGE_READERS: ReadonlySet<string> = new Set([
+  "generic-sqlite",
+  "zed-threads-v1",
+]);
+
 export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([
   "claude-session-v1",
   "codex-session-v1",
@@ -253,6 +265,31 @@ export function validateToolDefinitions(
               "unsafe-usage-root",
               `usage path root "${path.root}" is unsafe`,
             );
+          // The format and the reader must agree. A sqlite database is read
+          // through a prepared statement, not by buffering the file, so only
+          // the sqlite-aware readers apply the row budget and skip the
+          // whole-file byte cap (issue #42). A sqlite path on any other reader
+          // silently loses both protections and reproduces the "no logs"
+          // failure this rule exists to prevent.
+          const root = typeof path.root === "string" ? path.root : path.glob;
+          if (usage.reader !== undefined && path.format === "sqlite") {
+            if (!SQLITE_CAPABLE_USAGE_READERS.has(usage.reader)) {
+              diag(
+                id,
+                "sqlite-usage-reader-mismatch",
+                `usage reader "${usage.reader}" cannot read the sqlite path "${root}"`,
+              );
+            }
+          } else if (
+            usage.reader !== undefined &&
+            SQLITE_CAPABLE_USAGE_READERS.has(usage.reader)
+          ) {
+            diag(
+              id,
+              "sqlite-usage-reader-mismatch",
+              `usage reader "${usage.reader}" requires a sqlite path, but "${root}" is ${path.format}`,
+            );
+          }
         }
       }
     }
