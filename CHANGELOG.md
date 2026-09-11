@@ -24,6 +24,8 @@ fails the build when package.json names a version with no dated section.
 - The compatibility layer added in 1.0.3 is gone: installers are published under their versionless names only, so a release no longer attaches a duplicate copy of every installer
 - `release-metadata.json` lists all four platforms again, including the Windows ARM64 installer
 - Updates keep working: 1.0.3 resolves the new document, and later versions resolve it the same way
+- ZCode usage is collected again: a `db.sqlite` past 512 MB was skipped as "no logs", and a heavily used install reaches that within weeks
+- Usage scans no longer read a whole database history: the scan window is pushed into the query, and a history that outgrows one scan is capped in rows with a visible warning instead of reading without bound
 
 ### Details
 
