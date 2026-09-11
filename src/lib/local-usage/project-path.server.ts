@@ -6,6 +6,7 @@ import {
   serverPathImplForPlatform,
 } from "../git-repository.server.ts";
 import {
+  isTccProtectedPathFor,
   normalizeProjectPathFor,
   type ProjectPathImpl,
 } from "./project-path.ts";
@@ -38,16 +39,42 @@ function expandProjectPathFor(
  * repository root becomes the identity so sessions recorded from nested
  * working directories share one project bucket. Non-path values such as
  * `unknown` and `quick-conversation` are preserved for classification.
+ *
+ * Paths under a macOS TCC-protected directory (Documents, Desktop, Downloads,
+ * the cloud-provider folders, mounted volumes) are the one exception: they are
+ * never resolved on disk, so they keep their lexical form and report
+ * `isGitProject: false`. Reading them would raise a "…would like to access
+ * files in your Documents folder" prompt, and — because this build is ad-hoc
+ * signed — macOS could not even remember the answer: TCC stores a code
+ * requirement that collapses to the binary's cdhash for ad-hoc signatures, so
+ * every rebuilt bundle looks like a new app and asks again.
+ *
+ * The visible identity is identical either way (the display contract is
+ * home-relative, so `~/Documents/Dev/repo/src/feature` stays that string), so
+ * the only thing given up is collapsing a nested cwd onto its repository root.
+ * Features that key off `isGitProject` — project-level distillation grouping —
+ * therefore skip protected projects. To trade the prompt back for that
+ * grouping, sign the app with a stable certificate (see
+ * `electron/after-pack.cjs`) and drop the {@link isTccProtectedPathFor} guard
+ * below.
  */
 export async function canonicalizeProjectPathDetailsFor(
   pathImpl: ProjectPathImpl,
   project: string,
   homeDirectory: string,
+  platform: NodeJS.Platform = process.platform,
 ): Promise<CanonicalProjectIdentity> {
   const normalizedHome = pathImpl.normalize(homeDirectory);
   const expanded = expandProjectPathFor(pathImpl, project, normalizedHome);
   if (expanded == null) {
     return { project: project.trim() || project, isGitProject: false };
+  }
+
+  if (isTccProtectedPathFor(pathImpl, expanded, normalizedHome, platform)) {
+    return {
+      project: normalizeProjectPathFor(pathImpl, expanded, normalizedHome),
+      isGitProject: false,
+    };
   }
 
   let canonicalPath = expanded;
@@ -79,9 +106,15 @@ export async function canonicalizeProjectPathFor(
   pathImpl: ProjectPathImpl,
   project: string,
   homeDirectory: string,
+  platform: NodeJS.Platform = process.platform,
 ): Promise<string> {
   return (
-    await canonicalizeProjectPathDetailsFor(pathImpl, project, homeDirectory)
+    await canonicalizeProjectPathDetailsFor(
+      pathImpl,
+      project,
+      homeDirectory,
+      platform,
+    )
   ).project;
 }
 
@@ -95,6 +128,7 @@ export function canonicalizeProjectIdentity(
     pathImplForRecordedProject(project, platform),
     project,
     homeDirectory,
+    platform,
   );
 }
 
@@ -108,6 +142,7 @@ export function canonicalizeProjectPath(
     pathImplForRecordedProject(project, platform),
     project,
     homeDirectory,
+    platform,
   );
 }
 

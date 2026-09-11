@@ -147,6 +147,11 @@ test("collapses nested Codex working directories to one Git repository project",
       homeDirectory,
       cacheDirectory,
       now: NOW,
+      // Pin a platform without a macOS TCC gate: darwin deliberately skips the
+      // disk probe for `~/Documents/…`, which has its own coverage in
+      // project-path.test.ts. Without this the assertion below would pass on
+      // Linux CI and fail on a macOS developer machine.
+      platform: "linux",
     });
     const events = snapshot.details.filter((event) => event.source === "codex");
     assert.equal(events.length, 2);

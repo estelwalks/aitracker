@@ -155,11 +155,16 @@ release/release-metadata.json --channel <stable|beta> --token
   `licenses` folder exists in the unpacked artifact and includes
   `@estelwalks/agent-threat-scanner`'s LICENSE and NOTICE before publishing.
 - Attach checksums to the release.
-- For stable releases, sign platform artifacts and notarize macOS artifacts
-  with credentials held outside this repository. For unsigned beta releases,
-  document the expected Gatekeeper/SmartScreen prompt and never instruct users
-  to disable system-wide security protections. Never commit certificates,
-  private keys, or signing logs.
+- macOS builds are re-signed by `electron/after-pack.cjs` with the project's
+  self-signed certificate whenever the `MAC_CSC_LINK` secret is configured (see
+  docs/MACOS_SIGNING.md). Verify the build log reports
+  `designated requirement … certificate leaf = H"…"` and not `cdhash`, and
+  confirm the unpacked bundle with `codesign -d -r-`. Without that certificate
+  the build falls back to ad-hoc, which makes users re-grant folder permissions
+  after every release — acceptable for a beta, not for stable.
+- Notarization is still not performed, so document the expected Gatekeeper
+  prompt for users and never instruct them to disable system-wide security
+  protections. Never commit certificates, private keys, or signing logs.
 
 ## Publish
 
@@ -173,7 +178,8 @@ release/release-metadata.json --channel <stable|beta> --token
 https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg`
   should end on the new tag's asset URL, not the previous release's.
 - This workflow does not publish npm packages, create or update a Homebrew Tap,
-  sign artifacts, or notarize macOS builds. No external credentials should be
-  added to this repository.
+  or notarize macOS builds. The only external credentials it reads are the
+  optional macOS signing secrets documented in docs/MACOS_SIGNING.md, and no
+  credential is ever stored in this repository.
 - Do not advertise a stable install command until a signed stable build and the
   official Homebrew Cask are available.

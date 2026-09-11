@@ -1821,7 +1821,14 @@ test("session project identity uses the same Git-root canonicalization as usage"
       `${session("claude-components", "~/Documents/Dev/repo/src/components")}\n`,
     );
 
-    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    // Pin a platform without a macOS TCC gate: darwin deliberately skips the
+    // disk probe for `~/Documents/…`, so this cross-platform collapse contract
+    // would otherwise pass on Linux CI and fail on a macOS developer machine.
+    const summary = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      platform: "linux",
+    });
     assert.equal(summary.total, 2);
     assert.deepEqual(
       new Set(summary.sessions.map((record) => record.projectRef)),

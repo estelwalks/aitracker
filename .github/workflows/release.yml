@@ -79,13 +79,50 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
-      # This workflow intentionally produces unsigned installers. No signing
-      # identity, certificate, notarization, or SmartScreen credential is
-      # configured here.
+      # No Developer ID, notarization, or SmartScreen credential is configured,
+      # so electron-builder itself does not sign. macOS re-signing happens in
+      # electron/after-pack.cjs, which picks the first available identity:
+      # CSC_NAME, then a Developer ID certificate, then a self-signed
+      # "AITracker" certificate, then ad-hoc.
+      #
+      # Ad-hoc is the fallback and it costs users a re-grant: macOS TCC stores a
+      # code requirement that collapses to the binary's cdhash, so every release
+      # looks like a new app and asks for Documents/Desktop/Downloads access
+      # again. Export the project's self-signed code-signing certificate as a
+      # .p12, add it as the MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD secrets, and set
+      # the MAC_CSC_NAME repository variable; the step below then imports it and
+      # the requirement becomes a stable `certificate leaf` anchor.
       CSC_IDENTITY_AUTO_DISCOVERY: false
+      CSC_NAME: ${{ vars.MAC_CSC_NAME }}
+      MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      # Fail the release instead of silently publishing an ad-hoc bundle once a
+      # certificate is configured — a misconfigured secret should be loud.
+      # Forks and pull requests never receive repository secrets, so their
+      # macOS builds stay ad-hoc and still succeed.
+      AITRACKER_REQUIRE_SIGNING: ${{ secrets.MAC_CSC_LINK != '' && '1' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Import macOS signing certificate
+        if: runner.os == 'macOS' && env.MAC_CSC_LINK != ''
+        shell: bash
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$MAC_CSC_LINK" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$MAC_CSC_KEY_PASSWORD" -T /usr/bin/codesign -A
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          # codesign only searches keychains already on the search list.
+          security list-keychains -d user -s "$KEYCHAIN" \
+            $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
 
       - name: Setup Node
         uses: actions/setup-node@v4
