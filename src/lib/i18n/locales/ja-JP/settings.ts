@@ -179,8 +179,6 @@ export const settings = {
   retentionForever: "無期限",
   storage: "ストレージ使用量",
   dataDangerZone: "危険な操作",
-  storageExceedsSoftCap:
-    "（500MB を超えています。キャッシュの削除をおすすめします）",
   clearCache: "キャッシュを削除",
   clearCacheHint:
     "現在の {appName} データディレクトリ内のキャッシュのみ削除します。ローカル収集データ、AI ツールのログ、アダプター設定、セキュリティ履歴は削除しません",

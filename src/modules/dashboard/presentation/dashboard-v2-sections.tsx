@@ -179,7 +179,10 @@ export function DashboardTrustHero({
         active: view.activeTools,
         dormant: dormantTools,
       }),
-      to: "/sources" as const,
+      // "Agent视角" opens the Agent overview (/agents, nav.agents = "Agent概览"),
+      // not the data-source page: the card reports Agent coverage, so the
+      // follow-up must stay on the same subject.
+      to: "/agents" as const,
       action: t("dashboard.v2.viewTools"),
     },
     {

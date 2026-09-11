@@ -10,6 +10,8 @@ import { ENV } from "../app-config";
 import { osFromProcess } from "../tools/detection.server.ts";
 import {
   decodeZstdSessionLogWithBounds,
+  parseDshLogFilename,
+  selectDshSessionLogs,
   ZSTD_MAGIC_BYTES,
 } from "../local-usage/dsh-zstd.ts";
 import { canonicalizeProjectIdentity } from "../local-usage/project-path.server.ts";
@@ -1293,16 +1295,26 @@ async function scanGrokSessions(
 
 // --------------------------------------------------------------------------
 // DeepSeek Harness (DSH) — ~/.dsh/sessions/<workspace>/<session-id>/
-// One session is a directory holding `session.jsonl` (compression "none") or
-// `session.jsonl.zstd` (concatenated zstd frames). The first record is the
-// session header (id/cwd/createdAt); `assistant/message` records carry the
-// per-step usage, `tool/call` records carry tool names (metadata only), and
-// `turn/start` marks each user turn. Physical decoding is shared with the
-// usage chain via the shared zstd decoder; only metadata is extracted here.
+// One session is a directory holding one session log: `session.jsonl`
+// (compression "none") or `session.jsonl.zstd` (concatenated zstd frames), or
+// the generation-addressed spelling `session.vN.jsonl[.zstd]` written since the
+// harness began versioning its stored session format. A migrated session keeps
+// its older generation beside the new one, so the directory is resolved to its
+// highest canonical generation (see `selectDshSessionLogs`) instead of being
+// read file by file. The first record is the session header (id/cwd/createdAt);
+// `assistant/message` records carry the per-step usage, `tool/call` records
+// carry tool names (metadata only), and `turn/start` marks each user turn.
+// Physical decoding is shared with the usage chain via the shared zstd decoder;
+// only metadata is extracted here.
 //
 // turns = `turn/start` records (a DSH "step" is one model round inside a
 // turn, so steps are intentionally not counted as turns). editTurns /
 // subagentCalls are best-effort from `tool/call` names, never tool arguments.
+//
+// The record set is generation-independent: v0 and v3 both carry the session
+// header, `turn/start`, `tool/call`, and `assistant/message` with the same
+// usage fields. A later generation drops the streaming chunk records
+// (`assistant/chunk`, `text-chunks`, ...), which this reader never used.
 
 function isDshEditTool(name: string): boolean {
   const lower = name.toLowerCase();
@@ -1325,7 +1337,13 @@ function isDshSubagentTool(name: string): boolean {
   );
 }
 
-/* DSH session files live at ~/.dsh/sessions/<workspace>/<session-id>/, named session.jsonl or session.jsonl.zstd. */
+/*
+ * Every canonical session log under ~/.dsh/sessions/<workspace>/<session-id>/,
+ * narrowed to the live generation of each session directory. The name test
+ * happens during the walk (a stray `session.lock` or backup must not consume
+ * the per-source file budget); the generation choice happens afterwards, when
+ * the whole directory is known.
+ */
 async function collectDshSessionFiles(
   sessionsRoot: string,
   signal?: AbortSignal,
@@ -1355,32 +1373,16 @@ async function collectDshSessionFiles(
         continue;
       }
       if (!entry.isFile()) continue;
-      if (
-        entry.name !== "session.jsonl" &&
-        entry.name !== "session.jsonl.zstd"
-      ) {
-        continue;
-      }
+      if (parseDshLogFilename(entry.name) == null) continue;
       if (!seen.has(entryPath)) {
         seen.add(entryPath);
         files.push({ path: entryPath });
-        if (files.length >= MAX_FILES_PER_SOURCE) return files;
+        if (files.length >= MAX_FILES_PER_SOURCE) break;
       }
     }
+    if (files.length >= MAX_FILES_PER_SOURCE) break;
   }
-  // A session dir holds one container; prefer zstd when both forms exist.
-  const byDirectory = new Map<string, string>();
-  for (const file of files) {
-    const directory = dirname(file.path);
-    const existing = byDirectory.get(directory);
-    if (
-      existing == null ||
-      (!existing.endsWith(".zstd") && file.path.endsWith(".zstd"))
-    ) {
-      byDirectory.set(directory, file.path);
-    }
-  }
-  return [...byDirectory.values()].map((path) => ({ path }));
+  return selectDshSessionLogs(files);
 }
 
 // ---------------------------------------------------------------------------
@@ -2026,6 +2028,13 @@ async function scanDshSessions(
     const fragment =
       fragments.get(parsed.sessionId) ??
       createEmptyFragment("dsh", parsed.sessionId);
+    // DSH exposes no resume entry point to launch: the shipped profiles are
+    // acp/web/headless/sdk/sdk-minimal, `dsh web` takes no session argument,
+    // and the long-documented `dsh --profile tui --resume <id>` fails with
+    // "profile tui does not exist". Sessions are therefore read-only here
+    // (resumeSupported=false, same as AiPy and Pi) and are resumed in the DSH
+    // Web UI's own session list.
+    fragment.resumeSupported = false;
     if (fragment.title === "" && parsed.title !== "") {
       fragment.title = parsed.title;
     }

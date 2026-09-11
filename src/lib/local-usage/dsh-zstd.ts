@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
+import { basename, dirname } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 
 /**
- * Decoder for DeepSeek Harness (DSH) session logs.
+ * Naming model and decoder for DeepSeek Harness (DSH) session logs.
  *
  * DSH persists each agent session as `~/.dsh/sessions/<workspace>/<session-id>/
  * session.jsonl.zstd` — a CONCATENATED-FRAME Zstandard container: every append
@@ -10,8 +11,19 @@ import { zstdDecompressSync } from "node:zlib";
  * frame contains exactly the one-line session header record. Plaintext
  * `.jsonl` logs (compression "none") are also valid.
  *
- * This module owns the physical decoding only (frame scanning + per-frame
- * decompression). Event extraction lives in the scanner's `parseDshUsageFile`.
+ * The basename is not fixed. DSH addresses each Session FORMAT GENERATION with
+ * its own file: generation 0 keeps `session.jsonl`, every later generation
+ * carries a `.vN` component (`session.v3.jsonl`), and the persistence layer
+ * appends `.zstd` when compressed. An upgrade that advances the stored format
+ * therefore starts writing a NEW name, and a migrated session keeps the older
+ * generation's file beside the new one. Discovery must match the generation
+ * component instead of one literal name — see `parseDshLogFilename` and
+ * `selectDshSessionLogs`, whose rules mirror the harness's own
+ * `CANONICAL_LOG_FILENAME` / "highest canonical generation wins".
+ *
+ * This module owns the naming model and the physical decoding (frame scanning
+ * + per-frame decompression). Event extraction lives in the scanners'
+ * `applyDshUsageLine` / `applyDshRecord` and never depends on the generation.
  *
  * Frame layout follows the Zstandard format spec (RFC 8878 §3.1): magic
  * 0xFD2FB528, one descriptor byte, optional window descriptor / dictionary id
@@ -192,4 +204,113 @@ export async function readDshSessionLog(filePath: string): Promise<string> {
     return decodeZstdSessionLog(buffer);
   }
   return buffer.toString("utf8");
+}
+
+// ---------------------------------------------------------------------------
+// Session log naming and generation selection.
+//
+// The harness names a session log after the Session FORMAT GENERATION it is
+// stored in, and keeps every generation it has written (a migration does not
+// delete its source). Discovery therefore has two jobs: recognize every
+// canonical generation name, and read only the live one.
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical DSH session-log basename: `session.jsonl[.zstd]` (generation 0) or
+ * `session.v<N>.jsonl[.zstd]` for generation N ≥ 1. Mirrors the harness's own
+ * `CANONICAL_LOG_FILENAME`, which accepts no compression-suffixed, uppercase,
+ * leading-zero, or `.v0` spelling.
+ */
+export const DSH_LOG_FILENAME =
+  /^session(?:\.v([1-9][0-9]*))?\.jsonl(\.zstd)?$/u;
+
+export interface DshLogGeneration {
+  /** Session format generation the basename names; 0 for `session.jsonl`. */
+  readonly generation: number;
+  /** Whether the container is zstd-compressed (`.jsonl.zstd`). */
+  readonly compressed: boolean;
+}
+
+/**
+ * Highest Session format generation whose record vocabulary the DSH readers
+ * have been verified against: generation 0 (harnesses before the format
+ * catalog existed), 2 (0.1.3-alpha.2), and 3 (0.1.5-alpha.1 through
+ * 0.1.5-rc.2). Generation 1 was never written by a released harness; it exists
+ * only as a migration waypoint.
+ *
+ * A later generation is still discovered and read like any other, so one that
+ * keeps the records these readers consume needs no change here. When it does
+ * not, the usage scan reports a field mismatch instead of quietly reporting an
+ * empty source for a harness that is collecting fine.
+ */
+export const DSH_MAX_VERIFIED_GENERATION = 3;
+
+/**
+ * Read the format generation one basename names. Returns undefined when the
+ * name is not a canonical session log, which is how a discoverer rejects
+ * temporary, backup, or foreign files that happen to share the prefix.
+ */
+export function parseDshLogFilename(
+  filename: string,
+): DshLogGeneration | undefined {
+  const match = DSH_LOG_FILENAME.exec(filename);
+  if (match == null) return undefined;
+  const generation = match[1] === undefined ? 0 : Number(match[1]);
+  if (!Number.isSafeInteger(generation)) return undefined;
+  return { generation, compressed: match[2] !== undefined };
+}
+
+/**
+ * Keep only the live log of each session directory.
+ *
+ * A session directory holds one session, and one session may hold several
+ * generations. The newest generation is a COMPLETE re-encoding of that session
+ * — the same events under new sequence numbers, not an extension of the older
+ * file — so summing generations would count every migrated session twice (in
+ * one real install a 324-byte header-only generation-0 stub sat beside the
+ * 392 KB generation-3 log of the same conversation).
+ *
+ * Highest generation wins, and within one generation the zstd container wins,
+ * matching the harness, which resolves a session directory to its numerically
+ * highest canonical generation. Non-canonical names are dropped rather than
+ * read: they are not session logs, and DSH's own reader rejects them.
+ *
+ * Input order is preserved so callers that rank candidates (by mtime, then
+ * truncate to a file budget) keep their existing semantics.
+ */
+export function selectDshSessionLogs<T extends { readonly path: string }>(
+  files: readonly T[],
+): T[] {
+  const winnerByDirectory = new Map<
+    string,
+    {
+      readonly file: T;
+      readonly generation: number;
+      readonly compressed: boolean;
+    }
+  >();
+  for (const file of files) {
+    const parsed = parseDshLogFilename(basename(file.path));
+    if (parsed == null) continue;
+    const directory = dirname(file.path);
+    const winner = winnerByDirectory.get(directory);
+    if (
+      winner == null ||
+      parsed.generation > winner.generation ||
+      (parsed.generation === winner.generation &&
+        parsed.compressed &&
+        !winner.compressed)
+    ) {
+      winnerByDirectory.set(directory, {
+        file,
+        generation: parsed.generation,
+        compressed: parsed.compressed,
+      });
+    }
+  }
+  if (winnerByDirectory.size === 0) return [];
+  const winners = new Set(
+    [...winnerByDirectory.values()].map((entry) => entry.file),
+  );
+  return files.filter((file) => winners.has(file));
 }

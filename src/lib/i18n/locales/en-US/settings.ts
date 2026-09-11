@@ -178,7 +178,6 @@ export const settings = {
   retentionForever: "Forever",
   storage: "Storage used",
   dataDangerZone: "Dangerous actions",
-  storageExceedsSoftCap: " (over 500 MB — consider clearing the cache)",
   clearCache: "Clear cache",
   clearCacheHint:
     "Deletes only caches inside the current {appName} data directory; never local collected data, AI tool logs, adapter configs or security history",

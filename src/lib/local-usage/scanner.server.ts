@@ -31,7 +31,10 @@ import {
 } from "./codex-context.ts";
 import {
   decodeZstdSessionLogWithBounds,
+  DSH_MAX_VERIFIED_GENERATION,
+  parseDshLogFilename,
   scanZstdFrames,
+  selectDshSessionLogs,
   ZSTD_MAGIC_BYTES,
 } from "./dsh-zstd.ts";
 import { canonicalizeProjectPath } from "./project-path.server.ts";
@@ -2685,10 +2688,15 @@ async function parseAntigravityUsageFile(
  * DeepSeek Harness (DSH) session-log reader. DSH persists one append-only log
  * per agent session at `~/.dsh/sessions/<workspace>/<session-id>/` — a
  * concatenated-frame zstd container of JSONL event records (plaintext `.jsonl`
- * with compression "none" is also accepted). The first record is the session
- * header (id/cwd); later `assistant/message` records carry the provider's
- * final usage sample per turn/step. Only stats are extracted: message content,
- * system prompts and tool payloads are read transiently and never cached.
+ * with compression "none" is also accepted). The file is named after the
+ * Session FORMAT GENERATION it stores (`session.jsonl` for generation 0,
+ * `session.vN.jsonl` after that), and a format migration leaves the older
+ * generation's file in place, so `scanDshUsageAdapter` resolves each session
+ * directory to its highest canonical generation before reading. The first
+ * record is the session header (id/cwd); later `assistant/message` records
+ * carry the provider's final usage sample per turn/step, with the same field
+ * names in every generation. Only stats are extracted: message content, system
+ * prompts and tool payloads are read transiently and never cached.
  */
 // ---------------------------------------------------------------------------
 // Pi (earendil-works/pi coding agent) native reader.
@@ -3334,12 +3342,21 @@ async function scanDshUsageAdapter(
     homeDirectory,
     usageOverrideFor(adapter.source, overrides),
   );
-  const selected = await collectAdapterFiles(
+  const candidates = await collectAdapterFiles(
     placements,
     cutoffTime,
     maxFiles,
     signal,
   );
+  // One session directory can hold several format generations: a migration
+  // rewrites the session under the new generation's name and leaves the source
+  // file behind. The newest generation is a COMPLETE re-encoding of that
+  // session, so it supersedes the older files rather than extending them —
+  // reading both would count every migrated event twice. Superseded files are
+  // dropped before the read budget is spent; `detected` still reflects the
+  // placement walk, so a DSH install holding only superseded files stays
+  // visible as detected-but-empty instead of disappearing.
+  const selected = selectDshSessionLogs(candidates.files);
   const cacheEntries: PersistentStructuredFileEntry[] = [];
   const diagnostics: LocalUsageDiagnostic[] = [];
   let filesRead = 0;
@@ -3347,7 +3364,7 @@ async function scanDshUsageAdapter(
   let filesParsed = 0;
   let malformedLines = 0;
 
-  for (const file of selected.files) {
+  for (const file of selected) {
     signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     const cachedDsh =
@@ -3424,6 +3441,31 @@ async function scanDshUsageAdapter(
       }
       filesParsed += 1;
     }
+    // Format-drift tripwire. A generation newer than the highest verified one
+    // is read like any other, and one that keeps the records this reader
+    // consumes needs no change here. When it does NOT keep them the file parses
+    // cleanly and yields nothing, which would otherwise look exactly like a
+    // harness that simply is not collecting: the user sees a source that is
+    // detected, empty, and silent. Report the mismatch instead, from the file
+    // name alone so no extra read or parser state is needed. Only a freshly
+    // parsed entry can add it - a reused entry already carries the diagnostics
+    // it was parsed with.
+    if (entry !== cachedDsh) {
+      const generation =
+        parseDshLogFilename(basename(file.path))?.generation ?? 0;
+      if (
+        generation > DSH_MAX_VERIFIED_GENERATION &&
+        entry.identifiedEvents.length === 0
+      ) {
+        entry = {
+          ...entry,
+          diagnostics: [
+            ...entry.diagnostics,
+            fieldMismatchDiagnostic(adapter, file.path, 1),
+          ],
+        };
+      }
+    }
     cacheEntries.push(entry);
     diagnostics.push(...entry.diagnostics);
     malformedLines += entry.malformedLines;
@@ -3436,9 +3478,9 @@ async function scanDshUsageAdapter(
     summary: {
       source: "dsh",
       available: events.length > 0,
-      detected: selected.detected,
+      detected: candidates.detected,
       paths: placements.map((placement) => placement.root),
-      filesConsidered: selected.files.length,
+      filesConsidered: selected.length,
       filesRead,
       filesReused,
       filesParsed,

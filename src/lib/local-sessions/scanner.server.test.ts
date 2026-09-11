@@ -1297,7 +1297,10 @@ test("P1-3: a newly registered session reader is scanned via the registry plan",
 });
 
 // ---------------------------------------------------------------------------
-// DeepSeek Harness (DSH) — ~/.dsh/sessions/<workspace>/<session-id>/session.jsonl[.zstd]
+// DeepSeek Harness (DSH) — ~/.dsh/sessions/<workspace>/<session-id>/ holding one
+// session log: session.jsonl[.zstd] (format generation 0) or the
+// generation-addressed session.v<N>.jsonl[.zstd] written once the harness
+// versioned its stored session format.
 // ---------------------------------------------------------------------------
 
 const DSH_SESSION_ID = "11111111-2222-3333-4444-555555555555";
@@ -1426,11 +1429,10 @@ test("DSH: parses session.jsonl (compression none) with turns/project/tools", as
     assert.equal(session.totals.outputTokens, 23);
     assert.equal(session.totals.reasoningOutputTokens, 5);
     assert.equal(session.totals.totalTokens, 218);
-    assert.equal(session.resumeSafe, true);
-    assert.equal(
-      session.resumeCommand,
-      `dsh --profile tui --resume ${DSH_SESSION_ID}`,
-    );
+    // DSH ships no resume entry point (see scanDshSessions): the session list
+    // stays read-only rather than offering a command that cannot launch.
+    assert.equal(session.resumeSafe, false);
+    assert.equal(session.resumeCommand, null);
     assert.equal(session.startedAt, "2026-08-03T09:00:00.000Z");
     assertPrivacyClean(session);
   });
@@ -1466,7 +1468,7 @@ test("DSH: decodes a zstd session log through the shared dsh-zstd reader", async
     assert.equal(session.sessionId, DSH_SESSION_ID);
     assert.equal(session.turns, 1);
     assert.equal(session.totals.inputTokens, 140);
-    assert.equal(session.resumeSafe, true);
+    assert.equal(session.resumeSafe, false);
     assertPrivacyClean(session);
   });
 });
@@ -1498,6 +1500,108 @@ test("DSH: session summary counts all sessions across workspaces", async () => {
       new Set(summary.sessions.map((session) => session.projectKey)),
       new Set(["project-a", "project-b"]),
     );
+  });
+});
+
+/** The records of one DSH session log as a checksummed frame container. */
+function dshLog(records: object[]): Buffer {
+  const [header, ...events] = records;
+  return Buffer.concat([
+    dshFrame(`${JSON.stringify(header)}\n`),
+    dshFrame(`${events.map((record) => JSON.stringify(record)).join("\n")}\n`),
+  ]);
+}
+
+test("DSH: discovers generation-addressed logs (session.v3.jsonl.zstd)", async () => {
+  await withTempHome(async (home) => {
+    const cwd = join(home, "project-gen3");
+    const sessionDir = join(
+      home,
+      ".dsh",
+      "sessions",
+      "project-gen3",
+      DSH_SESSION_ID,
+    );
+    await mkdir(sessionDir, { recursive: true });
+    // A harness that upgraded its stored session format names the log after
+    // the new generation; only the generation component changes.
+    const records = dshRecords(cwd);
+    records[0] = { ...records[0], version: 3 };
+    await writeFile(join(sessionDir, "session.v3.jsonl.zstd"), dshLog(records));
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+    assert.equal(session.source, "dsh");
+    assert.equal(session.sessionId, DSH_SESSION_ID);
+    assert.equal(session.title, "Refactor scanner");
+    assert.equal(session.model, "deepseek-v4-flash");
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.totalTokens, 218);
+    assertPrivacyClean(session);
+  });
+});
+
+test("DSH: a migrated session is read once, from its highest generation", async () => {
+  await withTempHome(async (home) => {
+    const cwd = join(home, "project-migrated");
+    const sessionDir = join(
+      home,
+      ".dsh",
+      "sessions",
+      "project-migrated",
+      DSH_SESSION_ID,
+    );
+    await mkdir(sessionDir, { recursive: true });
+
+    // Generation 0: the pre-upgrade log, frozen where the format advanced.
+    await writeFile(
+      join(sessionDir, "session.jsonl.zstd"),
+      dshLog(dshRecords(cwd)),
+    );
+
+    // Generation 3: the same session re-encoded — same events under new
+    // sequence numbers — plus the turn written after the migration. Reading
+    // both files would report two turns twice and double the token totals.
+    const migrated: object[] = dshRecords(cwd);
+    migrated[0] = { ...migrated[0], version: 3 };
+    migrated[1] = {
+      type: "session/title",
+      seq: 1,
+      time: "2026-08-03T09:00:00.100Z",
+      data: { title: "Migrated title", source: "user" },
+    };
+    migrated.push({
+      type: "turn/start",
+      seq: 100,
+      time: "2026-08-03T09:05:00.000Z",
+      data: { turn: 2 },
+    });
+    migrated.push({
+      type: "assistant/message",
+      seq: 101,
+      time: "2026-08-03T09:05:01.000Z",
+      data: {
+        turn: 2,
+        step: 1,
+        message: { role: "assistant", content: "SECRET MESSAGE" },
+        usage: { inputTokens: 10, outputTokens: 4, cacheReadTokens: 0 },
+      },
+    });
+    await writeFile(
+      join(sessionDir, "session.v3.jsonl.zstd"),
+      dshLog(migrated),
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    assert.equal(summary.total, 1, "one session, not one per generation");
+    const session = soleSession(summary.sessions);
+    assert.equal(session.title, "Migrated title");
+    assert.equal(session.turns, 2, "generations are not summed");
+    assert.equal(session.editTurns, 1);
+    assert.equal(session.totals.inputTokens, 150);
+    assert.equal(session.totals.outputTokens, 27);
+    assert.equal(session.totals.totalTokens, 232);
+    assertPrivacyClean(session);
   });
 });
 
@@ -1821,7 +1925,14 @@ test("session project identity uses the same Git-root canonicalization as usage"
       `${session("claude-components", "~/Documents/Dev/repo/src/components")}\n`,
     );
 
-    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    // Pin a platform without a macOS TCC gate: darwin deliberately skips the
+    // disk probe for `~/Documents/…`, so this cross-platform collapse contract
+    // would otherwise pass on Linux CI and fail on a macOS developer machine.
+    const summary = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      platform: "linux",
+    });
     assert.equal(summary.total, 2);
     assert.deepEqual(
       new Set(summary.sessions.map((record) => record.projectRef)),

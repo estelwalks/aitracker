@@ -16,19 +16,15 @@ import {
  * Retention and cache clearing are database-backed (S-03): HTTP/insight cache
  * rows live in SQLite. The separate collected-data reset drops regenerable
  * snapshot, search and classification indexes. The storage readout walks the
- * filesystem only to measure the app data directory; it is never destructive.
+ * filesystem only to measure the app data directory; it is never destructive
+ * and imposes no size limit — it reports the bytes currently on disk and
+ * nothing else.
  */
-
-export const STORAGE_SOFT_CAP_BYTES = 500 * 1024 * 1024;
 
 export interface StorageUsage {
   directory: string;
   bytes: number;
   fileCount: number;
-  softCapBytes: number;
-  /** 0..1 fraction of the soft cap currently used. */
-  utilization: number;
-  exceedsSoftCap: boolean;
   /** The app data root is always the controlled SQLite data directory. */
   controlled: boolean;
 }
@@ -97,15 +93,7 @@ async function directorySize(
 export async function readStorageUsage(): Promise<StorageUsage> {
   const directory = dataDirectory();
   const { bytes, fileCount } = await directorySize(directory);
-  return {
-    directory,
-    bytes,
-    fileCount,
-    softCapBytes: STORAGE_SOFT_CAP_BYTES,
-    utilization: Math.min(1, bytes / STORAGE_SOFT_CAP_BYTES),
-    exceedsSoftCap: bytes >= STORAGE_SOFT_CAP_BYTES,
-    controlled: true,
-  };
+  return { directory, bytes, fileCount, controlled: true };
 }
 
 function cleanupFromSummary(

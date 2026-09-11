@@ -13,86 +13,44 @@ the tag, so a numbered section means "this version shipped" and is never
 opened early. Individual fixes do not have to touch this file.
 -->
 
+## [1.0.4] - 2026-09-11
+
 ### Highlights
 
 > Published as this release's GitHub notes; keep these short and user-facing.
 
-- The compatibility layer added in 1.0.3 is gone: installers are published under their versionless names only, so a release no longer attaches a duplicate copy of every installer
-- `release-metadata.json` lists all four platforms again, including the Windows ARM64 installer
-- Updates keep working: 1.0.3 resolves the new document, and later versions resolve it the same way
-- ZCode usage is collected again: a `db.sqlite` past 512 MB was skipped as "no logs", and a heavily used install reaches that within weeks
-- Usage scans no longer read a whole database history: the scan window is pushed into the query, and a history that outgrows one scan is capped in rows with a visible warning instead of reading without bound
+- macOS asks for folder access once instead of on every launch: scans no longer touch `~/Documents`, `~/Desktop` or `~/Downloads`, and releases are signed so macOS remembers the answer
+- ZCode usage is collected again: a database past 512 MB was skipped as "no logs", and a heavily used install reaches that within weeks
+- Usage scans no longer read a whole database history, so a large install stays fast instead of getting slower with age
+- DeepSeek Harness sessions are collected again: the harness moved its session logs to a versioned file name
+- A release no longer attaches a duplicate copy of every installer, and the Windows ARM64 installer is listed again
 
 ### Details
 
-- Removed the compatibility layer that kept 1.0.0 and 1.0.1 updating
-  themselves. It was added in 1.0.3, whose release is the last one those
-  clients can reach, so it has served its purpose: releases no longer carry a
-  versioned copy of every installer, `release-metadata.json` names the
-  versionless files at `releases/latest/download/<name>` URLs, and the Windows
-  ARM64 installer is listed again (`win32-arm64` was withheld only because a
-  pre-1.0.2 client rejects a platform key it does not know).
-- An update is resolved from the record alone: the name is matched against the
-  selected release's own assets and the bytes are verified against `sha256`, so
-  the tag-addressed URL and the duplicate assets were never load-bearing for
-  1.0.3 and later.
-- `checksums.txt` names the same files as before, now simply the artifact names.
-  The CLI and the Cask generator accept both namings, so a release published
-  before this change (up to 1.0.3) can still be resolved and re-rendered.
-
-### Fixes (issue #42)
-
-- Fixed usage collection for sqlite-backed tools whose database passes the
-  adapter's `maxFileSizeBytes` cap. ZCode keeps every session's message/part
-  plaintext in `~/.zcode/cli/db/db.sqlite`, so a real install passes 512 MB
-  within weeks of heavy use; the whole file was skipped before its read-only
-  query ever ran, and the card reported "no logs" forever. The byte cap is a
-  budget for formats that are read in one piece (json/jsonl) and no longer
-  applies to `format: "sqlite"`, whose size says nothing about scan memory. The
-  same gate was removed from Zed's native `threads.db` reader; the other seven
-  sqlite adapters (AiPy, AnythingLLM, Goose, Hermes, Kiro, MiMo, Qoder CN)
-  share the generic reader and are fixed with it.
-- Bounded that read instead by row count: sqlite rows are streamed through
-  `iterate()` instead of collected with `.all()`, so a large table no longer
-  materializes a second in-memory copy, and a shared `maxSqliteRows` budget
-  (500,000 events per source, declared in `_shared/scanner-policy.json`) caps
-  what a single source can contribute. Exceeding it emits a counted
-  diagnostic instead of failing silently.
-- Every sqlite usage query now ends with `ORDER BY <timestamp> DESC`, so the
-  row budget keeps the most recent events and drops the oldest instead of an
-  arbitrary prefix. A contract test prepares each query against a fixture
-  schema and fails if the ordering is missing or no longer leads with `DESC`.
-- The scan window now reaches sqlite instead of being applied afterwards. The
-  adapter query used to be a fixed string, so a scan read every historical row
-  and discarded the pre-cutoff ones in TypeScript: a multi-gigabyte database
-  cost the same whether the window was ten years or thirty days, and the row
-  budget filled with rows the window would have thrown away. Each sqlite
-  adapter now declares a `windowFilter` predicate, which the compiler applies
-  by wrapping its query in a subquery - filtering the adapter's own output
-  columns keeps the comparison in the units it already normalized to, so a
-  table storing text timestamps cannot coerce a millisecond parameter. The
-  TypeScript range check remains the authority for adapters without one. On a
-  634 MB / 5M-row fixture a 365-day scan drops from 27.0 s to 13.4 s and stops
-  truncating; at 90 and 30 days it drops to 0.9 s and 0.4 s.
-- A row-budget stop is reported as `query-truncated` rather than
-  `file-too-large`. The file is fine in that case - the query simply returned
-  more rows than one scan will carry - and reusing the size code sent anyone
-  debugging it back to the byte cap that no longer applies to sqlite reads.
-- The tool registry rejects a definition whose usage path format and reader
-  disagree. A `format: "sqlite"` path on a non-sqlite reader silently lost
-  both sqlite protections and reproduced the "no logs" failure #42 describes,
-  and validation previously accepted it without a diagnostic.
-- Review follow-ups: `query-truncated` is registered in the persisted-index
-  validator (it was missing from that hand-written list, so the warning
-  vanished one restart later - the list is now typed against the diagnostic
-  union so an unclassified code fails the build); Zed's `threads.db` window
-  compares an ISO-8601 TEXT column, so the numeric cutoff was coerced to text
-  and filtered nothing - it now binds the instant as an ISO string too and
-  orders `updated_at DESC, rowid DESC` so a capped walk keeps the newest
-  threads; the row budget is per source rather than per file, so a multi-
-  profile Hermes install no longer multiplies it; and a cached sqlite parse
-  records the lookback it was windowed to, so widening the window re-parses
-  instead of serving a narrower cache.
+- macOS stopped asking for Documents access on every launch. Scanning resolved
+  each recorded project path on disk, so a project under `~/Documents` raised
+  the folder prompt; TCC-protected locations are left alone now. The prompt also
+  came back after every update, because macOS records an ad-hoc signed build
+  against the exact binary rather than the app; releases are signed with a
+  project certificate, which makes the grant survive an upgrade.
+- Tools that keep usage in SQLite were skipped whole once the database passed
+  512 MB: ZCode's `db.sqlite`, Zed's `threads.db` and the seven other SQLite
+  adapters. The byte cap is a budget for formats read in one piece, so it no
+  longer applies to a database that is queried rather than buffered; that read
+  is bounded by row count instead, and the scan window now reaches the query
+  instead of being applied after it. On a 634 MB fixture a 365-day scan drops
+  from 27.0 s to 13.4 s.
+- DeepSeek Harness sessions were invisible once the harness began naming a
+  session log after the format generation it holds (`session.v3.jsonl`).
+  Discovery, the session list and the transcript reader now resolve a session
+  directory to its highest generation, which also stops a migrated session from
+  being counted twice.
+- Removed the 1.0.3 compatibility layer, which kept 1.0.0 and 1.0.1 updating
+  themselves. 1.0.3 is the last release those clients can reach, so a release
+  no longer attaches a versioned copy of every installer; the metadata names
+  the versionless files and lists all four platforms again.
+- The settings page no longer warns above 500 MB of stored data. That cap was
+  never enforced: the readout reports what is on disk and nothing else.
 
 ## [1.0.3] - 2026-09-10
 

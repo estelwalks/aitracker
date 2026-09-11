@@ -3001,6 +3001,30 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "path": ".dsh/sessions",
             "glob": "**/session.jsonl",
             "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".dsh/sessions",
+            "glob": "**/session.v*.jsonl.zstd",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".dsh/sessions",
+            "glob": "**/session.v*.jsonl",
+            "format": "jsonl"
           }
         ],
         "maxFileSizeBytes": 67108864
@@ -3008,15 +3032,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "skills": "unsupported",
       "agents": "unsupported",
       "sessions": {
-        "mode": "resume",
-        "reader": "dsh-session-v1",
-        "command": [
-          "dsh",
-          "--profile",
-          "tui",
-          "--resume",
-          "{sessionId}"
-        ]
+        "mode": "read",
+        "reader": "dsh-session-v1"
       },
       "market": "unsupported",
       "security": "unsupported"
@@ -4183,4 +4200,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "5b52be7c117731d9";
+export const TOOL_REGISTRY_VERSION: string = "29daaad4c666eb3d";
