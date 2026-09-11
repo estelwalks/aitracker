@@ -27,6 +27,26 @@ uses semantic versioning for published releases.
   row budget keeps the most recent events and drops the oldest instead of an
   arbitrary prefix. A new contract test prepares each query against a fixture
   schema and fails if the ordering is missing or no longer leads with `DESC`.
+- The scan window now reaches sqlite instead of being applied afterwards. The
+  adapter query used to be a fixed string, so a scan read every historical row
+  and discarded the pre-cutoff ones in TypeScript: a multi-gigabyte database
+  cost the same whether the window was ten years or thirty days, and the row
+  budget filled with rows the window would have thrown away. Each sqlite
+  adapter now declares a `windowFilter` predicate, which the compiler applies
+  by wrapping its query in a subquery - filtering the adapter's own output
+  columns keeps the comparison in the units it already normalized to, so a
+  table storing text timestamps cannot coerce a millisecond parameter. The
+  TypeScript range check remains the authority for adapters without one. On a
+  634 MB / 5M-row fixture a 365-day scan drops from 27.0 s to 13.4 s and stops
+  truncating; at 90 and 30 days it drops to 0.9 s and 0.4 s.
+- A row-budget stop is reported as `query-truncated` rather than
+  `file-too-large`. The file is fine in that case - the query simply returned
+  more rows than one scan will carry - and reusing the size code sent anyone
+  debugging it back to the byte cap that no longer applies to sqlite reads.
+- The tool registry rejects a definition whose usage path format and reader
+  disagree. A `format: "sqlite"` path on a non-sqlite reader silently lost
+  both sqlite protections and reproduced the "no logs" failure #42 describes,
+  and validation previously accepted it without a diagnostic.
 
 ## [1.0.4] - 2026-09-10
 

@@ -3364,6 +3364,7 @@ function parseZedThreadsDb(
   adapter: UsageAdapterContract,
   signal: AbortSignal | undefined,
   maxSqliteRows: number,
+  cutoffTime: number,
 ): {
   events: LocalUsageEvent[];
   malformedLines: number;
@@ -3380,8 +3381,11 @@ function parseZedThreadsDb(
     // streamed and the walk stops at the shared row budget.
     let exceeded = false;
     for (const row of database
-      .prepare("SELECT id, updated_at, data_type, data FROM threads")
-      .iterate() as IterableIterator<Record<string, unknown>>) {
+      .prepare(
+        `SELECT id, updated_at, data_type, data FROM threads
+         WHERE updated_at >= ?`,
+      )
+      .iterate(cutoffTime) as IterableIterator<Record<string, unknown>>) {
       signal?.throwIfAborted();
       if (events.length >= maxSqliteRows) {
         exceeded = true;
@@ -3507,6 +3511,7 @@ async function scanZedUsageAdapter(
         adapter,
         signal,
         maxSqliteRows,
+        cutoffTime,
       );
       parsed.events = parsed.events.map((event) => ({
         ...event,
@@ -4655,6 +4660,7 @@ async function parseGenericFile(
   fallbackSessionId: string,
   signal: AbortSignal | undefined,
   maxSqliteRows: number,
+  cutoffTime: number,
 ): Promise<{
   events: LocalUsageEvent[];
   malformedLines: number;
@@ -4707,10 +4713,27 @@ async function parseGenericFile(
       // stops at the row budget instead of building an unbounded event array.
       // The cap counts mapped events, not raw rows: a query joins and filters,
       // so rows and events are not the same unit.
+      // A window filter lets sqlite discard the history the scan would only
+      // filter out afterwards, so a multi-gigabyte database is read up to the
+      // cutoff instead of in full. The filter is written against the adapter
+      // query's OWN output columns and applied by wrapping it in a subquery,
+      // which keeps the comparison in the units the adapter already
+      // normalized to. Adapters without one still work - the JavaScript range
+      // check below stays the authority either way - they just pay the full
+      // read.
+      const windowFilter = adapter.windowFilter;
+      const statement =
+        windowFilter == null
+          ? database.prepare(adapter.query)
+          : database.prepare(
+              `SELECT * FROM (${adapter.query}) WHERE ${windowFilter}`,
+            );
+      const rows =
+        windowFilter == null
+          ? statement.iterate()
+          : statement.iterate(cutoffTime);
       let exceeded = false;
-      for (const record of database
-        .prepare(adapter.query)
-        .iterate() as IterableIterator<Record<string, unknown>>) {
+      for (const record of rows as IterableIterator<Record<string, unknown>>) {
         signal?.throwIfAborted();
         if (events.length >= maxSqliteRows) {
           exceeded = true;
@@ -4930,6 +4953,7 @@ async function scanGenericAdapter(
         ),
         signal,
         maxSqliteRows,
+        cutoffTime,
       );
       parsed.events = parsed.events.map((event) => ({
         ...event,

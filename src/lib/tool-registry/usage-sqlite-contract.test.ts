@@ -131,3 +131,44 @@ test("every sqlite usage query opens newest-first and prepares", () => {
     );
   }
 });
+
+/**
+ * The window pushdown is a performance contract, not a correctness one: with
+ * the cutoff applied in TypeScript as well, dropping `windowFilter` still
+ * produces the right events and only makes a multi-gigabyte database slow
+ * again. Nothing else would catch that regression, so it is asserted here -
+ * measured on a 634 MB / 5M-row fixture, a 365-day scan drops from 13.4 s to
+ * 27.0 s when the filter is removed.
+ */
+test("every sqlite adapter pushes the scan window into its query", () => {
+  const definitions = listTools().filter(
+    (tool) =>
+      tool.capabilities.usage.mode !== "unsupported" &&
+      tool.capabilities.usage.paths?.some((path) => path.format === "sqlite") &&
+      // The native reader builds its own SQL in the scanner, window included.
+      tool.capabilities.usage.reader !== "zed-threads-v1",
+  );
+  assert.ok(definitions.length >= 8);
+
+  for (const tool of definitions) {
+    const usage = tool.capabilities.usage;
+    const filter = usage.windowFilter;
+    assert.ok(
+      filter,
+      `${tool.id}: a sqlite adapter must declare windowFilter, or the scan reads every historical row`,
+    );
+    assert.equal(
+      (filter.match(/\?/gu) ?? []).length,
+      1,
+      `${tool.id}: windowFilter must bind exactly one parameter (the cutoff)`,
+    );
+    // It filters the adapter query's own output, so the comparison happens on
+    // the timestamp the adapter already normalized - not a raw column whose
+    // storage class might coerce a millisecond parameter.
+    assert.match(
+      filter,
+      /timestamp\s*>=\s*\?/iu,
+      `${tool.id}: windowFilter must bound the mapped timestamp - saw "${filter}"`,
+    );
+  }
+});

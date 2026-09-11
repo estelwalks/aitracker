@@ -186,6 +186,24 @@ const UsageCapabilitySchema = z
     maxFileSizeBytes: z.number().int().positive().optional(),
     /** D9: sqlite queries are data; write/attach semantics rejected here. */
     query: z.string().optional(),
+    /**
+     * Time-window predicate, carrying exactly one positional `?` parameter
+     * bound to the scan's cutoff timestamp (ms). It is a boolean SQL fragment
+     * written against `query`'s OWN output columns - for example
+     * `timestamp >= ?` - and the compiler wraps `query` in a subquery to apply
+     * it: `SELECT * FROM (<query>) WHERE <windowFilter>`. Filtering the
+     * adapter's output rather than a raw column keeps the comparison in the
+     * units and types the adapter already normalized to, so an adapter whose
+     * table stores TEXT timestamps cannot silently coerce a numeric parameter
+     * the wrong way.
+     *
+     * Without it the scan reads every historical row and discards the ones
+     * before the cutoff in TypeScript, which is what makes a multi-gigabyte
+     * database slow. The upper bound deliberately has no parameter: `query`
+     * ends `ORDER BY <timestamp> DESC`, so the walk reaches the newest rows
+     * first and anything future-dated is dropped by the existing range check.
+     */
+    windowFilter: z.string().optional(),
   })
   .superRefine((usage, ctx) => {
     if (usage.mode === "unsupported") {
@@ -224,6 +242,34 @@ const UsageCapabilitySchema = z
           path: ["usage.query"],
           message:
             "query must be a single read-only SELECT (no ; or ATTACH/DROP/INSERT/UPDATE/DELETE/PRAGMA)",
+        });
+      }
+    }
+    if (usage.windowFilter !== undefined) {
+      const w = usage.windowFilter.trim();
+      if (w === "" || w.includes(";") || UNSAFE_SQL_KEYWORDS.test(w)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["usage.windowFilter"],
+          message:
+            "windowFilter must be a boolean SQL fragment (no ; or ATTACH/DROP/INSERT/UPDATE/DELETE/PRAGMA)",
+        });
+      }
+      // Exactly one placeholder: the scan binds the cutoff timestamp to it.
+      // A second parameter would have no binding and fail at prepare time.
+      const placeholders = (w.match(/\?/gu) ?? []).length;
+      if (placeholders !== 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["usage.windowFilter"],
+          message: `windowFilter must carry exactly one ? placeholder for the cutoff timestamp (found ${placeholders})`,
+        });
+      }
+      if (usage.query === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["usage.windowFilter"],
+          message: "windowFilter requires a query to wrap",
         });
       }
     }

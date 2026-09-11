@@ -34,6 +34,8 @@ export interface UsageAdapterContract {
   paths: UsageAdapterPath[];
   mapping: UsageFieldMapping;
   query?: string;
+  /** Time-window predicate for `query`; one `?` takes the cutoff timestamp. */
+  windowFilter?: string;
   /**
    * Whole-file byte budget for paths read in one piece (json/jsonl). It does
    * not apply to `format: "sqlite"` paths: those run a prepared statement
@@ -50,4 +52,6 @@ export interface ExternalUsageAdapterConfig {
   paths: UsageAdapterPath[];
   mapping: UsageFieldMapping;
   query?: string;
+  /** See `UsageAdapterContract.windowFilter`. */
+  windowFilter?: string;
 }

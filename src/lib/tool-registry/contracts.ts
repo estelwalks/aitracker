@@ -107,6 +107,8 @@ export interface UsageCapability {
   maxFileSizeBytes?: number;
   /** SQL query for sqlite readers (data only). */
   query?: string;
+  /** Time-window predicate for `query`; one `?` takes the cutoff timestamp. */
+  windowFilter?: string;
 }
 
 export interface SkillsCapability {

@@ -110,6 +110,7 @@
         "totalTokens": ["totalTokens"]
       },
       "query": "SELECT\n  id AS sessionId,\n  (COALESCE(ended_at, started_at) * 1000) AS timestamp,\n  COALESCE(NULLIF(model, ''), 'unknown') AS model,\n  'unknown' AS project,\n  CAST(COALESCE(input_tokens, 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(cache_read_tokens, 0) AS INTEGER) AS cachedInputTokens,\n  CAST(COALESCE(cache_write_tokens, 0) AS INTEGER) AS cacheCreationInputTokens,\n  CAST(COALESCE(output_tokens, 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(reasoning_tokens, 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(input_tokens, 0) + COALESCE(cache_read_tokens, 0) + COALESCE(cache_write_tokens, 0) + COALESCE(output_tokens, 0) + COALESCE(reasoning_tokens, 0) AS INTEGER) AS totalTokens\nFROM sessions\nWHERE input_tokens > 0 OR cache_read_tokens > 0 OR cache_write_tokens > 0 OR output_tokens > 0 OR reasoning_tokens > 0\nORDER BY timestamp DESC, rowid DESC",
+      "windowFilter": "timestamp >= ?",
       "maxFileSizeBytes": 536870912
     },
     "skills": "read-write",

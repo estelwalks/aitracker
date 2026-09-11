@@ -440,3 +440,74 @@ test("sqlite row budget keeps the newest rows and reports truncation", async () 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+/**
+ * Issue #42 follow-up: the cutoff has to reach sqlite. The adapter query used
+ * to be a fixed string, so the scan read every historical row and dropped the
+ * pre-cutoff ones in TypeScript - the cost of a multi-gigabyte database for a
+ * window that only keeps a fraction of it. `windowFilter` is applied by
+ * wrapping the adapter query in a subquery, and this pins that the window is
+ * actually in force rather than merely declared.
+ */
+test("sqlite window filter keeps only rows inside the scan window", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-zcode-window-"));
+  try {
+    const dbDir = join(root, ".zcode", "cli", "db");
+    await mkdir(dbDir, { recursive: true });
+    const now = new Date("2026-09-09T08:00:00.000Z");
+    const day = 86_400_000;
+    const sessions = new Map([["sess-window", join(root, "proj")]]);
+    createZcodeDb(join(dbDir, "db.sqlite"), sessions, [
+      // 400 days old: outside a 365-day window, inside a 3650-day one.
+      {
+        sessionId: "sess-window",
+        startedAt: now.getTime() - 400 * day,
+        completedAt: now.getTime() - 400 * day,
+        input: 1_000,
+        output: 100,
+      },
+      // 10 days old: inside both.
+      {
+        sessionId: "sess-window",
+        startedAt: now.getTime() - 10 * day,
+        completedAt: now.getTime() - 10 * day,
+        input: 2_000,
+        output: 200,
+      },
+    ]);
+
+    const scan = (lookbackDays: number) =>
+      scanLocalUsage({
+        homeDirectory: root,
+        cacheDirectory: root,
+        lookbackDays,
+        platform: "linux" as const,
+        now,
+        disablePersistentCache: true,
+      });
+
+    const wide = await scan(3650);
+    assert.equal(
+      wide.sources.find((s) => s.source === "zcode")?.events,
+      2,
+      "a 3650-day window must include the 400-day-old row",
+    );
+
+    const narrow = await scan(365);
+    const narrowZcode = narrow.sources.find((s) => s.source === "zcode");
+    assert.equal(
+      narrowZcode?.events,
+      1,
+      "a 365-day window must exclude the 400-day-old row",
+    );
+    const kept = narrow.details.filter((event) => event.source === "zcode");
+    assert.equal(kept.length, 1);
+    assert.equal(
+      kept[0]!.timestamp,
+      new Date(now.getTime() - 10 * day).toISOString(),
+    );
+    assert.equal(kept[0]!.inputTokens, 2_000);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
