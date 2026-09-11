@@ -257,3 +257,80 @@ test("hermes usage adapter reads default + profile state.db sessions", async () 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+/**
+ * Review finding: the row budget was handed to each file's parse separately,
+ * but Hermes keeps one `state.db` per profile - so the documented "500,000
+ * rows per source" was really "per file" and a multi-profile install could
+ * multiply it by the number of profiles, escaping the memory bound the budget
+ * exists to enforce. The budget is now created once per adapter scan and
+ * shared by every file, and the truncation is reported once.
+ */
+test("the sqlite row budget is shared across a source's databases", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-hermes-budget-"));
+  try {
+    const hermesDir = join(root, ".hermes");
+    await mkdir(join(hermesDir, "profiles", "work"), { recursive: true });
+    await mkdir(join(hermesDir, "profiles", "personal"), { recursive: true });
+    const epoch = Math.floor(Date.now() / 1000) - 3_600;
+    const row = (id: string, index: number) => [
+      id,
+      "hermes-agent",
+      epoch - index,
+      epoch - index + 10,
+      1_000 + index * 7,
+      100 + index,
+      0,
+      0,
+      0,
+      1,
+    ];
+    const sessions = (prefix: string) => [
+      row(`${prefix}-1`, 1),
+      row(`${prefix}-2`, 2),
+      row(`${prefix}-3`, 3),
+    ];
+    createHermesDb(join(hermesDir, "state.db"), sessions("default"));
+    createHermesDb(
+      join(hermesDir, "profiles", "work", "state.db"),
+      sessions("work"),
+    );
+    createHermesDb(
+      join(hermesDir, "profiles", "personal", "state.db"),
+      sessions("personal"),
+    );
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+      platform: "linux" as const,
+      disablePersistentCache: true,
+      maxSqliteRowsPerSource: 2,
+    });
+    const hermes = snapshot.sources.find(
+      (source) => source.source === "hermes",
+    );
+    assert.ok(hermes);
+    assert.ok(
+      (hermes.filesParsed ?? 0) >= 2,
+      `expected several profile databases, parsed ${hermes.filesParsed}`,
+    );
+    // Three databases x 3 rows with a per-file budget would return 6.
+    assert.equal(
+      hermes.events,
+      2,
+      "the budget must cap the whole source, not each file",
+    );
+    const truncations = (hermes.diagnostics ?? []).filter(
+      (entry) => entry.code === "query-truncated",
+    );
+    assert.equal(
+      truncations.length,
+      1,
+      "a shared budget reports once, not once per file it stopped",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

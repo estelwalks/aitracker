@@ -96,6 +96,33 @@ const MAX_JSONL_FILE_BYTES = 256 * 1024 * 1024;
 // skipping it meant "no logs" for an adapter that could read it fine. The
 // memory bound for sqlite is the row count, applied per statement below.
 const MAX_SQLITE_ROWS = SCANNER_POLICY?.maxSqliteRows ?? 500_000;
+
+/**
+ * Row budget shared by every sqlite file of one source (issue #42 review).
+ * Hermes keeps one `state.db` per profile and each is a separate file, so a
+ * per-file budget multiplied the advertised "500,000 rows per source" by the
+ * number of profiles and let one source exceed the memory bound the budget
+ * exists to enforce. The budget is created once per adapter scan and handed to
+ * every file's parse; a file whose parse starts with the budget already spent
+ * contributes no events and reports truncation, and only one truncation
+ * diagnostic is emitted for the source.
+ */
+interface SqliteRowBudget {
+  readonly limit: number;
+  exhausted(): boolean;
+  take(): void;
+}
+
+function createSqliteRowBudget(limit: number): SqliteRowBudget {
+  let used = 0;
+  return {
+    limit,
+    exhausted: () => used >= limit,
+    take: () => {
+      used += 1;
+    },
+  };
+}
 const FUTURE_TIMESTAMP_TOLERANCE_MS =
   SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
 // Antigravity's estimated transcript events were added in v14. Rebuild once so cached Claude
@@ -106,7 +133,10 @@ const FUTURE_TIMESTAMP_TOLERANCE_MS =
 // the WAL companion signature (`wal`) to generic sqlite entries so a
 // WAL-mode database whose main file was not checkpointed yet is re-parsed
 // (fresh frames live in `db.sqlite-wal`, invisible to main-file mtime/size).
-const PERSISTENT_CACHE_VERSION = 18;
+// v19 adds the sqlite window identity (`windowDays`): a windowed parse only
+// holds the rows inside the window it was run with, so the cached range has to
+// be compared against the requested one before reuse.
+const PERSISTENT_CACHE_VERSION = 19;
 /**
  * Fingerprint of the tool-registry config that produced this cache. A config
  * change (paths, reader, command, pricing-rule set, or any JSON definition)
@@ -209,6 +239,15 @@ interface PersistentFileEntryBase {
    * the main database file has not been checkpointed (mtime/size unchanged).
    */
   wal?: { mtimeMs: number; size: number } | null;
+  /**
+   * Lookback the sqlite query was windowed to (issue #42). A windowed parse
+   * only holds the rows inside that window, so an entry may be reused only
+   * when its window is at least as wide as the request - a narrower cache
+   * would silently under-report after `lookbackDays` is widened. Absent for
+   * non-sqlite entries and for entries written before v19, both of which fall
+   * back to a re-parse.
+   */
+  windowDays?: number;
 }
 
 interface PersistentClaudeFileEntry extends PersistentFileEntryBase {
@@ -306,6 +345,13 @@ function tokenValue(value: unknown): number {
 
 function nonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/** A lookback in days: a positive integer, as `scanLocalUsage` clamps it. */
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
 }
 
 function timestampValue(value: unknown): Date | undefined {
@@ -483,6 +529,12 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
     return undefined;
   }
   const wal = cachedWalSignature(entry.wal);
+  // The window a sqlite parse was run with. Losing it on hydration makes every
+  // sqlite entry look like it covers nothing, so the cache would never be
+  // reused after a restart - the read cost the window exists to bound would
+  // come back on every scan. Malformed values drop the field, which degrades
+  // to a re-parse rather than a wrong reuse.
+  const windowDays = positiveInteger(entry.windowDays);
 
   if (source === "claude-code") {
     if (!Array.isArray(entry.claudeEvents)) {
@@ -610,6 +662,7 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
     size: entry.size,
     malformedLines: entry.malformedLines,
     ...(wal !== undefined ? { wal } : {}),
+    ...(windowDays == null ? {} : { windowDays }),
     events: entry.events,
     ...(identities == null ? {} : { identities }),
     diagnostics,
@@ -623,15 +676,40 @@ function isLocalUsageSource(value: unknown): value is LocalUsageSource {
   );
 }
 
+/**
+ * Diagnostic codes that may be restored from the persisted scan index.
+ *
+ * This list is a validation gate, not documentation: a code missing here makes
+ * every persisted diagnostic carrying it vanish when the index is rehydrated,
+ * so a warning the user already saw silently disappears one restart later.
+ * `query-truncated` was lost exactly that way, which turned a visible
+ * truncation back into a silent one.
+ *
+ * `retained-previous` is deliberately absent: the collector synthesizes it
+ * when it merges previous evidence into a committed snapshot, so it is never a
+ * scan-time diagnostic.
+ *
+ * The annotation makes the compiler check this list against the union: adding
+ * a code to `LocalUsageDiagnosticCode` fails the build until it is classified
+ * here.
+ */
+const CACHED_DIAGNOSTIC_CODES: ReadonlySet<LocalUsageDiagnostic["code"]> =
+  new Set<LocalUsageDiagnostic["code"]>([
+    "config-invalid",
+    "file-too-large",
+    "field-mismatch",
+    "malformed-json",
+    "query-failed",
+    "query-truncated",
+    "read-failed",
+  ]);
+
 function isCachedDiagnostic(value: unknown): value is LocalUsageDiagnostic {
   const item = asObject(value);
   return (
     isLocalUsageSource(item?.source) &&
-    (item.code === "config-invalid" ||
-      item.code === "file-too-large" ||
-      item.code === "field-mismatch" ||
-      item.code === "malformed-json" ||
-      item.code === "read-failed") &&
+    typeof item.code === "string" &&
+    CACHED_DIAGNOSTIC_CODES.has(item.code as LocalUsageDiagnostic["code"]) &&
     nonNegativeNumber(item.count) &&
     typeof item.message === "string" &&
     (item.path == null || typeof item.path === "string")
@@ -744,9 +822,24 @@ function fileSignatureMatches(
 function sqliteWalMatches(
   candidate: FileCandidate & { format: UsageAdapterPath["format"] },
   entry: PersistentFileEntry | undefined,
+  /**
+   * Lookback the current scan was asked for. A sqlite entry is parsed through
+   * a windowed query, so it only holds the rows inside the window it was run
+   * with and may be reused only when that window covers this request.
+   * Widening the lookback must re-parse: the narrower cache does not contain
+   * the older events, and serving it would silently under-report (issue #42
+   * review). Non-sqlite callers omit it, which skips the check.
+   */
+  requestedWindowDays?: number,
 ): boolean {
   if (candidate.format !== "sqlite") return true;
   if (entry == null) return false;
+  if (
+    requestedWindowDays !== undefined &&
+    !(entry.windowDays != null && entry.windowDays >= requestedWindowDays)
+  ) {
+    return false;
+  }
   const cached = entry.wal;
   if (cached === undefined) return false;
   const wal = candidate.wal;
@@ -3363,7 +3456,7 @@ function parseZedThreadsDb(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   adapter: UsageAdapterContract,
   signal: AbortSignal | undefined,
-  maxSqliteRows: number,
+  budget: SqliteRowBudget,
   cutoffTime: number,
 ): {
   events: LocalUsageEvent[];
@@ -3380,14 +3473,25 @@ function parseZedThreadsDb(
     // never gate the read - a sqlite file is queried, not buffered. Rows are
     // streamed and the walk stops at the shared row budget.
     let exceeded = false;
+    // `updated_at` is an ISO-8601 TEXT column, so it is compared as text: the
+    // numeric cutoff has to be converted first, or SQLite applies TEXT
+    // affinity to the parameter and a lexicographic comparison makes every
+    // ISO date satisfy `>= "<digits>"`. Two bindings of the same value because
+    // the window is compared twice - once as the type the column stores, once
+    // as the same instant in milliseconds, so a row whose timestamp is a bare
+    // epoch (every other reader accepts both) is filtered either way.
+    const cutoffIso = new Date(cutoffTime).toISOString().replace(".000Z", "Z");
     for (const row of database
       .prepare(
         `SELECT id, updated_at, data_type, data FROM threads
-         WHERE updated_at >= ?`,
+         WHERE updated_at >= ? OR CAST(updated_at AS INTEGER) >= ?
+         ORDER BY updated_at DESC, rowid DESC`,
       )
-      .iterate(cutoffTime) as IterableIterator<Record<string, unknown>>) {
+      .iterate(cutoffIso, cutoffTime) as IterableIterator<
+      Record<string, unknown>
+    >) {
       signal?.throwIfAborted();
-      if (events.length >= maxSqliteRows) {
+      if (budget.exhausted()) {
         exceeded = true;
         break;
       }
@@ -3402,6 +3506,7 @@ function parseZedThreadsDb(
       const totals = decoded.totals;
       const totalTokens =
         totals.input + totals.output + totals.cacheRead + totals.cacheWrite;
+      budget.take();
       events.push({
         source: adapter.source as LocalUsageSource,
         timestamp: decoded.updatedAt.toISOString(),
@@ -3425,7 +3530,7 @@ function parseZedThreadsDb(
           adapter,
           "query-truncated",
           file.path,
-          `SQLite 查询结果超过 ${maxSqliteRows} 行读取上限，其余记录未统计。`,
+          `SQLite 查询结果超过 ${budget.limit} 行读取上限，其余记录未统计。`,
         ),
       );
     }
@@ -3475,6 +3580,7 @@ async function scanZedUsageAdapter(
   signal: AbortSignal | undefined,
   overrides: UsageOverrideMap | undefined,
   maxSqliteRows: number,
+  lookbackDays: number,
 ): Promise<SourceScanResult> {
   const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
   const placements = rebaseUsagePathConfigs(
@@ -3495,13 +3601,17 @@ async function scanZedUsageAdapter(
   let filesParsed = 0;
   let malformedLines = 0;
 
+  // Single-file source, but the budget is built the same shared way so the
+  // cap has one definition.
+  const budget = createSqliteRowBudget(maxSqliteRows);
+
   for (const file of selected.files) {
     signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     let entry: PersistentGenericFileEntry;
     if (
       fileSignatureMatches(file, cached, adapter.source) &&
-      sqliteWalMatches(file, cached)
+      sqliteWalMatches(file, cached, lookbackDays)
     ) {
       entry = cached as PersistentGenericFileEntry;
       filesReused += 1;
@@ -3510,7 +3620,7 @@ async function scanZedUsageAdapter(
         file,
         adapter,
         signal,
-        maxSqliteRows,
+        budget,
         cutoffTime,
       );
       parsed.events = parsed.events.map((event) => ({
@@ -3529,6 +3639,9 @@ async function scanZedUsageAdapter(
                 file.wal == null
                   ? null
                   : { mtimeMs: file.wal.modifiedAt, size: file.wal.size },
+              // How much history this parse actually holds, so a later scan
+              // cannot reuse it for a wider window.
+              windowDays: lookbackDays,
             }
           : {}),
         events: parsed.events,
@@ -4659,7 +4772,7 @@ async function parseGenericFile(
   adapter: UsageAdapterContract,
   fallbackSessionId: string,
   signal: AbortSignal | undefined,
-  maxSqliteRows: number,
+  budget: SqliteRowBudget,
   cutoffTime: number,
 ): Promise<{
   events: LocalUsageEvent[];
@@ -4735,13 +4848,16 @@ async function parseGenericFile(
       let exceeded = false;
       for (const record of rows as IterableIterator<Record<string, unknown>>) {
         signal?.throwIfAborted();
-        if (events.length >= maxSqliteRows) {
+        if (budget.exhausted()) {
           exceeded = true;
           break;
         }
         const event = eventFromMappedRecord(record, adapter, fallbackSessionId);
         if (event == null) mismatches += 1;
-        else events.push(event);
+        else {
+          events.push(event);
+          budget.take();
+        }
       }
       const diagnostics: LocalUsageDiagnostic[] = [];
       if (exceeded) {
@@ -4750,7 +4866,7 @@ async function parseGenericFile(
             adapter,
             "query-truncated",
             file.path,
-            `SQLite 查询结果超过 ${maxSqliteRows} 行读取上限，其余记录未统计。`,
+            `SQLite 查询结果超过 ${budget.limit} 行读取上限，其余记录未统计。`,
           ),
         );
       }
@@ -4872,6 +4988,7 @@ async function runBoundedGenericAdapters(
   signal: AbortSignal | undefined,
   overrides: UsageOverrideMap | undefined,
   maxSqliteRows: number,
+  lookbackDays: number,
 ): Promise<SourceScanResult[]> {
   const results: SourceScanResult[] = new Array(adapters.length);
   let cursor = 0;
@@ -4894,6 +5011,7 @@ async function runBoundedGenericAdapters(
           signal,
           overrides,
           maxSqliteRows,
+          lookbackDays,
         ).catch((error) => sourceFailure(adapter.source, error));
       }
     },
@@ -4913,6 +5031,7 @@ async function scanGenericAdapter(
   signal: AbortSignal | undefined,
   overrides: UsageOverrideMap | undefined,
   maxSqliteRows: number,
+  lookbackDays: number,
 ): Promise<SourceScanResult> {
   const pathConfigs = adapterPathsForPlatform(adapter.paths, platformOs);
   const placements = rebaseUsagePathConfigs(
@@ -4933,13 +5052,19 @@ async function scanGenericAdapter(
   let filesParsed = 0;
   let malformedLines = 0;
 
+  // One budget for the whole source: several files (Hermes keeps one state.db
+  // per profile) share it, so the cap is per source as documented rather than
+  // per file.
+  const budget = createSqliteRowBudget(maxSqliteRows);
+  let truncationReported = false;
+
   for (const file of selected.files) {
     signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     let entry: PersistentGenericFileEntry;
     if (
       fileSignatureMatches(file, cached, adapter.source) &&
-      sqliteWalMatches(file, cached)
+      sqliteWalMatches(file, cached, lookbackDays)
     ) {
       entry = cached as PersistentGenericFileEntry;
       filesReused += 1;
@@ -4952,7 +5077,7 @@ async function scanGenericAdapter(
           relative(homeDirectory, file.path),
         ),
         signal,
-        maxSqliteRows,
+        budget,
         cutoffTime,
       );
       parsed.events = parsed.events.map((event) => ({
@@ -4971,6 +5096,9 @@ async function scanGenericAdapter(
                 file.wal == null
                   ? null
                   : { mtimeMs: file.wal.modifiedAt, size: file.wal.size },
+              // How much history this parse actually holds, so a later scan
+              // cannot reuse it for a wider window.
+              windowDays: lookbackDays,
             }
           : {}),
         events: parsed.events,
@@ -4978,7 +5106,14 @@ async function scanGenericAdapter(
       };
       filesParsed += 1;
     }
-    diagnostics.push(...entry.diagnostics);
+    // A shared budget reports once, not once per file it stopped.
+    for (const item of entry.diagnostics) {
+      if (item.code === "query-truncated") {
+        if (truncationReported) continue;
+        truncationReported = true;
+      }
+      diagnostics.push(item);
+    }
     cacheEntries.push(entry);
     filesRead += 1;
     malformedLines += entry.malformedLines;
@@ -5361,6 +5496,7 @@ export async function scanLocalUsage(
       options.signal,
       options.toolDataRoots,
       maxSqliteRows,
+      lookbackDays,
     ).catch((error) => sourceFailure("zed", error)),
     scanDroidUsageAdapter(
       BUILTIN_USAGE_ADAPTERS.find(
@@ -5412,6 +5548,7 @@ export async function scanLocalUsage(
       options.signal,
       options.toolDataRoots,
       maxSqliteRows,
+      lookbackDays,
     )),
   ]);
 

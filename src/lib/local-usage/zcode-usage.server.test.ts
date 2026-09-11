@@ -511,3 +511,182 @@ test("sqlite window filter keeps only rows inside the scan window", async () => 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+/** Registry codes the collector synthesizes rather than the scanner. */
+const COLLECTOR_ONLY_DIAGNOSTIC_CODES = new Set(["retained-previous"]);
+
+/**
+ * Review finding: the persisted index validates every diagnostic against a
+ * hand-written list, and `query-truncated` was missing from it. A truncation
+ * warning therefore survived the first scan and vanished on the next restart,
+ * which is exactly the silent behaviour the #42 work set out to remove. The
+ * list is now annotated with the diagnostic union so TypeScript flags an
+ * unclassified code at build time; this covers the runtime half, reading the
+ * union out of the source so a new code cannot be forgotten here either.
+ */
+test("every scan-time diagnostic code survives the persisted index", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("./types.ts", import.meta.url), "utf8");
+  const union = source.slice(
+    source.indexOf("export type LocalUsageDiagnosticCode"),
+    source.indexOf("export interface LocalUsageDiagnostic"),
+  );
+  const codes = [...union.matchAll(/^\s*\|\s*"([a-z-]+)"/gmu)].map(
+    (match) => match[1]!,
+  );
+  assert.ok(codes.length >= 6, `expected codes, parsed ${codes.length}`);
+  assert.ok(codes.includes("query-truncated"));
+
+  const scanner = await readFile(
+    new URL("./scanner.server.ts", import.meta.url),
+    "utf8",
+  );
+  const list = scanner.slice(
+    scanner.indexOf("const CACHED_DIAGNOSTIC_CODES"),
+    scanner.indexOf("function isCachedDiagnostic"),
+  );
+  for (const code of codes) {
+    const cached = list.includes(`"${code}"`);
+    if (COLLECTOR_ONLY_DIAGNOSTIC_CODES.has(code)) {
+      assert.equal(
+        cached,
+        false,
+        `${code} is synthesized by the collector and must not be cached`,
+      );
+      continue;
+    }
+    assert.ok(
+      cached,
+      `${code} must be in CACHED_DIAGNOSTIC_CODES or its diagnostics vanish on restart`,
+    );
+  }
+});
+
+test("a truncation warning survives a restart", async () => {
+  const {
+    __resetUsageScanIndexForTests,
+    hydrateUsageScanIndex,
+    snapshotUsageScanIndex,
+  } = await import("./scanner.server.ts");
+  const root = await mkdtemp(join(tmpdir(), "aitracker-truncation-restart-"));
+  try {
+    const dbDir = join(root, ".zcode", "cli", "db");
+    await mkdir(dbDir, { recursive: true });
+    const now = new Date("2026-09-09T08:00:00.000Z");
+    const sessions = new Map([["sess-restart", join(root, "proj")]]);
+    createZcodeDb(
+      join(dbDir, "db.sqlite"),
+      sessions,
+      Array.from({ length: 6 }, (_, index) => ({
+        sessionId: "sess-restart",
+        startedAt: now.getTime() - index * 3_600_000,
+        completedAt: now.getTime() - index * 3_600_000,
+        input: 1_000 + index,
+        output: 10,
+      })),
+    );
+    const options = {
+      homeDirectory: root,
+      // The index is keyed by the home directory; the other tests in this file
+      // use their own temp root, so this one owns its key.
+      cacheDirectory: root,
+      lookbackDays: 3650,
+      platform: "linux" as const,
+      now,
+      maxSqliteRowsPerSource: 3,
+    };
+
+    __resetUsageScanIndexForTests();
+    const first = await scanLocalUsage(options);
+    const firstCodes = (
+      first.sources.find((s) => s.source === "zcode")?.diagnostics ?? []
+    ).map((entry) => entry.code);
+    assert.deepEqual(firstCodes, ["query-truncated"]);
+
+    // Simulate a restart: drop process state, restore what was persisted.
+    const persisted = JSON.parse(JSON.stringify(snapshotUsageScanIndex()));
+    __resetUsageScanIndexForTests();
+    hydrateUsageScanIndex(persisted);
+
+    const after = await scanLocalUsage(options);
+    const zcode = after.sources.find((s) => s.source === "zcode");
+    assert.equal(zcode?.filesReused, 1, "the persisted entry must be reused");
+    assert.deepEqual(
+      (zcode?.diagnostics ?? []).map((entry) => entry.code),
+      ["query-truncated"],
+      "a reused entry must still report the truncation it was parsed under",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("widening the lookback re-parses instead of serving a narrow cache", async () => {
+  const { __resetUsageScanIndexForTests } = await import("./scanner.server.ts");
+  const root = await mkdtemp(join(tmpdir(), "aitracker-window-cache-"));
+  try {
+    const dbDir = join(root, ".zcode", "cli", "db");
+    await mkdir(dbDir, { recursive: true });
+    const now = new Date("2026-09-09T08:00:00.000Z");
+    const day = 86_400_000;
+    createZcodeDb(
+      join(dbDir, "db.sqlite"),
+      new Map([["sess-window-cache", join(root, "proj")]]),
+      [
+        {
+          sessionId: "sess-window-cache",
+          startedAt: now.getTime() - 400 * day,
+          completedAt: now.getTime() - 400 * day,
+          input: 1_000,
+          output: 10,
+        },
+        {
+          sessionId: "sess-window-cache",
+          startedAt: now.getTime() - 10 * day,
+          completedAt: now.getTime() - 10 * day,
+          input: 2_000,
+          output: 20,
+        },
+      ],
+    );
+    const base = {
+      homeDirectory: root,
+      cacheDirectory: root,
+      platform: "linux" as const,
+      now,
+    };
+
+    // A windowed parse only holds the rows inside its window, so the cached
+    // entry must not be reused for a wider request.
+    __resetUsageScanIndexForTests();
+    const narrow = await scanLocalUsage({ ...base, lookbackDays: 365 });
+    assert.equal(
+      narrow.sources.find((s) => s.source === "zcode")?.events,
+      1,
+      "365-day scan sees only the recent row",
+    );
+
+    const wide = await scanLocalUsage({ ...base, lookbackDays: 3650 });
+    const wideZcode = wide.sources.find((s) => s.source === "zcode");
+    assert.equal(
+      wideZcode?.events,
+      2,
+      "widening the lookback must re-parse and pick up the older row",
+    );
+    assert.equal(
+      wideZcode?.filesReused,
+      0,
+      "the narrow cache must not be reused",
+    );
+
+    // Narrowing again may reuse: the wider parse is a superset.
+    const narrowAgain = await scanLocalUsage({ ...base, lookbackDays: 365 });
+    const narrowAgainZcode = narrowAgain.sources.find(
+      (s) => s.source === "zcode",
+    );
+    assert.equal(narrowAgainZcode?.filesReused, 1);
+    assert.equal(narrowAgainZcode?.events, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

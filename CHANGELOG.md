@@ -48,6 +48,30 @@ uses semantic versioning for published releases.
   both sqlite protections and reproduced the "no logs" failure #42 describes,
   and validation previously accepted it without a diagnostic.
 
+### Review follow-ups
+
+- The new `query-truncated` code is registered in the persisted-index
+  validator. It was missing from that hand-written list, so the warning
+  survived the first scan and vanished on the next restart, turning a visible
+  truncation back into a silent one. The list is now typed against the
+  diagnostic union so an unclassified code fails the build, and a test reads
+  the union out of the source to cover the runtime half.
+- Zed's `threads.db` window compares an ISO-8601 TEXT column, so the numeric
+  cutoff was coerced to text and every date satisfied the comparison - the
+  window filtered nothing while appearing to. It now binds the same instant as
+  an ISO string as well, and orders `updated_at DESC, rowid DESC` so a capped
+  walk keeps the newest threads instead of the oldest.
+- The row budget is per source, not per file. Hermes keeps one `state.db` per
+  profile, and handing each file its own budget multiplied the documented
+  "500,000 rows per source" by the number of profiles, escaping the memory
+  bound the budget exists to enforce. One budget is now created per adapter
+  scan and shared by every file, with a single truncation diagnostic.
+- A cached sqlite parse records the lookback it was windowed to and is reused
+  only when that window covers the request; scanning 365 days and then 3650
+  would otherwise serve the narrower cache and silently under-report. The
+  window identity also survives index hydration, so entries are still reused
+  across restarts instead of re-parsing everything.
+
 ## [1.0.4] - 2026-09-10
 
 ### Highlights
