@@ -297,3 +297,53 @@ test("kilocode usage adapter reads per-message ui_messages.json token payloads",
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("kilocode usage events read the project from the request's workspace directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-kilocode-project-"));
+  try {
+    const taskFile = join(
+      root,
+      "AppData",
+      "Roaming",
+      "Code",
+      "User",
+      "globalStorage",
+      "kilocode.kilo-code",
+      "tasks",
+      "task-cwd",
+      "ui_messages.json",
+    );
+    const now = Date.now();
+    await writeUiMessages(taskFile, [
+      // The workspace path only surfaces inside the request body carried by
+      // api_req_started as the environment-details heading.
+      uiMessage({
+        say: "api_req_started",
+        ts: now - 60 * 1000,
+        text: payloadText({
+          tokensIn: 120,
+          tokensOut: 30,
+          cacheReads: 10,
+          cacheWrites: 0,
+          inferenceProvider: "anthropic",
+          request:
+            "<environment_details>\n# Current Workspace Directory (~/Dev/kilo-app) Files\nsrc/main.ts\n</environment_details>",
+        }),
+      }),
+    ]);
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+      platform: "win32",
+    });
+    const events = snapshot.details.filter(
+      (event) => event.source === "kilocode",
+    );
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.project, "~/Dev/kilo-app");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -29,7 +29,8 @@ CREATE TABLE sessions (
   output_tokens INTEGER,
   accumulated_total_tokens INTEGER,
   accumulated_input_tokens INTEGER,
-  accumulated_output_tokens INTEGER
+  accumulated_output_tokens INTEGER,
+  working_dir TEXT
 );
 `;
 
@@ -212,6 +213,49 @@ test("goose usage adapter tolerates older schemas without accumulated columns", 
       0,
       "legacy schema without accumulated columns yields no events",
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("goose usage events carry the session working_dir as their project", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-goose-project-"));
+  try {
+    const sessionsDir = join(root, "AppData", "Roaming", "goose", "sessions");
+    await mkdir(sessionsDir, { recursive: true });
+    const db = new DatabaseSync(join(sessionsDir, "sessions.db"));
+    db.exec(SCHEMA);
+    db.prepare(
+      `INSERT INTO sessions (id, model_config_json, provider_name, created_at,
+         total_tokens, input_tokens, output_tokens, accumulated_total_tokens,
+         accumulated_input_tokens, accumulated_output_tokens, working_dir)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "sess-working-dir",
+      '{"model_name":"claude-3-7-sonnet"}',
+      "anthropic",
+      "2026-05-21T14:30:00Z",
+      900,
+      600,
+      300,
+      900,
+      600,
+      300,
+      // `working_dir` is NOT NULL on the current Goose schema: it holds the
+      // directory the session was started in.
+      "~/Dev/goose-app",
+    );
+    db.close();
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+      platform: "win32",
+    });
+    const events = snapshot.details.filter((event) => event.source === "goose");
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.project, "~/Dev/goose-app");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
