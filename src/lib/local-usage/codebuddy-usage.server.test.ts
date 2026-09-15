@@ -32,6 +32,8 @@ interface TranscriptRowFixture {
   rawUsage: Record<string, unknown>;
   /** Epoch milliseconds (or seconds, exercising the coerce fallback). */
   timestamp: number;
+  /** Row working directory; the reader attributes it as the event project. */
+  cwd?: string;
 }
 
 function transcriptRow(fixture: TranscriptRowFixture): string {
@@ -40,6 +42,7 @@ function transcriptRow(fixture: TranscriptRowFixture): string {
     timestamp: fixture.timestamp,
     ...(fixture.sessionId == null ? {} : { sessionId: fixture.sessionId }),
     ...(fixture.role == null ? {} : { role: fixture.role }),
+    ...(fixture.cwd == null ? {} : { cwd: fixture.cwd }),
     providerData: {
       ...(fixture.model == null ? {} : { model: fixture.model }),
       messageId: fixture.messageId,
@@ -261,6 +264,53 @@ test("codebuddy usage adapter reads per-round-trip JSONL rawUsage totals", async
     assert.equal(secondCodebuddy.filesParsed, 0);
     assert.equal(secondCodebuddy.filesReused, 1);
     assert.equal(secondCodebuddy.events, 3);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("codebuddy usage events carry the row cwd as their project", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-codebuddy-project-"));
+  try {
+    // The project directory exists so the canonicalizer resolves it as a real
+    // path (and reports it home-relative, like every other reader).
+    await mkdir(join(root, "Dev", "codebuddy-app"), { recursive: true });
+    const now = Date.now();
+    const sessionFile = join(
+      root,
+      ".codebuddy",
+      "projects",
+      "c-Users-u-Dev-codebuddy-app",
+      "sess-cwd-1.jsonl",
+    );
+    await writeTranscript(sessionFile, [
+      transcriptRow({
+        type: "message",
+        role: "assistant",
+        sessionId: "sess-cwd-1",
+        model: "glm-4.6",
+        messageId: "rt-cwd",
+        rawUsage: {
+          prompt_tokens: 1200,
+          completion_tokens: 80,
+          prompt_tokens_details: { cached_tokens: 0 },
+          completion_tokens_details: { reasoning_tokens: 0 },
+        },
+        timestamp: now - 60 * 1000,
+        cwd: "~/Dev/codebuddy-app",
+      }),
+    ]);
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+    });
+    const events = snapshot.details.filter(
+      (event) => event.source === "codebuddy",
+    );
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.project, "~/Dev/codebuddy-app");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

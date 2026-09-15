@@ -400,3 +400,44 @@ test("zed window excludes old threads and keeps the newest under a budget", asyn
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("zed usage events carry the thread's first folder path as their project", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-zed-project-"));
+  try {
+    const threadsDir = join(root, "AppData", "Local", "Zed", "threads");
+    await mkdir(threadsDir, { recursive: true });
+    const dbPath = join(threadsDir, "threads.db");
+    const db = new DatabaseSync(dbPath);
+    // Newer Zed builds add folder_paths/folder_paths_order to the threads
+    // table; the display order picks the thread's project folder.
+    db.exec(
+      "CREATE TABLE threads (id TEXT, updated_at TEXT, data_type TEXT, data BLOB, folder_paths TEXT, folder_paths_order TEXT);",
+    );
+    db.prepare(
+      "INSERT INTO threads (id, updated_at, data_type, data, folder_paths, folder_paths_order) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(
+      "th-project-1",
+      "2026-05-01T14:00:00Z",
+      "json",
+      threadJson({
+        model: "claude-sonnet-4",
+        request: [{ input_tokens: 10, output_tokens: 2 }],
+      }),
+      "docs-notes\n~/Dev/zed-app",
+      "1,0",
+    );
+    db.close();
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+      platform: "win32",
+    });
+    const events = snapshot.details.filter((event) => event.source === "zed");
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.project, "~/Dev/zed-app");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

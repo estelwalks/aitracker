@@ -1584,23 +1584,30 @@ async function scanClaude(
   };
 }
 
+/**
+ * Context records that carry the session's model and working directory:
+ * `turn_context` rows, and the `session_meta` header every rollout opens
+ * with (the only source of `cwd` when a trimmed log retains no
+ * `turn_context`). Records of any other type are not context.
+ */
 function codexContextFromRecord(
   record: JsonObject,
 ): { model?: string; project?: string } | undefined {
   const payload = asObject(record.payload);
   const recordType = stringValue(record.type);
   const payloadType = stringValue(payload?.type);
-  if (recordType !== "turn_context" && payloadType !== "turn_context") {
+  const isTurnContext =
+    recordType === "turn_context" || payloadType === "turn_context";
+  const isSessionMeta =
+    recordType === "session_meta" || payloadType === "session_meta";
+  if (!isTurnContext && !isSessionMeta) {
     return undefined;
   }
 
-  const context =
-    payloadType === "turn_context" || recordType === "turn_context"
-      ? payload
-      : record;
+  const context = payload ?? record;
   return {
-    model: stringValue(context?.model),
-    project: stringValue(context?.cwd) ?? stringValue(context?.project),
+    model: stringValue(context.model),
+    project: stringValue(context.cwd) ?? stringValue(context.project),
   };
 }
 
@@ -2275,6 +2282,48 @@ function diffGeminiSnapshot(
   return delta.totalTokens > 0 ? delta : undefined;
 }
 
+/**
+ * Gemini CLI keeps sessions under `~/.gemini/tmp/<project-identifier>/chats/`
+ * and the conversation records only carry the opaque `projectHash`; the
+ * project path itself is not in the session file. Two side files restore it:
+ * the per-project ownership marker `<project-identifier>/.project_root`
+ * (absolute path as the file content) and the global
+ * `~/.gemini/projects.json` map (`{"projects": {"<abs path>": "<slug>"}}`).
+ * Without either lookup every gemini event lands in "unknown".
+ */
+async function geminiProjectForSessionFile(filePath: string): Promise<string> {
+  // <geminiHome>/tmp/<identifier>/chats/session-*.json
+  const projectDirectory = dirname(dirname(filePath));
+  try {
+    const marker = (
+      await readFile(join(projectDirectory, ".project_root"), "utf8")
+    ).trim();
+    if (marker.length > 0) return marker;
+  } catch {
+    // Ownership markers are written by newer gemini-cli builds only.
+  }
+  try {
+    const registry = asObject(
+      JSON.parse(
+        await readFile(
+          join(dirname(dirname(projectDirectory)), "projects.json"),
+          "utf8",
+        ),
+      ) as unknown,
+    );
+    const projects = asObject(registry?.projects);
+    if (projects != null) {
+      const identifier = basename(projectDirectory);
+      for (const [projectPath, slug] of Object.entries(projects)) {
+        if (slug === identifier) return projectPath;
+      }
+    }
+  } catch {
+    // No projects.json: the project label stays unknown.
+  }
+  return "unknown";
+}
+
 async function parseGeminiUsageFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   fallbackSessionId: string,
@@ -2301,6 +2350,7 @@ async function parseGeminiUsageFile(
   const identifiedEvents: CachedIdentifiedEvent[] = [];
   let previous: LocalTokenCounts | undefined;
   let model = "unknown";
+  const project = await geminiProjectForSessionFile(file.path);
 
   for (let index = 0; index < messages.length; index += 1) {
     signal?.throwIfAborted();
@@ -2320,7 +2370,7 @@ async function parseGeminiUsageFile(
         timestamp: timestamp.toISOString(),
         sessionId,
         model,
-        project: "unknown",
+        project,
         ...delta,
       },
     });
@@ -2376,6 +2426,28 @@ function grokTokenCounts(usage: JsonObject): LocalTokenCounts | undefined {
   };
 }
 
+/**
+ * Grok keeps one session directory per conversation
+ * (`~/.grok/sessions/<url-encoded-cwd>/<uuid>/`) with `summary.json` beside
+ * `updates.jsonl`, and its `info.cwd` is the working directory for every turn
+ * in the file — the same field the Grok session reader consumes. The usage
+ * reader must look it up because `updates.jsonl` itself never records a
+ * project, which otherwise pins every grok event to "unknown".
+ */
+async function grokProjectFromSummaryFile(filePath: string): Promise<string> {
+  try {
+    const summary = asObject(
+      JSON.parse(
+        await readFile(join(dirname(filePath), "summary.json"), "utf8"),
+      ) as unknown,
+    );
+    return stringValue(asObject(summary?.info)?.cwd) ?? "unknown";
+  } catch {
+    // A missing or unreadable summary.json only costs the project label.
+    return "unknown";
+  }
+}
+
 async function parseGrokUsageFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   fallbackSessionId: string,
@@ -2386,6 +2458,7 @@ async function parseGrokUsageFile(
   diagnostics: LocalUsageDiagnostic[];
 }> {
   const identifiedEvents: CachedIdentifiedEvent[] = [];
+  const project = await grokProjectFromSummaryFile(file.path);
   const { malformedLines, oversized } = await readJsonLines(
     file.path,
     (record) => {
@@ -2416,7 +2489,7 @@ async function parseGrokUsageFile(
             timestamp: timestamp.toISOString(),
             sessionId,
             model,
-            project: "unknown",
+            project,
             ...counts,
           },
         });
@@ -2468,9 +2541,16 @@ async function parseOpenclawUsageFile(
   diagnostics: LocalUsageDiagnostic[];
 }> {
   const identifiedEvents: CachedIdentifiedEvent[] = [];
+  // The session header (first record, `type: "session"`) carries the
+  // conversation's working directory; the message rows that follow never do.
+  let project = "unknown";
   const { malformedLines, oversized } = await readJsonLines(
     file.path,
     (record) => {
+      if (record.type === "session") {
+        project = stringValue(record.cwd) ?? project;
+        return;
+      }
       if (record.type !== "message") return;
       const message = asObject(record.message);
       if (message?.role !== "assistant") return;
@@ -2513,7 +2593,7 @@ async function parseOpenclawUsageFile(
           timestamp: timestamp.toISOString(),
           sessionId: fallbackSessionId,
           model,
-          project: "unknown",
+          project,
           inputTokens,
           cachedInputTokens,
           cacheCreationInputTokens,
@@ -3654,6 +3734,34 @@ function decodeZedThread(row: Record<string, unknown>):
 }
 
 /**
+ * Zed's threads table gained `folder_paths`/`folder_paths_order` after the
+ * original schema: the workspace folders the thread was created against,
+ * serialized as a newline-separated path list with a comma-separated index
+ * list recording their display order. The thread's project is the first
+ * folder in that order; a database written before the columns existed has no
+ * project to report.
+ */
+function zedProjectFromThreadRow(row: Record<string, unknown>): string {
+  const raw = stringValue(row.folder_paths);
+  if (raw == null) return "unknown";
+  const paths = raw
+    .split("\n")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  if (paths.length === 0) return "unknown";
+  const order = stringValue(row.folder_paths_order);
+  if (order != null) {
+    for (const entry of order.split(",")) {
+      const index = Number.parseInt(entry.trim(), 10);
+      if (Number.isInteger(index) && index >= 0 && index < paths.length) {
+        return paths[index]!;
+      }
+    }
+  }
+  return paths[0]!;
+}
+
+/**
  * Parse Zed's `threads.db` (one event per thread row, current cumulative
  * totals). Rows that cannot be decoded are skipped and counted as malformed;
  * a row-level failure never fails the whole database.
@@ -3687,9 +3795,25 @@ function parseZedThreadsDb(
     // as the same instant in milliseconds, so a row whose timestamp is a bare
     // epoch (every other reader accepts both) is filtered either way.
     const cutoffIso = new Date(cutoffTime).toISOString().replace(".000Z", "Z");
+    // Zed added `folder_paths`/`folder_paths_order` (the workspace folders a
+    // thread was created against, and their display order) after the original
+    // threads schema. Databases written by older Zed builds have neither
+    // column, so they are probed before being selected - the thread data
+    // itself never records a project.
+    const threadColumns = new Set(
+      (
+        database.prepare(`PRAGMA table_info(threads)`).all() as Record<
+          string,
+          unknown
+        >[]
+      ).map((column) => stringValue(column.name)),
+    );
+    const folderColumns = threadColumns.has("folder_paths")
+      ? ", folder_paths, folder_paths_order"
+      : "";
     for (const row of database
       .prepare(
-        `SELECT id, updated_at, data_type, data FROM threads
+        `SELECT id, updated_at, data_type, data${folderColumns} FROM threads
          WHERE updated_at >= ? OR CAST(updated_at AS INTEGER) >= ?
          ORDER BY updated_at DESC, rowid DESC`,
       )
@@ -3720,7 +3844,7 @@ function parseZedThreadsDb(
         // structured session id is always derivable here.
         sessionId: sessionIdFromStructuredValue(adapter.source, row.id)!,
         model: decoded.model,
-        project: "unknown",
+        project: zedProjectFromThreadRow(row),
         inputTokens: totals.input,
         cachedInputTokens: totals.cacheRead,
         cacheCreationInputTokens: totals.cacheWrite,
@@ -3990,6 +4114,8 @@ const DROID_UNKNOWN_MODEL = "droid-unknown";
 const MAX_DROID_MODEL_SIDECAR_BYTES = 1024 * 1024;
 /** Cap on sibling-transcript lines probed for the fallback model id (ccusage parity). */
 const MAX_DROID_MODEL_SIDECAR_LINES = 500;
+/** Cap on sibling-transcript bytes probed for the session's working directory. */
+const MAX_DROID_PROJECT_SIDECAR_BYTES = 64 * 1024;
 
 /** Coerce one Droid token field: numbers and numeric strings, <= 0 -> 0. */
 function droidTokenCount(value: unknown): number {
@@ -4114,6 +4240,46 @@ async function droidModelForSettings(
 }
 
 /**
+ * Droid's settings file carries token totals and the model, but no path
+ * field at all: the session's working directory only exists on the first
+ * record of the sibling `<id>.jsonl` transcript
+ * (`{"type":"session_start",…,"cwd":…}`). The bounded head read mirrors the
+ * model probe; a session without a readable transcript keeps "unknown".
+ */
+async function droidProjectFromSidecarJsonl(
+  settingsPath: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const sidecarPath = `${settingsPath.slice(0, -DROID_SETTINGS_SUFFIX.length)}.jsonl`;
+  let head: string;
+  try {
+    head = await readFileHead(
+      sidecarPath,
+      MAX_DROID_PROJECT_SIDECAR_BYTES,
+      signal,
+    );
+  } catch {
+    return "unknown";
+  }
+  for (const line of head.split("\n")) {
+    if (line.trim().length === 0) continue;
+    let record: JsonObject;
+    try {
+      record = asObject(JSON.parse(line) as unknown) ?? {};
+    } catch {
+      // The byte budget can cut the final line; earlier records still count.
+      break;
+    }
+    const cwd =
+      stringValue(record.cwd) ??
+      stringValue(record.WorkspaceRoot) ??
+      stringValue(asObject(record.session)?.cwd);
+    if (cwd != null) return cwd;
+  }
+  return "unknown";
+}
+
+/**
  * Parse one Droid `<sessionId>.settings.json` into a single event carrying
  * the session's current cumulative totals, timestamped with the file mtime.
  * Files with malformed JSON, without a tokenUsage object, or whose component
@@ -4188,6 +4354,7 @@ async function parseDroidSettingsFile(
     return { events: [], malformedLines: 0, diagnostics: [] };
   }
   const model = await droidModelForSettings(settings, file.path, signal);
+  const project = await droidProjectFromSidecarJsonl(file.path, signal);
   const event: LocalUsageEvent = {
     source: adapter.source as LocalUsageSource,
     // The settings file is rewritten each turn, so its mtime is the most
@@ -4195,7 +4362,7 @@ async function parseDroidSettingsFile(
     timestamp: new Date(file.modifiedAt).toISOString(),
     sessionId: sessionIdFromStructuredValue(adapter.source, stem)!,
     model,
-    project: "unknown",
+    project,
     inputTokens,
     cachedInputTokens,
     cacheCreationInputTokens,
@@ -4504,7 +4671,8 @@ async function parseCodebuddyJsonlFile(
         timestamp: new Date(tsMs).toISOString(),
         sessionId: sessionIdFromStructuredValue(adapter.source, rowSessionId)!,
         model: stringValue(providerData?.model) ?? CODEBUDDY_UNKNOWN_MODEL,
-        project: "unknown",
+        project:
+          stringValue(record.cwd) ?? stringValue(record.project) ?? "unknown",
         inputTokens,
         cachedInputTokens,
         cacheCreationInputTokens,
@@ -4740,6 +4908,23 @@ function normalizeKilocodeProviderToModel(providerName: unknown): string {
 }
 
 /**
+ * Kilo Code's task tree records no workspace path anywhere: neither
+ * `task_metadata.json` nor the message rows carry a `cwd`. The working
+ * directory only surfaces inside the request body of an `api_req_started`
+ * row, as the `# Current Workspace Directory (<path>) Files` section the
+ * extension renders into its environment details. The first task row that
+ * matches is the workspace the task started in.
+ */
+const KILOCODE_WORKSPACE_DIRECTORY_PATTERN =
+  /# Current Workspace Directory \(([^)\n]+)\) Files/;
+
+function kilocodeProjectFromRequestText(text: string): string | undefined {
+  const candidate =
+    KILOCODE_WORKSPACE_DIRECTORY_PATTERN.exec(text)?.[1]?.trim();
+  return candidate != null && candidate.length > 0 ? candidate : undefined;
+}
+
+/**
  * Parse one Kilo Code `<taskUuid>/ui_messages.json` (a single top-level JSON
  * array) into one event per token-bearing api_req_started/api_req_deleted
  * message, following the TokenTracker rules above. Files above the adapter
@@ -4798,6 +4983,7 @@ async function parseKilocodeUiMessagesFile(
   }
   const sessionId = sessionIdFromStructuredValue(adapter.source, taskUuid);
   const events: LocalUsageEvent[] = [];
+  let project = "unknown";
   for (const element of parsed) {
     signal?.throwIfAborted();
     const message = asObject(element);
@@ -4810,6 +4996,9 @@ async function parseKilocodeUiMessagesFile(
     }
     const text = stringValue(message.text);
     if (text == null || !text.startsWith("{")) continue;
+    if (project === "unknown") {
+      project = kilocodeProjectFromRequestText(text) ?? project;
+    }
     let payload: JsonObject | undefined;
     try {
       payload = asObject(JSON.parse(text) as unknown);
@@ -4839,7 +5028,7 @@ async function parseKilocodeUiMessagesFile(
       timestamp: new Date(ts).toISOString(),
       ...(sessionId == null ? {} : { sessionId }),
       model: normalizeKilocodeProviderToModel(payload.inferenceProvider),
-      project: "unknown",
+      project,
       inputTokens,
       cachedInputTokens,
       cacheCreationInputTokens,

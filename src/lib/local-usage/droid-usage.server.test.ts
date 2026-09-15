@@ -202,3 +202,44 @@ test("droid usage adapter reads cumulative per-session settings.json totals", as
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("droid usage events read the project from the sibling transcript header", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-droid-project-"));
+  try {
+    const sessions = join(root, ".factory", "sessions");
+    const settingsPath = join(sessions, "session-cwd.settings.json");
+    await writeSettings(settingsPath, {
+      model: "claude-sonnet-4-5",
+      ...usage({
+        inputTokens: 400,
+        outputTokens: 80,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 20,
+        thinkingTokens: 5,
+      }),
+    });
+    // settings.json has no path field at all: the working directory only
+    // exists on the first record of the sibling transcript.
+    await writeFile(
+      join(sessions, "session-cwd.jsonl"),
+      `${JSON.stringify({
+        type: "session_start",
+        id: "session-cwd",
+        title: "private droid title",
+        cwd: "~/Dev/droid-app",
+      })}\n`,
+      "utf8",
+    );
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+    });
+    const events = snapshot.details.filter((event) => event.source === "droid");
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.project, "~/Dev/droid-app");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -164,6 +164,61 @@ test("collapses nested Codex working directories to one Git repository project",
   }
 });
 
+test("Codex rollouts without a turn_context fall back to the session_meta cwd", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-codex-meta-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const sessionsDirectory = join(homeDirectory, ".codex", "sessions");
+  await mkdir(sessionsDirectory, { recursive: true });
+  // A trimmed rollout: the opening session_meta carries the cwd and no
+  // turn_context row ever follows.
+  await writeFile(
+    join(sessionsDirectory, "rollout-meta-only.jsonl"),
+    `${[
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:00.000Z",
+        type: "session_meta",
+        payload: {
+          type: "session_meta",
+          id: "codex-meta-only",
+          cwd: "~/Dev/codex-app",
+        },
+      }),
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:01.000Z",
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            last_token_usage: {
+              input_tokens: 10,
+              cached_input_tokens: 0,
+              output_tokens: 4,
+              reasoning_output_tokens: 1,
+            },
+          },
+        },
+      }),
+    ].join("\n")}\n`,
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = snapshot.details.filter((event) => event.source === "codex");
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.project, "~/Dev/codex-app");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function sourceSummary(
   snapshot: Awaited<ReturnType<typeof scanLocalUsage>>,
   source: LocalUsageSource,
@@ -253,6 +308,61 @@ test("Gemini native reader diffs cumulative snapshots, clamps component drops, a
   }
 });
 
+test("Gemini sessions restore the project from the ownership marker or projects.json", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-gemini-project-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const geminiTmp = join(homeDirectory, ".gemini", "tmp");
+  const template = JSON.parse(
+    await readFile(join(NATIVE_FIXTURES, "gemini-session-native.json"), "utf8"),
+  ) as Record<string, unknown>;
+  const writeSession = async (
+    identifier: string,
+    sessionId: string,
+  ): Promise<void> => {
+    const chats = join(geminiTmp, identifier, "chats");
+    await mkdir(chats, { recursive: true });
+    await writeFile(
+      join(chats, "session-native.json"),
+      JSON.stringify({ ...template, sessionId }),
+    );
+  };
+
+  // Session 1: the per-project ownership marker holds the absolute path.
+  await writeSession("marked-project", "marked-session");
+  await writeFile(
+    join(geminiTmp, "marked-project", ".project_root"),
+    "~/Dev/marked-project",
+  );
+  // Session 2: no marker — the global projects.json map resolves the slug.
+  await writeSession("mapped-project", "mapped-session");
+  await writeFile(
+    join(homeDirectory, ".gemini", "projects.json"),
+    JSON.stringify({ projects: { "~/Dev/mapped-project": "mapped-project" } }),
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = snapshot.details.filter(
+      (event) => event.source === "gemini-cli",
+    );
+    assert.equal(events.length, 8);
+    assert.deepEqual(
+      new Set(events.map((event) => event.project)),
+      new Set(["~/Dev/marked-project", "~/Dev/mapped-project"]),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Grok native reader uses keyed modelUsage, reported totals, component fallback, and eventId-model dedup", async () => {
   const root = join(
     tmpdir(),
@@ -320,6 +430,53 @@ test("Grok native reader uses keyed modelUsage, reported totals, component fallb
     assert.equal(sourceSummary(second, "grok").filesReused, 1);
     assert.deepEqual(second.totals, first.totals);
     assert.deepEqual(second.details, first.details);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Grok usage events restore the project from the session summary.json", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-grok-project-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const sessionDirectory = join(
+    homeDirectory,
+    ".grok",
+    "sessions",
+    "project",
+    "sid-project",
+  );
+  await mkdir(sessionDirectory, { recursive: true });
+  await writeFile(
+    join(sessionDirectory, "updates.jsonl"),
+    await readFile(join(NATIVE_FIXTURES, "grok-updates-native.jsonl"), "utf8"),
+  );
+  // Every Grok session directory pairs updates.jsonl with a summary.json whose
+  // info.cwd is the only record of the working directory.
+  await writeFile(
+    join(sessionDirectory, "summary.json"),
+    JSON.stringify({
+      info: { id: "private-grok-session", cwd: "~/Dev/grok-app" },
+      num_messages: 2,
+    }),
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = snapshot.details.filter((event) => event.source === "grok");
+    assert.ok(events.length > 0);
+    assert.ok(events.every((event) => event.project === "~/Dev/grok-app"));
+    assert.doesNotMatch(
+      JSON.stringify(snapshot),
+      /PRIVATE_GROK_BODY|private-grok-session|turn-1/,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -453,6 +610,55 @@ test("OpenClaw native reader merges active/archive/reset copies as a multiset an
     assert.equal(sourceSummary(second, "openclaw").filesReused, 3);
     assert.deepEqual(second.totals, first.totals);
     assert.deepEqual(second.details, first.details);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("OpenClaw usage events read the working directory from the session header", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-openclaw-project-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const sessionsDirectory = join(
+    homeDirectory,
+    ".openclaw",
+    "agents",
+    "main",
+    "sessions",
+  );
+  await mkdir(sessionsDirectory, { recursive: true });
+  const fixture = await readFile(
+    join(NATIVE_FIXTURES, "openclaw-session-native.jsonl"),
+    "utf8",
+  );
+  // The first record is the session header; message rows never carry a path,
+  // so the header is the only record of the conversation's project.
+  const header = JSON.stringify({
+    type: "session",
+    version: 3,
+    id: "openclaw-session-1",
+    timestamp: "2026-07-27T10:00:00.000Z",
+    cwd: "~/Dev/openclaw-app",
+  });
+  await writeFile(
+    join(sessionsDirectory, "session-cwd.jsonl"),
+    `${header}\n${fixture}`,
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = snapshot.details.filter(
+      (event) => event.source === "openclaw",
+    );
+    assert.ok(events.length > 0);
+    assert.ok(events.every((event) => event.project === "~/Dev/openclaw-app"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
