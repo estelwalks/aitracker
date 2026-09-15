@@ -28,7 +28,8 @@ CREATE TABLE sessions (
   cache_read_tokens INTEGER,
   cache_write_tokens INTEGER,
   reasoning_tokens INTEGER,
-  message_count INTEGER
+  message_count INTEGER,
+  cwd TEXT
 ) STRICT;
 `;
 
@@ -754,6 +755,73 @@ test("a raised budget clears the truncation warning it no longer needs", async (
       ).length,
       0,
       "nothing is dropped now, so nothing may warn",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("hermes usage events carry each session's cwd as its project", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-hermes-project-"));
+  const epoch = Math.floor(Date.now() / 1000);
+  try {
+    const hermesDir = join(root, ".hermes");
+    await mkdir(hermesDir, { recursive: true });
+    const db = new DatabaseSync(join(hermesDir, "state.db"));
+    db.exec(SESSIONS_SCHEMA);
+    const insert = db.prepare(
+      `INSERT INTO sessions (
+         id, model, started_at, ended_at, input_tokens, output_tokens,
+         cache_read_tokens, cache_write_tokens, reasoning_tokens, message_count,
+         cwd
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    insert.run(
+      "sess_cwd",
+      "hermes-agent",
+      epoch - 3600,
+      epoch - 1800,
+      500,
+      200,
+      0,
+      0,
+      0,
+      4,
+      "~/Dev/hermes-app",
+    );
+    // Sessions recorded before Hermes persisted a cwd keep the unknown bucket.
+    insert.run(
+      "sess_no_cwd",
+      "hermes-agent",
+      epoch - 7200,
+      epoch - 5400,
+      300,
+      100,
+      0,
+      0,
+      0,
+      2,
+      null,
+    );
+    db.close();
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+    });
+    const events = snapshot.details.filter(
+      (event) => event.source === "hermes",
+    );
+    assert.equal(events.length, 2);
+    const byId = new Map(events.map((event) => [event.sessionId, event]));
+    assert.equal(
+      byId.get(sessionIdFromStructuredValue("hermes", "sess_cwd"))?.project,
+      "~/Dev/hermes-app",
+    );
+    assert.equal(
+      byId.get(sessionIdFromStructuredValue("hermes", "sess_no_cwd"))?.project,
+      "unknown",
     );
   } finally {
     await rm(root, { recursive: true, force: true });

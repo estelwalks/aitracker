@@ -44,11 +44,11 @@ const SCHEMAS: Record<string, string> = {
     CREATE TABLE sessions(id TEXT, created_at TEXT, model_config_json TEXT,
       input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER,
       accumulated_input_tokens INTEGER, accumulated_output_tokens INTEGER,
-      accumulated_total_tokens INTEGER);`,
+      accumulated_total_tokens INTEGER, working_dir TEXT);`,
   hermes: `
     CREATE TABLE sessions(id TEXT, started_at INTEGER, ended_at INTEGER, model TEXT,
       input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER,
-      cache_read_tokens INTEGER, cache_write_tokens INTEGER);`,
+      cache_read_tokens INTEGER, cache_write_tokens INTEGER, cwd TEXT);`,
   kiro: `
     CREATE TABLE tokens_generated(id TEXT, timestamp TEXT, model TEXT,
       tokens_prompt INTEGER, tokens_generated INTEGER);`,

@@ -802,6 +802,58 @@ test("Antigravity emits labelled model-only transcript estimates without context
   }
 });
 
+test("Antigravity usage events read the project from tool-call workspace arguments", async () => {
+  const root = join(
+    tmpdir(),
+    `aitracker-antigravity-project-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const logDirectory = join(
+    homeDirectory,
+    ".gemini",
+    "antigravity",
+    "brain",
+    "session-cwd",
+    ".system_generated",
+    "logs",
+  );
+  await mkdir(logDirectory, { recursive: true });
+  await writeFile(
+    join(logDirectory, "transcript.jsonl"),
+    `${[
+      JSON.stringify({
+        type: "PLANNER_RESPONSE",
+        content: "PRIVATE_ANTIGRAVITY_PLAN",
+        // Tool arguments are JSON-encoded strings; the workspace path is the
+        // only project evidence a transcript carries.
+        tool_calls: [
+          { name: "grep_search", args: { SearchPath: '"~/Dev/other/sub"' } },
+          { name: "run_command", args: { Cwd: '"~/Dev/antigravity-app"' } },
+        ],
+        created_at: "2026-07-27T10:00:01.000Z",
+      }),
+    ].join("\n")}\n`,
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = snapshot.details.filter(
+      (event) => event.source === "antigravity",
+    );
+    assert.equal(events.length, 1);
+    // `Cwd` outranks the search scope: it is the directory the session ran in.
+    assert.equal(events[0]?.project, "~/Dev/antigravity-app");
+    assert.doesNotMatch(JSON.stringify(snapshot), /PRIVATE_ANTIGRAVITY_PLAN/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("process cache reuses, reparses, prunes, and can be bypassed safely", async () => {
   const root = join(tmpdir(), `aitracker-scanner-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");

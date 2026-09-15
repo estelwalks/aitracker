@@ -2682,6 +2682,49 @@ function antigravityContextTokens(record: JsonObject): number {
  * a labelled model-level estimate and does not expose any context breakdown.
  * Raw transcript content is used only during this scan and is never cached.
  */
+/**
+ * Antigravity transcripts carry no project field of their own: the working
+ * directory only appears inside tool-call arguments, JSON-encoded as a quoted
+ * string (`"d:\\proj"` on Windows, `"~/proj"` elsewhere). Workspace-scoped
+ * keys are tried first — `Cwd` is what run_command runs in, the search/list
+ * keys are directory scopes — so the first match is the project the session
+ * was working against. Only the decoded path is kept.
+ */
+const ANTIGRAVITY_PROJECT_ARGUMENT_KEYS = [
+  "Cwd",
+  "SearchDirectory",
+  "DirectoryPath",
+  "SearchPath",
+] as const;
+
+function antigravityDecodedPathValue(value: unknown): string | undefined {
+  const raw = stringValue(value)?.trim();
+  if (raw == null || raw.length === 0) return undefined;
+  if (!raw.startsWith('"')) return raw;
+  try {
+    const decoded = JSON.parse(raw) as unknown;
+    const decodedText = typeof decoded === "string" ? decoded.trim() : "";
+    return decodedText.length > 0 ? decodedText : undefined;
+  } catch {
+    // A truncated or non-string argument value carries no usable path.
+    return undefined;
+  }
+}
+
+function antigravityProjectFromToolCalls(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const argumentSets = value
+    .map((entry) => asObject(asObject(entry)?.args))
+    .filter((args): args is JsonObject => args != null);
+  for (const key of ANTIGRAVITY_PROJECT_ARGUMENT_KEYS) {
+    for (const args of argumentSets) {
+      const candidate = antigravityDecodedPathValue(args[key]);
+      if (candidate != null) return candidate;
+    }
+  }
+  return undefined;
+}
+
 async function parseAntigravityUsageFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   fallbackSessionId: string,
@@ -2696,10 +2739,14 @@ async function parseAntigravityUsageFile(
   let contextTokens = 0;
   let previousContextTokens = 0;
   let index = 0;
+  let project = "unknown";
   const { malformedLines, oversized } = await readJsonLines(
     file.path,
     (record) => {
       index += 1;
+      if (project === "unknown") {
+        project = antigravityProjectFromToolCalls(record.tool_calls) ?? project;
+      }
       if (
         record.type === "USER_INPUT" ||
         record.type === "USER_SETTINGS_CHANGE"
@@ -2734,7 +2781,7 @@ async function parseAntigravityUsageFile(
           timestamp: timestamp.toISOString(),
           sessionId: fallbackSessionId,
           model,
-          project: "unknown",
+          project,
           inputTokens,
           cachedInputTokens: 0,
           cacheCreationInputTokens: 0,
