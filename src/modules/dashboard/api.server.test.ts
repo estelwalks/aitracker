@@ -207,6 +207,37 @@ test("dashboard preserves task-like labels for unknown classifications", () => {
   assert.equal(result.details[0]?.projectKind, "unknown");
 });
 
+test("dashboard keeps quick conversation directories distinct without labels", () => {
+  const homeRef = "~/Desktop/scratch";
+  const driveRef = "D:\\WorkBuddyWorkSpace\\2026-08-17-09-02-16";
+  const result = projectedDashboardSnapshot(
+    {
+      ...rawSnapshot,
+      details: [
+        { ...rawSnapshot.details[0]!, project: homeRef },
+        { ...rawSnapshot.details[0]!, project: driveRef },
+      ],
+    },
+    new Map<string, DashboardProjectClassification>([
+      [homeRef, { kind: "quick-conversation", label: "quick-conversation" }],
+      [driveRef, { kind: "quick-conversation", label: "quick-conversation" }],
+    ]),
+  );
+
+  // An in-memory refresh carries no projectLabel; the directory label must be
+  // derived from the ref instead of falling back to the classifier literal.
+  assert.deepEqual(
+    result.details.map((event) => event.project).sort(),
+    ["2026-08-17-09-02-16", homeRef].sort(),
+  );
+  assert.equal(
+    result.details.every((event) => event.projectKind === "quick-conversation"),
+    true,
+  );
+  // The drive-letter ref must never cross the browser boundary.
+  assert.equal(JSON.stringify(result).includes("WorkBuddyWorkSpace"), false);
+});
+
 test("dashboard V2 projection contains only aggregate-safe context and no session id", () => {
   const snapshot = projectedDashboardSnapshot(rawSnapshot);
   const result = toDashboardV2Snapshot({

@@ -30,7 +30,10 @@ export interface DashboardUsageEvent extends LocalTokenCounts {
   readonly source: LocalUsageEvent["source"];
   readonly timestamp: string;
   readonly model: string;
-  /** Display-only project key, never a local path. */
+  /**
+   * Display-only project key; never an absolute local path. The home-relative
+   * `~/…` display form is the only path-shaped value allowed here.
+   */
   readonly project: string;
   /** Server-derived category; omitted only by legacy test/compatibility DTOs. */
   readonly projectKind?: DashboardProjectKind;

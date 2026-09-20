@@ -26,6 +26,26 @@ export function safeProjectLabel(value: string): string {
   return label && !/^[A-Za-z]:$/u.test(label) ? label.slice(0, 128) : "unknown";
 }
 
+/** Persisted project labels share the sessions `project_key` bound. */
+const PROJECT_LABEL_MAX_LENGTH = 128;
+
+/**
+ * Display label for a `quick-conversation` project ref. The classifier labels
+ * every marker-less directory with the same literal, so the breakdown row
+ * loses its meaning; derive the display value from the ref instead. Paths stay
+ * inside the documented display contract: the home-relative `~/…` form is
+ * kept, every other absolute path keeps only its final segment, and anything
+ * else (a task title, `unknown`) falls back to {@link safeProjectLabel}.
+ */
+export function quickConversationProjectLabel(value: string): string {
+  const normalized = value.trim().replaceAll("\\", "/").replace(/\/+$/u, "");
+  if (normalized === "~") return "~";
+  if (normalized.startsWith("~/")) {
+    return normalized.slice(0, PROJECT_LABEL_MAX_LENGTH);
+  }
+  return safeProjectLabel(value);
+}
+
 export function isoToMs(value: string | null | undefined): number | null {
   if (value == null) return null;
   const parsed = Date.parse(value);
