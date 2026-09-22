@@ -7,6 +7,7 @@ import {
   isoToMs,
   loadGeneration,
   msToIso,
+  quickConversationProjectLabel,
   safeProjectLabel,
 } from "../../../platform/database/snapshot-generation.server.ts";
 import type {
@@ -165,10 +166,19 @@ export function createSqliteUsageSnapshotRepository(
       // generic `unknown` label would discard that useful display value when
       // the aggregate is persisted. Keep the safe final segment for all
       // unknown classifications while preserving the classification kind.
+      //
+      // Quick conversations hit the same problem: the classifier labels every
+      // marker-less directory with the same literal, so the breakdown merges
+      // unrelated directories. Derive the label from the ref instead — the
+      // home-relative `~/…` form is kept, every other absolute path keeps only
+      // its final segment. Only this display value changes; the classification
+      // kind (and therefore the mtime-fingerprinted cache) stays untouched.
       label:
-        kind === "unknown"
-          ? safeProjectLabel(projectRef)
-          : String(row?.label ?? "unknown"),
+        kind === "quick-conversation"
+          ? quickConversationProjectLabel(projectRef)
+          : kind === "unknown"
+            ? safeProjectLabel(projectRef)
+            : String(row?.label ?? "unknown"),
       kind: kind as PersistedProjectIdentity["kind"],
     };
   };

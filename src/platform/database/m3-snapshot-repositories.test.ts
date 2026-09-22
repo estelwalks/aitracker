@@ -13,6 +13,7 @@ import { createSqliteInstallationSnapshotRepository } from "../discovery/sqlite-
 import type { SnapshotEnvelope } from "../snapshot-runtime/contracts.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import { runMigrations } from "./migration-runner.server.ts";
+import { hashSensitiveRef } from "./snapshot-generation.server.ts";
 
 function stringifySqliteRows(value: unknown): string {
   return JSON.stringify(value, (_key, item) =>
@@ -138,7 +139,9 @@ test("usage aggregate generation is atomic and never reads or writes legacy even
     )
     .get()!;
   assert.notEqual(persisted.project_ref_hash, event.project);
-  assert.equal(persisted.project_label, "quick-conversation");
+  // Quick conversations derive their display label from the ref: a path
+  // outside home keeps only its final segment (:167 still holds).
+  assert.equal(persisted.project_label, "secret-repo");
   assert.equal(persisted.project_kind, "quick-conversation");
   assert.equal(
     Number(
@@ -195,6 +198,98 @@ test("usage aggregate generation is atomic and never reads or writes legacy even
         .get()!.count,
     ),
     1,
+  );
+});
+
+test("usage aggregate keeps quick conversations distinct per directory", async (t) => {
+  const database = openDatabase(t);
+  const hmacKey = "quick-conversation-label-key";
+  const refs = [
+    "~/WorkBuddyWorkSpace/2026-08-17-09-02-16",
+    "D:\\WorkBuddyWorkSpace\\2026-08-17-09-02-16",
+    "/tmp/scratch",
+    "quick-conversation",
+  ];
+  await createSqliteClassificationIndexRepository({
+    database,
+    hmacKey,
+  }).commit(
+    refs.map((ref) => ({
+      ref,
+      kind: "quick-conversation" as const,
+      label: "quick-conversation",
+      classifiedAt: "2026-08-19T01:01:00.000Z",
+      fingerprint: null,
+    })),
+  );
+  const repository = createSqliteUsageSnapshotRepository({ database, hmacKey });
+  const snapshot = buildLocalUsageSnapshot(
+    refs.map((project, index) => ({
+      source: "workbuddy" as const,
+      timestamp: `2026-08-19T01:0${index}:00.000Z`,
+      model: "wb-test",
+      project,
+      inputTokens: 10,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 5,
+      reasoningOutputTokens: 0,
+      totalTokens: 15,
+    })),
+    [],
+    new Date("2026-08-19T01:05:00.000Z"),
+  );
+  await repository.save(envelope("quick-conversation-labels", snapshot));
+
+  const persistedLabel = (
+    ref: string,
+    table: "usage_aggregate_buckets" | "usage_tracker_buckets",
+  ): unknown => {
+    const refHash = hashSensitiveRef(hmacKey, "project", ref);
+    if (table === "usage_aggregate_buckets") {
+      return database
+        .prepare(
+          "SELECT DISTINCT project_label AS label FROM usage_aggregate_buckets WHERE project_ref_hash = ?",
+        )
+        .get(refHash)?.label;
+    }
+    return database
+      .prepare(
+        "SELECT DISTINCT entity_label AS label FROM usage_tracker_buckets WHERE dimension = 'project' AND entity_key = ?",
+      )
+      .get(refHash)?.label;
+  };
+
+  assert.equal(persistedLabel(refs[0]!, "usage_aggregate_buckets"), refs[0]);
+  assert.equal(
+    persistedLabel(refs[1]!, "usage_aggregate_buckets"),
+    "2026-08-17-09-02-16",
+  );
+  assert.equal(persistedLabel(refs[2]!, "usage_aggregate_buckets"), "scratch");
+  assert.equal(
+    persistedLabel(refs[3]!, "usage_aggregate_buckets"),
+    "quick-conversation",
+  );
+  // The tracker projection shares resolveProjectForWrite with the aggregates.
+  assert.equal(persistedLabel(refs[0]!, "usage_tracker_buckets"), refs[0]);
+  assert.equal(
+    persistedLabel(refs[1]!, "usage_tracker_buckets"),
+    "2026-08-17-09-02-16",
+  );
+  // A raw drive-letter ref is never persisted; only the `~/…` form and
+  // basename projections keep a path-free label.
+  assert.equal(
+    stringifySqliteRows(
+      database.prepare("SELECT * FROM usage_aggregate_buckets").all(),
+    ).includes("\\"),
+    false,
+  );
+  const loaded = await repository.load();
+  assert.deepEqual(
+    loaded.envelope.data?.aggregateBuckets
+      ?.map((bucket) => bucket.projectLabel)
+      .sort(),
+    ["2026-08-17-09-02-16", "quick-conversation", "scratch", refs[0]!].sort(),
   );
 });
 

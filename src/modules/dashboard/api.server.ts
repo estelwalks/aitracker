@@ -26,7 +26,10 @@ import type { MonitoringStatus } from "../monitoring/contracts.ts";
 import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
 import { getDashboardAIInsightService } from "./ai-insight.server.ts";
 import type { DashboardProjectClassification } from "./project-classification.server.ts";
-import { safeProjectLabel } from "../../platform/database/snapshot-generation.server.ts";
+import {
+  quickConversationProjectLabel,
+  safeProjectLabel,
+} from "../../platform/database/snapshot-generation.server.ts";
 
 const SESSION_SOURCE_IDS = new Set(["claude-code", "codex", "grok", "dsh"]);
 const SESSION_REFRESH_GRACE_MS = 30_000;
@@ -236,10 +239,16 @@ function toDashboardEvent(
   classifications: ReadonlyMap<string, DashboardProjectClassification>,
 ): DashboardUsageEvent {
   const classification = classifications.get(event.project);
+  // Mirrors the persistence layer (sqlite-usage-snapshot-repository): an
+  // in-memory refresh carries no projectLabel, so quick conversations must
+  // derive their directory label here or the row falls back to the classifier
+  // literal until the snapshot is rehydrated.
   const classifiedLabel =
-    classification?.kind === "unknown"
-      ? safeProjectLabel(event.project)
-      : classification?.label;
+    classification?.kind === "quick-conversation"
+      ? quickConversationProjectLabel(event.project)
+      : classification?.kind === "unknown"
+        ? safeProjectLabel(event.project)
+        : classification?.label;
   return {
     source: event.source,
     timestamp: event.timestamp,
