@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   EXPECTED_ARTIFACT_NAMES,
+  EXPECTED_TEMPLATES,
   inspectPackagingConfig,
   verifyReleaseArtifactNames,
 } from "./verify-release-artifact-names.mjs";
@@ -17,13 +18,15 @@ const SCRIPT = join(
 );
 const REPOSITORY_ROOT = join(dirname(SCRIPT), "..");
 
+// The fixture must declare exactly the templates the live guard expects,
+// otherwise every case below also reports the fixture's own drift.
 const CONFIG = [
   "appId: com.aitracker.desktop",
   "productName: AITracker",
   "dmg:",
-  "  artifactName: ${productName}-${arch}.${ext}",
+  `  artifactName: ${EXPECTED_TEMPLATES[0]}`,
   "nsis:",
-  "  artifactName: ${productName}-Setup-${arch}.${ext}",
+  `  artifactName: ${EXPECTED_TEMPLATES[1]}`,
   "",
 ].join("\n");
 
@@ -90,29 +93,29 @@ test("the four expected names are exactly what electron-builder renders", async 
 test("a reintroduced ${version} placeholder is reported", () => {
   const { problems } = inspectPackagingConfig({
     config: CONFIG.replace(
-      "  artifactName: ${productName}-${arch}.${ext}",
+      `  artifactName: ${EXPECTED_TEMPLATES[0]}`,
       "  artifactName: ${productName}-${version}-${arch}.${ext}",
     ),
   });
   assert.equal(problems.length, 2);
   assert.match(problems[0], /puts a version in an artifact name/u);
-  assert.match(
+  assert.ok(
+    problems[1].includes(`must declare artifactName ${EXPECTED_TEMPLATES[0]}`),
     problems[1],
-    /must declare artifactName \$\{productName\}-\$\{arch\}/u,
   );
 });
 
 test("a renamed artifact template is reported", () => {
   const { problems } = inspectPackagingConfig({
     config: CONFIG.replace(
-      "  artifactName: ${productName}-Setup-${arch}.${ext}",
+      `  artifactName: ${EXPECTED_TEMPLATES[1]}`,
       "  artifactName: ${productName}-Installer-${arch}.${ext}",
     ),
   });
   assert.equal(problems.length, 1);
-  assert.match(
+  assert.ok(
+    problems[0].includes(`must declare artifactName ${EXPECTED_TEMPLATES[1]}`),
     problems[0],
-    /must declare artifactName \$\{productName\}-Setup-\$\{arch\}/u,
   );
 });
 
@@ -121,13 +124,13 @@ test("a release script that drops a name is reported", async () => {
   try {
     await writeFile(
       join(root, "scripts/release-metadata.mjs"),
-      '"AITracker-arm64.dmg"',
+      '"AITracker-macOS-arm64.dmg"',
       "utf8",
     );
     const problems = await verifyReleaseArtifactNames({ rootDir: root });
     assert.ok(
       problems.some((problem) =>
-        /scripts\/release-metadata\.mjs does not name AITracker-Setup-x64\.exe/u.test(
+        /scripts\/release-metadata\.mjs does not name AITracker-Windows-x64\.exe/u.test(
           problem,
         ),
       ),
@@ -157,7 +160,7 @@ test("a missing packaging config is reported", async () => {
 test("the CLI exits non-zero when the names drift", async () => {
   const root = await fixtureRoot({
     config: CONFIG.replace(
-      "  artifactName: ${productName}-${arch}.${ext}",
+      `  artifactName: ${EXPECTED_TEMPLATES[0]}`,
       "  artifactName: ${productName}-${version}-${arch}.${ext}",
     ),
   });

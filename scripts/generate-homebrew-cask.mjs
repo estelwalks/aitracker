@@ -49,12 +49,11 @@ function validateArtifact(artifact, { key, expectedName, metadataVersion }) {
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
   }
-  // The metadata names the versioned installer at its tag-addressed URL, which
-  // is what clients released before 1.0.2 require. The cask points at the
-  // versionless `releases/latest/download/<name>` URL instead: that is the name
+  // The metadata names the versionless installer at the same stable
+  // `releases/latest/download/<name>` URL the cask points at: that is the name
   // the download page and READMEs use and it never needs editing per release.
-  // The version is pinned by the `version` stanza and the bytes by `sha256`, and
-  // both namings hold identical bytes.
+  // The version is pinned by the `version` stanza and the bytes by `sha256`. A
+  // tag-addressed URL for the same name is accepted too.
   const expected = `${LATEST_DOWNLOAD_BASE_URL}${versionlessName(name)}`;
   const accepted = [
     expected,
@@ -65,13 +64,9 @@ function validateArtifact(artifact, { key, expectedName, metadataVersion }) {
   }
 }
 
-/** `AITracker-1.0.3-x64.dmg` -> `AITracker-x64.dmg`. */
+/** Installer names are versionless, so this is an identity helper. */
 function versionlessName(name) {
-  const match =
-    /^(.*?)-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-(arm64|x64)\.(dmg|exe)$/u.exec(
-      name,
-    );
-  return match ? `${match[1]}-${match[2]}.${match[3]}` : name;
+  return name;
 }
 
 /**
@@ -97,13 +92,13 @@ export function validateMetadata(metadata, { channel } = {}) {
     fail(error instanceof Error ? error.message : String(error));
   }
 
-  // release-metadata.json names the versioned copy of each installer (clients
-  // released before 1.0.2 require that form); the cask still points at the
-  // versionless URL, so derive the name the download page uses.
+  // release-metadata.json names the versionless installer, which is exactly the
+  // name the cask URL uses, so the expected name is the macOS one for this
+  // architecture.
   for (const [, , arch] of REQUIRED_DARWIN_ARTIFACTS) {
     validateArtifact(findArtifact(metadata, "darwin", arch), {
       key: `darwin-${arch}`,
-      expectedName: `AITracker-${metadata.appVersion}-${arch}.dmg`,
+      expectedName: `AITracker-macOS-${arch}.dmg`,
       metadataVersion: metadata.appVersion,
     });
   }

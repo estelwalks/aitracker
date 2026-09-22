@@ -5,6 +5,26 @@ uses semantic versioning for published releases.
 
 ## [Unreleased]
 
+### Details
+
+- Installer names now carry the operating system: the DMGs are published as
+  `AITracker-macOS-arm64.dmg` / `AITracker-macOS-x64.dmg` and the NSIS
+  installers as `AITracker-Windows-x64.exe` / `AITracker-Windows-arm64.exe`
+  (the `Setup` token is gone). The names stay versionless, so
+  `releases/latest/download/<name>` and the README download links keep resolving
+  to the newest release, and the DMG contents and the app version are unchanged:
+  only the download page and the installer file names move. Updating is
+  unaffected — an install picks its installer by file extension and
+  architecture, never by name, and this release's `release-metadata.json` names
+  the new files, which is the only pairing it checks.
+- A rename is now guarded on both sides, because a half-applied one is silent
+  until an install tries to update: `npm run test:release` fails when the
+  packaging config, the release scripts and the READMEs do not all name the same
+  four installers in the same order, and a new post-draft step
+  (`scripts/verify-release-asset-agreement.mjs`) compares the draft release's
+  actual asset list against the `release-metadata.json` uploaded with it, so new
+  asset names paired with the old metadata can no longer be published.
+
 <!--
 Unreleased work is summarised here. The release branch turns this whole
 section into `## [X.Y.Z] - YYYY-MM-DD` when the version is actually

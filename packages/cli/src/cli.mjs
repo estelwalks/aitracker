@@ -42,17 +42,15 @@ const MAX_METADATA_BYTES = 8 * 1024 * 1024;
 const SAFE_INSTALLER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:dmg|exe)$/u;
 
 /**
- * Installer names carry no version, so this is normally a no-op. Releases
- * published while the compatibility window was open (up to 1.0.3) named a
- * versioned copy instead; those still resolve to the name the download page
- * uses.
+ * Installer names carry the operating system and no version
+ * (`AITracker-macOS-arm64.dmg`, `AITracker-Windows-x64.exe`), so the name the
+ * metadata records already is the name this resolves to and the helper stays a
+ * no-op. Releases published while the compatibility window was open (up to
+ * 1.0.3) additionally carried a `<name>-<version>-<arch>` copy; that copy is
+ * addressed by its own tag rather than renamed here.
  */
 function versionlessName(name) {
-  const match =
-    /^(.*?)-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-(arm64|x64)\.(dmg|exe)$/u.exec(
-      name,
-    );
-  return match ? `${match[1]}-${match[2]}.${match[3]}` : name;
+  return name;
 }
 
 function timeoutFromEnv(name, fallback) {

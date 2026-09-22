@@ -33,10 +33,10 @@ test("accepts matching strict-semver packages and derives beta contract", () => 
   assert.deepEqual(
     contract.artifacts.map(({ platform, name }) => ({ platform, name })),
     [
-      { platform: "darwin-arm64", name: "AITracker-arm64.dmg" },
-      { platform: "darwin-x64", name: "AITracker-x64.dmg" },
-      { platform: "win32-arm64", name: "AITracker-Setup-arm64.exe" },
-      { platform: "win32-x64", name: "AITracker-Setup-x64.exe" },
+      { platform: "darwin-arm64", name: "AITracker-macOS-arm64.dmg" },
+      { platform: "darwin-x64", name: "AITracker-macOS-x64.dmg" },
+      { platform: "win32-arm64", name: "AITracker-Windows-arm64.exe" },
+      { platform: "win32-x64", name: "AITracker-Windows-x64.exe" },
     ],
   );
 });

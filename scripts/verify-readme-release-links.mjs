@@ -14,10 +14,10 @@ const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  * installer the packaging step does not produce.
  */
 export const README_DOWNLOAD_NAMES = Object.freeze([
-  "AITracker-arm64.dmg",
-  "AITracker-x64.dmg",
-  "AITracker-Setup-x64.exe",
-  "AITracker-Setup-arm64.exe",
+  "AITracker-macOS-arm64.dmg",
+  "AITracker-macOS-x64.dmg",
+  "AITracker-Windows-x64.exe",
+  "AITracker-Windows-arm64.exe",
 ]);
 
 /** Paths whose links must stay on the versionless installer contract. */

@@ -22,10 +22,10 @@ const BASE = "https://github.com/estelwalks/aitracker/releases/latest/download";
 const README_WITH_ALL_INSTALLERS = [
   "# AITracker",
   "",
-  `- macOS: [AITracker-arm64.dmg](${BASE}/AITracker-arm64.dmg)`,
-  `- macOS: [AITracker-x64.dmg](${BASE}/AITracker-x64.dmg)`,
-  `- Windows: [AITracker-Setup-x64.exe](${BASE}/AITracker-Setup-x64.exe)`,
-  `- Windows: [AITracker-Setup-arm64.exe](${BASE}/AITracker-Setup-arm64.exe)`,
+  `- macOS: [AITracker-macOS-arm64.dmg](${BASE}/AITracker-macOS-arm64.dmg)`,
+  `- macOS: [AITracker-macOS-x64.dmg](${BASE}/AITracker-macOS-x64.dmg)`,
+  `- Windows: [AITracker-Windows-x64.exe](${BASE}/AITracker-Windows-x64.exe)`,
+  `- Windows: [AITracker-Windows-arm64.exe](${BASE}/AITracker-Windows-arm64.exe)`,
   "",
 ].join("\n");
 
@@ -111,7 +111,7 @@ test("a README without any latest-release download link is reported", () => {
 
 test("a README that stops linking one installer is reported", async () => {
   const partial = README_WITH_ALL_INSTALLERS.replace(
-    `- Windows: [AITracker-Setup-arm64.exe](${BASE}/AITracker-Setup-arm64.exe)\n`,
+    `- Windows: [AITracker-Windows-arm64.exe](${BASE}/AITracker-Windows-arm64.exe)\n`,
     "",
   );
   const root = await fixtureRoot({ readme: partial });
@@ -119,7 +119,7 @@ test("a README that stops linking one installer is reported", async () => {
     const problems = await verifyReadmeReleaseLinks({ rootDir: root });
     assert.ok(
       problems.some((problem) =>
-        /no README links .*AITracker-Setup-arm64\.exe/u.test(problem),
+        /no README links .*AITracker-Windows-arm64\.exe/u.test(problem),
       ),
       problems.join("\n"),
     );

@@ -77,13 +77,13 @@ valid across releases and always resolve to the newest published one: installer
 names carry no version, so the release tag is the only thing that changes.
 
 - macOS (Apple Silicon):
-  [AITracker-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg)
+  [AITracker-macOS-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-macOS-arm64.dmg)
 - macOS (Intel):
-  [AITracker-x64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg)
+  [AITracker-macOS-x64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-macOS-x64.dmg)
 - Windows (x64):
-  [AITracker-Setup-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe)
+  [AITracker-Windows-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-x64.exe)
 - Windows (ARM64):
-  [AITracker-Setup-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe)
+  [AITracker-Windows-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-arm64.exe)
 
 Each release lists its own `release-metadata.json` and `checksums.txt`, which
 record the exact version and SHA-256 of the files in that release. For a

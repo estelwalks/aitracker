@@ -74,13 +74,13 @@ npm run dev:desktop
 릴리스마다 달라지는 것은 태그뿐입니다.
 
 - macOS(Apple Silicon):
-  [AITracker-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg)
+  [AITracker-macOS-arm64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-macOS-arm64.dmg)
 - macOS(Intel):
-  [AITracker-x64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-x64.dmg)
+  [AITracker-macOS-x64.dmg](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-macOS-x64.dmg)
 - Windows(x64):
-  [AITracker-Setup-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-x64.exe)
+  [AITracker-Windows-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-x64.exe)
 - Windows(ARM64):
-  [AITracker-Setup-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Setup-arm64.exe)
+  [AITracker-Windows-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-arm64.exe)
 
 각 릴리스에는 해당 버전의 `release-metadata.json`과 `checksums.txt`가 첨부되어 정확한
 버전과 SHA-256을 기록합니다. 특정 빌드를 재현해야 할 때는 `latest`가 아니라 해당 태그의

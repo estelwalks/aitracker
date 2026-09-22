@@ -224,12 +224,12 @@ async function main() {
   const artifacts = [
     {
       arch: "x64",
-      dmg: join(releaseDirectory, `${appName}-x64.dmg`),
+      dmg: join(releaseDirectory, `${appName}-macOS-x64.dmg`),
       app: join(releaseDirectory, "mac", `${appName}.app`),
     },
     {
       arch: "arm64",
-      dmg: join(releaseDirectory, `${appName}-arm64.dmg`),
+      dmg: join(releaseDirectory, `${appName}-macOS-arm64.dmg`),
       app: join(releaseDirectory, "mac-arm64", `${appName}.app`),
     },
   ].filter((artifact) => packagedArchitectures.includes(artifact.arch));
