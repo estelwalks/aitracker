@@ -103,6 +103,8 @@ export interface UsageCollectionRequest {
     readonly wslTopology?: import("../../lib/wsl-topology-types.ts").WslTopologyInput;
     /** Per-tool user data-directory overrides (Sources page). */
     readonly toolDataRoots?: ReadonlyMap<string, string>;
+    /** Signed, user-authorized macOS builds may probe protected project paths. */
+    readonly allowTccProtectedPathProbe?: boolean;
   };
 }
 

@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useRouter } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Boxes, Flame, FolderKanban, MessagesSquare } from "lucide-react";
 
 import { MetricGrid } from "../../../components/aitracker";
@@ -11,16 +13,48 @@ import {
   type RoastDimension,
 } from "../application/tracker.ts";
 import { RoastBoard } from "./roast/RoastBoard.tsx";
+import { mergeProjectIdentitiesQuery } from "../query.ts";
 
 /**
  * Token burn leaderboard page. All figures come from the server-side read
  * model (real usage events); nothing here is mocked or estimated.
  */
 export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
+  const router = useRouter();
   const { t, format } = useI18n();
   const { boards } = initial;
   const [dimension, setDimension] = useState<RoastDimension>("project");
   const selectedTokens = tokensForDimension(boards, dimension);
+
+  const mergeProjects = async (
+    source: { key: string; name: string },
+    target: { key: string; name: string },
+  ): Promise<boolean> => {
+    if (
+      !window.confirm(
+        t("tracker.merge.confirm", {
+          source: source.name,
+          target: target.name,
+        }),
+      )
+    ) {
+      return false;
+    }
+    try {
+      await mergeProjectIdentitiesQuery({
+        data: {
+          sourceIdentity: source.key,
+          targetIdentity: target.key,
+        },
+      });
+      toast.success(t("tracker.merge.success"));
+      await router.invalidate();
+      return true;
+    } catch {
+      toast.error(t("tracker.merge.failed"));
+      return false;
+    }
+  };
 
   const metrics = useMemo(
     () => [
@@ -65,6 +99,7 @@ export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
         boards={boards}
         dimension={dimension}
         onDimensionChange={setDimension}
+        onProjectMerge={mergeProjects}
       />
     </div>
   );

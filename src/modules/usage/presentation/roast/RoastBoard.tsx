@@ -78,16 +78,22 @@ export function RoastBoard({
   boards,
   dimension,
   onDimensionChange,
+  onProjectMerge,
 }: {
   boards: Record<RoastDimension, TrackerBoard>;
   dimension: RoastDimension;
   onDimensionChange: (dimension: RoastDimension) => void;
+  onProjectMerge?: (source: RoastRow, target: RoastRow) => Promise<boolean>;
 }) {
   const { t, format } = useI18n();
   const [selected, setSelected] = useState<RoastRow | null>(null);
+  const [mergeMode, setMergeMode] = useState(false);
+  const [mergeSource, setMergeSource] = useState<RoastRow | null>(null);
 
   useEffect(() => {
     setSelected(null);
+    setMergeMode(false);
+    setMergeSource(null);
   }, [dimension]);
 
   const rows = boards[dimension].rows;
@@ -120,6 +126,27 @@ export function RoastBoard({
         options={options}
         className="mb-3"
       />
+      {dimension === "project" && onProjectMerge && rows.length > 1 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2">
+          <button
+            type="button"
+            onClick={() => {
+              setMergeMode((current) => !current);
+              setMergeSource(null);
+            }}
+            className="rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-accent"
+          >
+            {mergeMode ? t("tracker.merge.cancel") : t("tracker.merge.start")}
+          </button>
+          {mergeMode && (
+            <span className="text-[11px] text-muted-foreground">
+              {mergeSource
+                ? t("tracker.merge.chooseTarget")
+                : t("tracker.merge.chooseSource")}
+            </span>
+          )}
+        </div>
+      )}
       {rows.length === 0 ? (
         <EmptyState
           title={t("tracker.empty")}
@@ -144,10 +171,36 @@ export function RoastBoard({
               <li key={row.key}>
                 <button
                   type="button"
-                  onClick={() => setSelected(row)}
+                  onClick={() => {
+                    if (
+                      dimension === "project" &&
+                      mergeMode &&
+                      onProjectMerge
+                    ) {
+                      if (mergeSource == null) {
+                        setMergeSource(row);
+                      } else if (mergeSource.key === row.key) {
+                        setMergeSource(null);
+                      } else {
+                        void onProjectMerge(mergeSource, row).then((merged) => {
+                          if (merged) {
+                            setMergeMode(false);
+                            setMergeSource(null);
+                          }
+                        });
+                      }
+                      return;
+                    }
+                    setSelected(row);
+                  }}
                   className={`relative w-full cursor-pointer overflow-hidden rounded-xl px-3.5 py-3 text-left transition-colors ${
                     top ? "bg-surface-2" : "bg-surface"
-                  } hover:bg-accent/40`}
+                  } hover:bg-accent/40 ${
+                    mergeSource?.key === row.key
+                      ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
+                      : ""
+                  }`}
+                  aria-pressed={mergeSource?.key === row.key}
                 >
                   <span
                     className="pointer-events-none absolute inset-y-0 left-0 bg-gradient-to-r from-primary/10 to-transparent"

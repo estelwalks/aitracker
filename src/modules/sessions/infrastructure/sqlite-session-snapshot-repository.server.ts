@@ -15,6 +15,8 @@ import type { SessionSnapshotData } from "./session-snapshot.contracts.ts";
 export interface SqliteSessionSnapshotRepositoryOptions {
   readonly database: SqliteDatabasePort;
   readonly hmacKey: string | Uint8Array;
+  /** Optional opaque project-merge resolver. */
+  readonly resolveProjectIdentity?: (identity: string) => string;
   readonly now?: () => number;
   readonly createId?: () => string;
 }
@@ -41,15 +43,14 @@ const n = (value: unknown): number => Number(value ?? 0);
 const b = (value: unknown): boolean => Number(value) === 1;
 const micros = (value: number): number =>
   Math.max(0, Math.round(value * 1_000_000));
-const persistedProjectIdentity = (value: string | undefined): string | null => {
-  const identity = value?.trim() ?? "";
-  return /^[A-Za-z0-9_-]{43}$/u.test(identity) ? identity : null;
-};
-
 export function createSqliteSessionSnapshotRepository(
   options: SqliteSessionSnapshotRepositoryOptions,
 ): SqliteSessionSnapshotRepository {
   const { database } = options;
+  const mergeIdentity = (identity: string): string =>
+    /^[A-Za-z0-9_-]{43}$/u.test(identity)
+      ? (options.resolveProjectIdentity?.(identity) ?? identity)
+      : identity;
   return {
     async load(page?: SessionSnapshotPage) {
       return loadGeneration({
@@ -102,7 +103,11 @@ export function createSqliteSessionSnapshotRepository(
               projectKey: String(row.project_key),
               ...(row.project_ref_hash == null
                 ? {}
-                : { projectIdentity: String(row.project_ref_hash) }),
+                : {
+                    projectIdentity: mergeIdentity(
+                      String(row.project_ref_hash),
+                    ),
+                  }),
               model: row.model_id == null ? null : String(row.model_id),
               startedAt: msToIso(row.started_at_ms)!,
               endedAt: msToIso(row.ended_at_ms)!,
@@ -184,12 +189,16 @@ export function createSqliteSessionSnapshotRepository(
             // back to Claude Code/Codex logs after an app restart.
             const sessionId = session.sessionId;
             const projectIdentity =
-              persistedProjectIdentity(session.projectIdentity) ??
+              (session.projectIdentity
+                ? mergeIdentity(session.projectIdentity)
+                : null) ??
               (session.projectRef
-                ? hashSensitiveRef(
-                    options.hmacKey,
-                    "project",
-                    session.projectRef,
+                ? mergeIdentity(
+                    hashSensitiveRef(
+                      options.hmacKey,
+                      "project",
+                      session.projectRef,
+                    ),
                   )
                 : null);
             database

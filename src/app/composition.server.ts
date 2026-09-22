@@ -450,6 +450,14 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
           failed: wslTopology.failed,
         },
         toolDataRoots,
+        // Packaged macOS builds are signed with the stable certificate
+        // configured by the release workflow. After the user grants access,
+        // they may probe protected folders to collapse nested cwd values onto
+        // the Git repository root. Development builds retain the prompt-free
+        // lexical fallback unless explicitly opted in.
+        allowTccProtectedPathProbe:
+          process.platform === "darwin" &&
+          process.env.AITRACKER_ALLOW_TCC_PROJECT_PROBES === "1",
       },
     });
     // P2-18: refresh the skill-usage evidence from this collection. A

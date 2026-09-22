@@ -267,6 +267,20 @@ test("darwin: never resolves a project inside a protected directory", async (t) 
       ),
       "~/Documents/Dev/repo",
     );
+
+    // A stable-signed packaged build opts in only after the user has granted
+    // access to Documents; the same filesystem fixture then uses the normal
+    // Git-root identity on darwin as well.
+    assert.equal(
+      await canonicalizeProjectPathFor(
+        posix,
+        nestedDirectory,
+        homeDirectory,
+        "darwin",
+        { allowTccProtectedPathProbe: true },
+      ),
+      "~/Documents/Dev/repo",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

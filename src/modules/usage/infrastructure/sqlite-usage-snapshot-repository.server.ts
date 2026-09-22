@@ -35,6 +35,8 @@ export interface SqliteUsageSnapshotRepositoryOptions {
   readonly database: SqliteDatabasePort;
   /** Installation-scoped secret; never stored in SQLite. */
   readonly hmacKey: string | Uint8Array;
+  /** Optional opaque project-merge resolver. */
+  readonly resolveProjectIdentity?: (identity: string) => string;
   readonly now?: () => number;
   readonly createId?: () => string;
 }
@@ -49,6 +51,11 @@ interface PersistedProjectIdentity {
 }
 
 const USAGE_PROJECT_LABEL_PROJECTION_PREFIX = "usage-project-label-v2:";
+const PROJECT_IDENTITY_SUFFIX_PATTERN = /\s·\s[A-Za-z0-9_-]{8,12}$/u;
+
+function unsuffixProjectLabel(value: string): string {
+  return value.trim().replace(PROJECT_IDENTITY_SUFFIX_PATTERN, "");
+}
 
 function hasCurrentProjectLabelProjection(value: unknown): boolean {
   return (
@@ -88,8 +95,8 @@ function persistedProjectIdentity(input: {
     refHash: input.refHash,
     label:
       input.kind === "quick-conversation"
-        ? quickConversationProjectLabel(input.label)
-        : safeProjectLabel(input.label),
+        ? quickConversationProjectLabel(unsuffixProjectLabel(input.label))
+        : safeProjectLabel(unsuffixProjectLabel(input.label)),
     kind: input.kind,
   };
 }
@@ -142,10 +149,16 @@ export function createSqliteUsageSnapshotRepository(
   options: SqliteUsageSnapshotRepositoryOptions,
 ): SnapshotRepository<UsageSnapshotDto> {
   const { database } = options;
+  const mergeIdentity = (identity: string): string =>
+    isOpaqueProjectIdentity(identity)
+      ? (options.resolveProjectIdentity?.(identity) ?? identity)
+      : identity;
   const resolveProjectIdentity = (
     projectRef: string,
   ): PersistedProjectIdentity => {
-    const refHash = hashSensitiveRef(options.hmacKey, "project", projectRef);
+    const refHash = mergeIdentity(
+      hashSensitiveRef(options.hmacKey, "project", projectRef),
+    );
     const row = database
       .prepare(
         "SELECT kind, label FROM project_classifications WHERE ref_hash = ?",
@@ -281,12 +294,28 @@ export function createSqliteUsageSnapshotRepository(
               (legacyProjectLabelProjection && label === "quick-conversation")
             );
           });
+          const canonicalProjectLabels = new Map<string, string>();
+          for (const row of bucketRows) {
+            const rawIdentity = String(row.project_ref_hash || "unknown");
+            const identity = mergeIdentity(rawIdentity);
+            const label = unsuffixProjectLabel(
+              String(row.project_label || "unknown"),
+            );
+            if (
+              !canonicalProjectLabels.has(identity) ||
+              rawIdentity === identity
+            ) {
+              canonicalProjectLabels.set(identity, label);
+            }
+          }
           const loadedProjectLabels = disambiguateProjectLabels(
             bucketRows.map((row) => {
               const kind = String(row.project_kind) as UsageProjectKind;
-              const label = String(row.project_label || "unknown");
+              const rawIdentity = String(row.project_ref_hash || "unknown");
+              const identity = mergeIdentity(rawIdentity);
+              const label = canonicalProjectLabels.get(identity) ?? "unknown";
               return {
-                identity: String(row.project_ref_hash || "unknown"),
+                identity,
                 label:
                   kind === "quick-conversation"
                     ? quickConversationProjectLabel(label)
@@ -295,7 +324,9 @@ export function createSqliteUsageSnapshotRepository(
             }),
           );
           const buckets: UsageAggregateBucket[] = bucketRows.map((row) => {
-            const projectRefHash = String(row.project_ref_hash || "unknown");
+            const projectRefHash = mergeIdentity(
+              String(row.project_ref_hash || "unknown"),
+            );
             return {
               date: String(row.date_key),
               latestTimestamp:
@@ -339,14 +370,30 @@ export function createSqliteUsageSnapshotRepository(
                ORDER BY dimension, date_key, entity_key, source_id`,
             )
             .all(id);
+          const canonicalTrackerLabels = new Map<string, string>();
+          for (const row of trackerRows) {
+            if (String(row.dimension) !== "project") continue;
+            const rawIdentity = String(row.entity_key);
+            const identity = mergeIdentity(rawIdentity);
+            const label = unsuffixProjectLabel(
+              String(row.entity_label || "unknown"),
+            );
+            if (
+              !canonicalTrackerLabels.has(identity) ||
+              rawIdentity === identity
+            ) {
+              canonicalTrackerLabels.set(identity, label);
+            }
+          }
           const loadedTrackerProjectLabels = disambiguateProjectLabels(
             trackerRows
               .filter((row) => String(row.dimension) === "project")
               .map((row) => {
                 const kind = String(row.project_kind) as UsageProjectKind;
-                const label = String(row.entity_label || "unknown");
+                const identity = mergeIdentity(String(row.entity_key));
+                const label = canonicalTrackerLabels.get(identity) ?? "unknown";
                 return {
-                  identity: String(row.entity_key),
+                  identity,
                   label:
                     kind === "quick-conversation"
                       ? quickConversationProjectLabel(label)
@@ -355,32 +402,39 @@ export function createSqliteUsageSnapshotRepository(
               }),
           );
           const trackerBuckets: UsageTrackerBucket[] = trackerRows.map(
-            (row) => ({
-              dimension: String(
+            (row) => {
+              const dimension = String(
                 row.dimension,
-              ) as UsageTrackerBucket["dimension"],
-              date: String(row.date_key),
-              source: String(row.source_id) as LocalUsageSource,
-              identity: String(row.entity_key),
-              label:
-                String(row.dimension) === "project"
-                  ? (loadedTrackerProjectLabels.get(String(row.entity_key)) ??
-                    "unknown")
-                  : String(row.entity_label),
-              ...(row.project_kind == null
-                ? {}
-                : {
-                    projectKind: String(row.project_kind) as UsageProjectKind,
-                  }),
-              events: n(row.event_count),
-              calls: n(row.calls),
-              inputTokens: n(row.input_tokens),
-              cachedInputTokens: n(row.cached_input_tokens),
-              cacheCreationInputTokens: n(row.cache_creation_input_tokens),
-              outputTokens: n(row.output_tokens),
-              reasoningOutputTokens: n(row.reasoning_output_tokens),
-              totalTokens: n(row.total_tokens),
-            }),
+              ) as UsageTrackerBucket["dimension"];
+              const rawIdentity = String(row.entity_key);
+              const identity =
+                dimension === "project"
+                  ? mergeIdentity(rawIdentity)
+                  : rawIdentity;
+              return {
+                dimension,
+                date: String(row.date_key),
+                source: String(row.source_id) as LocalUsageSource,
+                identity,
+                label:
+                  dimension === "project"
+                    ? (loadedTrackerProjectLabels.get(identity) ?? "unknown")
+                    : String(row.entity_label),
+                ...(row.project_kind == null
+                  ? {}
+                  : {
+                      projectKind: String(row.project_kind) as UsageProjectKind,
+                    }),
+                events: n(row.event_count),
+                calls: n(row.calls),
+                inputTokens: n(row.input_tokens),
+                cachedInputTokens: n(row.cached_input_tokens),
+                cacheCreationInputTokens: n(row.cache_creation_input_tokens),
+                outputTokens: n(row.output_tokens),
+                reasoningOutputTokens: n(row.reasoning_output_tokens),
+                totalTokens: n(row.total_tokens),
+              };
+            },
           );
           const snapshot = buildUsageSnapshotFromProjection({
             generatedAt:
@@ -411,7 +465,10 @@ export function createSqliteUsageSnapshotRepository(
       for (const bucket of compact.aggregateBuckets ?? []) {
         const project =
           persistedProjectIdentity({
-            refHash: bucket.projectRefHash,
+            refHash:
+              bucket.projectRefHash == null
+                ? undefined
+                : mergeIdentity(bucket.projectRefHash),
             label: bucket.projectLabel,
             kind: bucket.projectKind,
           }) ?? resolveProjectIdentity(bucket.project);
@@ -422,7 +479,7 @@ export function createSqliteUsageSnapshotRepository(
         if (bucket.dimension !== "project") continue;
         const project =
           persistedProjectIdentity({
-            refHash: bucket.identity,
+            refHash: mergeIdentity(bucket.identity),
             label: bucket.label,
             kind: bucket.projectKind,
           }) ?? resolveProjectIdentity(bucket.identity);
@@ -443,6 +500,90 @@ export function createSqliteUsageSnapshotRepository(
           label: projectLabels.get(project.refHash) ?? project.label,
         };
       };
+      type PersistedTrackerBucket = {
+        readonly dimension: UsageTrackerBucket["dimension"];
+        readonly entityKey: string;
+        readonly entityLabel: string;
+        readonly projectKind: UsageProjectKind | null;
+        readonly source: UsageTrackerBucket["source"];
+        readonly date: string;
+        events: number;
+        calls: number;
+        inputTokens: number;
+        cachedInputTokens: number;
+        cacheCreationInputTokens: number;
+        outputTokens: number;
+        reasoningOutputTokens: number;
+        totalTokens: number;
+      };
+      // A manual merge can make two fresh project tracker buckets share the
+      // same SQLite primary key. Fold them before writing instead of relying
+      // on the database to accept duplicate (dimension, identity, source,
+      // date) rows.
+      const trackerWrites = new Map<string, PersistedTrackerBucket>();
+      for (const bucket of compact.trackerBuckets ?? []) {
+        let entityKey = bucket.identity;
+        let entityLabel = bucket.label;
+        let projectKind: UsageProjectKind | null = null;
+        if (bucket.dimension === "project") {
+          const project = projectForWrite(trackerProjects.get(bucket)!);
+          entityKey = project.refHash;
+          entityLabel = project.label;
+          projectKind = project.kind;
+        } else if (bucket.dimension === "session") {
+          entityKey =
+            isOpaqueProjectIdentity(bucket.identity) &&
+            bucket.identity !== bucket.label
+              ? bucket.identity
+              : hashSensitiveRef(
+                  options.hmacKey,
+                  "usage-tracker-session",
+                  `${bucket.source}\0${bucket.identity}`,
+                );
+        } else {
+          entityKey = isOpaqueProjectIdentity(bucket.identity)
+            ? bucket.identity
+            : hashSensitiveRef(
+                options.hmacKey,
+                "usage-tracker-skill",
+                bucket.identity,
+              );
+        }
+        const key = [
+          bucket.dimension,
+          entityKey,
+          bucket.source,
+          bucket.date,
+        ].join("\0");
+        const current = trackerWrites.get(key);
+        if (current == null) {
+          trackerWrites.set(key, {
+            dimension: bucket.dimension,
+            entityKey,
+            entityLabel,
+            projectKind,
+            source: bucket.source,
+            date: bucket.date,
+            events: bucket.events,
+            calls: bucket.calls,
+            inputTokens: bucket.inputTokens,
+            cachedInputTokens: bucket.cachedInputTokens,
+            cacheCreationInputTokens: bucket.cacheCreationInputTokens,
+            outputTokens: bucket.outputTokens,
+            reasoningOutputTokens: bucket.reasoningOutputTokens,
+            totalTokens: bucket.totalTokens,
+          });
+        } else {
+          current.events += bucket.events;
+          current.calls += bucket.calls;
+          current.inputTokens += bucket.inputTokens;
+          current.cachedInputTokens += bucket.cachedInputTokens;
+          current.cacheCreationInputTokens += bucket.cacheCreationInputTokens;
+          current.outputTokens += bucket.outputTokens;
+          current.reasoningOutputTokens += bucket.reasoningOutputTokens;
+          current.totalTokens += bucket.totalTokens;
+        }
+      }
       const sourceFingerprint =
         compact.requiresProjectLabelRefresh === true
           ? envelope.sourceFingerprint
@@ -586,43 +727,7 @@ export function createSqliteUsageSnapshotRepository(
             }
           });
 
-          for (const bucket of data.trackerBuckets ?? []) {
-            let entityKey = bucket.identity;
-            let entityLabel = bucket.label;
-            let projectKind: UsageProjectKind | null = null;
-            if (bucket.dimension === "project") {
-              const project = projectForWrite(trackerProjects.get(bucket)!);
-              entityKey = project.refHash;
-              entityLabel = project.label;
-              projectKind = project.kind;
-            } else if (bucket.dimension === "session") {
-              entityKey =
-                isOpaqueProjectIdentity(bucket.identity) &&
-                // Fresh session tracker rows use the raw session id as both
-                // identity and label. Hydration replaces only identity with
-                // its HMAC, so this comparison is a per-row replay marker and
-                // remains correct when retained and freshly scanned sources
-                // are mixed in one snapshot.
-                bucket.identity !== bucket.label
-                  ? bucket.identity
-                  : hashSensitiveRef(
-                      options.hmacKey,
-                      "usage-tracker-session",
-                      `${bucket.source}\0${bucket.identity}`,
-                    );
-            } else {
-              entityKey =
-                // Fresh Skill identities are `${source}\0${name}` and cannot
-                // match the opaque-HMAC shape; hydrated rows can therefore be
-                // recognized independently of every other source/bucket.
-                isOpaqueProjectIdentity(bucket.identity)
-                  ? bucket.identity
-                  : hashSensitiveRef(
-                      options.hmacKey,
-                      "usage-tracker-skill",
-                      bucket.identity,
-                    );
-            }
+          for (const bucket of trackerWrites.values()) {
             database
               .prepare(
                 `INSERT INTO usage_tracker_buckets (
@@ -636,9 +741,9 @@ export function createSqliteUsageSnapshotRepository(
               .run(
                 snapshotId,
                 bucket.dimension,
-                entityKey,
-                entityLabel,
-                projectKind,
+                bucket.entityKey,
+                bucket.entityLabel,
+                bucket.projectKind,
                 bucket.source,
                 bucket.date,
                 bucket.events,

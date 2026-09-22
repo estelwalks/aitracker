@@ -165,6 +165,11 @@ export function createUsageCollector(
         ...(scanInput?.toolDataRoots
           ? { toolDataRoots: scanInput.toolDataRoots }
           : {}),
+        ...(scanInput?.allowTccProtectedPathProbe === undefined
+          ? {}
+          : {
+              allowTccProtectedPathProbe: scanInput.allowTccProtectedPathProbe,
+            }),
         ...(request.budget?.maxFilesPerSource == null
           ? {}
           : { maxFilesPerSource: request.budget.maxFilesPerSource }),

@@ -9,6 +9,8 @@ import type {
 export interface SqliteClassificationIndexOptions {
   readonly database: SqliteDatabasePort;
   readonly hmacKey: string | Uint8Array;
+  /** Optional opaque project-merge resolver. */
+  readonly resolveProjectIdentity?: (identity: string) => string;
 }
 
 const EMPTY: ClassificationIndex = {
@@ -45,7 +47,7 @@ export function createSqliteClassificationIndexRepository(
 
   const repository: ClassificationIndexRepository = {
     identityFor(ref) {
-      return refHash(ref);
+      return options.resolveProjectIdentity?.(refHash(ref)) ?? refHash(ref);
     },
     async get(ref) {
       return readOne(ref);

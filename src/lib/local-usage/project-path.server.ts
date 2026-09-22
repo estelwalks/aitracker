@@ -16,6 +16,15 @@ export interface CanonicalProjectIdentity {
   readonly isGitProject: boolean;
 }
 
+export interface CanonicalProjectPathOptions {
+  /**
+   * Allow filesystem probing under macOS TCC-protected directories. Packaged
+   * builds enable this only after they have a stable certificate; development
+   * builds keep the prompt-free fallback unless explicitly opted in.
+   */
+  readonly allowTccProtectedPathProbe?: boolean;
+}
+
 function expandProjectPathFor(
   pathImpl: ProjectPathImpl,
   project: string,
@@ -41,28 +50,24 @@ function expandProjectPathFor(
  * `unknown` and `quick-conversation` are preserved for classification.
  *
  * Paths under a macOS TCC-protected directory (Documents, Desktop, Downloads,
- * the cloud-provider folders, mounted volumes) are the one exception: they are
- * never resolved on disk, so they keep their lexical form and report
- * `isGitProject: false`. Reading them would raise a "…would like to access
- * files in your Documents folder" prompt, and — because this build is ad-hoc
- * signed — macOS could not even remember the answer: TCC stores a code
- * requirement that collapses to the binary's cdhash for ad-hoc signatures, so
- * every rebuilt bundle looks like a new app and asks again.
+ * the cloud-provider folders, mounted volumes) use a prompt-free lexical
+ * fallback by default. A packaged build with a stable certificate can opt into
+ * resolving them after the user grants access, which restores repository-root
+ * grouping without making ad-hoc development builds prompt on every rebuild.
  *
  * The visible identity is identical either way (the display contract is
- * home-relative, so `~/Documents/Dev/repo/src/feature` stays that string), so
- * the only thing given up is collapsing a nested cwd onto its repository root.
- * Features that key off `isGitProject` — project-level distillation grouping —
- * therefore skip protected projects. To trade the prompt back for that
- * grouping, sign the app with a stable certificate (see
- * `electron/after-pack.cjs`) and drop the {@link isTccProtectedPathFor} guard
- * below.
+ * home-relative, so `~/Documents/Dev/repo/src/feature` stays that string).
+ * Without the opt-in, the only thing given up is collapsing a nested cwd onto
+ * its repository root. To trade the prompt back for that grouping, sign the
+ * app with a stable certificate (see `electron/after-pack.cjs`) and enable
+ * {@link CanonicalProjectPathOptions.allowTccProtectedPathProbe}.
  */
 export async function canonicalizeProjectPathDetailsFor(
   pathImpl: ProjectPathImpl,
   project: string,
   homeDirectory: string,
   platform: NodeJS.Platform = process.platform,
+  options: CanonicalProjectPathOptions = {},
 ): Promise<CanonicalProjectIdentity> {
   const normalizedHome = pathImpl.normalize(homeDirectory);
   const expanded = expandProjectPathFor(pathImpl, project, normalizedHome);
@@ -70,7 +75,10 @@ export async function canonicalizeProjectPathDetailsFor(
     return { project: project.trim() || project, isGitProject: false };
   }
 
-  if (isTccProtectedPathFor(pathImpl, expanded, normalizedHome, platform)) {
+  if (
+    !options.allowTccProtectedPathProbe &&
+    isTccProtectedPathFor(pathImpl, expanded, normalizedHome, platform)
+  ) {
     return {
       project: normalizeProjectPathFor(pathImpl, expanded, normalizedHome),
       isGitProject: false,
@@ -107,6 +115,7 @@ export async function canonicalizeProjectPathFor(
   project: string,
   homeDirectory: string,
   platform: NodeJS.Platform = process.platform,
+  options: CanonicalProjectPathOptions = {},
 ): Promise<string> {
   return (
     await canonicalizeProjectPathDetailsFor(
@@ -114,6 +123,7 @@ export async function canonicalizeProjectPathFor(
       project,
       homeDirectory,
       platform,
+      options,
     )
   ).project;
 }
@@ -123,12 +133,14 @@ export function canonicalizeProjectIdentity(
   project: string,
   homeDirectory: string,
   platform: NodeJS.Platform = process.platform,
+  options: CanonicalProjectPathOptions = {},
 ): Promise<CanonicalProjectIdentity> {
   return canonicalizeProjectPathDetailsFor(
     pathImplForRecordedProject(project, platform),
     project,
     homeDirectory,
     platform,
+    options,
   );
 }
 
@@ -137,12 +149,14 @@ export function canonicalizeProjectPath(
   project: string,
   homeDirectory: string,
   platform: NodeJS.Platform = process.platform,
+  options: CanonicalProjectPathOptions = {},
 ): Promise<string> {
   return canonicalizeProjectPathFor(
     pathImplForRecordedProject(project, platform),
     project,
     homeDirectory,
     platform,
+    options,
   );
 }
 
