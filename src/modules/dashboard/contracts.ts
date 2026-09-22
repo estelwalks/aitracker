@@ -30,11 +30,10 @@ export interface DashboardUsageEvent extends LocalTokenCounts {
   readonly source: LocalUsageEvent["source"];
   readonly timestamp: string;
   readonly model: string;
-  /**
-   * Display-only project key; never an absolute local path. The home-relative
-   * `~/…` display form is the only path-shaped value allowed here.
-   */
+  /** Display-only project label derived from the final path segment. */
   readonly project: string;
+  /** Installation-scoped opaque HMAC used only for stable grouping. */
+  readonly projectIdentity?: string;
   /** Server-derived category; omitted only by legacy test/compatibility DTOs. */
   readonly projectKind?: DashboardProjectKind;
   /** An estimate is model-level only and must never imply context evidence. */
@@ -95,6 +94,8 @@ export interface DashboardSkillSummary {
  */
 export interface DashboardProjectSessionAggregate {
   readonly project: string;
+  /** Same opaque identity used by usage events; omitted by legacy snapshots. */
+  readonly projectIdentity?: string;
   readonly source: string;
   readonly date: string;
   readonly count: number;
@@ -139,6 +140,8 @@ export interface DashboardV2Event extends LocalTokenCounts {
   readonly model: string;
   /** Display-only project label, derived from the final project segment. */
   readonly project: string;
+  /** Installation-scoped opaque HMAC used only for stable grouping. */
+  readonly projectIdentity?: string;
   readonly projectKind?: DashboardProjectKind;
   /** Number of original scanner events represented by this row. */
   readonly events?: number;

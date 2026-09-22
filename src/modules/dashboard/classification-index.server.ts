@@ -26,6 +26,8 @@ export interface ClassificationIndex {
 }
 
 export interface ClassificationIndexRepository {
+  /** Installation-scoped opaque identity; safe to use as a grouping key. */
+  identityFor(ref: string): string;
   /** O(1) lookup; undefined when the ref was never classified. */
   get(ref: string): Promise<ClassificationIndexEntry | undefined>;
   /** Batch lookup; returns entries for refs already indexed. */

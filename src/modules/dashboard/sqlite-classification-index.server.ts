@@ -44,6 +44,9 @@ export function createSqliteClassificationIndexRepository(
   };
 
   const repository: ClassificationIndexRepository = {
+    identityFor(ref) {
+      return refHash(ref);
+    },
     async get(ref) {
       return readOne(ref);
     },

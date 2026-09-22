@@ -63,9 +63,9 @@ export function createSnapshotSessionRepository(
         // current scanner refreshes through the unified task runtime.
         void reader.requestRefresh({ reason: "stale", signal }).catch(() => {});
       }
-      // Strip the server-only cwd reference before summaries cross the query
+      // Strip both server-only project fields before summaries cross the query
       // boundary (sessions page, distillation transport). The dashboard reads
-      // the snapshot directly through its own adapter and also reduces refs to
+      // the snapshot directly through its own adapter and reduces them to
       // display-safe aggregates.
       return latest.data.sessions
         .filter(
@@ -73,7 +73,10 @@ export function createSnapshotSessionRepository(
             !ZERO_TOKEN_SESSION_SOURCES.has(summary.source) ||
             summary.totals.totalTokens > 0,
         )
-        .map(({ projectRef: _ref, ...summary }) => summary);
+        .map(
+          ({ projectRef: _ref, projectIdentity: _identity, ...summary }) =>
+            summary,
+        );
     },
   };
 }

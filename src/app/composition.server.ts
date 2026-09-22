@@ -759,6 +759,8 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     context: createReportContextPort({
       snapshot: sessionSnapshot,
       usage: usageSnapshot,
+      projectIdentity: (projectRef) =>
+        classificationService.identities([projectRef]).get(projectRef) ?? "",
       usdToCny: async () => {
         const { buildPricingSnapshot } =
           await import("../lib/pricing/dynamic.server.ts");

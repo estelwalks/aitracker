@@ -70,35 +70,33 @@ function totalsFor(events: readonly DashboardV2Event[]): LocalUsageTotals {
   }, emptyTotals());
 }
 
+interface RankedRow {
+  readonly id: string;
+  readonly key: string;
+  readonly tokens: number;
+  readonly events: number;
+}
+
 function ranked(
   events: readonly DashboardV2Event[],
   keyOf: (event: DashboardV2Event) => string,
-): DashboardV2BreakdownRow[] {
-  const rows = new Map<
-    string,
-    { key: string; tokens: number; events: number }
-  >();
+  identityOf: (event: DashboardV2Event) => string = keyOf,
+): RankedRow[] {
+  const rows = new Map<string, RankedRow>();
   for (const event of events) {
     const key = keyOf(event) || "unknown";
-    const current = rows.get(key) ?? { key, tokens: 0, events: 0 };
-    current.tokens += event.totalTokens;
-    current.events += event.events ?? 1;
-    rows.set(key, current);
+    const id = identityOf(event) || key;
+    const current = rows.get(id) ?? { id, key, tokens: 0, events: 0 };
+    rows.set(id, {
+      ...current,
+      tokens: current.tokens + event.totalTokens,
+      events: current.events + (event.events ?? 1),
+    });
   }
-  return [...rows.values()]
-    .sort(
-      (left, right) =>
-        right.tokens - left.tokens || left.key.localeCompare(right.key),
-    )
-    .map((row) => ({
-      ...row,
-      share: 0,
-      estimatedCostUsd: null,
-      estimatedCostIsPartial: false,
-      previousTokens: null,
-      deltaPercent: null,
-      sessions: null,
-    }));
+  return [...rows.values()].sort(
+    (left, right) =>
+      right.tokens - left.tokens || left.key.localeCompare(right.key),
+  );
 }
 
 function dateKey(timestamp: string): string | null {
@@ -263,17 +261,18 @@ function calendarFor(
 }
 
 function enrichRows(
-  rows: readonly DashboardV2BreakdownRow[],
+  rows: readonly RankedRow[],
   events: readonly DashboardV2Event[],
   previousEvents: readonly DashboardV2Event[],
   keyOf: (event: DashboardV2Event) => string,
   pricingAvailable: boolean,
   totalTokens: number,
   projectSessions: ReadonlyMap<string, number> | null,
+  identityOf: (event: DashboardV2Event) => string = keyOf,
 ): DashboardV2BreakdownRow[] {
   return rows.map((row) => {
     const related = events.filter(
-      (event) => (keyOf(event) || "unknown") === row.key,
+      (event) => (identityOf(event) || keyOf(event) || "unknown") === row.id,
     );
     const cost = pricingAvailable
       ? estimateUsageCost(
@@ -281,7 +280,7 @@ function enrichRows(
         )
       : null;
     const previous = previousEvents.filter(
-      (event) => (keyOf(event) || "unknown") === row.key,
+      (event) => (identityOf(event) || keyOf(event) || "unknown") === row.id,
     );
     const previousTotals = totalsFor(previous);
     const comparable =
@@ -297,7 +296,9 @@ function enrichRows(
           : 0
       : null;
     return {
-      ...row,
+      key: row.key,
+      tokens: row.tokens,
+      events: row.events,
       share: totalTokens === 0 ? 0 : (row.tokens / totalTokens) * 100,
       estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
       estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,
@@ -307,7 +308,7 @@ function enrichRows(
       // project with no sessions in the selected range. Null is reserved for
       // an unavailable session snapshot.
       sessions:
-        projectSessions == null ? null : (projectSessions.get(row.key) ?? 0),
+        projectSessions == null ? null : (projectSessions.get(row.id) ?? 0),
     };
   });
 }
@@ -645,7 +646,8 @@ function projectSessionCounts(
   for (const row of snapshot.sessions.byProjectDay) {
     const date = new Date(`${row.date}T00:00:00`);
     if (date < fromDate || date > toDate) continue;
-    counts.set(row.project, (counts.get(row.project) ?? 0) + row.count);
+    const projectIdentity = row.projectIdentity ?? row.project;
+    counts.set(projectIdentity, (counts.get(projectIdentity) ?? 0) + row.count);
   }
   return counts;
 }
@@ -768,7 +770,13 @@ export function createDashboardV2View(
       event.projectKind !== "quick-conversation" &&
       event.projectKind !== "unknown",
   );
-  const allProjectRows = ranked(projectEvents, (event) => event.project);
+  const projectIdentity = (event: DashboardV2Event) =>
+    event.projectIdentity ?? event.project;
+  const allProjectRows = ranked(
+    projectEvents,
+    (event) => event.project,
+    projectIdentity,
+  );
   const models = enrichRows(
     allModelRows.slice(0, 8),
     events,
@@ -796,6 +804,7 @@ export function createDashboardV2View(
       snapshot.pricingAvailable,
       totals.totalTokens,
       currentProjectSessions,
+      projectIdentity,
     ),
     11,
   );

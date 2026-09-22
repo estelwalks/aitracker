@@ -12,6 +12,8 @@ import type { DashboardProjectClassification } from "./project-classification.se
  */
 
 export interface ClassificationService {
+  /** Opaque HMAC identities for grouping without exposing project refs. */
+  identities(refs: readonly string[]): ReadonlyMap<string, string>;
   /** O(1) read of classifications for the given refs. */
   resolve(
     refs: readonly string[],
@@ -33,6 +35,14 @@ export function createClassificationService(options: {
   readonly classifier: IncrementalClassifier;
 }): ClassificationService {
   return {
+    identities(refs) {
+      return new Map(
+        [...new Set(refs.filter(Boolean))].map((ref) => [
+          ref,
+          options.repository.identityFor(ref),
+        ]),
+      );
+    },
     async resolve(refs) {
       const unique = [...new Set(refs.filter(Boolean))];
       const found = await options.repository.getMany(unique);

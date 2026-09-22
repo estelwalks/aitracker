@@ -7,10 +7,11 @@ import type { SessionSummary } from "../contracts.ts";
  * transcript content) plus pre-aggregated report density rows so Reports can
  * paginate over one snapshot read instead of re-scanning per page.
  *
- * `SessionSnapshotRecord` additionally carries the server-only `projectRef`
- * (cwd normalized like usage events, ~/… under HOME) so the dashboard adapter
- * can classify sessions into the same project labels as usage events. The
- * reference never crosses to the browser:
+ * `SessionSnapshotRecord` additionally carries server-only project metadata:
+ * the raw `projectRef` on a fresh scan (cwd normalized like usage events,
+ * ~/… under HOME), and the opaque `projectIdentity` restored from a persisted
+ * snapshot. The dashboard adapter uses either value to join sessions to the
+ * same project as usage events. Neither field crosses to the browser:
  * `snapshot-session-repository` strips it at the query boundary and the
  * dashboard reduces it to display-safe aggregates. It mirrors what the usage
  * snapshot already persists for events (`details[].project`), so no new path
@@ -29,9 +30,14 @@ export interface SessionDensityRow {
   readonly knownUsd: number;
 }
 
-/** Server-only record persisted in the snapshot; `projectRef` is stripped at every browser boundary. */
+/**
+ * Server-only snapshot record. Both project fields are stripped at every
+ * browser/query boundary; `projectIdentity` is an installation-scoped HMAC,
+ * never a raw path.
+ */
 export type SessionSnapshotRecord = SessionSummary & {
   readonly projectRef?: string;
+  readonly projectIdentity?: string;
 };
 
 export interface SessionSnapshotData {

@@ -67,6 +67,9 @@ export interface ToolOverviewTrendPoint {
 }
 
 export interface ToolOverviewBreakdownRow {
+  /** Stable grouping identity; the renderer must not use the display label as a key. */
+  readonly id: string;
+  /** Human-readable model or privacy-safe project label. */
   readonly key: string;
   readonly tokens: number;
   readonly events: number;
@@ -173,38 +176,50 @@ function rank(
   keyOf: (event: DashboardV2Event) => string,
   pricingAvailable: boolean,
   sessionsByKey?: ReadonlyMap<string, number> | null,
+  identityOf: (event: DashboardV2Event, displayKey: string) => string = (
+    _event,
+    displayKey,
+  ) => displayKey,
 ): ToolOverviewBreakdownRow[] {
   const rows = new Map<string, ToolOverviewBreakdownRow>();
+  const costEventsByKey = new Map<
+    string,
+    Parameters<typeof estimateUsageCost>[0]
+  >();
   for (const event of events) {
     const key = keyOf(event) || "unknown";
-    const current = rows.get(key) ?? {
+    const id = identityOf(event, key) || key;
+    const current = rows.get(id) ?? {
+      id,
       key,
       tokens: 0,
       events: 0,
-      sessions: sessionsByKey?.get(key) ?? null,
+      sessions: sessionsByKey?.get(id) ?? null,
       estimatedCostUsd: null,
       estimatedCostIsPartial: false,
     };
-    rows.set(key, {
+    rows.set(id, {
+      id,
       key,
       tokens: current.tokens + event.totalTokens,
       // P1-13: aggregate rows carry the original event count (event.events);
       // a plain +1 undercounts against the dashboard for bucketed snapshots.
       events: current.events + (event.events ?? 1),
-      sessions: sessionsByKey?.get(key) ?? null,
+      sessions: sessionsByKey?.get(id) ?? null,
       estimatedCostUsd: null,
       estimatedCostIsPartial: false,
     });
+    if (pricingAvailable) {
+      const { context: _context, ...costEvent } = event;
+      const costEvents = costEventsByKey.get(id);
+      if (costEvents) costEvents.push(costEvent);
+      else costEventsByKey.set(id, [costEvent]);
+    }
   }
   return [...rows.values()]
     .map((row) => {
-      const related = events.filter(
-        (event) => (keyOf(event) || "unknown") === row.key,
-      );
       const cost = pricingAvailable
-        ? estimateUsageCost(
-            related.map(({ context: _context, ...event }) => event),
-          )
+        ? estimateUsageCost(costEventsByKey.get(row.id) ?? [])
         : null;
       return {
         ...row,
@@ -214,7 +229,9 @@ function rank(
     })
     .sort(
       (left, right) =>
-        right.tokens - left.tokens || left.key.localeCompare(right.key),
+        right.tokens - left.tokens ||
+        left.key.localeCompare(right.key) ||
+        left.id.localeCompare(right.id),
     );
 }
 
@@ -524,7 +541,8 @@ function projectSessionsForSource(
   for (const row of snapshot.sessions.byProjectDay) {
     if (row.source !== source || !dateWithinRange(row.date, period, from, to))
       continue;
-    sessions.set(row.project, (sessions.get(row.project) ?? 0) + row.count);
+    const identity = row.projectIdentity ?? row.project;
+    sessions.set(identity, (sessions.get(identity) ?? 0) + row.count);
   }
   return sessions;
 }
@@ -658,6 +676,7 @@ export function buildToolOverview(
       (event) => event.project,
       snapshot.pricingAvailable,
       selectedProjectSessions,
+      (event, displayKey) => event.projectIdentity ?? displayKey,
     ),
     context: context(selectedEvents),
     toolCallDetails: detailedToolCalls.rows,

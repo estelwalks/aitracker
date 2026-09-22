@@ -9,6 +9,7 @@ import {
   aggregateDashboardProjectSessions,
   aggregateDashboardSourceSessions,
   requestDashboardSessionRefresh,
+  requestDashboardUsageLabelRefresh,
   shouldRefreshDashboardSessions,
   shouldRefreshDashboardUsageForSessionActivity,
   toDashboardSnapshot,
@@ -109,6 +110,109 @@ test("dashboard refreshes usage when a newer session belongs to a usage-capable 
   );
 });
 
+test("dashboard schedules one non-blocking refresh for legacy quick-conversation labels", async () => {
+  let requestCount = 0;
+  let requestedReason: string | null = null;
+  let refreshCompleted = false;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  requestDashboardUsageLabelRefresh(
+    [
+      {
+        source: "codex",
+        projectKind: "quick-conversation",
+        projectLabel: "quick-conversation",
+      },
+      {
+        source: "claude-code",
+        projectKind: "quick-conversation",
+        projectLabel: "~/Desktop/private/scratch",
+      },
+      {
+        source: "aipy",
+        projectKind: "unknown",
+        projectLabel: "unknown",
+      },
+    ],
+    {
+      requestRefresh: async ({ reason }) => {
+        requestCount += 1;
+        requestedReason = reason;
+        await pending;
+        refreshCompleted = true;
+      },
+    },
+  );
+
+  assert.equal(requestCount, 1);
+  assert.equal(requestedReason, "event");
+  assert.equal(refreshCompleted, false);
+  release();
+  await pending;
+  await Promise.resolve();
+  assert.equal(refreshCompleted, true);
+});
+
+test("dashboard keeps current quick-conversation labels without refreshing", () => {
+  let requestCount = 0;
+
+  requestDashboardUsageLabelRefresh(
+    [
+      {
+        source: "codex",
+        projectKind: "quick-conversation",
+        projectLabel: "scratch",
+      },
+      {
+        source: "codex",
+        projectKind: "workspace",
+        projectLabel: "quick-conversation",
+      },
+      {
+        source: "codex",
+        projectKind: "quick-conversation",
+      },
+      {
+        source: "codex",
+        projectKind: "quick-conversation",
+        projectLabel: "quick-conversation",
+      },
+    ],
+    {
+      requestRefresh: async () => {
+        requestCount += 1;
+      },
+    },
+  );
+
+  assert.equal(requestCount, 0);
+});
+
+test("dashboard refreshes a sanitized snapshot when hydration found a legacy path label", () => {
+  let requestCount = 0;
+
+  requestDashboardUsageLabelRefresh(
+    [
+      {
+        source: "codex",
+        projectKind: "quick-conversation",
+        projectLabel: "scratch",
+      },
+    ],
+    {
+      requestRefresh: async () => {
+        requestCount += 1;
+      },
+    },
+    true,
+  );
+
+  assert.equal(requestCount, 1);
+});
+
 const rawSnapshot: LocalUsageSnapshot = {
   generatedAt: "2026-08-10T00:00:00.000Z",
   mode: "real",
@@ -185,8 +289,13 @@ function projectedDashboardSnapshot(
     string,
     DashboardProjectClassification
   > = new Map(),
+  projectIdentities: ReadonlyMap<string, string> = new Map(),
 ) {
-  return toDashboardSnapshot(compactUsageSnapshot(snapshot), classifications);
+  return toDashboardSnapshot(
+    compactUsageSnapshot(snapshot),
+    classifications,
+    projectIdentities,
+  );
 }
 
 test("dashboard snapshot projects scanner data without paths or command summaries", () => {
@@ -275,7 +384,7 @@ test("dashboard keeps quick conversation directories distinct without labels", (
   // derived from the ref instead of falling back to the classifier literal.
   assert.deepEqual(
     result.details.map((event) => event.project).sort(),
-    ["2026-08-17-09-02-16", homeRef].sort(),
+    ["2026-08-17-09-02-16", "scratch"].sort(),
   );
   assert.equal(
     result.details.every((event) => event.projectKind === "quick-conversation"),
@@ -283,10 +392,58 @@ test("dashboard keeps quick conversation directories distinct without labels", (
   );
   // The drive-letter ref must never cross the browser boundary.
   assert.equal(JSON.stringify(result).includes("WorkBuddyWorkSpace"), false);
+  assert.equal(JSON.stringify(result).includes("~/Desktop"), false);
+});
+
+test("dashboard separates same-name projects by opaque identity", () => {
+  const firstQuick = "/tmp/first/src";
+  const secondQuick = "/tmp/second/src";
+  const workspace = "/work/product/src";
+  const identities = new Map([
+    [firstQuick, "opaque-first-111111111111"],
+    [secondQuick, "opaque-second-222222222222"],
+    [workspace, "opaque-workspace-333333333333"],
+  ]);
+  const result = projectedDashboardSnapshot(
+    {
+      ...rawSnapshot,
+      details: [firstQuick, secondQuick, workspace].map((project) => ({
+        ...rawSnapshot.details[0]!,
+        project,
+      })),
+    },
+    new Map<string, DashboardProjectClassification>([
+      [firstQuick, { kind: "quick-conversation", label: "quick-conversation" }],
+      [
+        secondQuick,
+        { kind: "quick-conversation", label: "quick-conversation" },
+      ],
+      [workspace, { kind: "workspace", label: "src" }],
+    ]),
+    identities,
+  );
+
+  assert.equal(result.details.length, 3);
+  assert.equal(new Set(result.details.map((event) => event.project)).size, 3);
+  assert.deepEqual(
+    new Set(result.details.map((event) => event.projectIdentity)),
+    new Set(identities.values()),
+  );
+  assert.equal(
+    result.details.every((event) => event.project.startsWith("src · ")),
+    true,
+  );
+  assert.equal(JSON.stringify(result).includes("/tmp/"), false);
+  assert.equal(JSON.stringify(result).includes("/work/product"), false);
 });
 
 test("dashboard V2 projection contains only aggregate-safe context and no session id", () => {
-  const snapshot = projectedDashboardSnapshot(rawSnapshot);
+  const rawProject = rawSnapshot.details[0]!.project;
+  const snapshot = projectedDashboardSnapshot(
+    rawSnapshot,
+    new Map(),
+    new Map([[rawProject, "opaque-project-identity"]]),
+  );
   const result = toDashboardV2Snapshot({
     snapshot,
     skills: { available: true, count: 3, generatedAt: "2026-08-10T00:00:00Z" },
@@ -325,6 +482,7 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
   assert.equal(JSON.stringify(result).includes("opaque-session"), false);
   assert.equal(JSON.stringify(result).includes("/Users/example"), false);
   assert.equal(JSON.stringify(result).includes("exec_command"), false);
+  assert.equal(result.events[0]?.projectIdentity, "opaque-project-identity");
   assert.deepEqual(result.outputAvailability, {
     securityRuns: { count: null, available: false },
     distillationOutputs: { count: null, available: false },
@@ -500,6 +658,77 @@ test("dashboard carries session-level token totals when usage rows are missing",
   );
 });
 
+test("dashboard keeps verified workspace identity after session hydration", () => {
+  const identity = "opaque-hydrated-project-identity";
+  assert.deepEqual(
+    aggregateDashboardProjectSessions(
+      [
+        {
+          projectKey: APP_ID,
+          projectIdentity: identity,
+          source: "codex",
+          startedAt: "2026-08-10T10:00:00+08:00",
+          turns: 2,
+          editTurns: 1,
+          subagentCalls: 0,
+        },
+      ],
+      new Map(),
+      new Map(),
+      new Map([[identity, "workspace"]]),
+    ),
+    [
+      {
+        project: APP_ID,
+        projectIdentity: identity,
+        source: "codex",
+        date: "2026-08-10",
+        count: 1,
+        turns: 2,
+        editTurns: 1,
+        subagentCalls: 0,
+      },
+    ],
+  );
+});
+
+test("dashboard drops hydrated quick and unknown sessions from workspace projects", () => {
+  const sessions = [
+    {
+      projectKey: "scratch",
+      projectIdentity: "opaque-quick-project-identity",
+      source: "codex",
+      startedAt: "2026-08-10T10:00:00+08:00",
+      turns: 2,
+      editTurns: 0,
+      subagentCalls: 0,
+    },
+    {
+      projectKey: "unknown",
+      projectIdentity: "opaque-unknown-project-identity",
+      source: "codex",
+      startedAt: "2026-08-10T11:00:00+08:00",
+      turns: 1,
+      editTurns: 0,
+      subagentCalls: 0,
+    },
+  ];
+
+  assert.deepEqual(
+    aggregateDashboardProjectSessions(
+      sessions,
+      new Map(),
+      new Map(),
+      new Map([
+        ["opaque-quick-project-identity", "quick-conversation"],
+        ["opaque-unknown-project-identity", "unknown"],
+      ]),
+    ),
+    [],
+  );
+  assert.deepEqual(aggregateDashboardProjectSessions(sessions), []);
+});
+
 test("dashboard project session aggregates classify by projectRef and drop non-workspace sessions", () => {
   const sessions = [
     {
@@ -566,6 +795,9 @@ test("normalized session projectRef joins usage events under one project key", (
   const classifications = new Map<string, DashboardProjectClassification>([
     [normalizedRef, { kind: "workspace", label: APP_ID }],
   ]);
+  const projectIdentities = new Map([
+    [normalizedRef, "opaque-workspace-identity"],
+  ]);
 
   assert.deepEqual(
     aggregateDashboardProjectSessions(
@@ -581,10 +813,12 @@ test("normalized session projectRef joins usage events under one project key", (
         },
       ],
       classifications,
+      projectIdentities,
     ),
     [
       {
         project: APP_ID,
+        projectIdentity: "opaque-workspace-identity",
         source: "codex",
         date: "2026-08-10",
         count: 1,
@@ -603,8 +837,10 @@ test("normalized session projectRef joins usage events under one project key", (
       details: [{ ...rawSnapshot.details[0]!, project: normalizedRef }],
     },
     classifications,
+    projectIdentities,
   );
   assert.equal(usage.details[0]?.project, APP_ID);
+  assert.equal(usage.details[0]?.projectIdentity, "opaque-workspace-identity");
 });
 
 test("DeepSeek Harness sessions map to the dashboard project row", () => {

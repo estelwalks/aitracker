@@ -41,6 +41,10 @@ const n = (value: unknown): number => Number(value ?? 0);
 const b = (value: unknown): boolean => Number(value) === 1;
 const micros = (value: number): number =>
   Math.max(0, Math.round(value * 1_000_000));
+const persistedProjectIdentity = (value: string | undefined): string | null => {
+  const identity = value?.trim() ?? "";
+  return /^[A-Za-z0-9_-]{43}$/u.test(identity) ? identity : null;
+};
 
 export function createSqliteSessionSnapshotRepository(
   options: SqliteSessionSnapshotRepositoryOptions,
@@ -96,6 +100,9 @@ export function createSqliteSessionSnapshotRepository(
               source: String(row.source_id),
               title: String(row.title),
               projectKey: String(row.project_key),
+              ...(row.project_ref_hash == null
+                ? {}
+                : { projectIdentity: String(row.project_ref_hash) }),
               model: row.model_id == null ? null : String(row.model_id),
               startedAt: msToIso(row.started_at_ms)!,
               endedAt: msToIso(row.ended_at_ms)!,
@@ -176,6 +183,15 @@ export function createSqliteSessionSnapshotRepository(
             // Hashing it here made the persisted snapshot impossible to join
             // back to Claude Code/Codex logs after an app restart.
             const sessionId = session.sessionId;
+            const projectIdentity =
+              persistedProjectIdentity(session.projectIdentity) ??
+              (session.projectRef
+                ? hashSensitiveRef(
+                    options.hmacKey,
+                    "project",
+                    session.projectRef,
+                  )
+                : null);
             database
               .prepare(
                 `INSERT INTO sessions VALUES (${Array.from({ length: 30 }, () => "?").join(",")})`,
@@ -186,13 +202,7 @@ export function createSqliteSessionSnapshotRepository(
                 sessionId,
                 session.title.slice(0, 512),
                 session.projectKey.slice(0, 128),
-                session.projectRef
-                  ? hashSensitiveRef(
-                      options.hmacKey,
-                      "project",
-                      session.projectRef,
-                    )
-                  : null,
+                projectIdentity,
                 session.model,
                 isoToMs(session.startedAt) ?? 0,
                 isoToMs(session.endedAt) ?? 0,

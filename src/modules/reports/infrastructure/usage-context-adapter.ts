@@ -26,6 +26,10 @@ import type {
   ReportTrendPoint,
 } from "../contracts.ts";
 import type { UsageSnapshotDto } from "../../usage/contracts.ts";
+import {
+  disambiguateProjectLabels,
+  quickConversationProjectLabel,
+} from "../../../platform/database/snapshot-generation.server.ts";
 import { estimateUsageBucketCost } from "./usage-cost.ts";
 import {
   dayKeyOf,
@@ -37,6 +41,10 @@ import {
 /** Minimal session shape the adapter reads (structural, no sessions import). */
 export interface SnapshotSession {
   readonly sessionId?: string;
+  /** Server-only raw ref present on a fresh snapshot. */
+  readonly projectRef?: string;
+  /** Server-only opaque HMAC restored from SQLite. */
+  readonly projectIdentity?: string;
   readonly source: string;
   readonly title: string;
   readonly projectKey: string;
@@ -82,6 +90,8 @@ export interface ReportContextAdapterOptions {
    * metrics (sessions, turns, edits and duration).
    */
   readonly usage?: ReportUsageSnapshotReader;
+  /** Installation-scoped HMAC used when a fresh bucket has not been persisted. */
+  readonly projectIdentity?: (projectRef: string) => string;
   /** Shared cached USD→CNY rate used by the Reports header. */
   readonly usdToCny?: () => number | Promise<number>;
   readonly now?: () => Date;
@@ -166,12 +176,13 @@ type EventUsageStats = {
   costUsd: number;
   bySource: Map<string, number>;
   bySourceCost: Map<string, number>;
-  projects: Map<string, number>;
+  projects: Map<string, { label: string; tokens: number }>;
   opaqueEditSources: Set<string>;
   byModel: Map<string, { calls: number; tokens: number; costUsd: number }>;
   byProject: Map<
     string,
     {
+      label: string;
       kind: "project" | "conversation";
       tokens: number;
       costUsd: number;
@@ -222,16 +233,73 @@ function hasOpaqueExecutionTool(
 function usageProjectLabel(
   projectLabel: string | undefined,
   project: string,
+  projectKind: "workspace" | "quick-conversation" | "unknown" | undefined,
+  projectRefHash: string | undefined,
 ): string | null {
   const label = projectLabel?.trim();
-  if (label) return safeDisplayLabel(label, "");
-  const fallback = project.trim();
-  // Persisted usage buckets normally have projectLabel. Do not expose a raw
-  // absolute path if an older snapshot lacks that safe display field.
-  if (!fallback || fallback.startsWith("/") || fallback.startsWith("~")) {
-    return null;
+  const raw = project.trim();
+  const candidate =
+    projectKind === "quick-conversation" &&
+    projectRefHash == null &&
+    (!label || label === "quick-conversation")
+      ? raw
+      : (label ??
+        (projectKind === "quick-conversation" ? "quick-conversation" : raw));
+  return safeProjectDisplayLabel(candidate, "") || null;
+}
+
+/** Project labels crossing into ReportContext are always a single segment. */
+function safeProjectDisplayLabel(value: string, fallback: string): string {
+  const normalized = value.trim();
+  if (!normalized) return fallback;
+  const finalSegment = /[\\/]/u.test(normalized)
+    ? quickConversationProjectLabel(normalized)
+    : normalized;
+  return safeDisplayLabel(finalSegment, fallback);
+}
+
+function resolveProjectIdentity(
+  persistedIdentity: string | undefined,
+  projectRef: string | undefined,
+  resolveIdentity: ReportContextAdapterOptions["projectIdentity"],
+): string | null {
+  const persisted = persistedIdentity?.trim();
+  if (persisted && /^[A-Za-z0-9_-]{12,}$/u.test(persisted)) return persisted;
+  try {
+    const resolved = projectRef ? resolveIdentity?.(projectRef).trim() : null;
+    if (resolved && /^[A-Za-z0-9_-]{12,}$/u.test(resolved)) return resolved;
+  } catch {
+    // A missing classifier identity must not make report generation fail.
   }
-  return fallback;
+  return null;
+}
+
+function projectIdentity(
+  persistedIdentity: string | undefined,
+  projectRef: string,
+  displayLabel: string,
+  resolveIdentity: ReportContextAdapterOptions["projectIdentity"],
+): string {
+  const resolved = resolveProjectIdentity(
+    persistedIdentity,
+    projectRef,
+    resolveIdentity,
+  );
+  if (resolved) return resolved;
+  // Compatibility fallback for isolated adapters/tests. Production injects
+  // the installation-scoped HMAC, so fresh raw refs never become identity.
+  return `display:${displayLabel}`;
+}
+
+function eventProjectLabels(
+  usage: EventUsageStats,
+): ReadonlyMap<string, string> {
+  return disambiguateProjectLabels(
+    Array.from(usage.projects, ([identity, project]) => ({
+      identity,
+      label: project.label,
+    })),
+  );
 }
 
 function safeDisplayLabel(value: string, fallback: string): string {
@@ -281,7 +349,7 @@ function reportSessionTitle(session: SnapshotSession): string {
   ) {
     return title;
   }
-  const project = safeDisplayLabel(session.projectKey, "");
+  const project = safeProjectDisplayLabel(session.projectKey, "");
   const source = safeDisplayLabel(session.source, "AI");
   return project ? `${project} · ${source}` : source;
 }
@@ -289,6 +357,7 @@ function reportSessionTitle(session: SnapshotSession): string {
 function collectEventUsage(
   data: UsageSnapshotDto,
   range: { from: string; to: string },
+  resolveProjectIdentity: ReportContextAdapterOptions["projectIdentity"],
 ): EventUsageStats {
   const result = emptyEventUsageStats();
   for (const daily of data.daily ?? []) {
@@ -347,13 +416,24 @@ function collectEventUsage(
     result.cache.reasoningTokens += bucket.reasoningOutputTokens;
     result.cache.cachedTokens += bucket.cachedInputTokens;
 
-    const project = usageProjectLabel(bucket.projectLabel, bucket.project);
-    if (!project) continue;
-    result.projects.set(
-      project,
-      (result.projects.get(project) ?? 0) + bucket.totalTokens,
+    const label = usageProjectLabel(
+      bucket.projectLabel,
+      bucket.project,
+      bucket.projectKind,
+      bucket.projectRefHash,
     );
-    const projectRow = result.byProject.get(project) ?? {
+    if (!label) continue;
+    const identity = projectIdentity(
+      bucket.projectRefHash,
+      bucket.project,
+      label,
+      resolveProjectIdentity,
+    );
+    const project = result.projects.get(identity) ?? { label, tokens: 0 };
+    project.tokens += bucket.totalTokens;
+    result.projects.set(identity, project);
+    const projectRow = result.byProject.get(identity) ?? {
+      label,
       kind:
         bucket.projectKind === "quick-conversation"
           ? ("conversation" as const)
@@ -364,7 +444,7 @@ function collectEventUsage(
     };
     projectRow.tokens += bucket.totalTokens;
     projectRow.costUsd += costUsd;
-    result.byProject.set(project, projectRow);
+    result.byProject.set(identity, projectRow);
   }
   return result;
 }
@@ -390,7 +470,8 @@ function aggregateSessionMetrics(sessions: readonly SnapshotSession[]) {
     (acc, session) => {
       const source = session.source || "unknown";
       sources.add(source);
-      if (session.projectKey) projects.add(session.projectKey);
+      const project = safeProjectDisplayLabel(session.projectKey, "");
+      if (project) projects.add(project);
       acc.tokens += session.totals.totalTokens;
       acc.costUsd += session.cost.knownUsd + (session.cost.estimatedUsd ?? 0);
       acc.cacheSavingsUsd += session.cost.cacheSavingsUsd ?? 0;
@@ -498,7 +579,7 @@ export function createReportContextPort(
       const sessions = await collectSessions();
       const usageData = await collectUsage();
       const eventUsage = usageData
-        ? collectEventUsage(usageData, range)
+        ? collectEventUsage(usageData, range, options.projectIdentity)
         : emptyEventUsageStats();
       const inRange = sessions.filter((session) => {
         const day = sessionDayKey(session.startedAt);
@@ -556,7 +637,11 @@ export function createReportContextPort(
         : [];
       const yesterdayUsage =
         yesterdayRange && usageData
-          ? collectEventUsage(usageData, yesterdayRange)
+          ? collectEventUsage(
+              usageData,
+              yesterdayRange,
+              options.projectIdentity,
+            )
           : undefined;
 
       const bySourceMap = new Map<string, SourceRow>();
@@ -586,10 +671,11 @@ export function createReportContextPort(
         row.edits += session.editTurns;
         row.durationMin += Math.round(session.durationMs / 60_000);
         bySourceMap.set(source, row);
-        if (session.projectKey) {
+        const sessionProject = safeProjectDisplayLabel(session.projectKey, "");
+        if (sessionProject) {
           projectCount.set(
-            session.projectKey,
-            (projectCount.get(session.projectKey) ?? 0) + 1,
+            sessionProject,
+            (projectCount.get(sessionProject) ?? 0) + 1,
           );
         }
       }
@@ -636,17 +722,19 @@ export function createReportContextPort(
         // Agent row, even when the usage snapshot is unavailable.
         .filter((row) => row.tokens > 0)
         .sort((a, b) => b.tokens - a.tokens || b.sessions - a.sessions);
-      const projectRanking =
+      const projectLabels = eventProjectLabels(eventUsage);
+      const projectRanking: Array<readonly [string, number]> =
         usageData && eventUsage.projects.size > 0
-          ? eventUsage.projects
-          : projectCount;
-      const projects = Array.from(projectRanking.entries())
+          ? Array.from(eventUsage.projects, ([identity, project]) => [
+              projectLabels.get(identity) ?? project.label,
+              project.tokens,
+            ])
+          : Array.from(projectCount.entries());
+      const projects = projectRanking
         .sort((a, b) => b[1] - a[1])
         .map(([project]) => project)
         .slice(0, 6);
-      const topProject = Array.from(projectRanking.entries()).sort(
-        (a, b) => b[1] - a[1],
-      )[0]?.[0];
+      const topProject = projectRanking[0]?.[0];
 
       let usdToCny = 1;
       try {
@@ -701,59 +789,100 @@ export function createReportContextPort(
         .sort((a, b) => b.tokens - a.tokens)
         .slice(0, 5);
       const activeModelCount = modelMap.size;
-      const projectRows = Array.from(eventUsage.byProject.entries())
-        .map(([label, row]): ReportProjectStats => ({
+      const sessionProjectsByIdentity = new Map<string, ReportProjectStats>();
+      const legacySessionProjectsByLabel = new Map<
+        string,
+        ReportProjectStats
+      >();
+      for (const session of inRange) {
+        const projectLabel = safeProjectDisplayLabel(session.projectKey, "");
+        const label = projectLabel || reportSessionTitle(session);
+        if (!label) continue;
+        const identity = resolveProjectIdentity(
+          session.projectIdentity,
+          session.projectRef,
+          options.projectIdentity,
+        );
+        const rows = identity
+          ? sessionProjectsByIdentity
+          : legacySessionProjectsByLabel;
+        const key = identity ?? label;
+        const current = rows.get(key) ?? {
           label,
+          kind: projectLabel ? "project" : "conversation",
+          sessions: 0,
+          tokens: 0,
+        };
+        rows.set(key, {
+          ...current,
+          sessions: current.sessions + 1,
+          tokens: current.tokens + session.totals.totalTokens,
+        });
+      }
+      const eventProjectCountByBaseLabel = new Map<string, number>();
+      for (const project of eventUsage.byProject.values()) {
+        eventProjectCountByBaseLabel.set(
+          project.label,
+          (eventProjectCountByBaseLabel.get(project.label) ?? 0) + 1,
+        );
+      }
+      const reportProjectLabels = disambiguateProjectLabels([
+        ...Array.from(eventUsage.byProject, ([identity, row]) => ({
+          identity,
+          label: row.label,
+        })),
+        ...Array.from(sessionProjectsByIdentity, ([identity, row]) => ({
+          identity,
+          label: row.label,
+        })),
+      ]);
+      const projectRows = Array.from(eventUsage.byProject.entries())
+        .map(([identity, row]): ReportProjectStats => ({
+          label: reportProjectLabels.get(identity) ?? row.label,
           kind: row.kind,
-          sessions: inRange.filter((session) => session.projectKey === label)
-            .length,
+          sessions:
+            sessionProjectsByIdentity.get(identity)?.sessions ??
+            (eventProjectCountByBaseLabel.get(row.label) === 1
+              ? (legacySessionProjectsByLabel.get(row.label)?.sessions ?? 0)
+              : 0),
           tokens: row.tokens,
           costCny: row.costUsd * usdToCny,
           source: row.source,
         }))
         .sort((a, b) => b.tokens - a.tokens)
         .slice(0, 5);
-      const sessionProjectRows = new Map<string, ReportProjectStats>();
-      for (const session of inRange) {
-        const label = session.projectKey.trim()
-          ? safeDisplayLabel(session.projectKey, "项目")
-          : reportSessionTitle(session);
-        if (!label) continue;
-        const current = sessionProjectRows.get(label) ?? {
-          label,
-          kind: session.projectKey.trim() ? "project" : "conversation",
-          sessions: 0,
-          tokens: 0,
-        };
-        sessionProjectRows.set(label, {
-          ...current,
-          sessions: current.sessions + 1,
-          tokens: current.tokens + session.totals.totalTokens,
-        });
-      }
-      const projectRowsWithSessions = [
-        ...projectRows.map((row) => ({
+      const eventBaseLabels = new Set(
+        Array.from(eventUsage.byProject.values(), (row) => row.label),
+      );
+      const sessionOnlyIdentityRows = Array.from(
+        sessionProjectsByIdentity.entries(),
+      )
+        .filter(([identity]) => !eventUsage.byProject.has(identity))
+        .map(([identity, row]) => ({
           ...row,
-          sessions: sessionProjectRows.get(row.label)?.sessions ?? row.sessions,
-        })),
-        ...Array.from(sessionProjectRows.values()).filter(
-          (row) =>
-            !projectRows.some((existing) => existing.label === row.label),
-        ),
+          label: reportProjectLabels.get(identity) ?? row.label,
+        }));
+      const sessionOnlyLegacyRows = Array.from(
+        legacySessionProjectsByLabel.values(),
+      ).filter((row) => !eventBaseLabels.has(row.label));
+      const projectRowsWithSessions = [
+        ...projectRows,
+        ...sessionOnlyIdentityRows,
+        ...sessionOnlyLegacyRows,
       ]
         .sort((a, b) => b.tokens - a.tokens)
         .slice(0, 5);
-      const activeProjectCount = new Set([
-        ...eventUsage.projects.keys(),
-        ...sessionProjectRows.keys(),
-      ]).size;
+      const activeProjectCount =
+        eventUsage.projects.size +
+        sessionOnlyIdentityRows.length +
+        sessionOnlyLegacyRows.length;
       const activeAgentCount = allSourceRows.filter(
         (row) => row.sessions > 0 || row.tokens > 0,
       ).length;
       const sessionDetails: ReportSessionStats[] = inRange
         .map((session) => ({
           title: reportSessionTitle(session),
-          project: session.projectKey || undefined,
+          project: safeProjectDisplayLabel(session.projectKey, "") || undefined,
           source: session.source || "unknown",
           turns: session.turns,
           tokens: session.totals.totalTokens,
@@ -818,7 +947,11 @@ export function createReportContextPort(
             (session) => sessionDayKey(session.startedAt) === date,
           );
           const dayUsage = usageData
-            ? collectEventUsage(usageData, { from: date, to: date })
+            ? collectEventUsage(
+                usageData,
+                { from: date, to: date },
+                options.projectIdentity,
+              )
             : undefined;
           const dayMetrics = aggregateSessionMetrics(daySessions);
           const dayTokens = dayUsage ? dayUsage.tokens : dayMetrics.tokens;

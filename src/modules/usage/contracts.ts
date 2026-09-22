@@ -75,6 +75,8 @@ export interface UsageTrackerBucket extends LocalTokenCounts {
 export type UsageSnapshotDto = LocalUsageSnapshot & {
   readonly aggregateBuckets?: readonly UsageAggregateBucket[];
   readonly trackerBuckets?: readonly UsageTrackerBucket[];
+  /** Server-only hydration marker requesting a rebuild of legacy path labels. */
+  readonly requiresProjectLabelRefresh?: boolean;
 };
 
 export interface UsageScanBudget {
