@@ -4,6 +4,14 @@
  * Honesty tips here too.
  */
 export const reports = {
+  contentInsight: {
+    title: "会话内容深度洞察",
+    hintOff:
+      "关闭时仅做统计分析，不读取任何会话内容。开启后会本机读取本期会话内容，仅把脱敏摘要发送给您自己配置的模型，用于生成日报/周报/月报的深度总结。",
+    hintOn:
+      "已开启：本机读取本期会话内容，仅把脱敏摘要（自动移除路径、密钥、邮箱）发送给您自己配置的模型。原始会话内容不会写入报告，也不会持久化。",
+    saveFailed: "保存失败，请重试",
+  },
   insight: {
     title: "今日洞察",
     reports: "已生成 {count} 份简报",

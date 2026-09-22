@@ -9,6 +9,13 @@ import type {
 import { REPORT_TEMPLATES, templateSetFor } from "./templates.ts";
 import type { Locale } from "../../lib/i18n/locale";
 
+/**
+ * Monthly reports reuse the weekly definition for storage compatibility, so
+ * their persisted title doubles as the archive discriminator. Keep every
+ * reader/writer of that marker on this constant.
+ */
+export const MONTHLY_REPORT_TITLE = "Monthly review";
+
 export const BUILTIN_REPORT_DEFINITIONS: readonly ReportDefinition[] = [
   {
     definitionId: "reports.daily",
@@ -105,7 +112,7 @@ export function safeReportText(value: string, max = REPORT_BODY_MAX): string {
   const text = value.trim().slice(0, max);
   if (!text) throw new TypeError("report body is empty");
   if (
-    /(?:\/Users\/|\/home\/|[A-Za-z]:\\|\\\\|\b(?:bearer|sk-|api[_-]?key|password|secret)\b)/i.test(
+    /(?:\/Users\/|\/home\/|~\/|[A-Za-z]:\\|\\\\|\b(?:bearer|sk-|api[_-]?key|password|secret(?:[_-]?token)?)\b)/i.test(
       text,
     )
   )

@@ -1,3 +1,4 @@
+export { ReportContentInsightToggle } from "./ReportContentInsightToggle.tsx";
 import { err, type Result } from "../../../shared/result.ts";
 import type {
   KnowledgeAsset,

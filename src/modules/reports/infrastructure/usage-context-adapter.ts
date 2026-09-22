@@ -5,22 +5,32 @@
  * duration inside the report's covered period — daily covers today, weekly
  * covers the current Mon–Sun week. Everything that crosses into the context
  * is an aggregate, never raw sessions, absolute paths or conversation content
- * (CLEAN_ROOM): project labels are sanitized by the usage snapshot, and no
- * session body/commands are ever read.
+ * (CLEAN_ROOM): project labels are sanitized by the usage snapshot.
+ *
+ * The single exception is opt-in content-based reporting: when the user turns
+ * it on, `collectSessionDigests` reads the covered sessions' transcripts through
+ * an injected port and keeps only a bounded, locally redacted digest (goals +
+ * outcome). The digest never contains raw transcript text, paths or
+ * credentials, and it is never persisted into the report body.
  *
  * A missing/empty snapshot degrades to a zero-stats context (honest empty
  * draft) rather than failing closed.
  */
 import type {
   EvidenceRef,
+  ReportBehaviorKey,
+  ReportBehaviorStats,
   ReportContext,
   ReportContextPort,
   ReportCacheStats,
   ReportDefinition,
   ReportModelStats,
+  ReportOutputCounts,
+  ReportOutputPort,
   ReportPeriod,
   ReportPeriodComparison,
   ReportProjectStats,
+  ReportSessionDigest,
   ReportSessionStats,
   ReportStats,
   ReportTrendPoint,
@@ -30,6 +40,11 @@ import {
   disambiguateProjectLabels,
   quickConversationProjectLabel,
 } from "../../../platform/database/snapshot-generation.server.ts";
+import {
+  buildSessionContentDigest,
+  type DigestMessage,
+  type DigestOptions,
+} from "./session-content-digest.ts";
 import { estimateUsageBucketCost } from "./usage-cost.ts";
 import {
   dayKeyOf,
@@ -50,6 +65,12 @@ export interface SnapshotSession {
   readonly projectKey: string;
   readonly model?: string | null;
   readonly startedAt: string;
+  /**
+   * Last observed activity. Optional so partial providers stay usable;
+   * `startedAt + durationMs` is NOT a substitute because sessions report
+   * active duration rather than wall-clock span.
+   */
+  readonly endedAt?: string;
   readonly turns: number;
   readonly editTurns: number;
   readonly totals: {
@@ -92,8 +113,29 @@ export interface ReportContextAdapterOptions {
   readonly usage?: ReportUsageSnapshotReader;
   /** Installation-scoped HMAC used when a fresh bucket has not been persisted. */
   readonly projectIdentity?: (projectRef: string) => string;
+  /**
+   * Optional session-content reader. Wired by the composition root only when
+   * the user enabled content-based reporting; the port owns the filesystem
+   * boundary and the adapter never imports a scanner. Absent or disabled keeps
+   * the report strictly statistics-based.
+   */
+  readonly sessionContent?: {
+    readonly enabled: () => Promise<boolean> | boolean;
+    readonly read: (ref: {
+      readonly source: string;
+      readonly sessionId: string;
+    }) => Promise<{ readonly messages: readonly DigestMessage[] } | null>;
+  };
+  /** Overrides for the digest budget (tests / future tuning). */
+  readonly digestOptions?: DigestOptions;
   /** Shared cached USD→CNY rate used by the Reports header. */
   readonly usdToCny?: () => number | Promise<number>;
+  /**
+   * Durable-output counts for the covered period (skills/knowledge/distill).
+   * Injected by the composition root; the adapter never imports those
+   * implementations. Absent or throwing port degrades to "no output signal".
+   */
+  readonly output?: ReportOutputPort;
   readonly now?: () => Date;
 }
 
@@ -197,6 +239,10 @@ type EventUsageStats = {
     cachedTokens: number;
   };
   hasEvents: boolean;
+  /** Approximate behavior distribution; undefined when no tool signal. */
+  behaviors?: ReportBehaviorStats[];
+  /** Desensitized tool call counts per source (tool name -> calls). */
+  toolUsageBySource: Map<string, Map<string, number>>;
 };
 
 function emptyEventUsageStats(): EventUsageStats {
@@ -207,6 +253,7 @@ function emptyEventUsageStats(): EventUsageStats {
     bySourceCost: new Map(),
     projects: new Map(),
     opaqueEditSources: new Set(),
+    toolUsageBySource: new Map(),
     byModel: new Map(),
     byProject: new Map(),
     cache: {
@@ -217,6 +264,7 @@ function emptyEventUsageStats(): EventUsageStats {
       cachedTokens: 0,
     },
     hasEvents: false,
+    behaviors: undefined,
   };
 }
 
@@ -228,6 +276,196 @@ function hasOpaqueExecutionTool(
     const name = tool.name.trim().toLowerCase();
     return name === "exec" || name === "shell" || name === "bash";
   });
+}
+
+/**
+ * Behavior distribution from aggregate buckets. The report chain only sees
+ * desensitized aggregate tool categories (no commands / no conversation text),
+ * so this is a coarser per-bucket approximation of `behavior-classify.ts`
+ * (Model Details drawer). Labels and priority order are kept in sync with it.
+ */
+// Canonical behavior buckets. Keys are locale-neutral so every report locale
+// can render the same distribution with its own labels.
+const BEHAVIOR_KEY_BY_CATEGORY: Readonly<Record<string, ReportBehaviorKey>> = {
+  execution: "execution",
+  browser: "research",
+  planning: "planning",
+  agent: "subagent",
+  mcp: "research",
+  skills: "skills",
+};
+
+const BEHAVIOR_LABEL_BY_KEY: Readonly<Record<ReportBehaviorKey, string>> = {
+  debug: "调试",
+  execution: "代码生成/重构",
+  research: "工具调用/研究",
+  planning: "规划",
+  subagent: "子智能体",
+  skills: "技能",
+  qa: "对话/问答",
+};
+
+// Buckets carry tool categories, not the command signatures used by
+// behavior-classify. Debug is approximated from tool names containing these
+// hints (kept in sync with usage-taxonomy.json debugCommandHints).
+const DEBUG_TOOL_HINTS: readonly string[] = [
+  "diff",
+  "grep",
+  "log",
+  "status",
+  "test",
+  "lint",
+];
+
+const BEHAVIOR_CATEGORY_PRIORITY: readonly string[] = [
+  "execution",
+  "browser",
+  "agent",
+  "planning",
+  "mcp",
+  "skills",
+];
+
+type BehaviorBucket = {
+  readonly totalTokens: number;
+  readonly context: {
+    readonly tools?: readonly {
+      readonly name: string;
+      readonly category?: string;
+    }[];
+  };
+};
+
+function bucketBehaviorKey(bucket: BehaviorBucket): ReportBehaviorKey {
+  const tools = bucket.context?.tools ?? [];
+  if (!Array.isArray(tools) || tools.length === 0) return "qa";
+  const names = tools.map((tool) => tool.name.trim().toLowerCase());
+  if (
+    DEBUG_TOOL_HINTS.some((hint) => names.some((name) => name.includes(hint)))
+  ) {
+    return "debug";
+  }
+  const categories = new Set(tools.map((tool) => tool.category));
+  for (const category of BEHAVIOR_CATEGORY_PRIORITY) {
+    const key = BEHAVIOR_KEY_BY_CATEGORY[category];
+    if (categories.has(category) && key) return key;
+  }
+  return "qa";
+}
+
+function aggregateBehaviors(
+  buckets: readonly BehaviorBucket[],
+): ReportBehaviorStats[] | undefined {
+  if (buckets.length === 0) return undefined;
+  const hasToolSignal = buckets.some(
+    (bucket) => (bucket.context?.tools?.length ?? 0) > 0,
+  );
+  if (!hasToolSignal) return undefined;
+  const byKey = new Map<
+    ReportBehaviorKey,
+    { tokens: number; buckets: number }
+  >();
+  let totalTokens = 0;
+  for (const bucket of buckets) {
+    const key = bucketBehaviorKey(bucket);
+    const row = byKey.get(key) ?? { tokens: 0, buckets: 0 };
+    row.tokens += bucket.totalTokens;
+    row.buckets += 1;
+    byKey.set(key, row);
+    totalTokens += bucket.totalTokens;
+  }
+  return [...byKey.entries()]
+    .map(([key, row]) => ({
+      key,
+      label: BEHAVIOR_LABEL_BY_KEY[key],
+      tokenShare: totalTokens > 0 ? row.tokens / totalTokens : 0,
+      eventShare: row.buckets / buckets.length,
+    }))
+    .sort((a, b) => b.tokenShare - a.tokenShare);
+}
+
+/**
+ * True when a session started inside the covered period but its activity ran
+ * past the period end (a long agent session continuing into the next day).
+ * Session totals are whole-session cumulative values, so a single-day report
+ * must not present them as if they were collected on that day.
+ */
+function sessionCrossesRange(
+  session: SnapshotSession,
+  range: { from: string; to: string },
+): boolean {
+  const startDay = sessionDayKey(session.startedAt);
+  if (startDay === null) return false;
+  const endDay = session.endedAt ? sessionDayKey(session.endedAt) : startDay;
+  if (endDay === null) return false;
+  return startDay < range.from || endDay > range.to;
+}
+
+/** How many sessions a report may read content from, per cadence. */
+const CONTENT_DIGEST_SESSIONS = {
+  daily: 5,
+  weekly: 10,
+  monthly: 15,
+} as const;
+
+/**
+ * Read and digest the covered sessions' actual content.
+ *
+ * Returns an empty list — never throws — when the switch is off, the port is
+ * missing, the session has no readable transcript, or the reader fails: content
+ * insight is an enhancement, and a statistics-only report must still ship.
+ */
+async function collectSessionDigests(
+  options: ReportContextAdapterOptions,
+  sessions: readonly SnapshotSession[],
+  input: {
+    readonly definition: ReportDefinition;
+    readonly period?: ReportPeriod;
+  },
+): Promise<ReportSessionDigest[]> {
+  const port = options.sessionContent;
+  if (!port) return [];
+  try {
+    if (!(await port.enabled())) return [];
+  } catch {
+    return [];
+  }
+
+  const granularity =
+    input.period?.granularity ??
+    (input.definition.kind === "daily" ? "day" : "week");
+  const limit =
+    granularity === "month"
+      ? CONTENT_DIGEST_SESSIONS.monthly
+      : input.definition.kind === "daily"
+        ? CONTENT_DIGEST_SESSIONS.daily
+        : CONTENT_DIGEST_SESSIONS.weekly;
+
+  const targets = [...sessions]
+    .filter((session) => session.sessionId)
+    .sort((a, b) => b.totals.totalTokens - a.totals.totalTokens)
+    .slice(0, limit);
+
+  const digests: ReportSessionDigest[] = [];
+  for (const session of targets) {
+    try {
+      const transcript = await port.read({
+        source: session.source,
+        sessionId: session.sessionId!,
+      });
+      if (!transcript || transcript.messages.length === 0) continue;
+      digests.push(
+        buildSessionContentDigest(
+          reportSessionTitle(session),
+          transcript.messages,
+          options.digestOptions,
+        ),
+      );
+    } catch {
+      // A single unreadable session must not drop the others.
+    }
+  }
+  return digests;
 }
 
 function usageProjectLabel(
@@ -354,12 +592,62 @@ function reportSessionTitle(session: SnapshotSession): string {
   return project ? `${project} · ${source}` : source;
 }
 
+/**
+ * Repeat-work detection for `ReportSessionStats.repeated` (ADR-REP-002).
+ * Clean-room: only the session title and project key are compared for a
+ * boolean signal; titles are never written into the report or context.
+ * Heuristic only — a similar title in the same project (within the period or
+ * the previous comparison period) counts as repeated work worth distilling.
+ */
+function normalizeRepeatTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[\p{P}\p{S}]+/u, "")
+    .trim();
+}
+
+function titlesSimilar(a: string, b: string): boolean {
+  const na = normalizeRepeatTitle(a);
+  const nb = normalizeRepeatTitle(b);
+  if (!na || !nb || na.length < 4 || nb.length < 4) return false;
+  if (na === nb) return true;
+  const [short, long] = na.length <= nb.length ? [na, nb] : [nb, na];
+  // A continuation often adds a leading marker (e.g. “继续修复登录态丢失的问题”
+  // vs “修复登录态丢失的问题”), so a longer title that keeps the shorter one
+  // intact counts as the same line of work (ADR-REP-002).
+  if (long.includes(short)) return true;
+  let prefix = 0;
+  const limit = Math.min(na.length, nb.length, 24);
+  while (prefix < limit && na[prefix] === nb[prefix]) prefix += 1;
+  return prefix >= 10;
+}
+
+function isRepeatedSession(
+  session: SnapshotSession,
+  peers: readonly SnapshotSession[],
+  previous: readonly SnapshotSession[],
+): boolean {
+  const project = session.projectKey.trim();
+  if (!project) return false;
+  const repeatedIn = (group: readonly SnapshotSession[]): boolean =>
+    group.some(
+      (other) =>
+        other !== session &&
+        other.projectKey.trim() === project &&
+        titlesSimilar(session.title, other.title),
+    );
+  return repeatedIn(peers) || repeatedIn(previous);
+}
+
 function collectEventUsage(
   data: UsageSnapshotDto,
   range: { from: string; to: string },
   resolveProjectIdentity: ReportContextAdapterOptions["projectIdentity"],
 ): EventUsageStats {
   const result = emptyEventUsageStats();
+  const inRangeBuckets: BehaviorBucket[] = [];
   for (const daily of data.daily ?? []) {
     if (daily.date < range.from || daily.date > range.to) continue;
     const sourceEntries = Object.entries(daily.bySource ?? {});
@@ -380,6 +668,7 @@ function collectEventUsage(
 
   for (const bucket of data.aggregateBuckets ?? []) {
     if (bucket.date < range.from || bucket.date > range.to) continue;
+    inRangeBuckets.push(bucket);
 
     // Cost and source attribution do not depend on whether the bucket has a
     // browser-safe project label yet. Fresh in-memory snapshots can still
@@ -397,6 +686,12 @@ function collectEventUsage(
     // overstate changes, while reporting zero claims precision we do not have.
     if (hasOpaqueExecutionTool(bucket.context.tools)) {
       result.opaqueEditSources.add(bucket.source);
+    }
+    for (const tool of bucket.context.tools) {
+      const perSource =
+        result.toolUsageBySource.get(bucket.source) ?? new Map();
+      perSource.set(tool.name, (perSource.get(tool.name) ?? 0) + tool.calls);
+      result.toolUsageBySource.set(bucket.source, perSource);
     }
     result.hasEvents = true;
 
@@ -446,6 +741,7 @@ function collectEventUsage(
     projectRow.costUsd += costUsd;
     result.byProject.set(identity, projectRow);
   }
+  result.behaviors = aggregateBehaviors(inRangeBuckets);
   return result;
 }
 
@@ -566,6 +862,51 @@ export function createReportContextPort(
     }
     if (projects.length > 0) lines.push(`\n项目：${projects.join("、")}`);
     if (topProject) lines.push(`主要精力集中在「${topProject}」。`);
+    if (stats.behaviors && stats.behaviors.length > 0) {
+      lines.push(
+        "",
+        `行为分布（基于工具使用的近似估算）：${stats.behaviors
+          .map(
+            (behavior) =>
+              `${behavior.label} ${Math.round(behavior.tokenShare * 100)}%`,
+          )
+          .join("、")}。`,
+      );
+    }
+    if (stats.toolUsageBySource && stats.toolUsageBySource.length > 0) {
+      lines.push("", "主要工具行为（脱敏汇总，按 Agent）：");
+      for (const row of stats.toolUsageBySource) {
+        const toolText = row.tools
+          .map((tool) => `${tool.name} ×${tool.calls}`)
+          .join("、");
+        lines.push(`- ${row.source}：${toolText}`);
+      }
+    }
+    if (stats.sessionsDetail && stats.sessionsDetail.length > 0) {
+      lines.push("", "主要会话：");
+      for (const detail of stats.sessionsDetail) {
+        const safeProject = detail.project
+          ? safeDisplayLabel(detail.project, "")
+          : "";
+        const project = safeProject ? `（${safeProject}）` : "";
+        lines.push(
+          `- 「${detail.title}」${project}：${detail.turns} 轮、${fmtTokens(detail.tokens)}`,
+        );
+      }
+    }
+    const repeatedCount = (stats.sessionsDetail ?? []).filter(
+      (detail) => detail.repeated,
+    ).length;
+    if (repeatedCount > 0) {
+      lines.push(
+        `重复工作：${repeatedCount} 个会话存在重复任务迹象，可能值得进一步蒸馏。`,
+      );
+    }
+    if (stats.outputs) {
+      lines.push(
+        `沉淀与产出：本时段新增 Skill ${stats.outputs.skills} 个、记忆/知识 ${stats.outputs.knowledge} 个、蒸馏成果 ${stats.outputs.distillations} 个。`,
+      );
+    }
     return lines.join("\n");
   }
 
@@ -581,6 +922,29 @@ export function createReportContextPort(
       const eventUsage = usageData
         ? collectEventUsage(usageData, range, options.projectIdentity)
         : emptyEventUsageStats();
+      let outputs: ReportOutputCounts | undefined;
+      if (options.output) {
+        try {
+          const counts = await options.output.collect({
+            from: range.from,
+            to: range.to,
+          });
+          if (
+            counts &&
+            (counts.skills > 0 ||
+              counts.knowledge > 0 ||
+              counts.distillations > 0)
+          ) {
+            outputs = {
+              skills: counts.skills,
+              knowledge: counts.knowledge,
+              distillations: counts.distillations,
+            };
+          }
+        } catch {
+          // Degrade to "no output signal" rather than failing the report.
+        }
+      }
       const inRange = sessions.filter((session) => {
         const day = sessionDayKey(session.startedAt);
         return (
@@ -887,6 +1251,8 @@ export function createReportContextPort(
           turns: session.turns,
           tokens: session.totals.totalTokens,
           durationMin: Math.round(session.durationMs / 60_000),
+          repeated: isRepeatedSession(session, inRange, yesterdaySessions),
+          crossPeriod: sessionCrossesRange(session, range),
         }))
         .sort((a, b) => b.tokens - a.tokens || b.turns - a.turns)
         .slice(0, 5);
@@ -988,12 +1354,32 @@ export function createReportContextPort(
         byModel: modelRows.length > 0 ? modelRows : undefined,
         byProject: projectRowsWithSessions,
         sessionsDetail: sessionDetails,
+        behaviors: eventUsage.behaviors,
+        toolUsageBySource: [...eventUsage.toolUsageBySource.entries()]
+          .map(([source, tools]) => ({
+            source,
+            tools: [...tools.entries()]
+              .map(([name, calls]) => ({ name, calls }))
+              .sort((a, b) => b.calls - a.calls)
+              .slice(0, 8),
+          }))
+          .sort((a, b) => {
+            const ta = a.tools.reduce((x, t) => x + t.calls, 0);
+            const tb = b.tools.reduce((x, t) => x + t.calls, 0);
+            return tb - ta;
+          }),
+        outputs,
         cache,
         yesterday,
         trend,
       };
 
       const summary = buildContextSummary(stats, projects, topProject);
+      const sessionDigests = await collectSessionDigests(
+        options,
+        inRange,
+        input,
+      );
       const observedAt = nowValue.toISOString();
       const evidence: EvidenceRef[] = [
         ...(inRange.length > 0 || eventUsage.hasEvents
@@ -1007,7 +1393,12 @@ export function createReportContextPort(
           : []),
       ];
 
-      return { evidence, summary, stats };
+      return {
+        evidence,
+        summary,
+        stats,
+        ...(sessionDigests.length > 0 ? { sessionDigests } : {}),
+      };
     },
   };
 }

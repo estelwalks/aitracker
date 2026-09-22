@@ -126,6 +126,23 @@ export function createSnapshotCoordinator<T>(
     };
   };
 
+  /**
+   * Keep the in-memory snapshot equal to the persisted one when the repository
+   * enriches data on write. Best-effort: a failed reload keeps the committed
+   * payload, because a canonicalisation miss must never fail a refresh.
+   */
+  const canonicalise = async (
+    committed: SnapshotEnvelope<T>,
+  ): Promise<SnapshotEnvelope<T>> => {
+    if (!options.reloadAfterCommit) return committed;
+    try {
+      const reloaded = await options.reloadAfterCommit();
+      return reloaded?.data != null ? reloaded : committed;
+    } catch {
+      return committed;
+    }
+  };
+
   const hydrate = async (): Promise<void> => {
     if (hydrated) return;
     if (!hydratePromise) {
@@ -182,9 +199,9 @@ export function createSnapshotCoordinator<T>(
     // Abort-before-commit: a cancelled collector must never overwrite LKG.
     if (signal?.aborted) throw new AbortError("commit aborted");
     await options.repository.save(next);
-    current = next;
+    current = await canonicalise(next);
     invalidated = false;
-    return next;
+    return current;
   };
 
   const runRefresh = async (

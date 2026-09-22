@@ -41,6 +41,17 @@ export interface LegacyReportScheduleConfig {
 export type ReportScheduleConfig = LegacyReportScheduleConfig;
 
 export const REPORT_SCHEDULE_KEY = "tt.report.schedule";
+
+/**
+ * Opt-in switch for content-based reporting.
+ *
+ * OFF (default) keeps every report strictly statistics-based — no transcript is
+ * ever opened. ON lets the report read the covered sessions' transcripts
+ * through the local content reader and send a bounded, locally redacted digest
+ * to the user's own configured model, so the summary can describe the actual
+ * work instead of only counters.
+ */
+export const REPORT_CONTENT_INSIGHT_KEY = "tt.report.content-insight";
 export const LEGACY_REPORT_TASK_ID = "reports.generate" as const;
 export const REPORT_TASK_IDS = {
   daily: "reports.generate.daily",

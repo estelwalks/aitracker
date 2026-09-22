@@ -607,3 +607,175 @@ test("completed without response text maps to failed (no body to emit)", async (
   assert.equal(result.errorCode, "errors.reports.generationFailed");
   assert.equal(result.retryable, false);
 });
+
+function workStats(): ReportStats {
+  return {
+    periodLabel: "今日 2026-08-31",
+    sessions: 1,
+    turns: 12,
+    tokens: 500_000,
+    costUsd: 1,
+    costCny: 7,
+    edits: 18,
+    durationMin: 30,
+    bySource: [
+      {
+        source: "codex",
+        sessions: 1,
+        tokens: 500_000,
+        costUsd: 1,
+        costCny: 7,
+        edits: 18,
+        durationMin: 30,
+      },
+    ],
+    projects: ["aitracker"],
+    behaviors: [
+      {
+        key: "execution",
+        label: "代码生成/重构",
+        tokenShare: 0.8,
+        eventShare: 0.7,
+      },
+    ],
+    toolUsageBySource: [
+      {
+        source: "codex",
+        tools: [{ name: "exec_command", calls: 120 }],
+      },
+    ],
+    sessionsDetail: [
+      {
+        title: "拉取这个项目",
+        project: "aitracker",
+        source: "codex",
+        turns: 12,
+        tokens: 500_000,
+        durationMin: 30,
+      },
+    ],
+  };
+}
+
+test("the AI summary input carries the rendered work profile", async () => {
+  const captured: { request?: AIRequest } = {};
+  const generation = createReportGenerationPort({
+    ai: fake(
+      { summary: summary("completed"), response: response("ok", "profile") },
+      captured,
+    ),
+  });
+  await generation.generate({
+    definition: definition(),
+    modelId: "profile-1",
+    context: {
+      evidence: [],
+      summary: "unused by the fixed path",
+      stats: workStats(),
+    },
+  });
+  const text = captured.request?.input.text ?? "";
+  // Regression guard: the model must receive the work data, otherwise the
+  // summary can only restate totals (the exact defect this section fixes).
+  assert.match(text, /^# AITracker 日报/);
+  assert.match(text, /## 工作画像/);
+  assert.match(text, /代码生成\/重构 80\.0%/);
+  assert.match(text, /exec_command ×120/);
+  assert.match(text, /拉取这个项目/);
+  assert.doesNotMatch(text, /## AI 总结/);
+});
+
+test("the weekly AI summary input carries the rendered work profile", async () => {
+  const captured: { request?: AIRequest } = {};
+  const generation = createReportGenerationPort({
+    ai: fake(
+      { summary: summary("completed"), response: response("ok", "profile") },
+      captured,
+    ),
+  });
+  await generation.generate({
+    definition: weeklyDefinition(),
+    modelId: "profile-1",
+    context: {
+      evidence: [],
+      summary: "unused by the fixed path",
+      stats: { ...workStats(), periodLabel: "本周 2026-08-31 - 2026-09-06" },
+    },
+  });
+  const text = captured.request?.input.text ?? "";
+  assert.match(text, /^# AITracker 周报/);
+  assert.match(text, /## 工作画像/);
+  assert.match(text, /exec_command ×120/);
+});
+
+test("opted-in session digests reach the model input", async () => {
+  const captured: { request?: AIRequest } = {};
+  const generation = createReportGenerationPort({
+    ai: fake(
+      { summary: summary("completed"), response: response("ok", "profile") },
+      captured,
+    ),
+  });
+  await generation.generate({
+    definition: definition(),
+    modelId: "profile-1",
+    context: {
+      evidence: [],
+      summary: "unused by the fixed path",
+      stats: workStats(),
+      sessionDigests: [
+        {
+          title: "拉取这个项目",
+          goals: ["拉取这个项目", "先本地保留，不要直接提交"],
+          progress: ["分析了代码结构并补齐文档。"],
+          outcome: ["已补齐文档并打包桌面应用。"],
+          redacted: true,
+        },
+      ],
+    },
+  });
+  const text = captured.request?.input.text ?? "";
+  assert.match(text, /^# AITracker 日报/);
+  assert.match(text, /会话内容洞察/);
+  assert.match(text, /### 会话：拉取这个项目/);
+  assert.match(text, /先本地保留，不要直接提交/);
+  assert.match(text, /分析了代码结构并补齐文档/);
+  assert.match(text, /已补齐文档并打包桌面应用/);
+});
+
+test("statistics-only reports keep the model input free of digests", async () => {
+  const captured: { request?: AIRequest } = {};
+  const generation = createReportGenerationPort({
+    ai: fake(
+      { summary: summary("completed"), response: response("ok", "profile") },
+      captured,
+    ),
+  });
+  await generation.generate({
+    definition: definition(),
+    modelId: "profile-1",
+    context: { evidence: [], summary: "unused", stats: workStats() },
+  });
+  assert.doesNotMatch(captured.request?.input.text ?? "", /会话内容洞察/);
+});
+
+test("a path in the model summary is redacted instead of dropping the report", async () => {
+  const generation = createReportGenerationPort({
+    ai: fake({
+      summary: summary("completed"),
+      response: response(
+        "核心结论：今天在 /Users/diffsec/Documents/app 里补齐了文档。\n\n建议：\n1. 继续沉淀。",
+        "profile",
+      ),
+    }),
+  });
+  const result = await generation.generate({
+    definition: definition(),
+    modelId: "profile-1",
+    context: { evidence: [], summary: "unused", stats: workStats() },
+  });
+  assert.equal(result.status, "succeeded");
+  assert.match(result.body ?? "", /## AI 总结/);
+  assert.doesNotMatch(result.body ?? "", /\/Users\//);
+  assert.match(result.body ?? "", /<path>/);
+});

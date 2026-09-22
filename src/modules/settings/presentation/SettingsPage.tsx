@@ -66,7 +66,10 @@ import { Field, Toggle } from "./fields";
 import { ModelProfilesSection } from "./ModelProfilesSection";
 import { MenuBarAppSettingsSection } from "./MenuBarAppSettingsSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
-import { ReportSchedule } from "../../reports/presentation/index.ts";
+import {
+  ReportContentInsightToggle,
+  ReportSchedule,
+} from "../../reports/presentation/index.ts";
 import { useSecurityClient } from "./use-security-client";
 import {
   SETTINGS_CATEGORIES,
@@ -890,6 +893,9 @@ export function SettingsPage({
           {category === "reports" && (
             <div>
               <ReportSchedule variant="settings" />
+              <div className="mt-3 rounded-xl bg-card px-4 py-1">
+                <ReportContentInsightToggle />
+              </div>
             </div>
           )}
 

@@ -137,6 +137,16 @@ npm run check:opensource-hygiene
 
 可以使用 `npm run dist:mac` 或 `npm run dist:win:x64` 构建平台安装包。完整命令、生成文件约定和仓库结构请参阅[开发指南](DEVELOPMENT.md)。
 
+## 架构与业务文档
+
+- [架构与业务文档索引](architecture/README.zh-CN.md)
+- [系统架构（当前代码版）](architecture/system-architecture.zh-CN.md)
+- [业务结构（当前代码版）](architecture/business-structure.zh-CN.md)
+- [后续开发计划](plan/aitracker-后续开发计划.md)
+- [开发·测试·验证·发布实操手册](DEVELOPMENT_WORKFLOW.zh-CN.md)
+- [报告分析设计](design/aitracker-报告分析设计.md)
+
+
 ---
 
 ## 🌟 核心能力

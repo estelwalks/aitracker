@@ -11,7 +11,7 @@ import type {
   MonitoringRecorder,
 } from "../../../monitoring/contracts.ts";
 import {
-  monthKeyOf,
+  periodKeyOf,
   REPORT_TASK_IDS,
   reportDefinitionIdForSchedule,
   type ScheduleGranularity,
@@ -152,17 +152,25 @@ function bindReports(
       (item) => item.definitionId === definitionId && item.enabled,
     );
     if (!definition) return unavailable();
+    // Anchor the scheduled report to the period it actually covers. Previously
+    // only monthly runs passed a period, so daily/weekly rows were stamped with
+    // the wall-clock run time: the same day then accumulated one anchored and
+    // one "now" row, and the archive surfaced whichever timestamp happened to
+    // be larger instead of the report that was generated last.
+    const scheduledAt = new Date();
+    const periodGranularity =
+      granularity === "monthly"
+        ? ("month" as const)
+        : granularity === "weekly"
+          ? ("week" as const)
+          : ("day" as const);
     const result = await app.generate({
       definitionId: definition.definitionId,
       trigger: "schedule",
-      ...(granularity === "monthly"
-        ? {
-            period: {
-              granularity: "month" as const,
-              key: monthKeyOf(new Date()),
-            },
-          }
-        : {}),
+      period: {
+        granularity: periodGranularity,
+        key: periodKeyOf(periodGranularity, scheduledAt),
+      },
     });
     if (!result.ok)
       throw new ControlledExecutorError(EXECUTOR_ERROR_CODES.failed);

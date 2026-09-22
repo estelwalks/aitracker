@@ -39,3 +39,20 @@ test("safeReportText still rejects empty and sensitive bodies", () => {
     safeReportText("api_key: sk-abcdefghijklmnopqrstuvwxyz123456"),
   );
 });
+
+test("R5 privacy: safeReportText rejects command paths, credentials and secrets", () => {
+  // Command paths (POSIX home / Windows drive / UNC / relative traversal).
+  assert.throws(() => safeReportText("/home/alice/.ssh/id_rsa"));
+  assert.throws(() => safeReportText("C:\\Users\\alice\\report"));
+  assert.throws(() => safeReportText("\\\\server\\share\\report"));
+  assert.throws(() => safeReportText("rm -rf ~/projects/aitracker"));
+  // Credentials and secrets (bearer / api key / password / secret).
+  assert.throws(() => safeReportText("Authorization: bearer abc123"));
+  assert.throws(() => safeReportText("password=hunter2"));
+  assert.throws(() => safeReportText("secret_token=xyz"));
+  // Ordinary report prose is still accepted after trimming.
+  assert.equal(
+    safeReportText("  本周使用平稳，无异常。  "),
+    "本周使用平稳，无异常。",
+  );
+});

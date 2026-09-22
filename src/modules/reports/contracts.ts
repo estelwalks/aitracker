@@ -188,6 +188,25 @@ export interface ReportStats {
   readonly byModel?: readonly ReportModelStats[];
   readonly byProject?: readonly ReportProjectStats[];
   readonly sessionsDetail?: readonly ReportSessionStats[];
+  /**
+   * Approximate behavior distribution (clean-room). Absent when the period has
+   * no tool signal at all, so "zero usage" stays distinguishable from "no data".
+   */
+  readonly behaviors?: readonly ReportBehaviorStats[];
+  /**
+   * Desensitized tool-behavior detail aggregated per source for the period
+   * (tool name + call count only; never parameters, commands or content).
+   * Present when the usage snapshot carries tool signals.
+   */
+  readonly toolUsageBySource?: readonly {
+    readonly source: string;
+    readonly tools: readonly {
+      readonly name: string;
+      readonly calls: number;
+    }[];
+  }[];
+  /** Present only when at least one durable output was created in the period. */
+  readonly outputs?: ReportOutputCounts;
   readonly cache?: ReportCacheStats;
   readonly yesterday?: ReportPeriodComparison;
   readonly trend?: readonly ReportTrendPoint[];
@@ -219,12 +238,74 @@ export interface ReportProjectStats {
 
 export interface ReportSessionStats {
   readonly title: string;
+  /**
+   * True when the session started inside the covered period but kept running
+   * beyond it. Its `tokens` are then the whole-session cumulative total rather
+   * than a period figure, so renderers must label it instead of implying the
+   * number belongs to this period.
+   */
+  readonly crossPeriod?: boolean;
   readonly project?: string;
   readonly source: string;
   readonly turns: number;
   readonly tokens: number;
   readonly durationMin: number;
   readonly repeated?: boolean;
+}
+
+/**
+ * Approximate behavior distribution for a report period, derived from
+ * aggregate (already-desensitized) tool categories — never from raw session
+ * or conversation content. Labels stay consistent with the Model Details
+ * drawer (`behavior-classify.ts`).
+ */
+/** Stable, locale-neutral behavior identifiers so every locale can label them. */
+export type ReportBehaviorKey =
+  | "debug"
+  | "execution"
+  | "research"
+  | "planning"
+  | "subagent"
+  | "skills"
+  | "qa";
+
+export interface ReportBehaviorStats {
+  /** Stable behavior key; renderers localize it. */
+  readonly key: ReportBehaviorKey;
+  /** Behavior label (Chinese). */
+  readonly label: string;
+  /** Share of tokens attributed to this behavior (0–1). */
+  readonly tokenShare: number;
+  /** Share of buckets/events attributed to this behavior (0–1). */
+  readonly eventShare: number;
+}
+
+/**
+ * Durable outputs created during a report period (clean-room: counts only,
+ * never titles or content). Weekly/monthly reports use these to ground the
+ * "沉淀与产出" section in real data instead of generic claims.
+ */
+export interface ReportOutputCounts {
+  /** Distinct skills installed in the period. */
+  readonly skills: number;
+  /** Memory/knowledge assets created in the period. */
+  readonly knowledge: number;
+  /** Distillation-approved knowledge assets created in the period. */
+  readonly distillations: number;
+}
+
+/**
+ * Counts durable outputs created inside a report period. Implemented by the
+ * composition root (backed by the skill snapshot and knowledge repository);
+ * the reports module only sees this port, never those implementations.
+ */
+export interface ReportOutputPort {
+  collect(input: {
+    /** Local `YYYY-MM-DD` inclusive period start. */
+    readonly from: string;
+    /** Local `YYYY-MM-DD` inclusive period end. */
+    readonly to: string;
+  }): Promise<ReportOutputCounts>;
 }
 
 export interface ReportCacheStats {
@@ -247,10 +328,29 @@ export interface ReportPeriodComparison {
   readonly activeProjects?: number;
 }
 
+/**
+ * Bounded, locally redacted digest of one session's actual content. Only
+ * produced when the user turns on content-based reporting; it is never
+ * persisted as part of the report body.
+ */
+export interface ReportSessionDigest {
+  readonly title: string;
+  /** What the user asked for, sampled across the session. */
+  readonly goals: readonly string[];
+  /** What the agent reported doing, sampled across the session. */
+  readonly progress: readonly string[];
+  /** How the work ended. */
+  readonly outcome: readonly string[];
+  /** True when at least one redaction replaced sensitive material. */
+  readonly redacted: boolean;
+}
+
 export interface ReportContext {
   readonly evidence: readonly EvidenceRef[];
   /** Controlled, already-redacted context; never raw sessions or paths. */
   readonly summary: string;
+  /** Present only when content-based reporting is enabled and readable. */
+  readonly sessionDigests?: readonly ReportSessionDigest[];
   readonly assets?: readonly AssetRef[];
   /** Optional structured figures for the deterministic offline draft. */
   readonly stats?: ReportStats;
