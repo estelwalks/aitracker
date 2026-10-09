@@ -12,16 +12,16 @@ import {
 const genericDefaults = getGenericReaderDefaults();
 
 /**
- * Built-in usage adapters, derived from the tool-registry: one entry per tool
- * (including `catalogVisible=false` legacy sources aipy/cline) with a
- * non-unsupported `usage` capability. The scanner dispatches controlled native
- * readers by this entry's registry-declared `reader` key; generic entries feed
- * the field-mapping pipeline. The same catalog also defines the source universe.
+ * Built-in usage adapters, derived from the public tool-registry catalog: one
+ * entry per visible tool with a non-unsupported `usage` capability. Hidden
+ * definitions stay in the registry for future enablement, but are not scanned
+ * or shown as local usage sources until their data contract is verified.
  */
 const REGISTRY_USAGE_ADAPTERS: UsageAdapterContract[] = listTools()
   .filter(
     (def) =>
       def.capabilities.usage.mode !== "unsupported" &&
+      def.catalogVisible !== false &&
       def.capabilities.usage.paths &&
       def.capabilities.usage.paths.length > 0,
   )

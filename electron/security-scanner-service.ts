@@ -131,6 +131,55 @@ export const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
     // below the plugin-cache root (plugin/version/skills/<name>).
     maxDepth: 8,
   },
+  {
+    agent: "豆包 Work",
+    toolId: "doubao-work",
+    suffixes: [
+      "Library/Application Support/DoubaoWork/Default/.doubaowork/agent_mode/workspace/.user_skills",
+      "Library/Application Support/DoubaoWork/Default/.doubaowork/agent_mode/workspace/.skills",
+      "AppData/Roaming/DoubaoWork/Default/.doubaowork/agent_mode/workspace/.user_skills",
+      "AppData/Roaming/DoubaoWork/Default/.doubaowork/agent_mode/workspace/.skills",
+    ],
+    maxDepth: 5,
+  },
+  {
+    agent: "Kimi Work",
+    toolId: "kimi-work",
+    suffixes: [
+      "Library/Application Support/kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/plugins/managed",
+      "Library/Application Support/kimi-desktop/daimon-share/daimon/skills",
+      "AppData/Roaming/kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/plugins/managed",
+      "AppData/Roaming/kimi-desktop/daimon-share/daimon/skills",
+    ],
+    maxDepth: 8,
+  },
+  {
+    agent: "QCode",
+    toolId: "qcode",
+    suffixes: [".q-code/skills"],
+    maxDepth: 5,
+  },
+  {
+    agent: "Marvis",
+    toolId: "marvis",
+    suffixes: [
+      "Library/Application Support/com.tencent.mac.marvis/MarvisData/User",
+    ],
+    maxDepth: 6,
+  },
+  {
+    agent: "Trae Work",
+    toolId: "trae-work",
+    suffixes: [
+      ".trae/builtin/global/skills",
+      ".trae/builtin_skills",
+      ".trae-cn/builtin/global/skills",
+      ".trae-cn/builtin/work",
+      ".trae-cn/builtin/code",
+      ".trae-cn/builtin/design",
+    ],
+    maxDepth: 8,
+  },
 ];
 
 const TOOL_DATA_ROOTS_ENV = "AITRACKER_TOOL_DATA_DIRS";

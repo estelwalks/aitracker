@@ -133,7 +133,7 @@ console.log(
   `  visible:          ${defs.filter((d) => d.catalogVisible !== false).length}`,
 );
 console.log(
-  `  legacy hidden:    ${defs.filter((d) => d.catalogVisible === false).length}`,
+  `  hidden:           ${defs.filter((d) => d.catalogVisible === false).length}`,
 );
 console.log(`shared packs:       ${Object.keys(sharedPacks).length}`);
 console.log(`registry version:   ${version}`);

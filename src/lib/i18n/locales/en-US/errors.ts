@@ -43,6 +43,7 @@ export const errors = {
     notFound: "Skill not found or unreadable",
     toolNotInstalled:
       "Cannot install the Skill: {agent} was not detected — the target tool is not installed",
+    exportDestinationInvalid: "Invalid Skill export destination",
   },
   sessions: {
     filterInvalid: "Invalid session filter",

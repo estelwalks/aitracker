@@ -542,6 +542,11 @@ describe("shared policy packs (TC-POL-001)", () => {
       "grok",
       "hermes",
       "workbuddy",
+      "doubao-work",
+      "kimi-work",
+      "qcode",
+      "marvis",
+      "trae-work",
       "openclaw",
       "antigravity",
       "aipy",
@@ -601,13 +606,13 @@ describe("shared policy packs (TC-POL-001)", () => {
     ) as {
       tools: { id: string; path: string }[];
     };
-    assert.equal(pack.tools.length, 36);
+    assert.equal(pack.tools.length, 41);
     assert.equal(pack.tools[0].id, "claude-code");
     assert.equal(pack.tools[27].id, "dsh");
     assert.equal(pack.tools[28].id, "aipy");
     assert.equal(pack.tools[29].id, "cline");
     const ids = new Set(pack.tools.map((t) => t.id));
-    assert.equal(ids.size, 36, "ids must be unique");
+    assert.equal(ids.size, 41, "ids must be unique");
     for (const t of pack.tools) {
       assert.equal(
         t.path,

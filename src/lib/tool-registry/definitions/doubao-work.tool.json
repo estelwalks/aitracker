@@ -1,0 +1,78 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "doubao-work",
+  "catalogVisible": false,
+  "display": {
+    "name": "Doubao Work",
+    "nameZh": "豆包 Work",
+    "icon": "other",
+    "color": "#2f6bff"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos"],
+        "base": "appData",
+        "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace"
+      },
+      {
+        "targets": ["windows10", "windows11"],
+        "base": "appDataRoaming",
+        "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace"
+      }
+    ]
+  },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "appData",
+        "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace"
+      },
+      {
+        "base": "appDataRoaming",
+        "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace"
+      }
+    ],
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "appData",
+          "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace/.user_skills"
+        },
+        {
+          "base": "appData",
+          "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace/.skills"
+        },
+        {
+          "base": "appDataRoaming",
+          "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace/.user_skills"
+        },
+        {
+          "base": "appDataRoaming",
+          "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace/.skills"
+        }
+      ],
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 5
+    }
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "unsupported"
+    },
+    "skills": "read-write",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "read",
+      "reader": "doubao-work-session-v1"
+    },
+    "market": "install-target",
+    "security": "unsupported"
+  }
+}

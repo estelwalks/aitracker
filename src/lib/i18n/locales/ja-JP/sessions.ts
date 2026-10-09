@@ -16,6 +16,11 @@ export const sessions = {
     d30: "過去 30 日間",
     d90: "過去 90 日間",
   },
+  dateField: {
+    label: "並び替え",
+    lastActivity: "最終セッション",
+    createdAt: "作成日時",
+  },
   status: {
     all: "すべての状態",
     available: "復元可能",
@@ -48,6 +53,11 @@ export const sessions = {
   },
   refreshing: "更新中",
   refreshNow: "今すぐ更新",
+  export: {
+    selectPage: "このページを選択",
+    selected: "選択をエクスポート ({count})",
+    all: "すべてのセッションをエクスポート",
+  },
   group: {
     today: "今日",
     yesterday: "昨日",
@@ -99,6 +109,8 @@ export const sessions = {
     refreshed: "セッション一覧を更新しました",
     hashCopied: "セッション ID をコピーしました",
     copied: "ローカル復元リクエストを開始しました",
+    exported: "{count} セッションをエクスポートしました",
+    exportFailed: "セッションのエクスポートに失敗しました。再試行してください",
   },
   transcript: {
     loading: "ローカルセッションの会話を読み込み中…",

@@ -317,12 +317,63 @@ async function collectJsonlFiles(
   return files;
 }
 
+/** Bounded recursive file walk for session formats that are not JSONL-only. */
+async function collectSessionFiles(
+  root: string,
+  matches: (relativePath: string, name: string) => boolean,
+  signal?: AbortSignal,
+): Promise<FileCandidate[]> {
+  const files: FileCandidate[] = [];
+  if (!(await directoryAvailable(root))) return files;
+  const pending = [root];
+  let discoveredEntries = 0;
+  while (pending.length > 0 && discoveredEntries < MAX_DIRECTORY_ENTRIES) {
+    signal?.throwIfAborted();
+    const directoryPath = pending.pop();
+    if (directoryPath == null) break;
+    let directory;
+    try {
+      directory = await opendir(directoryPath);
+    } catch {
+      continue;
+    }
+    for await (const entry of directory) {
+      signal?.throwIfAborted();
+      discoveredEntries += 1;
+      if (discoveredEntries >= MAX_DIRECTORY_ENTRIES) break;
+      const entryPath = join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(entryPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const relativePath = relative(root, entryPath).split(sep).join("/");
+      if (!matches(relativePath, entry.name)) continue;
+      files.push({ path: entryPath });
+      if (files.length >= MAX_FILES_PER_SOURCE) return files;
+    }
+  }
+  return files;
+}
+
 async function readFileSize(path: string): Promise<number> {
   try {
     const info = await stat(path);
     return info.size;
   } catch {
     return -1;
+  }
+}
+
+async function readJsonObjectFile(
+  path: string,
+): Promise<JsonObject | undefined> {
+  const size = await readFileSize(path);
+  if (size < 0 || size > MAX_FILE_BYTES) return undefined;
+  try {
+    return asObject(JSON.parse(await readFile(path, "utf8")));
+  } catch {
+    return undefined;
   }
 }
 
@@ -2349,7 +2400,7 @@ function piSessionIdFromFileName(fileName: string): string | undefined {
 }
 
 async function scanPiLikeSessions(
-  source: "pi" | "omp",
+  source: "pi" | "omp" | "omo",
   piDirectory: string,
   signal?: AbortSignal,
 ): Promise<SessionRecord[]> {
@@ -2535,6 +2586,13 @@ function scanOmpSessions(
   return scanPiLikeSessions("omp", piDirectory, signal);
 }
 
+function scanOmoSessions(
+  piDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  return scanPiLikeSessions("omo", piDirectory, signal);
+}
+
 registerSessionReader({
   key: "pi-session-v1",
   scan: scanPiSessions,
@@ -2544,6 +2602,11 @@ registerSessionReader({
   key: "omp-session-v1",
   scan: scanOmpSessions,
   defaultRoots: [".omp", ".oh-my-pi"],
+});
+registerSessionReader({
+  key: "omo-session-v1",
+  scan: scanOmoSessions,
+  defaultRoots: [".omo"],
 });
 
 // Hermes Agent — state.db (SQLite) at the Hermes data root: the default
@@ -3127,6 +3190,504 @@ async function scanZcodeSessions(
   }
 }
 
+// Doubao Work — trajectories are stored below
+// `.sessions/<session>/agents/<agent>/system/trajectory.jsonl`. The format has
+// roles and content but no stable token counters, so this reader only derives
+// privacy-safe session metadata and turn counts. File mtimes provide the
+// activity timestamp when an individual record has no timestamp.
+async function scanDoubaoWorkSessions(
+  workspaceDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  const sessionsRoot = join(workspaceDirectory, ".sessions");
+  const files = await collectSessionFiles(
+    sessionsRoot,
+    (relativePath, name) =>
+      name === "trajectory.jsonl" &&
+      /(?:^|\/)agents\/[^/]+\/system\/trajectory\.jsonl$/u.test(relativePath),
+    signal,
+  );
+  const fragments = new Map<string, SessionFragment>();
+  for (const file of files) {
+    signal?.throwIfAborted();
+    const relativePath = relative(sessionsRoot, file.path).split(sep).join("/");
+    const sessionId = relativePath.split("/")[0];
+    if (!sessionId) continue;
+    const fragment =
+      fragments.get(sessionId) ?? createEmptyFragment("doubao-work", sessionId);
+    await readJsonLines(file.path, (record) => {
+      const timestamp =
+        parseTimestampValue(record.timestamp) ??
+        parseTimestampValue(record.time) ??
+        parseTimestampValue(record.createdAt);
+      if (timestamp != null) fragment.timestamps.push(timestamp);
+      const role = stringValue(record.role);
+      if (role === "user") {
+        fragment.turns += 1;
+        if (fragment.fallbackTitle === "") {
+          fragment.fallbackTitle = safeFallbackTitle(record.content) ?? "";
+        }
+      }
+    });
+    try {
+      const fileStat = await stat(file.path);
+      fragment.timestamps.push(timestampFromMs(fileStat.mtimeMs));
+      if (fileStat.birthtimeMs > 0) {
+        fragment.timestamps.push(timestampFromMs(fileStat.birthtimeMs));
+      }
+    } catch {
+      // A concurrently removed trajectory is ignored.
+    }
+    fragment.resumeSupported = false;
+    fragments.set(sessionId, fragment);
+  }
+  for (const fragment of fragments.values()) {
+    if (fragment.title === "" && fragment.fallbackTitle === "") {
+      fragment.title = `豆包 Work ${fragment.sessionId.slice(0, 8)}`;
+    }
+  }
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
+}
+
+function usageCountsFromObject(
+  usage: JsonObject | undefined,
+): SessionTokenCounts {
+  if (usage == null) return emptyTokenCounts();
+  const inputTokens = tokenValue(
+    usage.inputOther ?? usage.inputTokens ?? usage.input_tokens,
+  );
+  const cachedInputTokens = tokenValue(
+    usage.inputCacheRead ??
+      usage.cachedInputTokens ??
+      usage.cached_input_tokens,
+  );
+  const cacheCreationInputTokens = tokenValue(
+    usage.inputCacheCreation ??
+      usage.cacheCreationInputTokens ??
+      usage.cache_creation_input_tokens,
+  );
+  const outputTokens = tokenValue(
+    usage.output ?? usage.outputTokens ?? usage.output_tokens,
+  );
+  const reasoningOutputTokens = tokenValue(
+    usage.reasoningTokens ??
+      usage.reasoningOutputTokens ??
+      usage.thinking_tokens,
+  );
+  const componentTotal =
+    inputTokens +
+    cachedInputTokens +
+    cacheCreationInputTokens +
+    outputTokens +
+    reasoningOutputTokens;
+  return {
+    inputTokens,
+    cachedInputTokens,
+    cacheCreationInputTokens,
+    outputTokens,
+    reasoningOutputTokens,
+    totalTokens:
+      componentTotal || tokenValue(usage.totalTokens ?? usage.total_tokens),
+  };
+}
+
+// Kimi Work — state.json owns title/project/time metadata, while wire.jsonl
+// supplies user-turn, model and usage events. Only `usage.record` is counted;
+// loop/context events can carry the same usage payload and would double count.
+async function scanKimiWorkSessions(
+  kimiHome: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  const sessionsRoot = join(kimiHome, "sessions");
+  const stateFiles = await collectSessionFiles(
+    sessionsRoot,
+    (relativePath, name) => name === "state.json" && relativePath.includes("/"),
+    signal,
+  );
+  const fragments = new Map<string, SessionFragment>();
+  for (const file of stateFiles) {
+    signal?.throwIfAborted();
+    const state = await readJsonObjectFile(file.path);
+    if (state == null) continue;
+    const custom = asObject(state.custom);
+    const sessionId =
+      stringValue(state.sessionId) ??
+      stringValue(custom?.conversationKey) ??
+      basename(dirname(file.path));
+    if (!sessionId) continue;
+    const fragment =
+      fragments.get(sessionId) ?? createEmptyFragment("kimi-work", sessionId);
+    fragment.title =
+      stringValue(state.title) ??
+      safeFallbackTitle(state.lastPrompt) ??
+      fragment.title;
+    fragment.projectRef =
+      stringValue(state.workDir) ??
+      stringValue(custom?.workspacePath) ??
+      fragment.projectRef;
+    for (const value of [state.createdAt, state.updatedAt]) {
+      const timestamp = parseTimestampValue(value);
+      if (timestamp != null) fragment.timestamps.push(timestamp);
+    }
+    fragment.resumeSupported = false;
+    fragments.set(sessionId, fragment);
+  }
+
+  const wireFiles = await collectSessionFiles(
+    sessionsRoot,
+    (relativePath, name) =>
+      name === "wire.jsonl" &&
+      /(?:^|\/)agents\/[^/]+\/wire\.jsonl$/u.test(relativePath),
+    signal,
+  );
+  for (const file of wireFiles) {
+    signal?.throwIfAborted();
+    const normalized = relative(sessionsRoot, file.path).split(sep).join("/");
+    const segments = normalized.split("/");
+    const agentsIndex = segments.lastIndexOf("agents");
+    const sessionId = agentsIndex > 0 ? segments[agentsIndex - 1] : undefined;
+    if (!sessionId) continue;
+    const fragment =
+      fragments.get(sessionId) ?? createEmptyFragment("kimi-work", sessionId);
+    await readJsonLines(file.path, (record) => {
+      const timestamp = parseTimestampValue(record.time);
+      if (timestamp != null) fragment.timestamps.push(timestamp);
+      const type = stringValue(record.type);
+      if (type === "turn.prompt") {
+        fragment.turns += 1;
+        if (fragment.fallbackTitle === "") {
+          fragment.fallbackTitle =
+            safeFallbackTitle(record.prompt ?? record.content) ?? "";
+        }
+      }
+      const request = asObject(record.request);
+      const model =
+        stringValue(record.model) ??
+        stringValue(record.modelAlias) ??
+        stringValue(request?.model) ??
+        stringValue(request?.modelAlias);
+      if (model != null) fragment.model = model;
+      if (type === "usage.record") {
+        addTokenCounts(
+          fragment.totals,
+          usageCountsFromObject(asObject(record.usage)),
+        );
+      }
+    });
+    fragment.resumeSupported = false;
+    fragments.set(sessionId, fragment);
+  }
+  for (const fragment of fragments.values()) {
+    if (fragment.title === "" && fragment.fallbackTitle === "") {
+      fragment.title = `Kimi Work ${fragment.sessionId.slice(0, 8)}`;
+    }
+  }
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
+}
+
+function sessionIdFromQcodePath(path: string): string {
+  const name = basename(path);
+  if (name.endsWith(".meta.json")) return name.slice(0, -".meta.json".length);
+  if (name.endsWith(".jsonl")) return name.slice(0, -".jsonl".length);
+  return name;
+}
+
+// QCode keeps configuration under ~/.q-code but conversation logs in the
+// sibling ~/sessions tree. Meta files are preferred; JSONL fills in turns,
+// models and token usage and also keeps older installations discoverable.
+async function scanQcodeSessions(
+  qcodeHome: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  const sessionsRoot = join(dirname(qcodeHome), "sessions");
+  const files = await collectSessionFiles(
+    sessionsRoot,
+    (_relativePath, name) =>
+      name.endsWith(".meta.json") || name.endsWith(".jsonl"),
+    signal,
+  );
+  const fragments = new Map<string, SessionFragment>();
+  for (const file of files.filter((entry) =>
+    entry.path.endsWith(".meta.json"),
+  )) {
+    signal?.throwIfAborted();
+    const meta = await readJsonObjectFile(file.path);
+    if (meta == null) continue;
+    const sessionId =
+      stringValue(meta.sessionId) ?? sessionIdFromQcodePath(file.path);
+    if (!sessionId) continue;
+    const fragment =
+      fragments.get(sessionId) ?? createEmptyFragment("qcode", sessionId);
+    fragment.title =
+      stringValue(meta.title) ?? stringValue(meta.name) ?? fragment.title;
+    fragment.projectRef =
+      stringValue(meta.workDir) ??
+      stringValue(meta.cwd) ??
+      stringValue(meta.projectPath) ??
+      fragment.projectRef;
+    fragment.model = stringValue(meta.model) ?? fragment.model;
+    for (const value of [meta.createdAt, meta.updatedAt, meta.ts]) {
+      const timestamp = parseTimestampValue(value);
+      if (timestamp != null) fragment.timestamps.push(timestamp);
+    }
+    fragments.set(sessionId, fragment);
+  }
+  for (const file of files.filter((entry) => entry.path.endsWith(".jsonl"))) {
+    signal?.throwIfAborted();
+    const fallbackSessionId = sessionIdFromQcodePath(file.path);
+    let resolvedSessionId = fallbackSessionId;
+    let fragment =
+      fragments.get(resolvedSessionId) ??
+      createEmptyFragment("qcode", resolvedSessionId);
+    await readJsonLines(file.path, (record) => {
+      const recordSessionId = stringValue(record.sessionId);
+      if (recordSessionId != null && recordSessionId !== resolvedSessionId) {
+        resolvedSessionId = recordSessionId;
+        fragment =
+          fragments.get(resolvedSessionId) ??
+          createEmptyFragment("qcode", resolvedSessionId);
+      }
+      const payload = asObject(record.payload);
+      const timestamp =
+        parseTimestampValue(record.ts) ?? parseTimestampValue(record.timestamp);
+      if (timestamp != null) fragment.timestamps.push(timestamp);
+      fragment.projectRef =
+        stringValue(payload?.cwd) ??
+        stringValue(record.cwd) ??
+        fragment.projectRef;
+      fragment.model =
+        stringValue(payload?.model) ??
+        stringValue(record.model) ??
+        fragment.model;
+      const message = asObject(record.message) ?? asObject(payload?.message);
+      const role = stringValue(record.role) ?? stringValue(message?.role);
+      if (role === "user") {
+        fragment.turns += 1;
+        if (fragment.fallbackTitle === "") {
+          fragment.fallbackTitle =
+            safeFallbackTitle(record.content ?? message?.content) ?? "";
+        }
+      }
+      const usage =
+        asObject(payload?.usage) ??
+        (payload != null &&
+        (payload.inputTokens != null || payload.outputTokens != null)
+          ? payload
+          : undefined);
+      if (usage != null)
+        addTokenCounts(fragment.totals, usageCountsFromObject(usage));
+      fragments.set(resolvedSessionId, fragment);
+    });
+  }
+  for (const fragment of fragments.values()) {
+    if (fragment.title === "" && fragment.fallbackTitle === "") {
+      fragment.title = `QCode ${fragment.sessionId.slice(0, 8)}`;
+    }
+  }
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
+}
+
+function objectFromJsonText(value: unknown): JsonObject | undefined {
+  if (typeof value !== "string" || value.length === 0) return undefined;
+  try {
+    return asObject(JSON.parse(value));
+  } catch {
+    return undefined;
+  }
+}
+
+// Tencent Marvis stores one SQLite database per signed-in user below
+// `MarvisData/User/<user>/database/data.db`. Queries read metadata/counts only;
+// message bodies are never selected.
+async function scanMarvisSessions(
+  usersRoot: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  const databaseFiles = await collectSessionFiles(
+    usersRoot,
+    (relativePath, name) =>
+      name === "data.db" && /(?:^|\/)database\/data\.db$/u.test(relativePath),
+    signal,
+  );
+  const fragments = new Map<string, SessionFragment>();
+  for (const file of databaseFiles) {
+    signal?.throwIfAborted();
+    let database: DatabaseSync | undefined;
+    try {
+      database = new DatabaseSync(file.path, { readOnly: true });
+      const rows = database
+        .prepare(
+          `SELECT conversation_id, title, status, metadata, created_at, updated_at
+           FROM conversations
+           WHERE conversation_id IS NOT NULL AND conversation_id <> ''`,
+        )
+        .all() as Array<Record<string, unknown>>;
+      for (const row of rows) {
+        const sessionId = stringValue(row.conversation_id);
+        if (sessionId == null) continue;
+        const fragment =
+          fragments.get(sessionId) ?? createEmptyFragment("marvis", sessionId);
+        fragment.title = stringValue(row.title) ?? fragment.title;
+        const metadata = objectFromJsonText(row.metadata);
+        fragment.projectRef =
+          stringValue(metadata?.workspacePath) ??
+          stringValue(metadata?.workDir) ??
+          stringValue(metadata?.cwd) ??
+          fragment.projectRef;
+        for (const value of [row.created_at, row.updated_at]) {
+          const timestamp = parseTimestampValue(value);
+          if (timestamp != null) fragment.timestamps.push(timestamp);
+        }
+        fragment.terminalStatus = mergeTerminalStatus(
+          fragment.terminalStatus,
+          explicitTerminalStatus({ status: row.status }, metadata),
+        );
+        fragment.resumeSupported = false;
+        fragments.set(sessionId, fragment);
+      }
+      for (const row of database
+        .prepare(
+          `SELECT conversation_id, COUNT(*) AS n
+           FROM messages
+           WHERE role = 'user'
+           GROUP BY conversation_id`,
+        )
+        .all() as Array<Record<string, unknown>>) {
+        const sessionId = stringValue(row.conversation_id);
+        const count = Number(row.n);
+        const fragment =
+          sessionId == null ? undefined : fragments.get(sessionId);
+        if (fragment != null && Number.isFinite(count) && count > 0) {
+          fragment.turns += count;
+        }
+      }
+      for (const row of database
+        .prepare(
+          `SELECT conversation_id, model_id, input_tokens, output_tokens,
+                  thinking_tokens, cached_tokens, total_tokens, created_at
+           FROM llm_token_usage
+           WHERE conversation_id IS NOT NULL AND conversation_id <> ''
+           ORDER BY created_at ASC, id ASC`,
+        )
+        .all() as Array<Record<string, unknown>>) {
+        signal?.throwIfAborted();
+        const sessionId = stringValue(row.conversation_id);
+        const fragment =
+          sessionId == null ? undefined : fragments.get(sessionId);
+        if (fragment == null) continue;
+        fragment.model = stringValue(row.model_id) ?? fragment.model;
+        const timestamp = parseTimestampValue(row.created_at);
+        if (timestamp != null) fragment.timestamps.push(timestamp);
+        const rawInput = tokenValue(row.input_tokens);
+        const rawOutput = tokenValue(row.output_tokens);
+        const cachedInputTokens = tokenValue(row.cached_tokens);
+        const reasoningOutputTokens = tokenValue(row.thinking_tokens);
+        const inputTokens = Math.max(0, rawInput - cachedInputTokens);
+        const outputTokens = Math.max(0, rawOutput - reasoningOutputTokens);
+        addTokenCounts(fragment.totals, {
+          inputTokens,
+          outputTokens,
+          cachedInputTokens,
+          cacheCreationInputTokens: 0,
+          reasoningOutputTokens,
+          totalTokens:
+            inputTokens +
+            outputTokens +
+            cachedInputTokens +
+            reasoningOutputTokens,
+        });
+      }
+    } catch {
+      // Missing tables, locked databases and partial upgrades are empty users.
+    } finally {
+      database?.close();
+    }
+  }
+  for (const fragment of fragments.values()) {
+    if (fragment.title === "" && fragment.fallbackTitle === "") {
+      fragment.title = `Marvis ${fragment.sessionId.slice(0, 8)}`;
+    }
+  }
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
+}
+
+// Trae Work keeps privacy-reduced session memories under ~/.trae*/memory.
+// The full conversation store is application-managed/encrypted, so this
+// reader intentionally consumes only the exported memory metadata. It makes
+// sessions visible in the dashboard without pretending that unavailable token
+// or resume fields exist.
+function traeWorkSessionIdFromMemoryFile(path: string): string {
+  const name = basename(path, ".jsonl");
+  return name.startsWith("session_memory_")
+    ? name.slice("session_memory_".length)
+    : name;
+}
+
+async function scanTraeWorkSessions(
+  traeHome: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  const memoryRoot = join(traeHome, "memory", "projects");
+  const files = await collectSessionFiles(
+    memoryRoot,
+    (_relativePath, name) =>
+      name.startsWith("session_memory_") && name.endsWith(".jsonl"),
+    signal,
+  );
+  const fragments = new Map<string, SessionFragment>();
+  for (const file of files) {
+    signal?.throwIfAborted();
+    const sessionId = traeWorkSessionIdFromMemoryFile(file.path);
+    if (sessionId === "") continue;
+    const fragment =
+      fragments.get(sessionId) ?? createEmptyFragment("trae-work", sessionId);
+    await readJsonLines(file.path, (record) => {
+      const timestamp = parseTimestampValue(record.message_summary_time);
+      if (timestamp != null) fragment.timestamps.push(timestamp);
+      const explicitSessionId =
+        stringValue(record.server_history_id) ?? stringValue(record.message_id);
+      if (explicitSessionId != null && explicitSessionId === sessionId) {
+        fragment.sessionId = explicitSessionId;
+      }
+      const project =
+        stringValue(record.workspacePath) ??
+        stringValue(record.workDir) ??
+        stringValue(record.cwd);
+      if (project != null) fragment.projectRef = project;
+      const model = stringValue(record.model) ?? stringValue(record.modelId);
+      if (model != null) fragment.model = model;
+      // A memory summary represents at least one completed conversation turn;
+      // exact turn counts are deliberately absent from this privacy-safe file.
+      fragment.turns = Math.max(fragment.turns, 1);
+    });
+    try {
+      const fileStat = await stat(file.path);
+      fragment.timestamps.push(timestampFromMs(fileStat.mtimeMs));
+      if (fileStat.birthtimeMs > 0) {
+        fragment.timestamps.push(timestampFromMs(fileStat.birthtimeMs));
+      }
+    } catch {
+      // A concurrently removed memory file is ignored.
+    }
+    fragment.resumeSupported = false;
+    if (fragment.title === "") {
+      fragment.title = `Trae Work ${sessionId.slice(0, 8)}`;
+    }
+    fragments.set(sessionId, fragment);
+  }
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
+}
+
 registerSessionReader({
   key: "zcode-session-v1",
   scan: scanZcodeSessions,
@@ -3141,6 +3702,31 @@ registerSessionReader({
   key: "workbuddy-session-v1",
   scan: scanWorkbuddySessions,
   defaultRoots: [".workbuddy"],
+});
+registerSessionReader({
+  key: "doubao-work-session-v1",
+  scan: scanDoubaoWorkSessions,
+  defaultRoots: [],
+});
+registerSessionReader({
+  key: "kimi-work-session-v1",
+  scan: scanKimiWorkSessions,
+  defaultRoots: [],
+});
+registerSessionReader({
+  key: "qcode-session-v1",
+  scan: scanQcodeSessions,
+  defaultRoots: [".q-code"],
+});
+registerSessionReader({
+  key: "marvis-session-v1",
+  scan: scanMarvisSessions,
+  defaultRoots: [],
+});
+registerSessionReader({
+  key: "trae-work-session-v1",
+  scan: scanTraeWorkSessions,
+  defaultRoots: [".trae", ".trae-cn"],
 });
 /**
  * Scan every registry-declared session tool and return a merged, deduplicated,

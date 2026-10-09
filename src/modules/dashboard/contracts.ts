@@ -108,6 +108,13 @@ export interface DashboardSourceSessionAggregate {
   readonly turns: number;
   readonly editTurns: number;
   readonly subagentCalls: number;
+  /** Observed session-level token totals, when the source exposes them. */
+  readonly inputTokens?: number;
+  readonly cachedInputTokens?: number;
+  readonly cacheCreationInputTokens?: number;
+  readonly outputTokens?: number;
+  readonly reasoningOutputTokens?: number;
+  readonly totalTokens?: number;
 }
 
 export interface DashboardSessionsSummary {
@@ -365,6 +372,8 @@ export interface DashboardV2View {
   readonly tools: readonly (DashboardV2Tool & {
     readonly tokens: number;
     readonly events: number;
+    /** Sessions observed for this tool in the selected period. */
+    readonly sessionCount?: number;
   })[];
   readonly trend: readonly DashboardV2TrendPoint[];
   readonly models: readonly DashboardV2BreakdownRow[];

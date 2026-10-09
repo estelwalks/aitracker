@@ -1,0 +1,109 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "kimi-work",
+  "catalogVisible": false,
+  "display": {
+    "name": "Kimi Work",
+    "nameZh": "Kimi Work",
+    "icon": "kimi",
+    "color": "#7c5cff"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos"],
+        "base": "appData",
+        "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home"
+      },
+      {
+        "targets": ["windows10", "windows11"],
+        "base": "appDataRoaming",
+        "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home"
+      }
+    ]
+  },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "appData",
+        "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home"
+      },
+      {
+        "base": "appDataRoaming",
+        "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home"
+      }
+    ],
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "appData",
+          "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/plugins/managed"
+        },
+        {
+          "base": "appData",
+          "path": "kimi-desktop/daimon-share/daimon/skills"
+        },
+        {
+          "base": "appDataRoaming",
+          "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/plugins/managed"
+        },
+        {
+          "base": "appDataRoaming",
+          "path": "kimi-desktop/daimon-share/daimon/skills"
+        }
+      ],
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 8
+    }
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter",
+      "reader": "generic-jsonl",
+      "paths": [
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/sessions",
+          "glob": "**/agents/*/wire.jsonl",
+          "format": "jsonl"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/sessions",
+          "glob": "**/agents/*/wire.jsonl",
+          "format": "jsonl"
+        }
+      ],
+      "mapping": {
+        "timestamp": ["time"],
+        "sessionId": ["sessionId", "conversationKey"],
+        "model": ["model", "modelAlias"],
+        "project": ["workDir", "workspacePath"],
+        "inputTokens": ["usage.inputOther"],
+        "cachedInputTokens": ["usage.inputCacheRead"],
+        "cacheCreationInputTokens": ["usage.inputCacheCreation"],
+        "outputTokens": ["usage.output"]
+      },
+      "maxFileSizeBytes": 67108864
+    },
+    "skills": "read",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "read",
+      "reader": "kimi-work-session-v1"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

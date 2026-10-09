@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -208,6 +208,82 @@ test("qoder-cn usage adapter reads chat_message rows with cached-input decomposi
     assert.equal(fallback.inputTokens, 1000);
     assert.equal(fallback.totalTokens, 1250);
     assert.equal(fallback.project, "blog");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("qoder usage adapter reads new projects JSONL only when token fields are authoritative", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-qoder-jsonl-"));
+  try {
+    const projectDir = join(root, ".qoder", "projects", "demo");
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      join(projectDir, "session-jsonl-1.jsonl"),
+      [
+        JSON.stringify({
+          type: "assistant",
+          sessionId: "session-jsonl-1",
+          timestamp: "2026-09-01T11:00:00.000Z",
+          cwd: "/Users/demo/qoder-jsonl",
+          message: {
+            id: "message-with-tokens",
+            role: "assistant",
+            model: "qmodel_38max",
+            usage: {
+              input_tokens: 120,
+              cache_read_input_tokens: 30,
+              cache_creation_input_tokens: 5,
+              output_tokens: 40,
+              credits: 3.2,
+            },
+          },
+        }),
+        JSON.stringify({
+          type: "assistant",
+          sessionId: "session-jsonl-1",
+          timestamp: "2026-09-01T11:01:00.000Z",
+          cwd: "/Users/demo/qoder-jsonl",
+          message: {
+            id: "credit-only",
+            role: "assistant",
+            model: "qmodel_38max",
+            usage: {
+              credits: 2.5,
+              billable: true,
+            },
+          },
+        }),
+      ].join("\n") + "\n",
+      "utf8",
+    );
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, ".cache"),
+      lookbackDays: 3650,
+      platform: "darwin",
+      now: new Date("2026-09-02T12:00:00.000Z"),
+    });
+    const qoder = snapshot.sources.find((source) => source.source === "qoder");
+    assert.ok(qoder, "qoder source must be reported");
+    assert.equal(qoder.available, true);
+    assert.equal(qoder.events, 1);
+
+    const events = snapshot.details.filter((event) => event.source === "qoder");
+    assert.equal(events.length, 1);
+    const event = events[0]!;
+    assert.equal(event.model, "qmodel_38max");
+    assert.equal(event.project, "/Users/demo/qoder-jsonl");
+    assert.equal(event.inputTokens, 120);
+    assert.equal(event.cachedInputTokens, 30);
+    assert.equal(event.cacheCreationInputTokens, 5);
+    assert.equal(event.outputTokens, 40);
+    assert.equal(event.totalTokens, 195);
+    assert.equal(
+      event.sessionId,
+      sessionIdFromStructuredValue("qoder", "session-jsonl-1"),
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

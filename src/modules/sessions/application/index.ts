@@ -21,8 +21,10 @@ function matches(
   if (filter.projectId && session.projectKey !== filter.projectId) return false;
   if (filter.range && filter.range !== "all") {
     const days = filter.range === "7d" ? 7 : filter.range === "30d" ? 30 : 90;
-    const started = Date.parse(session.startedAt);
-    if (!Number.isFinite(started) || started < now - days * DAY_MS)
+    const timestamp = Date.parse(
+      filter.dateField === "startedAt" ? session.startedAt : session.endedAt,
+    );
+    if (!Number.isFinite(timestamp) || timestamp < now - days * DAY_MS)
       return false;
   }
   if (filter.keyword) {
@@ -47,7 +49,7 @@ function compare(
   b: SessionSummary,
   request: SessionPageRequest,
 ): number {
-  const field = request.sort?.field ?? "startedAt";
+  const field = request.sort?.field ?? "endedAt";
   const direction = request.sort?.direction === "asc" ? 1 : -1;
   const left =
     field === "totalTokens"

@@ -3,19 +3,24 @@ import type { DashboardV2Tool } from "../contracts.ts";
 export type DashboardToolWithUsage = DashboardV2Tool & {
   readonly tokens: number;
   readonly events: number;
+  readonly sessionCount?: number;
 };
 
 /**
- * A tool is eligible for the rail only when the active window observed token
- * usage for it. The selected tool is not treated as an exception here: the
- * page resolves an invalid selection to `all` before rendering the rail.
+ * A tool is eligible for the rail when the active window has usage tokens,
+ * usage events, or sessions for it. Installation/detection alone is not
+ * activity.
  */
 export function resolveDashboardSelectedTool(
   selectedTool: string,
   tools: readonly DashboardToolWithUsage[],
 ): string {
   if (selectedTool === "all") return selectedTool;
-  return tools.some((tool) => tool.id === selectedTool && tool.tokens > 0)
+  return tools.some(
+    (tool) =>
+      tool.id === selectedTool &&
+      (tool.tokens > 0 || tool.events > 0 || (tool.sessionCount ?? 0) > 0),
+  )
     ? selectedTool
     : "all";
 }
@@ -31,5 +36,8 @@ export function resolveDashboardToolRailTools(
   unscopedTools: readonly DashboardToolWithUsage[],
 ): readonly DashboardToolWithUsage[] {
   const orderedTools = selectedTool === "all" ? currentTools : unscopedTools;
-  return orderedTools.filter((tool) => tool.tokens > 0);
+  return orderedTools.filter(
+    (tool) =>
+      tool.tokens > 0 || tool.events > 0 || (tool.sessionCount ?? 0) > 0,
+  );
 }

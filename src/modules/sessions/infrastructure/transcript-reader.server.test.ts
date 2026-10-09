@@ -951,6 +951,238 @@ test("WorkBuddy: extracts user/assistant text from the conversation jsonl", asyn
   });
 });
 
+test("Doubao Work: extracts conversational trajectory records and skips tool output", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "doubao-s300-aaaaaaaa";
+    const trajectoryDirectory = join(
+      home,
+      "Library",
+      "Application Support",
+      "DoubaoWork",
+      "Default",
+      ".doubaowork",
+      "agent_mode",
+      "workspace",
+      ".sessions",
+      sessionId,
+      "agents",
+      "main",
+      "system",
+    );
+    await mkdir(trajectoryDirectory, { recursive: true });
+    await writeFile(
+      join(trajectoryDirectory, "trajectory.jsonl"),
+      [
+        {
+          role: "user",
+          content: "修复登录问题",
+          timestamp: "2026-09-09T04:50:15.000Z",
+        },
+        {
+          role: "assistant",
+          content: "我先检查登录流程。",
+          timestamp: "2026-09-09T04:50:16.000Z",
+        },
+        {
+          role: "tool",
+          content: "工具输出不应展示",
+          timestamp: "2026-09-09T04:50:17.000Z",
+        },
+        {
+          role: "assistant",
+          content: "登录流程已修复。",
+          timestamp: "2026-09-09T04:50:18.000Z",
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join("\n") + "\n",
+    );
+
+    const before = await snapshotTree(home);
+    const transcript = await loadSessionTranscript(
+      { source: "doubao-work", sessionId },
+      {
+        homeDirectory: home,
+        platform: "darwin",
+      },
+    );
+    const after = await snapshotTree(home);
+
+    assert.equal(transcript.source, "doubao-work");
+    assert.deepEqual(
+      transcript.messages.map((message) => [message.role, message.text]),
+      [
+        ["user", "修复登录问题"],
+        ["assistant", "我先检查登录流程。"],
+        ["assistant", "登录流程已修复。"],
+      ],
+    );
+    assert.deepEqual(after, before);
+  });
+});
+
+test("Kimi Work: extracts context messages from wire.jsonl", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "kimi-s300-aaaaaaaa";
+    const wireDirectory = join(
+      home,
+      "Library",
+      "Application Support",
+      "kimi-desktop",
+      "daimon-share",
+      "daimon",
+      "runtime",
+      "kimi-code",
+      "home",
+      "sessions",
+      "workspace",
+      sessionId,
+      "agents",
+      "main",
+    );
+    await mkdir(wireDirectory, { recursive: true });
+    await writeFile(
+      join(wireDirectory, "wire.jsonl"),
+      [
+        {
+          type: "context.append_message",
+          time: "2026-09-09T04:50:15.000Z",
+          message: { role: "user", content: "修复 Kimi 登录问题" },
+        },
+        {
+          type: "tool.result",
+          time: "2026-09-09T04:50:16.000Z",
+          message: { role: "tool", content: "工具输出" },
+        },
+        {
+          type: "context.append_message",
+          time: "2026-09-09T04:50:17.000Z",
+          message: { role: "assistant", content: "已修复。" },
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join("\n") + "\n",
+    );
+
+    const transcript = await loadSessionTranscript(
+      { source: "kimi-work", sessionId },
+      { homeDirectory: home, platform: "darwin" },
+    );
+    assert.deepEqual(
+      transcript.messages.map((message) => [message.role, message.text]),
+      [
+        ["user", "修复 Kimi 登录问题"],
+        ["assistant", "已修复。"],
+      ],
+    );
+  });
+});
+
+test("Marvis: extracts user/assistant messages from the local database", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "marvis-s300-aaaaaaaa";
+    const databaseDirectory = join(
+      home,
+      "Library",
+      "Application Support",
+      "com.tencent.mac.marvis",
+      "MarvisData",
+      "User",
+      "test-user",
+      "database",
+    );
+    await mkdir(databaseDirectory, { recursive: true });
+    const database = new NodeSqliteDatabase({
+      path: join(databaseDirectory, "data.db"),
+    });
+    try {
+      database.exec(`
+        CREATE TABLE messages (
+          message_id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          content TEXT,
+          message_seq INTEGER NOT NULL,
+          created_at TEXT NOT NULL
+        );
+      `);
+      const insert = database.prepare(
+        `INSERT INTO messages
+         (message_id, conversation_id, role, content, message_seq, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      );
+      insert.run(
+        "m1",
+        sessionId,
+        "user",
+        "查看登录问题",
+        1,
+        "2026-09-09T04:50:15Z",
+      );
+      insert.run(
+        "m2",
+        sessionId,
+        "assistant",
+        "登录问题已修复",
+        2,
+        "2026-09-09T04:50:16Z",
+      );
+      insert.run(
+        "m3",
+        sessionId,
+        "tool",
+        "工具输出",
+        3,
+        "2026-09-09T04:50:17Z",
+      );
+    } finally {
+      database.close();
+    }
+
+    const transcript = await loadSessionTranscript(
+      { source: "marvis", sessionId },
+      { homeDirectory: home, platform: "darwin" },
+    );
+    assert.deepEqual(
+      transcript.messages.map((message) => [message.role, message.text]),
+      [
+        ["user", "查看登录问题"],
+        ["assistant", "登录问题已修复"],
+      ],
+    );
+  });
+});
+
+test("QCode: extracts messages from sibling session JSONL", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "qcode-s300-aaaaaaaa";
+    await mkdir(join(home, ".q-code"), { recursive: true });
+    await mkdir(join(home, "sessions"), { recursive: true });
+    await writeFile(
+      join(home, "sessions", `${sessionId}.jsonl`),
+      [
+        { sessionId, role: "user", content: "检查 QCode 会话" },
+        { sessionId, role: "assistant", content: "已检查。" },
+        { sessionId, role: "tool", content: "工具输出" },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join("\n") + "\n",
+    );
+
+    const transcript = await loadSessionTranscript(
+      { source: "qcode", sessionId },
+      { homeDirectory: home, platform: "darwin" },
+    );
+    assert.deepEqual(
+      transcript.messages.map((message) => [message.role, message.text]),
+      [
+        ["user", "检查 QCode 会话"],
+        ["assistant", "已检查。"],
+      ],
+    );
+  });
+});
+
 test("ZCode: extracts ordered user/assistant text and reasoning from db.sqlite", async () => {
   await withTempHome(async (home) => {
     const sessionId = "sess-zcode-s300-aaaaaaaa";

@@ -92,6 +92,7 @@ export const skills = {
     uninstallAll: "全コピーをアンインストール",
     addMonitorDir: "監視ディレクトリを追加",
     goMarket: "セキュリティマーケットを見る",
+    exportAll: "すべての Skill をエクスポート",
     block: "ブラックリストに追加",
     unblock: "ブラックリストから除外",
   },
@@ -100,6 +101,7 @@ export const skills = {
     selectedCount: "{count} 件を選択中",
     totalCount: "合計 {count} 件の Skill",
     sync: "同期",
+    export: "選択 ({count}) をエクスポート",
     scan: "スキャン",
     uninstall: "アンインストール",
     clearSelection: "キャンセル",
@@ -421,5 +423,8 @@ export const skills = {
       "同期完了: 成功 {succeeded} 件 / スキップ {skipped} 件 / 失敗 {failed} 件",
     syncFailed: "同期に失敗しました",
     exportedTo: "{path} にエクスポートしました",
+    exported: "{count} 個の Skill を {folder} にエクスポートしました",
+    exportUnavailable:
+      "この環境では Skill フォルダーのエクスポートを利用できません",
   },
 } as const;

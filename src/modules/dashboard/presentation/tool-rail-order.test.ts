@@ -36,10 +36,11 @@ test("uses the current usage order for the all-tools view", () => {
   );
 });
 
-test("hides tools without token usage in the active window", () => {
+test("hides detected dormant tools from the overview rail", () => {
   const tools = [
     { ...tool("codex"), tokens: 100 },
-    { ...tool("claude-code"), tokens: 0 },
+    { ...tool("claude-code"), tokens: 0, detected: true, sessionCount: 0 },
+    { ...tool("cursor"), tokens: 0, detected: false, events: 0 },
   ];
 
   assert.deepEqual(
@@ -48,11 +49,26 @@ test("hides tools without token usage in the active window", () => {
   );
 });
 
-test("resets a selected tool when the next window has no token usage", () => {
-  const tools = [{ ...tool("codex"), tokens: 0 }];
+test("resets a selected tool when it is neither detected nor observed", () => {
+  const tools = [{ ...tool("codex"), tokens: 0, events: 0, detected: false }];
 
   assert.equal(resolveDashboardSelectedTool("codex", tools), "all");
   assert.equal(resolveDashboardSelectedTool("all", tools), "all");
+});
+
+test("keeps a session-active tool selected even without token usage", () => {
+  assert.equal(
+    resolveDashboardSelectedTool("codex", [
+      {
+        ...tool("codex"),
+        tokens: 0,
+        events: 0,
+        detected: false,
+        sessionCount: 1,
+      },
+    ]),
+    "codex",
+  );
 });
 
 test("keeps a selected tool when it has usage in the next window", () => {

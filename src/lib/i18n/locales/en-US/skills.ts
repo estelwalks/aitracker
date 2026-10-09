@@ -91,6 +91,7 @@ export const skills = {
     uninstallAll: "Uninstall all copies",
     addMonitorDir: "Add monitor directory",
     goMarket: "Browse the Security Market",
+    exportAll: "Export all Skills",
     block: "Add to blacklist",
     unblock: "Remove from blacklist",
   },
@@ -99,6 +100,7 @@ export const skills = {
     selectedCount: "{count} selected",
     totalCount: "{count} Skills total",
     sync: "Sync",
+    export: "Export selected ({count})",
     scan: "Scan",
     uninstall: "Uninstall",
     clearSelection: "Cancel",
@@ -418,5 +420,7 @@ export const skills = {
       "Sync complete: {succeeded} succeeded / {skipped} skipped / {failed} failed",
     syncFailed: "Sync failed",
     exportedTo: "Exported to {path}",
+    exported: "Exported {count} Skills to folder {folder}",
+    exportUnavailable: "Skill folder export is unavailable in this environment",
   },
 } as const;

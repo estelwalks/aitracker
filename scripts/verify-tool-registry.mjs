@@ -69,7 +69,7 @@ const count = (cap, mode) =>
 const visible = tools.filter((d) => d.catalogVisible !== false).length;
 console.log("[registry] compiled tools:       " + tools.length);
 console.log("[registry]   visible:           " + visible);
-console.log("[registry]   legacy hidden:     " + (tools.length - visible));
+console.log("[registry]   hidden:            " + (tools.length - visible));
 console.log(`[registry]   usage native:       ${count("usage", "native")}`);
 console.log(`[registry]   usage adapter:      ${count("usage", "adapter")}`);
 console.log(

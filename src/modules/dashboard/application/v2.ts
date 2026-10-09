@@ -111,6 +111,22 @@ function localDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function sessionCountsForRange(
+  snapshot: DashboardV2Snapshot,
+  from: string | null,
+  to: string | null,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  if (!snapshot.sessions.available || from == null || to == null) {
+    return counts;
+  }
+  for (const row of snapshot.sessions.bySourceDay) {
+    if (row.date < from || row.date > to) continue;
+    counts.set(row.source, (counts.get(row.source) ?? 0) + row.count);
+  }
+  return counts;
+}
+
 function daily(events: readonly DashboardV2Event[]): DashboardV2TrendPoint[] {
   const rows = new Map<
     string,
@@ -675,6 +691,7 @@ export function createDashboardV2View(
       )
     : [];
   const previousTotals = totalsFor(previousEvents);
+  const sessionCounts = sessionCountsForRange(snapshot, range.from, range.to);
   const localCost = estimateUsageCost(
     events.map(({ context: _context, ...event }) => event),
   );
@@ -692,19 +709,25 @@ export function createDashboardV2View(
         ...tool,
         tokens: usage?.tokens ?? 0,
         events: usage?.events ?? 0,
+        sessionCount: sessionCounts.get(tool.id) ?? 0,
       };
     })
-    .filter((tool) => tool.detected || tool.events > 0)
+    .filter(
+      (tool) =>
+        tool.detected || tool.events > 0 || (tool.sessionCount ?? 0) > 0,
+    )
     .sort(
       (left, right) =>
         right.tokens - left.tokens ||
         right.events - left.events ||
+        (right.sessionCount ?? 0) - (left.sessionCount ?? 0) ||
         left.name.localeCompare(right.name) ||
         left.id.localeCompare(right.id),
     );
-  // A known-but-currently-empty source is intentionally not promoted into a
-  // tool card. This avoids presenting catalog availability as activity.
-  const activeTools = tools.filter((tool) => tool.events > 0).length;
+  const activeTools = tools.filter(
+    (tool) =>
+      tool.tokens > 0 || tool.events > 0 || (tool.sessionCount ?? 0) > 0,
+  ).length;
   const observedTrend = daily(events);
   const trend = completeDailyRange(observedTrend, range);
   const previousTrend = previousRange

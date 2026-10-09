@@ -25,6 +25,7 @@ import {
   DashboardToolSwitcher,
   DashboardTrustHero,
 } from "./dashboard-v2-sections.tsx";
+import { hasTokenStats } from "./dashboard-token-stats.ts";
 import {
   resolveDashboardSelectedTool,
   resolveDashboardToolRailTools,
@@ -214,6 +215,7 @@ export function DashboardV2Page({
     () => windowToView(windowView, data),
     [data, windowView],
   );
+  const tokenStatsAvailable = hasTokenStats(view);
   const sessionsUnavailable = view.sessions == null;
   const today = useMemo(() => windowToView(data.windows.today, data), [data]);
   const hero = data.hero;
@@ -310,8 +312,11 @@ export function DashboardV2Page({
             {t("dashboard.v2.overviewLabel")}
           </span>
           <span className="aitracker-num truncate font-mono text-[12px] text-muted-foreground">
-            {format.formatTokens(view.totals.totalTokens)} tokens ·{" "}
-            {view.estimatedCostUsd == null
+            {tokenStatsAvailable
+              ? `${format.formatTokens(view.totals.totalTokens)} tokens`
+              : t("dashboard.v2.outputUnavailableHint")}{" "}
+            ·{" "}
+            {!tokenStatsAvailable || view.estimatedCostUsd == null
               ? t("dashboard.kpi.unavailable")
               : format.formatUsd(view.estimatedCostUsd)}{" "}
             ·{" "}
@@ -374,6 +379,7 @@ export function DashboardV2Page({
         focusFrom={focusRange.fromDate}
         focusTo={focusRange.toDate}
         periodLabel={rangeLabel}
+        tokenStatsAvailable={hasTokenStats(view)}
       />
       {/* The workstream panel appears only for a picked tool (reference:
           `agent !== "全部"`), not for the all-tools overview. */}

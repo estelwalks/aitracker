@@ -1,7 +1,7 @@
 /**
  * F6-T2: the usage source universe is projected from the public manifest —
- * every catalog tool id, plus legacy-marked ids, deduped. No hardcoded source
- * list may live in this module.
+ * every visible catalog tool id, plus legacy-marked ids, deduped. Hidden
+ * definitions stay out of the usage-source universe.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -16,7 +16,7 @@ describe("KNOWN_LOCAL_USAGE_SOURCES projection (F6-T2)", () => {
     assert.equal(new Set(KNOWN_LOCAL_USAGE_SOURCES).size, manifestIds.length);
   });
 
-  test("legacy-marked sources are included (aipy/cline present once)", () => {
+  test("legacy-marked public sources are included once", () => {
     const legacyIds = PUBLIC_TOOL_MANIFEST.tools
       .filter((tool) => tool.legacy === true)
       .map((tool) => tool.id);

@@ -28,7 +28,11 @@ import { getDashboardAIInsightService } from "./ai-insight.server.ts";
 import type { DashboardProjectClassification } from "./project-classification.server.ts";
 import { safeProjectLabel } from "../../platform/database/snapshot-generation.server.ts";
 
-const SESSION_SOURCE_IDS = new Set(["claude-code", "codex", "grok", "dsh"]);
+const SESSION_SOURCE_IDS = new Set(
+  PUBLIC_TOOL_MANIFEST.tools
+    .filter((tool) => tool.capabilities.sessions !== "unsupported")
+    .map((tool) => tool.id),
+);
 const SESSION_REFRESH_GRACE_MS = 30_000;
 
 /** Refresh a valid snapshot when usage already contains a newly supported
@@ -52,6 +56,39 @@ export function shouldRefreshDashboardSessions(input: {
     !Number.isFinite(generatedMs) ||
     (input.nowMs ?? Date.now()) - generatedMs >= SESSION_REFRESH_GRACE_MS
   );
+}
+
+/**
+ * A session refresh can observe a newly used tool before the five-minute
+ * usage snapshot expires. Refresh usage in that case so session activity and
+ * token consumption do not visibly diverge on the dashboard.
+ */
+export function shouldRefreshDashboardUsageForSessionActivity(input: {
+  readonly status: "empty" | "fresh" | "stale" | "refreshing" | "failed";
+  readonly usageGeneratedAt: string | null;
+  readonly sessionGeneratedAt: string | null;
+  readonly sessionSources: readonly string[];
+  readonly usageSupportedSources: readonly string[];
+  readonly nowMs?: number;
+}): boolean {
+  if (input.status === "stale" || input.status === "failed") return true;
+  if (input.status === "empty" || input.status === "refreshing") return false;
+  if (
+    !input.sessionSources.some((source) =>
+      input.usageSupportedSources.includes(source),
+    )
+  ) {
+    return false;
+  }
+  const usageMs = input.usageGeneratedAt
+    ? Date.parse(input.usageGeneratedAt)
+    : NaN;
+  const sessionMs = input.sessionGeneratedAt
+    ? Date.parse(input.sessionGeneratedAt)
+    : NaN;
+  if (!Number.isFinite(sessionMs)) return false;
+  if (!Number.isFinite(usageMs)) return true;
+  return sessionMs - usageMs >= SESSION_REFRESH_GRACE_MS;
 }
 
 /** Schedule session repair without making a dashboard query wait for I/O. */
@@ -101,6 +138,7 @@ export function aggregateDashboardProjectSessions(
     projectRef?: string | null;
     source: string;
     startedAt: string;
+    endedAt?: string;
     turns: number;
     editTurns: number;
     subagentCalls: number;
@@ -115,7 +153,8 @@ export function aggregateDashboardProjectSessions(
     { count: number; turns: number; editTurns: number; subagentCalls: number }
   >();
   for (const session of sessions) {
-    const date = localDateKey(session.startedAt);
+    const date =
+      localDateKey(session.endedAt ?? "") ?? localDateKey(session.startedAt);
     if (date == null) continue;
     // Use the same final-segment projection as usage events. Codex session
     // projectKey can be a display fallback while projectRef carries the
@@ -175,17 +214,38 @@ export function aggregateDashboardSourceSessions(
   sessions: readonly {
     source: string;
     startedAt: string;
+    endedAt?: string;
     turns: number;
     editTurns: number;
     subagentCalls: number;
+    totals?: {
+      inputTokens: number;
+      cachedInputTokens: number;
+      cacheCreationInputTokens: number;
+      outputTokens: number;
+      reasoningOutputTokens: number;
+      totalTokens: number;
+    };
   }[],
 ) {
   const counts = new Map<
     string,
-    { count: number; turns: number; editTurns: number; subagentCalls: number }
+    {
+      count: number;
+      turns: number;
+      editTurns: number;
+      subagentCalls: number;
+      inputTokens: number;
+      cachedInputTokens: number;
+      cacheCreationInputTokens: number;
+      outputTokens: number;
+      reasoningOutputTokens: number;
+      totalTokens: number;
+    }
   >();
   for (const session of sessions) {
-    const date = localDateKey(session.startedAt);
+    const date =
+      localDateKey(session.endedAt ?? "") ?? localDateKey(session.startedAt);
     if (date == null) continue;
     const key = `${session.source}\u0000${date}`;
     const current = counts.get(key) ?? {
@@ -193,23 +253,95 @@ export function aggregateDashboardSourceSessions(
       turns: 0,
       editTurns: 0,
       subagentCalls: 0,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 0,
     };
     current.count += 1;
     current.turns += session.turns;
     current.editTurns += session.editTurns;
     current.subagentCalls += session.subagentCalls;
+    current.inputTokens += session.totals?.inputTokens ?? 0;
+    current.cachedInputTokens += session.totals?.cachedInputTokens ?? 0;
+    current.cacheCreationInputTokens +=
+      session.totals?.cacheCreationInputTokens ?? 0;
+    current.outputTokens += session.totals?.outputTokens ?? 0;
+    current.reasoningOutputTokens += session.totals?.reasoningOutputTokens ?? 0;
+    current.totalTokens += session.totals?.totalTokens ?? 0;
     counts.set(key, current);
   }
   return [...counts.entries()]
     .map(([key, aggregate]) => {
       const [source, date] = key.split("\u0000");
-      return { source: source!, date: date!, ...aggregate };
+      const {
+        inputTokens,
+        cachedInputTokens,
+        cacheCreationInputTokens,
+        outputTokens,
+        reasoningOutputTokens,
+        totalTokens,
+        ...workflow
+      } = aggregate;
+      return {
+        source: source!,
+        date: date!,
+        ...workflow,
+        ...(totalTokens > 0
+          ? {
+              inputTokens,
+              cachedInputTokens,
+              cacheCreationInputTokens,
+              outputTokens,
+              reasoningOutputTokens,
+              totalTokens,
+            }
+          : {}),
+      };
     })
     .sort(
       (left, right) =>
         left.source.localeCompare(right.source) ||
         left.date.localeCompare(right.date),
     );
+}
+
+function sessionTokenFallbackEvents(
+  snapshot: DashboardUsageSnapshot,
+  sessions: import("./contracts.ts").DashboardSessionsSummary,
+): DashboardUsageEvent[] {
+  const usageDays = new Set(
+    snapshot.details.flatMap((event) => {
+      const date = localDateKey(event.timestamp);
+      return date == null ? [] : [`${event.source}\u0000${date}`];
+    }),
+  );
+  return sessions.bySourceDay.flatMap((row) => {
+    if (row.totalTokens == null || row.totalTokens <= 0) return [];
+    const key = `${row.source}\u0000${row.date}`;
+    // The real usage reader is authoritative whenever it already produced a
+    // row for this source/day. Session totals fill only the missing source/day
+    // so the same work is never counted twice.
+    if (usageDays.has(key)) return [];
+    return [
+      {
+        source: row.source as DashboardUsageEvent["source"],
+        timestamp: `${row.date}T12:00:00`,
+        model: "unknown",
+        project: "unknown",
+        projectKind: "unknown" as const,
+        inputTokens: row.inputTokens ?? 0,
+        cachedInputTokens: row.cachedInputTokens ?? 0,
+        cacheCreationInputTokens: row.cacheCreationInputTokens ?? 0,
+        outputTokens: row.outputTokens ?? 0,
+        reasoningOutputTokens: row.reasoningOutputTokens ?? 0,
+        totalTokens: row.totalTokens,
+        eventCount: row.count,
+      },
+    ];
+  });
 }
 
 function toDashboardEvent(
@@ -494,6 +626,10 @@ export function toDashboardV2Snapshot(input: {
    */
   readonly outputAvailability: DashboardV2OutputAvailability;
 }): DashboardV2Snapshot {
+  const fallbackEvents = sessionTokenFallbackEvents(
+    input.snapshot,
+    input.sessions,
+  );
   const sourceStatus = new Map(
     input.snapshot.sources.map((source) => [source.source, source]),
   );
@@ -523,7 +659,7 @@ export function toDashboardV2Snapshot(input: {
     sessions: input.sessions,
     pricingAvailable: input.pricingAvailable,
     outputAvailability: input.outputAvailability,
-    events: input.snapshot.details.map((event) => ({
+    events: [...input.snapshot.details, ...fallbackEvents].map((event) => ({
       source: event.source,
       timestamp: event.timestamp,
       model: event.model,
@@ -789,6 +925,20 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
       sessionLatest.data?.sessions.map((session) => session.source) ?? [],
     ),
   ];
+  const usageSupportedSources = PUBLIC_TOOL_MANIFEST.tools
+    .filter((tool) => tool.capabilities.usage !== "unsupported")
+    .map((tool) => tool.id);
+  if (
+    shouldRefreshDashboardUsageForSessionActivity({
+      status: latest.status,
+      usageGeneratedAt: latest.generatedAt,
+      sessionGeneratedAt: sessionLatest.generatedAt,
+      sessionSources,
+      usageSupportedSources,
+    })
+  ) {
+    void usageSnapshot.requestRefresh({ reason: "event" }).catch(() => {});
+  }
   if (
     shouldRefreshDashboardSessions({
       status: sessionLatest.status,

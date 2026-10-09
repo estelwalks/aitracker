@@ -1,7 +1,7 @@
-import { SKILL_AGENTS } from "./agent-rules.ts";
+import { SKILL_AGENTS, WRITABLE_SKILL_AGENTS } from "./agent-rules.ts";
 import type { MessageKey } from "../i18n/messages";
 
-export { SKILL_AGENTS };
+export { SKILL_AGENTS, WRITABLE_SKILL_AGENTS };
 
 export type SkillAgent = (typeof SKILL_AGENTS)[number];
 export type SkillUpdateStatus = "current" | "available" | "unknown";

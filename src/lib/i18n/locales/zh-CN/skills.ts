@@ -86,6 +86,7 @@ export const skills = {
     uninstallAll: "卸载全部副本",
     addMonitorDir: "添加监控目录",
     goMarket: "去安全市场看看",
+    exportAll: "导出全部 Skill",
     block: "加入黑名单",
     unblock: "移出黑名单",
   },
@@ -94,6 +95,7 @@ export const skills = {
     selectedCount: "已选 {count} 项",
     totalCount: "共 {count} 个 Skill",
     sync: "同步",
+    export: "导出已选 ({count})",
     scan: "扫描",
     uninstall: "卸载",
     clearSelection: "取消",
@@ -402,5 +404,7 @@ export const skills = {
       "同步完成：成功 {succeeded} 条 / 跳过 {skipped} 条 / 失败 {failed} 条",
     syncFailed: "同步失败",
     exportedTo: "已导出到 {path}",
+    exported: "已导出 {count} 个 Skill 到文件夹 {folder}",
+    exportUnavailable: "当前环境不支持导出 Skill 文件夹",
   },
 } as const;

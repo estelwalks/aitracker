@@ -7,26 +7,38 @@ import {
   BASELINE_USAGE_PARSING,
 } from "./__baseline__/baseline.ts";
 
+/** User-added extension tools that stay visible in the public catalog. */
+const VISIBLE_EXTENSION_IDS = ["cline"];
+
 /**
- * User-added extension tools (aipy/cline): real usage sources that the user
- * added beyond the 27-tool product catalog and wants displayed like any other
- * tool (catalogVisible=true, no longer legacy-hidden).
+ * Known-but-unverified sources are retained in the server registry but hidden
+ * from product navigation until a TokenTracker-aligned data contract exists.
  */
-const EXTENSION_IDS = ["aipy", "cline"];
+const HIDDEN_SOURCE_IDS = [
+  "aipy",
+  "qwen",
+  "proma",
+  "cherrystudio",
+  "doubao-work",
+  "kimi-work",
+  "qcode",
+  "marvis",
+  "trae-work",
+];
 
 test("the registry compiles all built-in tool definitions with no diagnostics", () => {
   const registry = getDefaultRegistry();
   const errors = registry.diagnostics.filter((d) => d.severity === "error");
   assert.deepEqual(errors, []);
-  assert.equal(registry.definitions.length, 36);
+  assert.equal(registry.definitions.length, 46);
 });
 
 test("registry tools match the frozen baseline (TC-REG-001)", () => {
   const registry = getDefaultRegistry();
-  // All built-in tools are visible now (aipy/cline are user extensions, not hidden).
+  // Only TokenTracker-aligned tools are visible in the public catalog.
   assert.equal(
     registry.definitions.filter((def) => def.catalogVisible !== false).length,
-    36,
+    37,
   );
   // The frozen 27-tool baseline matches the first 27 definitions in order.
   const ids = registry.definitions.map((def) => def.id);
@@ -58,11 +70,16 @@ test("registry tools match the frozen baseline (TC-REG-001)", () => {
       );
     }
   }
-  // The user extension tools are present and visible.
-  for (const id of EXTENSION_IDS) {
+  // Visible extension tools are present in the browser catalog.
+  for (const id of VISIBLE_EXTENSION_IDS) {
     const def = registry.byId.get(id);
-    assert.ok(def, `extension tool "${id}" missing from registry`);
+    assert.ok(def, `visible extension tool "${id}" missing from registry`);
     assert.notEqual(def?.catalogVisible, false);
+  }
+  for (const id of HIDDEN_SOURCE_IDS) {
+    const def = registry.byId.get(id);
+    assert.ok(def, `hidden source "${id}" missing from registry`);
+    assert.equal(def?.catalogVisible, false);
   }
 });
 
@@ -78,6 +95,11 @@ test("each config id equals its filename stem", () => {
   assert.equal(ids[27], "dsh");
   assert.ok(ids.includes("qwen"));
   assert.ok(ids.includes("cherrystudio"));
+  assert.ok(ids.includes("qoder"));
+  assert.ok(ids.includes("omo"));
+  assert.ok(ids.includes("prime-agent"));
+  assert.ok(ids.includes("minimax-code"));
+  assert.ok(ids.includes("acode"));
 });
 
 test("skill/market/usage capabilities match the frozen baseline sets", () => {
@@ -99,6 +121,9 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     // Deliberate post-baseline addition: ZCode discovers user skills under
     // ~/.zcode/skills (SKILL.md format) and is a market install target.
     "zcode",
+    "doubao-work",
+    "qcode",
+    "acode",
   ];
   // Native readers plus registry-declared generic adapters are supported.
   const BASELINE_USAGE_NATIVE = new Set([
@@ -125,6 +150,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     // Deliberate post-baseline addition (TokenTracker-sourced): Every Code
     // shares the Codex rollout family (~/.code/sessions rollout-*.jsonl).
     "every-code",
+    "acode",
     // Deliberate post-baseline addition (TokenTracker-sourced): Kilo Code
     // tasks ui_messages.json (Cline family) native reader.
     "kilocode",
@@ -162,16 +188,34 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     // Deliberate post-baseline addition (TokenTracker-sourced): Mimo Code
     // gained a generic-sqlite usage adapter over its mimocode.db messages.
     "mimo",
+    "kilo-cli",
+    "qoder",
+    "omo",
+    "prime-agent",
+    "minimax-code",
     // Deliberate post-baseline addition (TokenTracker-sourced): Craft Agents
     // exposes session-header cumulative snapshots via generic-jsonl.
     "craft",
+    "kimi-work",
+    "qcode",
+    "marvis",
   ]);
-  const BASELINE_SESSIONS_RESUME = new Set(["claude-code", "codex", "grok"]);
+  const READ_ONLY_SKILL_IDS = new Set(["kimi-work", "marvis", "trae-work"]);
+  const BASELINE_SESSIONS_RESUME = new Set([
+    "claude-code",
+    "codex",
+    "grok",
+    "qcode",
+  ]);
   for (const def of registry.definitions) {
     const isSkill = BASELINE_SKILL_IDS.includes(def.id);
     assert.equal(
       def.capabilities.skills.mode,
-      isSkill ? "read-write" : "unsupported",
+      isSkill
+        ? "read-write"
+        : READ_ONLY_SKILL_IDS.has(def.id)
+          ? "read"
+          : "unsupported",
     );
     assert.equal(
       def.capabilities.market.mode,
@@ -199,9 +243,14 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
           def.id === "aipy" ||
             def.id === "pi" ||
             def.id === "omp" ||
+            def.id === "omo" ||
             def.id === "hermes" ||
             def.id === "workbuddy" ||
             def.id === "zcode" ||
+            def.id === "doubao-work" ||
+            def.id === "kimi-work" ||
+            def.id === "marvis" ||
+            def.id === "trae-work" ||
             def.id === "dsh"
           ? "read"
           : "unsupported",
@@ -212,16 +261,24 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
 
 test("public manifest mirrors all visible tools", () => {
   const registry = getDefaultRegistry();
-  assert.equal(registry.publicManifest.tools.length, 36);
+  assert.equal(registry.publicManifest.tools.length, 37);
   assert.deepEqual(
     registry.publicManifest.tools.map((t) => t.id),
-    registry.definitions.map((d) => d.id),
+    registry.definitions
+      .filter((d) => d.catalogVisible !== false)
+      .map((d) => d.id),
   );
-  // User extension tools appear in the browser-safe manifest too.
-  for (const id of EXTENSION_IDS) {
+  // Visible extension tools appear in the browser-safe manifest too.
+  for (const id of VISIBLE_EXTENSION_IDS) {
     assert.ok(
       registry.publicManifest.tools.some((t) => t.id === id),
-      `extension tool "${id}" missing from public manifest`,
+      `visible extension tool "${id}" missing from public manifest`,
+    );
+  }
+  for (const id of HIDDEN_SOURCE_IDS) {
+    assert.ok(
+      !registry.publicManifest.tools.some((t) => t.id === id),
+      `hidden source "${id}" leaked into public manifest`,
     );
   }
 });

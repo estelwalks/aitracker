@@ -1,0 +1,77 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "minimax-code",
+  "display": {
+    "name": "MiniMax Code",
+    "nameZh": "MiniMax Code",
+    "icon": "other",
+    "color": "#2563eb"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "supported"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".minimax"
+      },
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".minimax/v2/sessions"
+      }
+    ]
+  },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "home",
+        "path": ".minimax"
+      }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter",
+      "reader": "generic-jsonl",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".minimax/v2/sessions",
+          "glob": "**/messages.jsonl",
+          "format": "jsonl"
+        }
+      ],
+      "mapping": {
+        "timestamp": ["message.timestamp", "timestamp"],
+        "sessionId": ["session_id", "sessionId", "message.session_id", "message_id"],
+        "model": ["message.model", "model"],
+        "project": ["cwd", "message.cwd"],
+        "inputTokens": ["message.usage.input", "message.usage.inputTokens"],
+        "cachedInputTokens": ["message.usage.cacheRead", "message.usage.cachedInputTokens"],
+        "cacheCreationInputTokens": ["message.usage.cacheWrite", "message.usage.cacheCreationInputTokens"],
+        "outputTokens": ["message.usage.output", "message.usage.outputTokens"],
+        "reasoningOutputTokens": ["message.usage.reasoningTokens"],
+        "totalTokens": ["message.usage.totalTokens"]
+      },
+      "maxFileSizeBytes": 67108864
+    },
+    "skills": "unsupported",
+    "agents": "unsupported",
+    "sessions": { "mode": "unsupported" },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model",
+    "tokenSemantics": {
+      "reasoningIncludedInOutput": false
+    }
+  }
+}

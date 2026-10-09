@@ -16,8 +16,8 @@ const EXPECTED_SKILL_LABELS = [
   "WorkBuddy",
   "OpenClaw",
   "Antigravity",
-  "AiPy",
   "ZCode",
+  "AStudio",
 ] as const;
 
 const EXPECTED_SKILL_TOOL_IDS = [
@@ -31,15 +31,15 @@ const EXPECTED_SKILL_TOOL_IDS = [
   "workbuddy",
   "openclaw",
   "antigravity",
-  "aipy",
   "zcode",
+  "acode",
 ] as const;
 
 test("AI_TOOLS catalogs all built-in tools with stable ids", () => {
-  assert.equal(AI_TOOLS.length, 36);
-  assert.equal(AI_TOOL_IDS.length, 36);
+  assert.equal(AI_TOOLS.length, 37);
+  assert.equal(AI_TOOL_IDS.length, 37);
   // ids are unique, lowercase-kebab.
-  assert.equal(new Set(AI_TOOL_IDS).size, 36);
+  assert.equal(new Set(AI_TOOL_IDS).size, 37);
   for (const id of AI_TOOL_IDS) {
     assert.match(id, /^[a-z][a-z0-9-]*$/u);
   }

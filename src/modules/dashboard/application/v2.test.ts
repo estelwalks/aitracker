@@ -414,6 +414,54 @@ test("Dashboard V2 preserves catalog detection while keeping activity range-spec
   );
 });
 
+test("Dashboard V2 treats sessions as interval activity when usage tokens are unavailable", () => {
+  const view = createDashboardV2View(
+    {
+      ...snapshot,
+      tools: [
+        ...snapshot.tools,
+        {
+          id: "doubao-work",
+          name: "Doubao Work",
+          available: false,
+          detected: false,
+          usageSupport: "unsupported",
+        },
+      ],
+      sessions: {
+        ...snapshot.sessions,
+        bySourceDay: [
+          ...snapshot.sessions.bySourceDay,
+          {
+            source: "doubao-work",
+            date: "2026-08-10",
+            count: 2,
+            ...emptyWorkflow,
+          },
+        ],
+      },
+    },
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.activeTools, 2);
+  assert.deepEqual(
+    view.tools.find((tool) => tool.id === "doubao-work"),
+    {
+      id: "doubao-work",
+      name: "Doubao Work",
+      available: false,
+      detected: false,
+      usageSupport: "unsupported",
+      tokens: 0,
+      events: 0,
+      sessionCount: 2,
+    },
+  );
+});
+
 test("Dashboard V2 derives safe previous-window, model and project aggregates", () => {
   const event = (
     timestamp: string,

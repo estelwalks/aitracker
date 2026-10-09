@@ -12,6 +12,7 @@ import {
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import type { DashboardV2View } from "../contracts.ts";
 import { DashboardDeltaChip } from "./dashboard-v2-sections.tsx";
+import { hasTokenStats } from "./dashboard-token-stats.ts";
 
 /**
  * P6-T6-05: trend chart section, split into its own module so Recharts is
@@ -34,6 +35,7 @@ export function DashboardTrendPanel({
     points[0],
   );
   const avgCache = view.cacheRate;
+  const tokenStatsAvailable = hasTokenStats(view);
   return (
     <section className="dashboard-panel">
       <div className="dashboard-panel-head">
@@ -41,17 +43,27 @@ export function DashboardTrendPanel({
           <h2>{t("dashboard.v2.trendTitle")}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
             <span className="aitracker-num">
-              {t("dashboard.v2.dailyAverage", {
-                tokens: format.formatTokens(Math.round(avg)),
-              })}
+              {tokenStatsAvailable
+                ? t("dashboard.v2.dailyAverage", {
+                    tokens: format.formatTokens(Math.round(avg)),
+                  })
+                : t("dashboard.v2.outputUnavailableHint")}
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <DashboardDeltaChip value={view.comparison.tokens.deltaPercent} />
-              {view.comparison.tokens.deltaPercent != null && baselineLabel ? (
+              <DashboardDeltaChip
+                value={
+                  tokenStatsAvailable
+                    ? view.comparison.tokens.deltaPercent
+                    : null
+                }
+              />
+              {tokenStatsAvailable &&
+              view.comparison.tokens.deltaPercent != null &&
+              baselineLabel ? (
                 <span>{baselineLabel}</span>
               ) : null}
             </span>
-            {peak && (
+            {tokenStatsAvailable && peak && (
               <span className="aitracker-num">
                 {t("dashboard.v2.peakLabel", {
                   date: format.formatDate(`${peak.date}T00:00:00`, {
@@ -67,14 +79,16 @@ export function DashboardTrendPanel({
         </div>
         <span className="font-mono text-[10.5px] text-muted-foreground">
           {t("dashboard.v2.cacheLabel")}{" "}
-          {avgCache == null
+          {!tokenStatsAvailable || avgCache == null
             ? t("dashboard.kpi.unavailable")
             : format.formatPercent(Math.round(avgCache))}
         </span>
       </div>
-      {points.length === 0 ? (
+      {!tokenStatsAvailable || points.length === 0 ? (
         <p className="py-10 text-sm text-muted-foreground">
-          {t("dashboard.v2.noData")}
+          {tokenStatsAvailable
+            ? t("dashboard.v2.noData")
+            : t("dashboard.v2.outputUnavailableHint")}
         </p>
       ) : (
         <>

@@ -29,6 +29,11 @@
         "targets": ["linux"],
         "base": "configHome",
         "path": "QoderCN/SharedClientCache/cache/db/local.db"
+      },
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".qoder-cn/projects"
       }
     ]
   },
@@ -57,17 +62,31 @@
           "path": "QoderCN/SharedClientCache/cache/db",
           "glob": "local.db",
           "format": "sqlite"
+        },
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".qoder-cn/projects",
+          "glob": "**/*.jsonl",
+          "format": "jsonl"
         }
       ],
       "mapping": {
-        "timestamp": ["timestamp"],
-        "sessionId": ["sessionId"],
-        "model": ["model"],
-        "project": ["project"],
-        "inputTokens": ["inputTokens"],
-        "cachedInputTokens": ["cachedInputTokens"],
-        "cacheCreationInputTokens": ["cacheCreationInputTokens"],
-        "outputTokens": ["outputTokens"],
+        "timestamp": ["timestamp", "message.timestamp"],
+        "sessionId": ["sessionId", "session_id", "message.id", "uuid", "id"],
+        "model": ["model", "message.model"],
+        "project": ["project", "cwd"],
+        "inputTokens": ["inputTokens", "message.usage.input_tokens"],
+        "cachedInputTokens": [
+          "cachedInputTokens",
+          "message.usage.cache_read_input_tokens",
+          "message.usage.cached_tokens"
+        ],
+        "cacheCreationInputTokens": [
+          "cacheCreationInputTokens",
+          "message.usage.cache_creation_input_tokens"
+        ],
+        "outputTokens": ["outputTokens", "message.usage.output_tokens"],
         "reasoningOutputTokens": ["reasoningOutputTokens"]
       },
       "maxFileSizeBytes": 536870912,

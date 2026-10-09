@@ -65,5 +65,5 @@ export const AI_TOOLS: readonly AiTool[] = REGISTRY_TOOLS.map((def) => ({
   officialDownloadUrl: officialDownloadUrlFor(def.id),
 }));
 
-/** Stable lowercase-kebab ids for the 29 visible catalog tools (legacy sources excluded). */
+/** Stable lowercase-kebab ids for the visible public catalog tools. */
 export const AI_TOOL_IDS: readonly string[] = AI_TOOLS.map((tool) => tool.id);

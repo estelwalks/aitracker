@@ -1,0 +1,84 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "marvis",
+  "catalogVisible": false,
+  "display": {
+    "name": "Marvis",
+    "nameZh": "Marvis",
+    "icon": "other",
+    "color": "#22c55e"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "planned",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos"],
+        "base": "appData",
+        "path": "com.tencent.mac.marvis/MarvisData/User"
+      }
+    ]
+  },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "appData",
+        "path": "com.tencent.mac.marvis/MarvisData/User"
+      }
+    ],
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "appData",
+          "path": "com.tencent.mac.marvis/MarvisData/User"
+        }
+      ],
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 6
+    }
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter",
+      "reader": "generic-sqlite",
+      "paths": [
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "com.tencent.mac.marvis/MarvisData/User",
+          "glob": "*/database/data.db",
+          "format": "sqlite"
+        }
+      ],
+      "mapping": {
+        "timestamp": ["timestamp"],
+        "sessionId": ["sessionId"],
+        "model": ["model"],
+        "project": ["project"],
+        "inputTokens": ["inputTokens"],
+        "cachedInputTokens": ["cachedInputTokens"],
+        "outputTokens": ["outputTokens"],
+        "reasoningOutputTokens": ["reasoningOutputTokens"],
+        "totalTokens": ["totalTokens"]
+      },
+      "query": "SELECT\n  u.conversation_id AS sessionId,\n  CASE\n    WHEN typeof(COALESCE(u.created_at, c.updated_at, c.created_at)) IN ('integer', 'real')\n      THEN CASE WHEN COALESCE(u.created_at, c.updated_at, c.created_at) < 1000000000000\n        THEN COALESCE(u.created_at, c.updated_at, c.created_at) * 1000\n        ELSE COALESCE(u.created_at, c.updated_at, c.created_at) END\n    ELSE CAST(strftime('%s', COALESCE(u.created_at, c.updated_at, c.created_at)) AS INTEGER) * 1000\n  END AS timestamp,\n  COALESCE(NULLIF(u.model_id, ''), 'unknown') AS model,\n  CASE WHEN json_valid(c.metadata) THEN COALESCE(NULLIF(json_extract(c.metadata, '$.workspacePath'), ''), NULLIF(json_extract(c.metadata, '$.workDir'), ''), 'unknown') ELSE 'unknown' END AS project,\n  CAST(MAX(0, COALESCE(u.input_tokens, 0) - COALESCE(u.cached_tokens, 0)) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(u.cached_tokens, 0) AS INTEGER) AS cachedInputTokens,\n  CAST(MAX(0, COALESCE(u.output_tokens, 0) - COALESCE(u.thinking_tokens, 0)) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(u.thinking_tokens, 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(u.total_tokens, 0) AS INTEGER) AS totalTokens\nFROM llm_token_usage u\nLEFT JOIN conversations c ON c.conversation_id = u.conversation_id\nWHERE u.conversation_id IS NOT NULL AND u.conversation_id <> ''\nORDER BY timestamp DESC, u.id DESC",
+      "windowFilter": "timestamp >= ?",
+      "maxFileSizeBytes": 536870912
+    },
+    "skills": "read",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "read",
+      "reader": "marvis-session-v1"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

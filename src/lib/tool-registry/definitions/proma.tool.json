@@ -2,6 +2,7 @@
   "$schema": "../tool-definition.schema.json",
   "configVersion": 1,
   "id": "proma",
+  "catalogVisible": false,
   "display": { "name": "Proma", "nameZh": "Proma", "icon": "other", "color": "#f97316" },
   "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
   "detection": {

@@ -47,6 +47,7 @@ export const errors = {
     notFound: "Skill が見つからないか、読み取れません",
     toolNotInstalled:
       "{agent} が見つかりません。対象ツールがインストールされていないため、Skill をインストールできません",
+    exportDestinationInvalid: "Skill のエクスポート先フォルダーが無効です",
   },
   sessions: {
     filterInvalid: "セッションフィルターが不正です",

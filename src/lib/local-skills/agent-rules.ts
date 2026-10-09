@@ -75,6 +75,12 @@ export const SKILL_AGENTS: readonly string[] = SKILL_AGENT_ORDER.filter(
   isSkillTool,
 ).map((id) => MANIFEST_BY_ID.get(id)!.name);
 
+/** Agents whose declared capability permits install/sync writes. */
+export const WRITABLE_SKILL_AGENTS: readonly string[] =
+  SKILL_AGENT_ORDER.filter(
+    (id) => MANIFEST_BY_ID.get(id)?.capabilities.skills === "read-write",
+  ).map((id) => MANIFEST_BY_ID.get(id)!.name);
+
 /**
  * Fail-fast module-load validation: derived labels must be unique.
  */

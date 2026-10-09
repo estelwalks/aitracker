@@ -1,0 +1,96 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "qcode",
+  "catalogVisible": false,
+  "display": {
+    "name": "QCode",
+    "nameZh": "QCode",
+    "icon": "other",
+    "color": "#0ea5e9"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".q-code"
+      }
+    ],
+    "executable": {
+      "shared": ["q-code"]
+    }
+  },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "home",
+        "path": ".q-code"
+      }
+    ],
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "home",
+          "path": ".q-code/skills"
+        }
+      ],
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 5
+    }
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter",
+      "reader": "generic-jsonl",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".q-code/logs",
+          "glob": "audit-*.ndjson",
+          "format": "jsonl"
+        }
+      ],
+      "mapping": {
+        "timestamp": ["ts"],
+        "sessionId": ["sessionId", "payload.sessionId"],
+        "model": ["payload.model", "model"],
+        "project": ["payload.cwd", "cwd"],
+        "inputTokens": ["payload.inputTokens", "payload.usage.inputTokens"],
+        "cachedInputTokens": [
+          "payload.cachedInputTokens",
+          "payload.usage.cachedInputTokens"
+        ],
+        "cacheCreationInputTokens": [
+          "payload.cacheCreationInputTokens",
+          "payload.usage.cacheCreationInputTokens"
+        ],
+        "outputTokens": ["payload.outputTokens", "payload.usage.outputTokens"],
+        "reasoningOutputTokens": [
+          "payload.reasoningTokens",
+          "payload.usage.reasoningTokens"
+        ],
+        "totalTokens": ["payload.totalTokens", "payload.usage.totalTokens"]
+      },
+      "maxFileSizeBytes": 67108864
+    },
+    "skills": "read-write",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "resume",
+      "reader": "qcode-session-v1",
+      "command": ["q-code", "--session", "{sessionId}"]
+    },
+    "market": "install-target",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

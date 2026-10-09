@@ -13,7 +13,10 @@ export const Route = createFileRoute("/chats/")({
   }),
   loader: async ({ deps }) => {
     const page = await getSessionsQuery({
-      data: { filter: { range: "30d" } },
+      data: {
+        filter: { range: "30d" },
+        sort: { field: "endedAt", direction: "desc" },
+      },
     });
     return { ...page, locale: deps.locale };
   },

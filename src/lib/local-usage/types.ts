@@ -4,12 +4,12 @@ import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated
  * The known usage source ids (F6-T2).
  *
  * Projected from the browser-safe public manifest — the single authority for
- * the source universe: every catalog tool id, plus the ids of legacy-marked
- * tools (`legacy: true`, stamped by `generatePublicManifest` from
- * `LEGACY_TOOL_IDS` in the tool-registry). Deduped because legacy sources
- * (aipy/cline) are also catalog-visible today. No source ids are hardcoded in
- * this module; a tool that leaves the catalog but keeps `legacy` stays
- * scannable, and one that fully disappears from the registry drops out.
+ * the source universe: every visible catalog tool id, plus the ids of
+ * legacy-marked public tools (`legacy: true`, stamped by
+ * `generatePublicManifest` from `LEGACY_TOOL_IDS` in the tool-registry).
+ * Deduped because legacy sources are already catalog-visible. No source ids
+ * are hardcoded in this module; a tool hidden from the public catalog drops out
+ * of usage-source UI and scheduled scanning.
  */
 const MANIFEST_TOOL_IDS: readonly string[] = PUBLIC_TOOL_MANIFEST.tools.map(
   (tool) => tool.id,

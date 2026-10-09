@@ -14,6 +14,11 @@ export const sessions = {
     d30: "近 30 天",
     d90: "近 90 天",
   },
+  dateField: {
+    label: "排序",
+    lastActivity: "最后会话",
+    createdAt: "创建时间",
+  },
   status: {
     all: "全部状态",
     available: "可恢复",
@@ -46,6 +51,11 @@ export const sessions = {
   },
   refreshing: "刷新中",
   refreshNow: "立即刷新",
+  export: {
+    selectPage: "选择当前页",
+    selected: "导出已选 ({count})",
+    all: "导出全部会话",
+  },
   group: {
     today: "今天",
     yesterday: "昨天",
@@ -96,6 +106,8 @@ export const sessions = {
     refreshed: "会话列表已刷新",
     hashCopied: "会话 ID 已复制",
     copied: "已发起本地恢复请求",
+    exported: "已导出 {count} 场会话",
+    exportFailed: "会话导出失败，请重试",
   },
   transcript: {
     loading: "正在读取本地会话对话…",

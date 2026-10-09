@@ -93,9 +93,9 @@ test("四语言无空字符串/纯空格值", async () => {
 test("getMessage: 无参数消息按当前语言解析", async () => {
   await loadAllCatalogs();
   assert.equal(getMessage(catalogs["zh-CN"], "nav.home"), "首页总览");
-  assert.equal(getMessage(catalogs["en-US"], "nav.home"), "Home Overview");
-  assert.equal(getMessage(catalogs["ja-JP"], "nav.home"), "ホーム概要");
-  assert.equal(getMessage(catalogs["ko-KR"], "nav.home"), "홈 개요");
+  assert.equal(getMessage(catalogs["en-US"], "nav.home"), "Overview");
+  assert.equal(getMessage(catalogs["ja-JP"], "nav.home"), "概要");
+  assert.equal(getMessage(catalogs["ko-KR"], "nav.home"), "개요");
 });
 
 test("路由元数据使用 AITracker 品牌参数", () => {

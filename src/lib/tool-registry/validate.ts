@@ -61,9 +61,15 @@ export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([
   "aipy-session-v1",
   "pi-session-v1",
   "omp-session-v1",
+  "omo-session-v1",
   "hermes-session-v1",
   "workbuddy-session-v1",
   "zcode-session-v1",
+  "doubao-work-session-v1",
+  "kimi-work-session-v1",
+  "qcode-session-v1",
+  "marvis-session-v1",
+  "trae-work-session-v1",
 ]);
 
 export const BUILTIN_CONTEXT_READERS: ReadonlySet<string> = new Set([
@@ -258,6 +264,18 @@ export function validateToolDefinitions(
           `usage.mode=${usage.mode} requires at least one path`,
         );
       } else {
+        const hasSqlitePath = usage.paths.some((path) => path.format === "sqlite");
+        if (
+          usage.reader !== undefined &&
+          SQLITE_CAPABLE_USAGE_READERS.has(usage.reader) &&
+          !hasSqlitePath
+        ) {
+          diag(
+            id,
+            "sqlite-usage-reader-mismatch",
+            `usage reader "${usage.reader}" requires at least one sqlite path`,
+          );
+        }
         for (const path of usage.paths) {
           if (isUnsafePath(path.root))
             diag(
@@ -280,15 +298,6 @@ export function validateToolDefinitions(
                 `usage reader "${usage.reader}" cannot read the sqlite path "${root}"`,
               );
             }
-          } else if (
-            usage.reader !== undefined &&
-            SQLITE_CAPABLE_USAGE_READERS.has(usage.reader)
-          ) {
-            diag(
-              id,
-              "sqlite-usage-reader-mismatch",
-              `usage reader "${usage.reader}" requires a sqlite path, but "${root}" is ${path.format}`,
-            );
           }
         }
       }

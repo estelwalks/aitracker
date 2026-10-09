@@ -1650,7 +1650,62 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "linux"
+            ],
+            "base": "dataHome",
+            "path": "kilo",
+            "glob": "kilo.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "kilo",
+            "glob": "kilo.db",
+            "format": "sqlite"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "project"
+          ],
+          "inputTokens": [
+            "inputTokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  COALESCE(NULLIF(m.session_id, ''), NULLIF(json_extract(m.data, '$.sessionID'), ''), m.id, CAST(m.rowid AS TEXT)) AS sessionId,\n  CAST(CASE WHEN COALESCE(NULLIF(m.time_updated, 0), json_extract(m.data, '$.time.completed'), json_extract(m.data, '$.time.created')) < 1000000000000 THEN COALESCE(NULLIF(m.time_updated, 0), json_extract(m.data, '$.time.completed'), json_extract(m.data, '$.time.created')) * 1000 ELSE COALESCE(NULLIF(m.time_updated, 0), json_extract(m.data, '$.time.completed'), json_extract(m.data, '$.time.created')) END AS INTEGER) AS timestamp,\n  COALESCE(NULLIF(json_extract(m.data, '$.modelID'), ''), NULLIF(json_extract(m.data, '$.model.id'), ''), 'unknown') AS model,\n  COALESCE(NULLIF(json_extract(m.data, '$.path.cwd'), ''), 'unknown') AS project,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.input'), 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.cache.read'), 0) AS INTEGER) AS cachedInputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.cache.write'), 0) AS INTEGER) AS cacheCreationInputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.output'), 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(json_extract(m.data, '$.tokens.reasoning'), 0) AS INTEGER) AS reasoningOutputTokens\nFROM message AS m\nWHERE json_valid(m.data) = 1\n  AND json_extract(m.data, '$.role') = 'assistant'\n  AND (COALESCE(json_extract(m.data, '$.tokens.input'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.output'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.reasoning'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.cache.read'), 0) > 0\n    OR COALESCE(json_extract(m.data, '$.tokens.cache.write'), 0) > 0)\nORDER BY timestamp DESC, m.rowid DESC",
+        "windowFilter": "timestamp >= ?"
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -3049,6 +3104,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "$schema": "../tool-definition.schema.json",
     "configVersion": 1,
     "id": "aipy",
+    "catalogVisible": false,
     "display": {
       "name": "AiPy",
       "nameZh": "AiPy",
@@ -3295,6 +3351,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "$schema": "../tool-definition.schema.json",
     "configVersion": 1,
     "id": "qwen",
+    "catalogVisible": false,
     "display": {
       "name": "Qwen CLI",
       "nameZh": "Qwen CLI",
@@ -3415,6 +3472,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "$schema": "../tool-definition.schema.json",
     "configVersion": 1,
     "id": "proma",
+    "catalogVisible": false,
     "display": {
       "name": "Proma",
       "nameZh": "Proma",
@@ -3509,6 +3567,16 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "configHome",
           "path": "QoderCN/SharedClientCache/cache/db/local.db"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".qoder-cn/projects"
         }
       ]
     },
@@ -3544,32 +3612,56 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "path": "QoderCN/SharedClientCache/cache/db",
             "glob": "local.db",
             "format": "sqlite"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".qoder-cn/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
           }
         ],
         "mapping": {
           "timestamp": [
-            "timestamp"
+            "timestamp",
+            "message.timestamp"
           ],
           "sessionId": [
-            "sessionId"
+            "sessionId",
+            "session_id",
+            "message.id",
+            "uuid",
+            "id"
           ],
           "model": [
-            "model"
+            "model",
+            "message.model"
           ],
           "project": [
-            "project"
+            "project",
+            "cwd"
           ],
           "inputTokens": [
-            "inputTokens"
+            "inputTokens",
+            "message.usage.input_tokens"
           ],
           "cachedInputTokens": [
-            "cachedInputTokens"
+            "cachedInputTokens",
+            "message.usage.cache_read_input_tokens",
+            "message.usage.cached_tokens"
           ],
           "cacheCreationInputTokens": [
-            "cacheCreationInputTokens"
+            "cacheCreationInputTokens",
+            "message.usage.cache_creation_input_tokens"
           ],
           "outputTokens": [
-            "outputTokens"
+            "outputTokens",
+            "message.usage.output_tokens"
           ],
           "reasoningOutputTokens": [
             "reasoningOutputTokens"
@@ -3685,6 +3777,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "$schema": "../tool-definition.schema.json",
     "configVersion": 1,
     "id": "cherrystudio",
+    "catalogVisible": false,
     "display": {
       "name": "Cherry Studio",
       "nameZh": "Cherry Studio",
@@ -3817,6 +3910,1192 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "modelObservation": {
       "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "doubao-work",
+    "catalogVisible": false,
+    "display": {
+      "name": "Doubao Work",
+      "nameZh": "豆包 Work",
+      "icon": "other",
+      "color": "#2f6bff"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace"
+        }
+      ]
+    },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "appData",
+          "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace"
+        },
+        {
+          "base": "appDataRoaming",
+          "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace"
+        }
+      ],
+      "skills": {
+        "rootSpecs": [
+          {
+            "base": "appData",
+            "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace/.user_skills"
+          },
+          {
+            "base": "appData",
+            "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace/.skills"
+          },
+          {
+            "base": "appDataRoaming",
+            "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace/.user_skills"
+          },
+          {
+            "base": "appDataRoaming",
+            "path": "DoubaoWork/Default/.doubaowork/agent_mode/workspace/.skills"
+          }
+        ],
+        "markers": [
+          "SKILL.md",
+          "skill.md"
+        ],
+        "maxDepth": 5
+      }
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "unsupported"
+      },
+      "skills": "read-write",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "read",
+        "reader": "doubao-work-session-v1"
+      },
+      "market": "install-target",
+      "security": "unsupported"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "kimi-work",
+    "catalogVisible": false,
+    "display": {
+      "name": "Kimi Work",
+      "nameZh": "Kimi Work",
+      "icon": "kimi",
+      "color": "#7c5cff"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home"
+        }
+      ]
+    },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "appData",
+          "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home"
+        },
+        {
+          "base": "appDataRoaming",
+          "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home"
+        }
+      ],
+      "skills": {
+        "rootSpecs": [
+          {
+            "base": "appData",
+            "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/plugins/managed"
+          },
+          {
+            "base": "appData",
+            "path": "kimi-desktop/daimon-share/daimon/skills"
+          },
+          {
+            "base": "appDataRoaming",
+            "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/plugins/managed"
+          },
+          {
+            "base": "appDataRoaming",
+            "path": "kimi-desktop/daimon-share/daimon/skills"
+          }
+        ],
+        "markers": [
+          "SKILL.md",
+          "skill.md"
+        ],
+        "maxDepth": 8
+      }
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/sessions",
+            "glob": "**/agents/*/wire.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/sessions",
+            "glob": "**/agents/*/wire.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "time"
+          ],
+          "sessionId": [
+            "sessionId",
+            "conversationKey"
+          ],
+          "model": [
+            "model",
+            "modelAlias"
+          ],
+          "project": [
+            "workDir",
+            "workspacePath"
+          ],
+          "inputTokens": [
+            "usage.inputOther"
+          ],
+          "cachedInputTokens": [
+            "usage.inputCacheRead"
+          ],
+          "cacheCreationInputTokens": [
+            "usage.inputCacheCreation"
+          ],
+          "outputTokens": [
+            "usage.output"
+          ]
+        },
+        "maxFileSizeBytes": 67108864
+      },
+      "skills": "read",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "read",
+        "reader": "kimi-work-session-v1"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "qcode",
+    "catalogVisible": false,
+    "display": {
+      "name": "QCode",
+      "nameZh": "QCode",
+      "icon": "other",
+      "color": "#0ea5e9"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".q-code"
+        }
+      ],
+      "executable": {
+        "shared": [
+          "q-code"
+        ]
+      }
+    },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "home",
+          "path": ".q-code"
+        }
+      ],
+      "skills": {
+        "rootSpecs": [
+          {
+            "base": "home",
+            "path": ".q-code/skills"
+          }
+        ],
+        "markers": [
+          "SKILL.md",
+          "skill.md"
+        ],
+        "maxDepth": 5
+      }
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".q-code/logs",
+            "glob": "audit-*.ndjson",
+            "format": "jsonl"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "ts"
+          ],
+          "sessionId": [
+            "sessionId",
+            "payload.sessionId"
+          ],
+          "model": [
+            "payload.model",
+            "model"
+          ],
+          "project": [
+            "payload.cwd",
+            "cwd"
+          ],
+          "inputTokens": [
+            "payload.inputTokens",
+            "payload.usage.inputTokens"
+          ],
+          "cachedInputTokens": [
+            "payload.cachedInputTokens",
+            "payload.usage.cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "payload.cacheCreationInputTokens",
+            "payload.usage.cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "payload.outputTokens",
+            "payload.usage.outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "payload.reasoningTokens",
+            "payload.usage.reasoningTokens"
+          ],
+          "totalTokens": [
+            "payload.totalTokens",
+            "payload.usage.totalTokens"
+          ]
+        },
+        "maxFileSizeBytes": 67108864
+      },
+      "skills": "read-write",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "resume",
+        "reader": "qcode-session-v1",
+        "command": [
+          "q-code",
+          "--session",
+          "{sessionId}"
+        ]
+      },
+      "market": "install-target",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "marvis",
+    "catalogVisible": false,
+    "display": {
+      "name": "Marvis",
+      "nameZh": "Marvis",
+      "icon": "other",
+      "color": "#22c55e"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "planned",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "com.tencent.mac.marvis/MarvisData/User"
+        }
+      ]
+    },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "appData",
+          "path": "com.tencent.mac.marvis/MarvisData/User"
+        }
+      ],
+      "skills": {
+        "rootSpecs": [
+          {
+            "base": "appData",
+            "path": "com.tencent.mac.marvis/MarvisData/User"
+          }
+        ],
+        "markers": [
+          "SKILL.md",
+          "skill.md"
+        ],
+        "maxDepth": 6
+      }
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "com.tencent.mac.marvis/MarvisData/User",
+            "glob": "*/database/data.db",
+            "format": "sqlite"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId"
+          ],
+          "model": [
+            "model"
+          ],
+          "project": [
+            "project"
+          ],
+          "inputTokens": [
+            "inputTokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens"
+          ],
+          "outputTokens": [
+            "outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ],
+          "totalTokens": [
+            "totalTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  u.conversation_id AS sessionId,\n  CASE\n    WHEN typeof(COALESCE(u.created_at, c.updated_at, c.created_at)) IN ('integer', 'real')\n      THEN CASE WHEN COALESCE(u.created_at, c.updated_at, c.created_at) < 1000000000000\n        THEN COALESCE(u.created_at, c.updated_at, c.created_at) * 1000\n        ELSE COALESCE(u.created_at, c.updated_at, c.created_at) END\n    ELSE CAST(strftime('%s', COALESCE(u.created_at, c.updated_at, c.created_at)) AS INTEGER) * 1000\n  END AS timestamp,\n  COALESCE(NULLIF(u.model_id, ''), 'unknown') AS model,\n  CASE WHEN json_valid(c.metadata) THEN COALESCE(NULLIF(json_extract(c.metadata, '$.workspacePath'), ''), NULLIF(json_extract(c.metadata, '$.workDir'), ''), 'unknown') ELSE 'unknown' END AS project,\n  CAST(MAX(0, COALESCE(u.input_tokens, 0) - COALESCE(u.cached_tokens, 0)) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(u.cached_tokens, 0) AS INTEGER) AS cachedInputTokens,\n  CAST(MAX(0, COALESCE(u.output_tokens, 0) - COALESCE(u.thinking_tokens, 0)) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(u.thinking_tokens, 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(u.total_tokens, 0) AS INTEGER) AS totalTokens\nFROM llm_token_usage u\nLEFT JOIN conversations c ON c.conversation_id = u.conversation_id\nWHERE u.conversation_id IS NOT NULL AND u.conversation_id <> ''\nORDER BY timestamp DESC, u.id DESC",
+        "windowFilter": "timestamp >= ?"
+      },
+      "skills": "read",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "read",
+        "reader": "marvis-session-v1"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "trae-work",
+    "catalogVisible": false,
+    "display": {
+      "name": "Trae Work",
+      "nameZh": "Trae Work",
+      "icon": "other",
+      "color": "#6c63ff"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "planned",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "home",
+          "path": ".trae"
+        },
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "home",
+          "path": ".trae-cn"
+        }
+      ]
+    },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "home",
+          "path": ".trae"
+        },
+        {
+          "base": "home",
+          "path": ".trae-cn"
+        }
+      ],
+      "skills": {
+        "rootSpecs": [
+          {
+            "base": "home",
+            "path": ".trae/builtin/global/skills"
+          },
+          {
+            "base": "home",
+            "path": ".trae/builtin_skills"
+          },
+          {
+            "base": "home",
+            "path": ".trae-cn/builtin/global/skills"
+          },
+          {
+            "base": "home",
+            "path": ".trae-cn/builtin/work"
+          },
+          {
+            "base": "home",
+            "path": ".trae-cn/builtin/code"
+          },
+          {
+            "base": "home",
+            "path": ".trae-cn/builtin/design"
+          }
+        ],
+        "markers": [
+          "SKILL.md",
+          "skill.md"
+        ],
+        "maxDepth": 8
+      }
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "unsupported"
+      },
+      "skills": "read",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "read",
+        "reader": "trae-work-session-v1"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "acode",
+    "display": {
+      "name": "AStudio",
+      "nameZh": "AStudio",
+      "icon": "other",
+      "color": "#10a37f"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".acode"
+        }
+      ],
+      "executable": {
+        "shared": [
+          "acode"
+        ]
+      }
+    },
+    "storage": {
+      "skills": {
+        "rootSpecs": [
+          {
+            "base": "home",
+            "path": ".acode/skills"
+          }
+        ],
+        "markers": [
+          "SKILL.md",
+          "skill.md"
+        ],
+        "maxDepth": 3
+      }
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "native",
+        "reader": "codex-rollout-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".acode/sessions",
+            "glob": "**/rollout-*.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".acode/archived_sessions",
+            "glob": "**/rollout-*.jsonl",
+            "format": "jsonl"
+          }
+        ]
+      },
+      "skills": "read-write",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "install-target",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "qoder",
+    "display": {
+      "name": "Qoder",
+      "nameZh": "Qoder",
+      "icon": "other",
+      "color": "#16a34a"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "Qoder/SharedClientCache/cache/db/local.db"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "Qoder/SharedClientCache/cache/db/local.db"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "Qoder/SharedClientCache/cache/db/local.db"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".qoder/projects"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-sqlite",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "Qoder/SharedClientCache/cache/db",
+            "glob": "local.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "Qoder/SharedClientCache/cache/db",
+            "glob": "local.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "Qoder/SharedClientCache/cache/db",
+            "glob": "local.db",
+            "format": "sqlite"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".qoder/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "timestamp",
+            "message.timestamp"
+          ],
+          "sessionId": [
+            "sessionId",
+            "session_id",
+            "message.id",
+            "uuid",
+            "id"
+          ],
+          "model": [
+            "model",
+            "message.model"
+          ],
+          "project": [
+            "project",
+            "cwd"
+          ],
+          "inputTokens": [
+            "inputTokens",
+            "message.usage.input_tokens"
+          ],
+          "cachedInputTokens": [
+            "cachedInputTokens",
+            "message.usage.cache_read_input_tokens",
+            "message.usage.cached_tokens"
+          ],
+          "cacheCreationInputTokens": [
+            "cacheCreationInputTokens",
+            "message.usage.cache_creation_input_tokens"
+          ],
+          "outputTokens": [
+            "outputTokens",
+            "message.usage.output_tokens"
+          ],
+          "reasoningOutputTokens": [
+            "reasoningOutputTokens"
+          ]
+        },
+        "maxFileSizeBytes": 536870912,
+        "query": "SELECT\n  COALESCE(NULLIF(cm.session_id, ''), CAST(cm.rowid AS TEXT)) AS sessionId,\n  CAST(CASE WHEN cm.gmt_create < 1000000000000 THEN cm.gmt_create * 1000 ELSE cm.gmt_create END AS INTEGER) AS timestamp,\n  COALESCE(\n    CASE WHEN json_valid(cm.model_info) = 1 THEN json_extract(cm.model_info, '$.model_key') END,\n    CASE WHEN json_valid(cm.model_info) = 1 THEN json_extract(cm.model_info, '$.modelKey') END,\n    CASE WHEN json_valid(cr.extra) = 1 THEN json_extract(cr.extra, '$.modelConfig.key') END,\n    CASE WHEN json_valid(cr.extra) = 1 THEN json_extract(cr.extra, '$.model_config.key') END,\n    CASE WHEN json_valid(cs.preferred_model_info) = 1 THEN json_extract(cs.preferred_model_info, '$.model_key') END,\n    CASE WHEN json_valid(cs.preferred_model_info) = 1 THEN json_extract(cs.preferred_model_info, '$.modelKey') END,\n    CASE WHEN json_valid(cs.preferred_model_info) = 1 THEN json_extract(cs.preferred_model_info, '$.preferred_model') END,\n    CASE WHEN json_valid(cs.preferred_model_info) = 1 THEN json_extract(cs.preferred_model_info, '$.preferredModel') END,\n    'qoder-agent'\n  ) AS model,\n  COALESCE(\n    NULLIF(cs.project_name, ''),\n    CASE WHEN substr(cs.project_uri, 1, 7) = 'file://' THEN substr(cs.project_uri, 8) ELSE cs.project_uri END,\n    cm.session_id,\n    'unknown'\n  ) AS project,\n  CAST(MAX(0, COALESCE(json_extract(cm.token_info, '$.prompt_tokens'), 0) - COALESCE(json_extract(cm.token_info, '$.cached_tokens'), 0)) AS INTEGER) AS inputTokens,\n  CAST(MIN(COALESCE(json_extract(cm.token_info, '$.prompt_tokens'), 0), COALESCE(json_extract(cm.token_info, '$.cached_tokens'), 0)) AS INTEGER) AS cachedInputTokens,\n  0 AS cacheCreationInputTokens,\n  CAST(COALESCE(json_extract(cm.token_info, '$.completion_tokens'), 0) AS INTEGER) AS outputTokens,\n  0 AS reasoningOutputTokens\nFROM chat_message cm\nLEFT JOIN chat_record cr ON cr.request_id = cm.request_id\nLEFT JOIN chat_session cs ON cs.session_id = cm.session_id\nWHERE cm.role = 'assistant'\n  AND json_valid(cm.token_info) = 1\n  AND trim(cm.token_info) NOT IN ('', '{}')\n  AND cm.gmt_create IS NOT NULL\nORDER BY cm.gmt_create DESC, cm.rowid DESC",
+        "windowFilter": "timestamp >= ?"
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "omo",
+    "display": {
+      "name": "OmO",
+      "nameZh": "OmO",
+      "icon": "other",
+      "color": "#f43f5e"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "supported"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".omo"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".omo/agent/sessions"
+        }
+      ]
+    },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "home",
+          "path": ".omo"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".omo/agent/sessions",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "message.timestamp",
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId",
+            "session_id",
+            "id"
+          ],
+          "model": [
+            "message.model",
+            "model"
+          ],
+          "project": [
+            "cwd",
+            "session.cwd",
+            "message.cwd"
+          ],
+          "inputTokens": [
+            "message.usage.input",
+            "message.usage.inputTokens"
+          ],
+          "cachedInputTokens": [
+            "message.usage.cacheRead",
+            "message.usage.cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "message.usage.cacheWrite",
+            "message.usage.cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "message.usage.output",
+            "message.usage.outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "message.usage.reasoningTokens"
+          ],
+          "totalTokens": [
+            "message.usage.totalTokens"
+          ]
+        },
+        "maxFileSizeBytes": 67108864
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "read",
+        "reader": "omo-session-v1"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model",
+      "tokenSemantics": {
+        "reasoningIncludedInOutput": false
+      }
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "prime-agent",
+    "display": {
+      "name": "Prime Agent",
+      "nameZh": "Prime Agent",
+      "icon": "other",
+      "color": "#a855f7"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "supported"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".prime"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".prime/agent/sessions"
+        }
+      ]
+    },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "home",
+          "path": ".prime"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".prime/agent/sessions",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "message.timestamp",
+            "timestamp"
+          ],
+          "sessionId": [
+            "sessionId",
+            "session_id",
+            "id"
+          ],
+          "model": [
+            "message.model",
+            "model"
+          ],
+          "project": [
+            "cwd",
+            "session.cwd",
+            "message.cwd"
+          ],
+          "inputTokens": [
+            "message.usage.input",
+            "message.usage.inputTokens"
+          ],
+          "cachedInputTokens": [
+            "message.usage.cacheRead",
+            "message.usage.cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "message.usage.cacheWrite",
+            "message.usage.cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "message.usage.output",
+            "message.usage.outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "message.usage.reasoningTokens"
+          ],
+          "totalTokens": [
+            "message.usage.totalTokens"
+          ]
+        },
+        "maxFileSizeBytes": 67108864
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model",
+      "tokenSemantics": {
+        "reasoningIncludedInOutput": false
+      }
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "minimax-code",
+    "display": {
+      "name": "MiniMax Code",
+      "nameZh": "MiniMax Code",
+      "icon": "other",
+      "color": "#2563eb"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "supported"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".minimax"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".minimax/v2/sessions"
+        }
+      ]
+    },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "home",
+          "path": ".minimax"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".minimax/v2/sessions",
+            "glob": "**/messages.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "mapping": {
+          "timestamp": [
+            "message.timestamp",
+            "timestamp"
+          ],
+          "sessionId": [
+            "session_id",
+            "sessionId",
+            "message.session_id",
+            "message_id"
+          ],
+          "model": [
+            "message.model",
+            "model"
+          ],
+          "project": [
+            "cwd",
+            "message.cwd"
+          ],
+          "inputTokens": [
+            "message.usage.input",
+            "message.usage.inputTokens"
+          ],
+          "cachedInputTokens": [
+            "message.usage.cacheRead",
+            "message.usage.cachedInputTokens"
+          ],
+          "cacheCreationInputTokens": [
+            "message.usage.cacheWrite",
+            "message.usage.cacheCreationInputTokens"
+          ],
+          "outputTokens": [
+            "message.usage.output",
+            "message.usage.outputTokens"
+          ],
+          "reasoningOutputTokens": [
+            "message.usage.reasoningTokens"
+          ],
+          "totalTokens": [
+            "message.usage.totalTokens"
+          ]
+        },
+        "maxFileSizeBytes": 67108864
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model",
+      "tokenSemantics": {
+        "reasoningIncludedInOutput": false
+      }
     }
   }
 ];
@@ -3995,8 +5274,8 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
       "workbuddy",
       "openclaw",
       "antigravity",
-      "aipy",
-      "zcode"
+      "zcode",
+      "acode"
     ],
     "defaultMarkers": [
       "SKILL.md",
@@ -4050,7 +5329,7 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   },
   "definitionsManifest": {
     "schemaVersion": 1,
-    "description": "Explicit, ordered list of built-in tool definitions (docs §5: fixed import list, no runtime directory scanning). Order matches the frozen baseline UI order; aipy/cline are legacy sources (catalogVisible=false).",
+    "description": "Explicit, ordered list of built-in tool definitions (docs §5: fixed import list, no runtime directory scanning). Order matches the frozen baseline UI order; catalogVisible=false keeps known-but-unverified tools out of product navigation.",
     "tools": [
       {
         "id": "claude-code",
@@ -4195,9 +5474,49 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
       {
         "id": "cherrystudio",
         "path": "cherrystudio.tool.json"
+      },
+      {
+        "id": "doubao-work",
+        "path": "doubao-work.tool.json"
+      },
+      {
+        "id": "kimi-work",
+        "path": "kimi-work.tool.json"
+      },
+      {
+        "id": "qcode",
+        "path": "qcode.tool.json"
+      },
+      {
+        "id": "marvis",
+        "path": "marvis.tool.json"
+      },
+      {
+        "id": "trae-work",
+        "path": "trae-work.tool.json"
+      },
+      {
+        "id": "acode",
+        "path": "acode.tool.json"
+      },
+      {
+        "id": "qoder",
+        "path": "qoder.tool.json"
+      },
+      {
+        "id": "omo",
+        "path": "omo.tool.json"
+      },
+      {
+        "id": "prime-agent",
+        "path": "prime-agent.tool.json"
+      },
+      {
+        "id": "minimax-code",
+        "path": "minimax-code.tool.json"
       }
     ]
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "596879398bf2baa7";
+export const TOOL_REGISTRY_VERSION: string = "9a1509e0592ab1de";

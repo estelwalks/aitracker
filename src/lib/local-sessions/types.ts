@@ -25,7 +25,7 @@ export const SESSION_TOOL_IDS = [
   "pi",
   "zcode",
   "dsh",
-  "aipy",
+  "omo",
 ] as const;
 
 export type SessionSource = (typeof SESSION_TOOL_IDS)[number] | (string & {});
