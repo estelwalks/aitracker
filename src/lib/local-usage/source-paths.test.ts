@@ -57,13 +57,10 @@ test("reference agents expose their actual platform-specific directories", () =>
       "~/.qoder-cn/projects",
     ],
   );
-  assert.deepEqual(
-    sourcePathsForPlatform("qoder", "macos", "/Users/tester"),
-    [
-      "~/Library/Application Support/Qoder/SharedClientCache/cache/db",
-      "~/.qoder/projects",
-    ],
-  );
+  assert.deepEqual(sourcePathsForPlatform("qoder", "macos", "/Users/tester"), [
+    "~/Library/Application Support/Qoder/SharedClientCache/cache/db",
+    "~/.qoder/projects",
+  ]);
   assert.deepEqual(sourcePathsForPlatform("omo", "macos", "/Users/tester"), [
     "~/.omo/agent/sessions",
   ]);

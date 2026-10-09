@@ -201,7 +201,9 @@ test("platform registry paths take precedence before the first usage snapshot", 
   const out = deriveUsageSources(
     AI_TOOLS,
     [],
-    installations("Library/Application Support/QoderCN/SharedClientCache/cache/db"),
+    installations(
+      "Library/Application Support/QoderCN/SharedClientCache/cache/db",
+    ),
     "t",
     HOME,
     new Map([

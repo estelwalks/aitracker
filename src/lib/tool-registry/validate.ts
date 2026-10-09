@@ -264,7 +264,9 @@ export function validateToolDefinitions(
           `usage.mode=${usage.mode} requires at least one path`,
         );
       } else {
-        const hasSqlitePath = usage.paths.some((path) => path.format === "sqlite");
+        const hasSqlitePath = usage.paths.some(
+          (path) => path.format === "sqlite",
+        );
         if (
           usage.reader !== undefined &&
           SQLITE_CAPABLE_USAGE_READERS.has(usage.reader) &&
