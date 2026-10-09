@@ -66,10 +66,13 @@ export interface SessionFilter {
   readonly source?: SessionSource;
   readonly projectId?: string;
   readonly range?: "all" | "7d" | "30d" | "90d";
+  /** Which session timestamp the relative range is measured from. */
+  readonly dateField?: SessionDateField;
   readonly keyword?: string;
   readonly status?: SessionStatus;
 }
 
+export type SessionDateField = "startedAt" | "endedAt";
 export type SessionSortField =
   "startedAt" | "endedAt" | "durationMs" | "totalTokens";
 export type SessionSortDirection = "asc" | "desc";
@@ -113,6 +116,18 @@ export interface SessionTranscript {
   readonly sessionId: string;
   readonly source: SessionSource;
   readonly messages: readonly SessionTranscriptMessage[];
+}
+
+/** User-requested export payload; transcript content stays local until export. */
+export interface SessionExportEntry {
+  readonly summary: SessionSummary;
+  readonly transcript: SessionTranscript | null;
+}
+
+export interface SessionExport {
+  readonly formatVersion: 1;
+  readonly exportedAt: string;
+  readonly sessions: readonly SessionExportEntry[];
 }
 
 export interface SessionRepository {

@@ -36,7 +36,9 @@ test("en-US 偏好经 SQLite 生效,首屏无中文残留", async ({ page }) => 
   await expect(
     page.getByRole("link", { name: "Settings", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Security Scan" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Security", exact: true }),
+  ).toBeVisible();
   // localStorage preference also becomes the canonical browser URL, so a
   // subsequent SSR request starts from the same language.
   await expect
@@ -59,7 +61,7 @@ test("设置页切换 ja-JP 即时生效并跨刷新保持", async ({ page }) =>
     page.getByRole("heading", { name: "設定", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "セキュリティ検査" }),
+    page.getByRole("link", { name: "セキュリティ", exact: true }),
   ).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.lang))

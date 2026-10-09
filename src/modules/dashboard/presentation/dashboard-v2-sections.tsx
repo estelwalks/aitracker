@@ -45,6 +45,7 @@ import type {
   DashboardV2View,
 } from "../contracts.ts";
 import type { MonitoringStatus } from "../../monitoring/contracts.ts";
+import { hasTokenStats } from "./dashboard-token-stats.ts";
 
 /** Registry tool id → display configuration (icon kind + brand color), browser security projection. */
 const toolDisplayById = new Map(
@@ -115,6 +116,7 @@ export function DashboardTrustHero({
   securityScan: SecurityOverviewReadModel;
 }) {
   const { t, format } = useI18n();
+  const tokenStatsAvailable = hasTokenStats(view);
   const distill = view.outputAvailability.distillationOutputs;
   const dormantTools = Math.max(
     0,
@@ -165,8 +167,9 @@ export function DashboardTrustHero({
                 security.unknownCount +
                 security.failedAssetCount,
             });
-  const todaySub =
-    today.estimatedCostUsd == null
+  const todaySub = !tokenStatsAvailable
+    ? t("dashboard.v2.outputUnavailableHint")
+    : today.estimatedCostUsd == null
       ? t("dashboard.kpi.unavailable")
       : `${format.formatUsd(today.estimatedCostUsd)} · ${t("dashboard.v2.cacheLabel")} ${today.cacheRate == null ? t("dashboard.kpi.unavailable") : format.formatPercent(Math.round(today.cacheRate))}`;
   const cards = [
@@ -208,7 +211,9 @@ export function DashboardTrustHero({
     {
       icon: Coins,
       label: t("dashboard.v2.todayUsage"),
-      value: format.formatTokens(today.totals.totalTokens),
+      value: tokenStatsAvailable
+        ? format.formatTokens(today.totals.totalTokens)
+        : t("dashboard.kpi.unavailable"),
       sub: todaySub,
       to: "/tracker" as const,
       action: t("dashboard.v2.viewTokens"),
@@ -279,6 +284,7 @@ export function DashboardMetricGrid({
 }) {
   const { t, format } = useI18n();
   const unavailable = t("dashboard.kpi.unavailable");
+  const tokenStatsAvailable = hasTokenStats(view);
   // The real scan overview arrives server-composed; this card shows the
   // cumulative scan count (runCount), and only falls back to the monitoring
   // placeholder when no engine exists at all.
@@ -344,23 +350,28 @@ export function DashboardMetricGrid({
     {
       icon: Coins,
       label: t("dashboard.kpi.tokens"),
-      value: format.formatTokens(view.totals.totalTokens),
-      hint:
-        view.estimatedCostUsd == null
+      value: tokenStatsAvailable
+        ? format.formatTokens(view.totals.totalTokens)
+        : unavailable,
+      hint: !tokenStatsAvailable
+        ? t("dashboard.v2.outputUnavailableHint")
+        : view.estimatedCostUsd == null
           ? t("dashboard.v2.eventCount", { count: view.totals.events })
           : format.formatUsd(view.estimatedCostUsd),
-      delta: view.comparison.tokens.deltaPercent,
+      delta: tokenStatsAvailable ? view.comparison.tokens.deltaPercent : null,
       alwaysBaseline: true,
     },
     {
       icon: CircleDollarSign,
       label: t("dashboard.kpi.cost"),
       value:
-        view.estimatedCostUsd == null
+        !tokenStatsAvailable || view.estimatedCostUsd == null
           ? unavailable
           : format.formatUsd(view.estimatedCostUsd),
       hint:
-        view.estimatedCostUsd == null || view.estimatedCostIsPartial
+        !tokenStatsAvailable ||
+        view.estimatedCostUsd == null ||
+        view.estimatedCostIsPartial
           ? t("dashboard.kpi.costUnknownHint")
           : t("dashboard.v2.costDailyProjection", {
               daily: format.formatUsd(view.estimatedCostUsd / days),
@@ -379,11 +390,15 @@ export function DashboardMetricGrid({
       hint:
         view.sessions == null
           ? t("dashboard.kpi.sessionUnavailableHint")
-          : t("dashboard.v2.sessionAvgTokens", {
-              tokens: format.formatTokens(
-                view.sessions > 0 ? view.totals.totalTokens / view.sessions : 0,
-              ),
-            }),
+          : !tokenStatsAvailable
+            ? t("dashboard.v2.outputUnavailableHint")
+            : t("dashboard.v2.sessionAvgTokens", {
+                tokens: format.formatTokens(
+                  view.sessions > 0
+                    ? view.totals.totalTokens / view.sessions
+                    : 0,
+                ),
+              }),
       delta: view.comparison.sessions.deltaPercent,
       alwaysBaseline: true,
     },
@@ -391,11 +406,11 @@ export function DashboardMetricGrid({
       icon: Zap,
       label: t("dashboard.v2.cacheLabel"),
       value:
-        view.cacheRate == null
+        !tokenStatsAvailable || view.cacheRate == null
           ? unavailable
           : format.formatPercent(Math.round(view.cacheRate)),
       hint:
-        view.cacheSavingsUsd == null
+        !tokenStatsAvailable || view.cacheSavingsUsd == null
           ? t("dashboard.v2.cacheHint")
           : t("dashboard.v2.cacheSavingsAmount", {
               amount: format.formatUsd(view.cacheSavingsUsd),
@@ -808,6 +823,18 @@ export function DashboardModelDonut({
 }) {
   const { format, t } = useI18n();
   const [restOpen, setRestOpen] = useState(false);
+  if (!hasTokenStats(view)) {
+    return (
+      <section className="dashboard-panel">
+        <div className="dashboard-panel-head">
+          <div>
+            <h2>{t("dashboard.v2.modelsTitle")}</h2>
+            <p>{t("dashboard.v2.outputUnavailableHint")}</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
   const top = view.models.slice(0, 8);
   const rest = view.models.slice(8);
   const max = top[0]?.share ?? 1;
@@ -956,6 +983,18 @@ export function DashboardProjectOverview({
 }) {
   const { format, t } = useI18n();
   const [topN, setTopN] = useState<3 | 5 | 10>(5);
+  if (!hasTokenStats(view)) {
+    return (
+      <section className="dashboard-panel dashboard-projects-panel">
+        <div className="dashboard-panel-head">
+          <div>
+            <h2>{t("dashboard.v2.projectsTitle")}</h2>
+            <p>{t("dashboard.v2.outputUnavailableHint")}</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
   const named = view.projects.filter((item) => item.key !== "other");
   const top = named.slice(0, topN);
   const share = top.reduce((sum, item) => sum + item.share, 0);
@@ -1166,6 +1205,7 @@ export function DashboardContribHeatmap({
   focusFrom,
   focusTo,
   periodLabel,
+  tokenStatsAvailable,
 }: {
   points: readonly DashboardV2CalendarPoint[];
   /** The starting point of the statistical period window (highlight within this window and fade out the rest); null = highlight the entire picture. */
@@ -1174,6 +1214,8 @@ export function DashboardContribHeatmap({
   focusTo?: Date | null;
   /** Cycle copy (such as "Last 30 days") is highlighted in the title. */
   periodLabel?: string;
+  /** Token-based activity is unavailable for subscription-only sources. */
+  tokenStatsAvailable?: boolean;
 }) {
   const { format, t } = useI18n();
   // Even when there is no active data at all, the last 365 days (all zeros) are synthesized to ensure that the calendar skeleton always has style.
@@ -1344,6 +1386,18 @@ export function DashboardContribHeatmap({
     point.events === 0
       ? 0
       : Math.min(4, Math.max(1, Math.ceil((point.tokens / max) * 4)));
+  if (tokenStatsAvailable === false) {
+    return (
+      <section className="dashboard-panel">
+        <div className="dashboard-panel-head">
+          <div>
+            <h2>{t("dashboard.v2.calendarTitle")}</h2>
+            <p>{t("dashboard.v2.outputUnavailableHint")}</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="dashboard-panel dashboard-calendar-panel">
       <header className="dashboard-calendar-head">
@@ -1532,6 +1586,7 @@ export function DashboardAgentWorkstreams({
   selectedTool: string;
 }) {
   const { format, t } = useI18n();
+  const tokenStatsAvailable = hasTokenStats(view);
   const navigate = useNavigate();
   const [open, setOpen] = useState<string | null>(
     selectedTool === "all" ? null : selectedTool,
@@ -1591,8 +1646,10 @@ export function DashboardAgentWorkstreams({
                     {live ? "LIVE" : "IDLE"}
                   </span>
                   <span className="font-mono text-[11px] text-muted-foreground">
-                    {format.formatTokens(tool.tokens)} ·{" "}
-                    {format.formatNumber(tool.events)}
+                    {tool.usageSupport === "unsupported"
+                      ? t("dashboard.kpi.unavailable")
+                      : format.formatTokens(tool.tokens)}{" "}
+                    · {format.formatNumber(tool.events)}
                   </span>
                   <span className="hidden font-mono text-[11px] text-muted-foreground md:inline">
                     —
@@ -1642,7 +1699,11 @@ export function DashboardAgentWorkstreams({
                   </div>
                   <div>
                     <dt>{t("dashboard.kpi.tokens")}</dt>
-                    <dd>{format.formatTokens(view.totals.totalTokens)}</dd>
+                    <dd>
+                      {tokenStatsAvailable
+                        ? format.formatTokens(view.totals.totalTokens)
+                        : t("dashboard.kpi.unavailable")}
+                    </dd>
                   </div>
                   <div>
                     <dt>{t("dashboard.v2.responses")}</dt>
@@ -1663,7 +1724,7 @@ export function DashboardAgentWorkstreams({
                   <div>
                     <dt>{t("dashboard.v2.cacheLabel")}</dt>
                     <dd>
-                      {view.cacheRate == null
+                      {!tokenStatsAvailable || view.cacheRate == null
                         ? t("dashboard.kpi.unavailable")
                         : format.formatPercent(Math.round(view.cacheRate))}
                     </dd>

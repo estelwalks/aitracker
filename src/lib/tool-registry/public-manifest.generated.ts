@@ -332,7 +332,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "adapter",
         "skills": "unsupported",
         "agents": "unsupported",
         "sessions": "unsupported",
@@ -593,28 +593,6 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       }
     },
     {
-      "id": "aipy",
-      "name": "AiPy",
-      "nameZh": "AiPy",
-      "icon": "other",
-      "color": "#14b8a6",
-      "legacy": true,
-      "platforms": {
-        "macos": "supported",
-        "windows10": "supported",
-        "windows11": "supported",
-        "linux": "planned"
-      },
-      "capabilities": {
-        "usage": "adapter",
-        "skills": "read-write",
-        "agents": "unsupported",
-        "sessions": "read",
-        "market": "install-target",
-        "security": "unsupported"
-      }
-    },
-    {
       "id": "cline",
       "name": "Cline",
       "nameZh": "Cline",
@@ -637,53 +615,11 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       }
     },
     {
-      "id": "qwen",
-      "name": "Qwen CLI",
-      "nameZh": "Qwen CLI",
-      "icon": "other",
-      "color": "#615ced",
-      "platforms": {
-        "macos": "supported",
-        "windows10": "supported",
-        "windows11": "supported",
-        "linux": "planned"
-      },
-      "capabilities": {
-        "usage": "adapter",
-        "skills": "unsupported",
-        "agents": "unsupported",
-        "sessions": "unsupported",
-        "market": "unsupported",
-        "security": "unsupported"
-      }
-    },
-    {
       "id": "commandcode",
       "name": "Command Code",
       "nameZh": "Command Code",
       "icon": "other",
       "color": "#8b5cf6",
-      "platforms": {
-        "macos": "supported",
-        "windows10": "supported",
-        "windows11": "supported",
-        "linux": "planned"
-      },
-      "capabilities": {
-        "usage": "adapter",
-        "skills": "unsupported",
-        "agents": "unsupported",
-        "sessions": "unsupported",
-        "market": "unsupported",
-        "security": "unsupported"
-      }
-    },
-    {
-      "id": "proma",
-      "name": "Proma",
-      "nameZh": "Proma",
-      "icon": "other",
-      "color": "#f97316",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -742,16 +678,100 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       }
     },
     {
-      "id": "cherrystudio",
-      "name": "Cherry Studio",
-      "nameZh": "Cherry Studio",
+      "id": "acode",
+      "name": "AStudio",
+      "nameZh": "AStudio",
       "icon": "other",
-      "color": "#ec4899",
+      "color": "#10a37f",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
         "linux": "planned"
+      },
+      "capabilities": {
+        "usage": "native",
+        "skills": "read-write",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "install-target",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "qoder",
+      "name": "Qoder",
+      "nameZh": "Qoder",
+      "icon": "other",
+      "color": "#16a34a",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "omo",
+      "name": "OmO",
+      "nameZh": "OmO",
+      "icon": "other",
+      "color": "#f43f5e",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "supported"
+      },
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "read",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "prime-agent",
+      "name": "Prime Agent",
+      "nameZh": "Prime Agent",
+      "icon": "other",
+      "color": "#a855f7",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "supported"
+      },
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "minimax-code",
+      "name": "MiniMax Code",
+      "nameZh": "MiniMax Code",
+      "icon": "other",
+      "color": "#2563eb",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "adapter",
@@ -774,7 +794,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
     "workbuddy",
     "openclaw",
     "antigravity",
-    "aipy",
-    "zcode"
+    "zcode",
+    "acode"
   ]
 };

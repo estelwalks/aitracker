@@ -32,7 +32,12 @@ export interface SkillWorkspaceSnapshot {
   readonly snapshot: SkillSnapshot;
   readonly workspace: SkillWorkspace;
 }
-export { SKILL_AGENTS } from "../../lib/local-skills/types.ts";
+export {
+  SKILL_AGENTS,
+  WRITABLE_SKILL_AGENTS,
+} from "../../lib/local-skills/types.ts";
+
+export { exportSkillsToDirectory } from "../../lib/local-skills/server-fns.ts";
 
 const refFor = (skillId: string, agent: string, index: number) =>
   `installation:${encodeURIComponent(skillId)}:${encodeURIComponent(agent)}:${index}`;

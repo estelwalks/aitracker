@@ -28,9 +28,9 @@ function projectItem(
     sessionId: session.sessionId,
     title: session.title,
     source: session.source,
-    dateKey: session.startedAt.slice(0, 10),
-    dateLabel: format.formatDate(session.startedAt),
-    timeLabel: format.formatDateTime(session.startedAt, false),
+    dateKey: session.endedAt.slice(0, 10),
+    dateLabel: format.formatDate(session.endedAt),
+    timeLabel: format.formatDateTime(session.endedAt, false),
     projectKey: session.projectKey,
   };
 }
@@ -58,7 +58,7 @@ export function ChatHistorySidebar({
       data: {
         ...(source ? { filter: { source } } : {}),
         pageSize: 100,
-        sort: { field: "startedAt", direction: "desc" },
+        sort: { field: "endedAt", direction: "desc" },
       },
     })
       .then((page) => {

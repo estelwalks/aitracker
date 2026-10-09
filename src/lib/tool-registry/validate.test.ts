@@ -255,7 +255,8 @@ test("sqlite usage paths require a sqlite-capable reader", () => {
     "a sqlite reader on a sqlite path is valid",
   );
 
-  // The reverse direction: a sqlite reader may not point at a non-sqlite path.
+  // The reverse direction: a sqlite reader must include at least one sqlite
+  // path, but may also carry JSON/JSONL sidecar paths for the same source.
   const reversed = codes([
     validDef({
       capabilities: {
@@ -271,5 +272,25 @@ test("sqlite usage paths require a sqlite-capable reader", () => {
   assert.ok(
     reversed.includes("sqlite-usage-reader-mismatch"),
     `expected a mismatch diagnostic, got ${JSON.stringify(reversed)}`,
+  );
+
+  assert.deepEqual(
+    codes([
+      validDef({
+        capabilities: {
+          ...validDef().capabilities,
+          usage: {
+            mode: "adapter",
+            reader: "generic-sqlite",
+            paths: [
+              sqlitePath,
+              { root: ".newtool/projects", glob: "*.jsonl", format: "jsonl" },
+            ],
+          },
+        },
+      }),
+    ]),
+    [],
+    "a sqlite-capable generic reader may include JSONL sidecar paths when a sqlite path is present",
   );
 });

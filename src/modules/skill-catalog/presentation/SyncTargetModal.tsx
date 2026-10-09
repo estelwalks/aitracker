@@ -15,9 +15,9 @@ import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import {
   requestApprovedSkillSync,
-  SKILL_AGENTS,
   type LocalSkill,
   type SkillAgent,
+  WRITABLE_SKILL_AGENTS,
 } from "../query.ts";
 
 /**
@@ -40,19 +40,22 @@ export function SyncTargetModal({
   onDone: () => Promise<void>;
 }) {
   const { t } = useI18n();
+  const writableAvailableAgents = availableAgents.filter((agent) =>
+    WRITABLE_SKILL_AGENTS.includes(agent),
+  );
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(availableAgents),
+    () => new Set(writableAvailableAgents),
   );
   const [overwrite, setOverwrite] = useState(true);
   const [showMissing, setShowMissing] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const missing = SKILL_AGENTS.filter(
-    (agent) => !availableAgents.includes(agent),
+  const missing = WRITABLE_SKILL_AGENTS.filter(
+    (agent) => !writableAvailableAgents.includes(agent),
   );
   const allSelected =
-    availableAgents.length > 0 &&
-    availableAgents.every((agent) => selected.has(agent));
+    writableAvailableAgents.length > 0 &&
+    writableAvailableAgents.every((agent) => selected.has(agent));
 
   const toggle = (agent: string) => {
     setSelected((current) => {
@@ -64,11 +67,13 @@ export function SyncTargetModal({
   };
 
   const toggleAll = () => {
-    setSelected(allSelected ? new Set() : new Set(availableAgents));
+    setSelected(allSelected ? new Set() : new Set(writableAvailableAgents));
   };
 
   const confirm = async () => {
-    const targetAgents = availableAgents.filter((agent) => selected.has(agent));
+    const targetAgents = writableAvailableAgents.filter((agent) =>
+      selected.has(agent),
+    );
     if (targetAgents.length === 0) {
       toast.error(t("skills.toast.selectTarget"));
       return;
@@ -137,7 +142,7 @@ export function SyncTargetModal({
           <div className="flex items-center justify-between">
             <span className="text-[12px] text-muted-foreground">
               {t("skills.syncTarget.detectedCount", {
-                count: availableAgents.length,
+                count: writableAvailableAgents.length,
               })}
             </span>
             <button
@@ -157,7 +162,7 @@ export function SyncTargetModal({
 
           {/* 2-col grid of detected agents */}
           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {availableAgents.map((agent) => {
+            {writableAvailableAgents.map((agent) => {
               const on = selected.has(agent);
               return (
                 <button
@@ -234,9 +239,10 @@ export function SyncTargetModal({
         <DialogFooter className="mt-3">
           <span className="mr-auto text-[11px] text-muted-foreground">
             {t("skills.syncTarget.count", {
-              selected: availableAgents.filter((agent) => selected.has(agent))
-                .length,
-              available: availableAgents.length,
+              selected: writableAvailableAgents.filter((agent) =>
+                selected.has(agent),
+              ).length,
+              available: writableAvailableAgents.length,
             })}
           </span>
           <AITrackerButton variant="default" disabled={busy} onClick={onClose}>

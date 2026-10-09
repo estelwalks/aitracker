@@ -115,6 +115,7 @@ const READER_DEFAULT_ROOTS: Readonly<Record<string, readonly string[]>> = {
   "dsh-session-v1": [".dsh"],
   "pi-session-v1": [".pi"],
   "omp-session-v1": [".omp", ".oh-my-pi"],
+  "omo-session-v1": [".omo"],
   "hermes-session-v1": [".hermes"],
   "workbuddy-session-v1": [".workbuddy"],
   "zcode-session-v1": [".zcode"],
@@ -375,6 +376,27 @@ function extractContent(content: unknown): { text: string; thinking: string } {
     }
   }
   return { text, thinking };
+}
+
+/** Marvis sometimes serializes message blocks into the TEXT content column. */
+function extractContentValue(content: unknown): {
+  text: string;
+  thinking: string;
+} {
+  if (typeof content !== "string") return extractContent(content);
+  const trimmed = content.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === "object" && parsed !== null) {
+        const extracted = extractContent(parsed);
+        if (extracted.text || extracted.thinking) return extracted;
+      }
+    } catch {
+      // Plain text that happens to start with JSON punctuation is valid.
+    }
+  }
+  return { text: content, thinking: "" };
 }
 
 function reasoningText(item: JsonObject): string | undefined {
@@ -1203,6 +1225,237 @@ async function readWorkbuddyTranscript(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Doubao Work — workspace/.sessions/<session>/agents/<agent>/system/
+// trajectory.jsonl.  Trajectories contain user, assistant and tool records;
+// only the two conversational roles are exposed by the session detail view.
+// ---------------------------------------------------------------------------
+
+async function readDoubaoTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const sessionsRoot = join(root, ".sessions");
+  const files = await collectJsonlFiles(
+    [sessionsRoot],
+    (relativePath, name) =>
+      name === "trajectory.jsonl" &&
+      /(?:^|\/)agents\/[^/]+\/system\/trajectory\.jsonl$/u.test(relativePath),
+    limits.maxFiles,
+  );
+  for (const file of files) {
+    if (out.length >= limits.maxMessages) return;
+    const relativePath = relative(sessionsRoot, file.path).split(sep).join("/");
+    if (relativePath.split("/")[0] !== sessionId) continue;
+    await readJsonLines(
+      file.path,
+      (record) => {
+        if (out.length >= limits.maxMessages) return;
+        const role = stringValue(record.role);
+        if (role !== "user" && role !== "assistant") return;
+        const { text, thinking } = extractContent(record.content);
+        if (text.length === 0 && thinking.length === 0) return;
+        pushMessage(
+          out,
+          role,
+          text,
+          thinking || undefined,
+          parseTimestampMs(record.timestamp ?? record.time ?? record.createdAt),
+          limits,
+        );
+      },
+      limits,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Kimi Work — home/sessions/<workspace>/<conversation>/agents/<agent>/
+// wire.jsonl.  The wire stream contains context.append_message records for
+// visible conversation messages; tool and loop events are intentionally
+// omitted from the transcript.
+// ---------------------------------------------------------------------------
+
+async function readKimiTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const sessionsRoot = join(root, "sessions");
+  const files = await collectJsonlFiles(
+    [sessionsRoot],
+    (relativePath, name) =>
+      name === "wire.jsonl" &&
+      /(?:^|\/)agents\/[^/]+\/wire\.jsonl$/u.test(relativePath),
+    limits.maxFiles,
+  );
+  for (const file of files) {
+    if (out.length >= limits.maxMessages) return;
+    const relativePath = relative(sessionsRoot, file.path).split(sep).join("/");
+    const segments = relativePath.split("/");
+    const agentsIndex = segments.lastIndexOf("agents");
+    if (agentsIndex <= 0 || segments[agentsIndex - 1] !== sessionId) continue;
+    await readJsonLines(
+      file.path,
+      (record) => {
+        if (out.length >= limits.maxMessages) return;
+        if (stringValue(record.type) !== "context.append_message") return;
+        const message = asObject(record.message);
+        const role = stringValue(message?.role);
+        if (role !== "user" && role !== "assistant") return;
+        const { text, thinking } = extractContent(message?.content);
+        if (text.length === 0 && thinking.length === 0) return;
+        pushMessage(
+          out,
+          role,
+          text,
+          thinking || undefined,
+          parseTimestampMs(record.time),
+          limits,
+        );
+      },
+      limits,
+    );
+  }
+}
+
+async function collectMarvisDatabases(
+  usersRoot: string,
+  maxFiles: number,
+): Promise<FileCandidate[]> {
+  if (!(await directoryAvailable(usersRoot))) return [];
+  const files: FileCandidate[] = [];
+  let directory;
+  try {
+    directory = await opendir(usersRoot);
+  } catch {
+    return files;
+  }
+  for await (const entry of directory) {
+    if (!entry.isDirectory()) continue;
+    const databasePath = join(usersRoot, entry.name, "database", "data.db");
+    try {
+      const info = await stat(databasePath);
+      if (!info.isFile()) continue;
+      files.push({ path: databasePath });
+      if (files.length >= maxFiles) break;
+    } catch {
+      // A user database can disappear while Marvis is switching accounts.
+    }
+  }
+  return files;
+}
+
+// ---------------------------------------------------------------------------
+// Marvis — MarvisData/User/<user>/database/data.db.  Conversation text lives
+// in messages; tool-call rows are omitted and message metadata is not exposed.
+// ---------------------------------------------------------------------------
+
+async function readMarvisTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const databases = await collectMarvisDatabases(root, limits.maxFiles);
+  for (const file of databases) {
+    if (out.length >= limits.maxMessages) return;
+    let database: ReturnType<typeof openReadOnlySqlite> | undefined;
+    try {
+      database = openReadOnlySqlite(file.path);
+      const rows = database.queryRows(
+        `SELECT role, content, created_at
+         FROM messages
+         WHERE conversation_id = ? AND role IN ('user', 'assistant')
+         ORDER BY message_seq ASC, created_at ASC`,
+        sessionId,
+      );
+      for (const row of rows) {
+        if (out.length >= limits.maxMessages) return;
+        const role = stringValue(row.role);
+        if (role !== "user" && role !== "assistant") continue;
+        const { text, thinking } = extractContentValue(
+          sqliteTextValue(row.content) ?? "",
+        );
+        if (text.length === 0 && thinking.length === 0) continue;
+        pushMessage(
+          out,
+          role,
+          text,
+          thinking || undefined,
+          parseTimestampMs(row.created_at),
+          limits,
+        );
+      }
+    } catch {
+      // Missing/incompatible databases degrade to an empty transcript.
+    } finally {
+      database?.close();
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// QCode — ~/.q-code is the configuration root; session JSONL lives in the
+// sibling ~/sessions directory.  Older files derive the id from the filename,
+// while newer records repeat it in sessionId/payload.sessionId.
+// ---------------------------------------------------------------------------
+
+function qcodeSessionIdFromFile(path: string): string {
+  const name = basename(path);
+  return name.endsWith(".jsonl") ? name.slice(0, -".jsonl".length) : name;
+}
+
+async function readQcodeTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const sessionsRoot = join(dirname(root), "sessions");
+  const files = await collectJsonlFiles(
+    [sessionsRoot],
+    (_relativePath, name) => name.endsWith(".jsonl"),
+    limits.maxFiles,
+  );
+  for (const file of files) {
+    if (out.length >= limits.maxMessages) return;
+    const fileSessionId = qcodeSessionIdFromFile(file.path);
+    if (fileSessionId !== sessionId && !file.path.includes(sessionId)) continue;
+    await readJsonLines(
+      file.path,
+      (record) => {
+        if (out.length >= limits.maxMessages) return;
+        const payload = asObject(record.payload);
+        const recordSessionId =
+          stringValue(record.sessionId) ?? stringValue(payload?.sessionId);
+        if (recordSessionId != null && recordSessionId !== sessionId) return;
+        const message = asObject(record.message) ?? asObject(payload?.message);
+        const role = stringValue(record.role) ?? stringValue(message?.role);
+        if (role !== "user" && role !== "assistant") return;
+        const { text, thinking } = extractContentValue(
+          record.content ?? message?.content ?? payload?.content,
+        );
+        if (text.length === 0 && thinking.length === 0) return;
+        pushMessage(
+          out,
+          role,
+          text,
+          thinking || undefined,
+          parseTimestampMs(
+            record.ts ?? record.timestamp ?? payload?.ts ?? payload?.timestamp,
+          ),
+          limits,
+        );
+      },
+      limits,
+    );
+  }
+}
+
 /** Session id encoded in a pi file name `<createdAt>_<id>.jsonl`. */
 function piLogFileNameId(fileName: string): string | undefined {
   const base = fileName.endsWith(".jsonl")
@@ -1502,10 +1755,20 @@ async function readSourceTranscript(
       return readPiTranscript(root, sessionId, out, limits);
     case "omp-session-v1":
       return readPiTranscript(root, sessionId, out, limits);
+    case "omo-session-v1":
+      return readPiTranscript(root, sessionId, out, limits);
     case "hermes-session-v1":
       return readHermesTranscript(root, sessionId, out, limits);
     case "workbuddy-session-v1":
       return readWorkbuddyTranscript(root, sessionId, out, limits);
+    case "doubao-work-session-v1":
+      return readDoubaoTranscript(root, sessionId, out, limits);
+    case "kimi-work-session-v1":
+      return readKimiTranscript(root, sessionId, out, limits);
+    case "marvis-session-v1":
+      return readMarvisTranscript(root, sessionId, out, limits);
+    case "qcode-session-v1":
+      return readQcodeTranscript(root, sessionId, out, limits);
     case "zcode-session-v1":
       return readZcodeTranscript(root, sessionId, out, limits);
     default:

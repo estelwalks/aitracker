@@ -16,6 +16,11 @@ export const sessions = {
     d30: "최근 30일",
     d90: "최근 90일",
   },
+  dateField: {
+    label: "정렬",
+    lastActivity: "마지막 세션",
+    createdAt: "생성 시간",
+  },
   status: {
     all: "모든 상태",
     available: "복원 가능",
@@ -48,6 +53,11 @@ export const sessions = {
   },
   refreshing: "새로고침 중",
   refreshNow: "지금 새로고침",
+  export: {
+    selectPage: "현재 페이지 선택",
+    selected: "선택 항목 내보내기 ({count})",
+    all: "모든 세션 내보내기",
+  },
   group: {
     today: "오늘",
     yesterday: "어제",
@@ -99,6 +109,8 @@ export const sessions = {
     refreshed: "세션 목록이 새로고침되었습니다",
     hashCopied: "세션 ID가 복사되었습니다",
     copied: "로컬 복원 요청을 시작했습니다",
+    exported: "세션 {count}개를 내보냈습니다",
+    exportFailed: "세션을 내보내지 못했습니다. 다시 시도하세요",
   },
   transcript: {
     loading: "로컬 세션 대화를 읽는 중…",

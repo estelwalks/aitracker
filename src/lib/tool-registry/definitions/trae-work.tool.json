@@ -1,0 +1,89 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "trae-work",
+  "catalogVisible": false,
+  "display": {
+    "name": "Trae Work",
+    "nameZh": "Trae Work",
+    "icon": "other",
+    "color": "#6c63ff"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "planned",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos"],
+        "base": "home",
+        "path": ".trae"
+      },
+      {
+        "targets": ["macos"],
+        "base": "home",
+        "path": ".trae-cn"
+      }
+    ]
+  },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "home",
+        "path": ".trae"
+      },
+      {
+        "base": "home",
+        "path": ".trae-cn"
+      }
+    ],
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "home",
+          "path": ".trae/builtin/global/skills"
+        },
+        {
+          "base": "home",
+          "path": ".trae/builtin_skills"
+        },
+        {
+          "base": "home",
+          "path": ".trae-cn/builtin/global/skills"
+        },
+        {
+          "base": "home",
+          "path": ".trae-cn/builtin/work"
+        },
+        {
+          "base": "home",
+          "path": ".trae-cn/builtin/code"
+        },
+        {
+          "base": "home",
+          "path": ".trae-cn/builtin/design"
+        }
+      ],
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 8
+    }
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "unsupported"
+    },
+    "skills": "read",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "read",
+      "reader": "trae-work-session-v1"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

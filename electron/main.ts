@@ -1055,6 +1055,16 @@ function registerIpcHandlers(): void {
     if (result.canceled || !selected) return null;
     return selected;
   });
+  ipcMain.handle(desktopIpc.selectSkillExportDirectory, async (event) => {
+    assertTrustedSender(event);
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, {
+          properties: ["openDirectory"],
+        })
+      : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+    if (result.canceled) return null;
+    return result.filePaths[0] ?? null;
+  });
   ipcMain.handle(
     desktopIpc.startSecurityScan,
     async (event, request: unknown) => {
@@ -1415,6 +1425,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.setCurrencyMode);
     ipcMain.removeHandler(desktopIpc.listSecuritySkills);
     ipcMain.removeHandler(desktopIpc.selectSecuritySkillDirectory);
+    ipcMain.removeHandler(desktopIpc.selectSkillExportDirectory);
     ipcMain.removeHandler(desktopIpc.startSecurityScan);
     ipcMain.removeHandler(desktopIpc.getSecurityScanStatus);
     ipcMain.removeHandler(desktopIpc.getSecurityScanHistory);

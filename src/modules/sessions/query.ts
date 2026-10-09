@@ -4,6 +4,7 @@ import { AppError } from "../../lib/errors.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../../lib/tool-registry/public-manifest.generated.ts";
 import type {
   SessionFilter,
+  SessionDateField,
   SessionSortDirection,
   SessionSortField,
   SessionStatus,
@@ -13,6 +14,7 @@ import type {
   SessionDetailInput,
   SessionsPageInput,
   TranscriptInput,
+  SessionsExportInput,
 } from "./api.server.ts";
 
 const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
@@ -33,6 +35,7 @@ const STATUS_VALUES = new Set<SessionStatus>([
   "lost",
   "unavailable",
 ]);
+const DATE_FIELDS = new Set<SessionDateField>(["startedAt", "endedAt"]);
 const SORT_FIELDS = new Set<SessionSortField>([
   "startedAt",
   "endedAt",
@@ -42,6 +45,29 @@ const SORT_FIELDS = new Set<SessionSortField>([
 const SORT_DIRECTIONS = new Set<SessionSortDirection>(["asc", "desc"]);
 const PAGE_SIZE_DEFAULT = 25;
 const PAGE_SIZE_MAX = 100;
+
+function validateSessionsExportInput(value: unknown): SessionsExportInput {
+  if (value == null) return {};
+  const input = record(value);
+  onlyKeys(input, ["sessions"]);
+  if (input.sessions === undefined) return {};
+  if (!Array.isArray(input.sessions) || input.sessions.length > 10_000)
+    throw new AppError("errors.sessions.filterInvalid");
+  const sessions = input.sessions.map((item) => {
+    const entry = record(item);
+    onlyKeys(entry, ["source", "sessionId"]);
+    if (
+      typeof entry.source !== "string" ||
+      !SESSION_SOURCES.has(entry.source) ||
+      typeof entry.sessionId !== "string" ||
+      !SAFE_SESSION_ID.test(entry.sessionId)
+    ) {
+      throw new AppError("errors.sessions.filterInvalid");
+    }
+    return { source: entry.source, sessionId: entry.sessionId };
+  });
+  return { sessions };
+}
 
 function record(value: unknown): Record<string, unknown> {
   if (value == null || typeof value !== "object" || Array.isArray(value))
@@ -84,7 +110,14 @@ function positiveInteger(
 function parseFilter(value: unknown): SessionFilter {
   if (value === undefined) return {};
   const input = record(value);
-  onlyKeys(input, ["source", "projectId", "range", "keyword", "status"]);
+  onlyKeys(input, [
+    "source",
+    "projectId",
+    "range",
+    "dateField",
+    "keyword",
+    "status",
+  ]);
 
   const source = optionalText(input.source, 80);
   const projectId = optionalText(input.projectId, 120);
@@ -98,6 +131,13 @@ function parseFilter(value: unknown): SessionFilter {
       !RANGE_VALUES.has(range as NonNullable<SessionFilter["range"]>))
   )
     throw new AppError("errors.sessions.filterInvalid");
+  const dateField = input.dateField;
+  if (
+    dateField !== undefined &&
+    (typeof dateField !== "string" ||
+      !DATE_FIELDS.has(dateField as SessionDateField))
+  )
+    throw new AppError("errors.sessions.filterInvalid");
   const status = input.status;
   if (
     status !== undefined &&
@@ -109,6 +149,9 @@ function parseFilter(value: unknown): SessionFilter {
     ...(source === undefined ? {} : { source }),
     ...(projectId === undefined ? {} : { projectId }),
     ...(range === undefined ? {} : { range: range as SessionFilter["range"] }),
+    ...(dateField === undefined
+      ? {}
+      : { dateField: dateField as SessionDateField }),
     ...(keyword === undefined ? {} : { keyword }),
     ...(status === undefined ? {} : { status: status as SessionStatus }),
   };
@@ -120,7 +163,7 @@ export function validateSessionsPageInput(value: unknown): SessionsPageInput {
   onlyKeys(input, ["filter", "page", "pageSize", "sort"]);
   const sortInput = input.sort === undefined ? {} : record(input.sort);
   onlyKeys(sortInput, ["field", "direction"]);
-  const field = sortInput.field ?? "startedAt";
+  const field = sortInput.field ?? "endedAt";
   const direction = sortInput.direction ?? "desc";
   if (typeof field !== "string" || !SORT_FIELDS.has(field as SessionSortField))
     throw new AppError("errors.sessions.filterInvalid");
@@ -219,4 +262,11 @@ export const getSessionTranscript = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const { loadSessionTranscript } = await import("./api.server.ts");
     return loadSessionTranscript(data);
+  });
+
+export const exportSessionsQuery = createServerFn({ method: "POST" })
+  .validator(validateSessionsExportInput)
+  .handler(async ({ data }) => {
+    const { exportSessions } = await import("./api.server.ts");
+    return exportSessions(data);
   });

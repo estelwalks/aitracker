@@ -52,9 +52,24 @@ const SCHEMAS: Record<string, string> = {
   kiro: `
     CREATE TABLE tokens_generated(id TEXT, timestamp TEXT, model TEXT,
       tokens_prompt INTEGER, tokens_generated INTEGER);`,
+  "kilo-cli": `
+    CREATE TABLE message(id TEXT, session_id TEXT, time_updated INTEGER, data TEXT);`,
   mimo: `
     CREATE TABLE message(id TEXT, session_id TEXT, time_updated INTEGER, data TEXT);`,
+  marvis: `
+    CREATE TABLE conversations(conversation_id TEXT, title TEXT, status TEXT,
+      metadata TEXT, created_at TEXT, updated_at TEXT);
+    CREATE TABLE llm_token_usage(id INTEGER, usage_date TEXT, conversation_id TEXT,
+      response_id TEXT, model_id TEXT, is_local INTEGER, input_tokens INTEGER,
+      output_tokens INTEGER, thinking_tokens INTEGER, cached_tokens INTEGER,
+      total_tokens INTEGER, created_at TEXT, metadata TEXT);`,
   qodercn: `
+    CREATE TABLE chat_message(session_id TEXT, gmt_create INTEGER, model_info TEXT,
+      token_info TEXT, request_id TEXT, role TEXT);
+    CREATE TABLE chat_record(request_id TEXT, extra TEXT);
+    CREATE TABLE chat_session(session_id TEXT, project_name TEXT, project_uri TEXT,
+      preferred_model_info TEXT);`,
+  qoder: `
     CREATE TABLE chat_message(session_id TEXT, gmt_create INTEGER, model_info TEXT,
       token_info TEXT, request_id TEXT, role TEXT);
     CREATE TABLE chat_record(request_id TEXT, extra TEXT);

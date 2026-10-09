@@ -32,6 +32,7 @@ export const desktopIpc = {
   listSecuritySkills: "security:list-skills",
   selectSecuritySkillDirectory: "security:select-skill-directory",
   selectToolDataDirectory: "sources:select-tool-data-directory",
+  selectSkillExportDirectory: "skills:select-export-directory",
   startSecurityScan: "security:start-scan",
   getSecurityScanStatus: "security:get-scan-status",
   getSecurityScanHistory: "security:get-scan-history",
@@ -492,6 +493,8 @@ export interface DesktopApi {
   selectSecuritySkillDirectory(): Promise<SecuritySkillTarget | null>;
   /** Native folder picker for the Sources "设置数据目录" configuration. */
   selectToolDataDirectory(): Promise<string | null>;
+  /** Native folder picker for the Skill export destination. */
+  selectSkillExportDirectory(): Promise<string | null>;
   startSecurityScan(
     request: SecurityScanStartRequest,
   ): Promise<SecurityScanState>;

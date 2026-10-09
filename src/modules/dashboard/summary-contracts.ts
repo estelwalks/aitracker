@@ -62,10 +62,12 @@ export interface DashboardWindowSummary {
   readonly projects: readonly DashboardV2BreakdownRow[];
   readonly context: DashboardV2ContextCounts;
   readonly contextAvailability: DashboardV2ContextAvailability;
-  /** Window-scoped tool cards (tokens/events within this window). */
+  /** Window-scoped tool cards (usage and session activity within this window). */
   readonly tools: readonly (DashboardV2Tool & {
     readonly tokens: number;
     readonly events: number;
+    /** Sessions observed for this tool in the selected period. */
+    readonly sessionCount?: number;
   })[];
 }
 
@@ -95,6 +97,8 @@ export interface DashboardSummaryReadModel extends WithReadModelMeta {
   readonly tools: readonly (DashboardV2Tool & {
     readonly tokens: number;
     readonly events: number;
+    /** Sessions observed for this tool in the selected period. */
+    readonly sessionCount?: number;
   })[];
   readonly skills: {
     readonly available: boolean;

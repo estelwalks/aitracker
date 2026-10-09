@@ -22,8 +22,8 @@ import {
 
 test("baseline tools remain present in the expanded AI_TOOLS catalog", () => {
   // The frozen baseline is the 27-tool product catalog captured pre-migration.
-  // aipy/cline are user-added extension tools (catalogVisible=true) and now
-  // appear in AI_TOOLS after the 27 baseline tools.
+  // Public additions appear in AI_TOOLS after the 27 baseline tools; hidden
+  // definitions remain registry-only until their data contract is verified.
   assert.ok(AI_TOOLS.length >= BASELINE_TOOLS.length);
   for (const expected of BASELINE_TOOLS) {
     const live = AI_TOOLS.find((tool) => tool.id === expected.id);
@@ -59,7 +59,7 @@ test("baseline tools remain present in the expanded AI_TOOLS catalog", () => {
     AI_TOOLS.slice(0, 27).map((t) => t.id),
     BASELINE_TOOLS.map((t) => t.id),
   );
-  assert.equal(AI_TOOLS.length, 36);
+  assert.equal(AI_TOOLS.length, 37);
 });
 
 test("baseline usage parsing matches usageLogParsingFor for every tool", () => {
@@ -121,6 +121,7 @@ test("baseline usage parsing matches usageLogParsingFor for every tool", () => {
       tool.id === "qodercn" ||
       tool.id === "anythingllm" ||
       tool.id === "kiro" ||
+      tool.id === "kilo-cli" ||
       tool.id === "mimo" ||
       tool.id === "craft"
     ) {
@@ -176,8 +177,12 @@ test("baseline usage adapters remain represented (native sources included)", () 
   // Antigravity contribute native usage adapters inside the frozen set, so the
   // live catalog matches it one-for-one (no extra "+1 extension"). dsh is a
   // deliberate post-baseline addition and is asserted separately below.
-  assert.ok(BUILTIN_USAGE_ADAPTERS.length >= BASELINE_USAGE_ADAPTERS.length);
-  for (const expected of BASELINE_USAGE_ADAPTERS) {
+  const visibleToolIds = new Set(AI_TOOLS.map((tool) => tool.id));
+  const visibleBaselineAdapters = BASELINE_USAGE_ADAPTERS.filter((adapter) =>
+    visibleToolIds.has(adapter.source),
+  );
+  assert.ok(BUILTIN_USAGE_ADAPTERS.length >= visibleBaselineAdapters.length);
+  for (const expected of visibleBaselineAdapters) {
     const live = BUILTIN_USAGE_ADAPTERS.find(
       (adapter) => adapter.source === expected.source,
     );

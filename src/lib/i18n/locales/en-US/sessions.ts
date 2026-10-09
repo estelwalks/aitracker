@@ -16,6 +16,11 @@ export const sessions = {
     d30: "Last 30 days",
     d90: "Last 90 days",
   },
+  dateField: {
+    label: "Sort",
+    lastActivity: "Last session",
+    createdAt: "Created",
+  },
   status: {
     all: "All statuses",
     available: "Resumable",
@@ -48,6 +53,11 @@ export const sessions = {
   },
   refreshing: "Refreshing",
   refreshNow: "Refresh now",
+  export: {
+    selectPage: "Select this page",
+    selected: "Export selected ({count})",
+    all: "Export all sessions",
+  },
   group: {
     today: "Today",
     yesterday: "Yesterday",
@@ -99,6 +109,8 @@ export const sessions = {
     refreshed: "Session list refreshed",
     hashCopied: "Session ID copied",
     copied: "Local recovery request started",
+    exported: "Exported {count} sessions",
+    exportFailed: "Session export failed; try again",
   },
   transcript: {
     loading: "Reading local session conversation…",

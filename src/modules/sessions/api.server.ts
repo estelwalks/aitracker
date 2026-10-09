@@ -8,6 +8,7 @@ import type {
   SessionSortField,
   SessionSummary,
   SessionTranscript,
+  SessionExport,
 } from "./contracts.ts";
 
 /** Renderer-safe page request after the transport validator has normalized it. */
@@ -35,6 +36,13 @@ export interface ResumeSessionInput {
 export interface TranscriptInput {
   readonly source: string;
   readonly sessionId: string;
+}
+
+export interface SessionsExportInput {
+  readonly sessions?: readonly {
+    readonly source: string;
+    readonly sessionId: string;
+  }[];
 }
 
 function requestFor(input: SessionsPageInput): SessionPageRequest {
@@ -96,7 +104,7 @@ export async function loadSessionDetail(
       filter: { keyword: input.sessionId },
       page: 1,
       pageSize: 100,
-      sort: { field: "startedAt", direction: "desc" },
+      sort: { field: "endedAt", direction: "desc" },
     });
     if (!query.ok) throw new AppError("errors.sessions.queryFailed");
     return (
@@ -147,5 +155,69 @@ export async function loadSessionTranscript(
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError("errors.sessions.transcriptUnavailable");
+  }
+}
+
+async function loadAllSessions(): Promise<readonly SessionSummary[]> {
+  const port = await sessionsPort();
+  const results: SessionSummary[] = [];
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const result = await port.query({
+      page,
+      pageSize: 100,
+      sort: { field: "endedAt", direction: "desc" },
+    });
+    if (!result.ok) throw new AppError("errors.sessions.queryFailed");
+    results.push(...result.value.sessions);
+    totalPages = result.value.totalPages;
+    page += 1;
+  } while (page <= totalPages);
+  return results;
+}
+
+/** Export selected sessions or the complete local session snapshot. */
+export async function exportSessions(
+  input: SessionsExportInput,
+): Promise<SessionExport> {
+  try {
+    const sessions = await loadAllSessions();
+    const selected = input.sessions;
+    const key = (source: string, sessionId: string) =>
+      `${source}\u0000${sessionId}`;
+    const selectedKeys =
+      selected == null
+        ? null
+        : new Set(selected.map((item) => key(item.source, item.sessionId)));
+    const targets = sessions.filter(
+      (session) =>
+        selectedKeys == null ||
+        selectedKeys.has(key(session.source, session.sessionId)),
+    );
+    const entries: SessionExport["sessions"][number][] = [];
+    // Read transcripts one at a time. The final JSON still contains every
+    // requested session, but this avoids opening and parsing the entire local
+    // corpus concurrently during a full export.
+    for (const summary of targets) {
+      let transcript: SessionTranscript | null = null;
+      try {
+        transcript = await loadSessionTranscript({
+          source: summary.source,
+          sessionId: summary.sessionId,
+        });
+      } catch {
+        // A stale/deleted local log should not prevent the remaining export.
+      }
+      entries.push({ summary, transcript });
+    }
+    return {
+      formatVersion: 1,
+      exportedAt: new Date().toISOString(),
+      sessions: entries,
+    };
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("errors.sessions.queryFailed");
   }
 }

@@ -87,6 +87,7 @@ export const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
   },
   { agent: "Gemini CLI", toolId: "gemini-cli", suffixes: [".gemini/skills"] },
   { agent: "Cursor", toolId: "cursor", suffixes: [".cursor/skills"] },
+  { agent: "AStudio", toolId: "acode", suffixes: [".acode/skills"] },
   {
     agent: "Antigravity",
     toolId: "antigravity",
@@ -129,6 +130,55 @@ export const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
     suffixes: [".zcode/skills", ".zcode/cli/plugins/cache"],
     // Mirrors the registry rule: marketplace plugin Skills sit several levels
     // below the plugin-cache root (plugin/version/skills/<name>).
+    maxDepth: 8,
+  },
+  {
+    agent: "豆包 Work",
+    toolId: "doubao-work",
+    suffixes: [
+      "Library/Application Support/DoubaoWork/Default/.doubaowork/agent_mode/workspace/.user_skills",
+      "Library/Application Support/DoubaoWork/Default/.doubaowork/agent_mode/workspace/.skills",
+      "AppData/Roaming/DoubaoWork/Default/.doubaowork/agent_mode/workspace/.user_skills",
+      "AppData/Roaming/DoubaoWork/Default/.doubaowork/agent_mode/workspace/.skills",
+    ],
+    maxDepth: 5,
+  },
+  {
+    agent: "Kimi Work",
+    toolId: "kimi-work",
+    suffixes: [
+      "Library/Application Support/kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/plugins/managed",
+      "Library/Application Support/kimi-desktop/daimon-share/daimon/skills",
+      "AppData/Roaming/kimi-desktop/daimon-share/daimon/runtime/kimi-code/home/plugins/managed",
+      "AppData/Roaming/kimi-desktop/daimon-share/daimon/skills",
+    ],
+    maxDepth: 8,
+  },
+  {
+    agent: "QCode",
+    toolId: "qcode",
+    suffixes: [".q-code/skills"],
+    maxDepth: 5,
+  },
+  {
+    agent: "Marvis",
+    toolId: "marvis",
+    suffixes: [
+      "Library/Application Support/com.tencent.mac.marvis/MarvisData/User",
+    ],
+    maxDepth: 6,
+  },
+  {
+    agent: "Trae Work",
+    toolId: "trae-work",
+    suffixes: [
+      ".trae/builtin/global/skills",
+      ".trae/builtin_skills",
+      ".trae-cn/builtin/global/skills",
+      ".trae-cn/builtin/work",
+      ".trae-cn/builtin/code",
+      ".trae-cn/builtin/design",
+    ],
     maxDepth: 8,
   },
 ];

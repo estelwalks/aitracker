@@ -13,6 +13,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Download,
   Loader2,
   RefreshCw,
   Trash2,
@@ -21,6 +22,7 @@ import {
 import { toast } from "sonner";
 
 import { BrandIcon } from "../../../components/BrandIcon";
+import { FilterSelect } from "../../../components/FilterSelect";
 import {
   EmptyState,
   Pagination,
@@ -30,9 +32,11 @@ import {
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import { STANDARD_PAGE_SIZE } from "../../../lib/pagination";
+import type { DesktopApi } from "../../../../electron/contracts";
 import type { AgentUsageOverviewReadModel } from "../usage-overview-contracts";
 import {
   refreshSkillSnapshot,
+  exportSkillsToDirectory,
   requestApprovedBatchUninstall,
   requestApprovedSkillInstall,
   requestApprovedSkillUninstall,
@@ -212,6 +216,46 @@ export function SkillsPage({
       busyRef.current = false;
     }
   };
+
+  const exportSkills = async (skillIds?: readonly string[]) => {
+    if (busy) return;
+    const desktop =
+      typeof window === "undefined"
+        ? null
+        : ((window as Window & { desktopApi?: DesktopApi }).desktopApi ?? null);
+    if (desktop == null) {
+      toast.error(t("skills.toast.exportUnavailable"));
+      return;
+    }
+    const destination = await desktop.selectSkillExportDirectory();
+    if (destination == null) return;
+    setBusy(true);
+    busyRef.current = true;
+    try {
+      const result = await exportSkillsToDirectory({
+        data: {
+          destinationDirectory: destination,
+          ...(skillIds == null ? {} : { skillIds }),
+        },
+      });
+      toast.success(
+        t("skills.toast.exported", {
+          count: format.formatNumber(result.skillCount),
+          folder: result.directoryName,
+        }),
+      );
+    } catch (error) {
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
+    } finally {
+      setBusy(false);
+      busyRef.current = false;
+    }
+  };
+
+  const exportAllSkills = () => exportSkills();
+
+  const exportSelectedSkills = () => exportSkills([...checkedIds]);
 
   const run = async (action: () => Promise<unknown>, success: string) => {
     setBusy(true);
@@ -847,6 +891,38 @@ export function SkillsPage({
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={toggleAllPaged}
+                disabled={busy || paged.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <span className="grid size-3.5 place-items-center rounded border border-current">
+                  {allPagedChecked ? <Check className="size-2.5" /> : null}
+                </span>
+                {t("skills.batch.selectPage")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void exportSelectedSkills()}
+                disabled={busy || checkedIds.size === 0}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Download className="size-3.5" />
+                {t("skills.batch.export", {
+                  count: format.formatNumber(checkedIds.size),
+                })}
+              </button>
+              <button
+                type="button"
+                onClick={() => void exportAllSkills()}
+                disabled={busy}
+                title={t("skills.actions.exportAll")}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary/12 px-2.5 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Download className="size-3.5" />
+                {t("skills.actions.exportAll")}
+              </button>
             </div>
           </section>
 
@@ -956,20 +1032,7 @@ export function SkillsPage({
             <>
               {/* Selection bar */}
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={toggleAllPaged}
-                  className="inline-flex items-center gap-2 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <span
-                    className={`grid size-5 shrink-0 place-items-center rounded-[6px] border transition-colors ${
-                      allPagedChecked
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-surface-2"
-                    }`}
-                  >
-                    {allPagedChecked && <Check className="size-2.5" />}
-                  </span>
+                <span className="text-[12px] text-muted-foreground">
                   {checkedIds.size > 0
                     ? t("skills.batch.selectedCount", {
                         count: format.formatNumber(checkedIds.size),
@@ -977,28 +1040,28 @@ export function SkillsPage({
                     : t("skills.batch.totalCount", {
                         count: format.formatNumber(assets.length),
                       })}
-                </button>
+                </span>
 
                 {checkedIds.size === 0 ? (
                   <div className="ml-auto flex shrink-0 items-center gap-2">
-                    <select
+                    <FilterSelect
                       value={sourceLabel}
-                      onChange={(event) => {
-                        setSourceLabel(event.target.value);
+                      onChange={(value) => {
+                        setSourceLabel(value);
                         setPage(1);
                       }}
-                      aria-label={t("skills.filter.source")}
-                      className="h-[28px] rounded-full bg-surface-2/70 px-3 text-[12px] text-foreground outline-none"
-                    >
-                      <option value="all">
-                        {t("skills.filter.sourceAll")}
-                      </option>
-                      {sourceOptions.map((option) => (
-                        <option key={option.name} value={option.name}>
-                          {option.name} · {option.count}
-                        </option>
-                      ))}
-                    </select>
+                      ariaLabel={t("skills.filter.source")}
+                      options={[
+                        {
+                          value: "all",
+                          label: t("skills.filter.sourceAll"),
+                        },
+                        ...sourceOptions.map((option) => ({
+                          value: option.name,
+                          label: `${option.name} · ${option.count}`,
+                        })),
+                      ]}
+                    />
                     {partialSkills.length > 0 && (
                       <button
                         type="button"

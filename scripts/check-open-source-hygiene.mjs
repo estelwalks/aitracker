@@ -37,7 +37,7 @@ const RULES = [
   {
     id: "local-absolute-path",
     pattern:
-      /(?:\/Users\/[A-Za-z][A-Za-z0-9._-]{2,}|\/home\/[A-Za-z][A-Za-z0-9._-]{2,}|[A-Za-z]:\\Users\\[A-Za-z][A-Za-z0-9._-]{2,})/g,
+      /(?<![A-Za-z0-9._/-])(?:\/Users\/[A-Za-z][A-Za-z0-9._-]{2,}|\/home\/[A-Za-z][A-Za-z0-9._-]{2,}|[A-Za-z]:\\Users\\[A-Za-z][A-Za-z0-9._-]{2,})/g,
   },
   {
     id: "credential-value",

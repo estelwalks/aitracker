@@ -336,11 +336,12 @@ interface PersistentClaudeFileEntry extends PersistentFileEntryBase {
 }
 
 /**
- * Codex-family rollout sources: OpenAI Codex (`~/.codex/sessions`) and the
- * Every Code CLI, which persists the same rollout JSONL layout under
- * `~/.code/sessions`. Both share one controlled parser (`scanCodexFamily`).
+ * Codex-family rollout sources: OpenAI Codex (`~/.codex/sessions`), AStudio
+ * (`~/.acode/sessions`), and the Every Code CLI, which persists the same
+ * rollout JSONL layout under `~/.code/sessions`. They share one controlled
+ * parser (`scanCodexFamily`).
  */
-type RolloutSource = "codex" | "every-code";
+type RolloutSource = "codex" | "every-code" | "acode";
 
 interface PersistentCodexFileEntry extends PersistentFileEntryBase {
   source: RolloutSource;
@@ -382,7 +383,13 @@ interface DshPersistentFileFields {
 interface PersistentGenericFileEntry extends PersistentFileEntryBase {
   source: Exclude<
     LocalUsageSource,
-    "claude-code" | "codex" | "gemini-cli" | "grok" | "openclaw"
+    | "claude-code"
+    | "codex"
+    | "every-code"
+    | "acode"
+    | "gemini-cli"
+    | "grok"
+    | "openclaw"
   >;
   events: LocalUsageEvent[];
   /**
@@ -1786,6 +1793,33 @@ async function scanEveryCodeUsageAdapter(
     cachedFiles,
     signal,
     adapter?.maxFileSizeBytes,
+  );
+}
+
+/**
+ * AStudio/ACode native usage reader. TokenTracker confirms ACode uses the
+ * Codex rollout layout under `~/.acode/{sessions,archived_sessions}`; reusing
+ * the Codex-family parser keeps token semantics identical while namespacing
+ * session ids and cache entries under source="acode".
+ */
+async function scanAcode(
+  roots: string[],
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
+): Promise<SourceScanResult> {
+  return scanCodexFamily(
+    "acode",
+    roots,
+    homeDirectory,
+    cutoffTime,
+    nowTime,
+    maxFiles,
+    cachedFiles,
+    signal,
   );
 }
 
@@ -5964,7 +5998,7 @@ export async function scanLocalUsage(
       ...windowsEnvironmentHomes,
     ].filter((value): value is string => Boolean(value?.trim())),
   );
-  const [wslClaudeHomes, wslCodexHomes] = await (async () => {
+  const [wslClaudeHomes, wslCodexHomes, wslAcodeHomes] = await (async () => {
     // P3-T3-04: enumerate WSL topology once per scan and share it between
     // providers. An injected topology (from the shared WSL fact snapshot)
     // skips the local enumeration entirely.
@@ -5985,6 +6019,7 @@ export async function scanLocalUsage(
     return [
       await discoverWindowsWslHomes(".claude", topology, platform),
       await discoverWindowsWslHomes(".codex", topology, platform),
+      await discoverWindowsWslHomes(".acode", topology, platform),
     ];
   })();
   const claudeRoots = uniqueRoots([
@@ -6009,6 +6044,18 @@ export async function scanLocalUsage(
     ...wslCodexHomes,
   ]);
   const codexRoots = codexHomes.flatMap((root) => [
+    join(root, "sessions"),
+    join(root, "archived_sessions"),
+  ]);
+  const acodeHomes = uniqueRoots([
+    configuredRoot(
+      process.env.TOKENTRACKER_ACODE_HOME,
+      join(homeDirectory, ".acode"),
+    ),
+    ...homeDirectories.map((directory) => join(directory, ".acode")),
+    ...wslAcodeHomes,
+  ]);
+  const acodeRoots = acodeHomes.flatMap((root) => [
     join(root, "sessions"),
     join(root, "archived_sessions"),
   ]);
@@ -6078,6 +6125,7 @@ export async function scanLocalUsage(
   const [
     claude,
     codex,
+    acode,
     everyCode,
     workbuddy,
     gemini,
@@ -6111,6 +6159,15 @@ export async function scanLocalUsage(
       cachedFiles,
       options.signal,
     ).catch((error) => sourceFailure("codex", error)),
+    scanAcode(
+      acodeRoots,
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+      options.signal,
+    ).catch((error) => sourceFailure("acode", error)),
     scanEveryCodeUsageAdapter(
       everyCodeRoots,
       homeDirectory,
@@ -6236,6 +6293,7 @@ export async function scanLocalUsage(
   const currentCacheEntries = [
     ...claude.cacheEntries,
     ...codex.cacheEntries,
+    ...acode.cacheEntries,
     ...everyCode.cacheEntries,
     ...workbuddy.cacheEntries,
     ...gemini.cacheEntries,
@@ -6256,6 +6314,7 @@ export async function scanLocalUsage(
     (persistentIndex == null ||
       claude.summary.filesParsed > 0 ||
       codex.summary.filesParsed > 0 ||
+      acode.summary.filesParsed > 0 ||
       everyCode.summary.filesParsed > 0 ||
       workbuddy.summary.filesParsed > 0 ||
       gemini.summary.filesParsed > 0 ||
@@ -6278,6 +6337,7 @@ export async function scanLocalUsage(
   const nativeEvents = [
     ...claude.events,
     ...codex.events,
+    ...acode.events,
     ...everyCode.events,
     ...workbuddy.events,
     ...gemini.events,
@@ -6312,6 +6372,7 @@ export async function scanLocalUsage(
   for (const summary of [
     claude.summary,
     codex.summary,
+    acode.summary,
     everyCode.summary,
     workbuddy.summary,
     gemini.summary,

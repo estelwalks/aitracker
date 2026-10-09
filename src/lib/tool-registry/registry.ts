@@ -62,8 +62,16 @@ const TOOL_SURFACES: Readonly<Record<string, ToolSurface>> = {
   "github-copilot": "plugin",
   "kimi-code": "cli",
   omp: "cli",
+  omo: "cli",
   codebuddy: "cli",
   workbuddy: "cli",
+  "prime-agent": "cli",
+  "doubao-work": "desktop",
+  "kimi-work": "desktop",
+  qcode: "cli",
+  marvis: "desktop",
+  "trae-work": "desktop",
+  acode: "cli",
   grok: "cli",
   "kilo-cli": "cli",
   kilocode: "plugin",
@@ -75,6 +83,7 @@ const TOOL_SURFACES: Readonly<Record<string, ToolSurface>> = {
   goose: "cli",
   droid: "cli",
   mimo: "cli",
+  "minimax-code": "cli",
   zcode: "cli",
   anythingllm: "desktop",
   aipy: "cli",
@@ -101,6 +110,9 @@ const OFFICIAL_DOWNLOAD_URLS: Readonly<Record<string, string | null>> = {
   omp: "https://github.com/can1357/oh-my-pi",
   codebuddy: "https://cloud.tencent.com/product/acc",
   workbuddy: "https://copilot.tencent.com/work/",
+  "kimi-work": "https://www.kimi.com/code",
+  qcode: "https://github.com/v833/q-code",
+  "trae-work": "https://www.trae.ai/",
   grok: "https://x.ai/grok",
   "kilo-cli": "https://kilo.ai/cli",
   kilocode: "https://kilocode.ai/",
@@ -112,6 +124,7 @@ const OFFICIAL_DOWNLOAD_URLS: Readonly<Record<string, string | null>> = {
   goose: "https://goose-docs.ai/",
   droid: "https://factory.ai/product/droids",
   mimo: "https://mimo.xiaomi.com/index",
+  "minimax-code": "https://www.minimaxi.com/",
   zcode: "https://zcode.z.ai/en",
   anythingllm: "https://anythingllm.com/",
   aipy: "https://www.aipyaipy.com/",
@@ -120,6 +133,7 @@ const OFFICIAL_DOWNLOAD_URLS: Readonly<Record<string, string | null>> = {
   qwen: "https://qwen.ai/download",
   commandcode: "https://commandcode.ai/",
   proma: "https://proma.cool/download",
+  qoder: "https://qoder.com/",
   qodercn: "https://qoder.com.cn/",
   reasonix: "https://reasonix.io/",
   cherrystudio: "https://www.cherryai.com/",
@@ -655,7 +669,11 @@ export function listSessionTools(
   registry: CompiledRegistry = getDefaultRegistry(),
 ): readonly string[] {
   return registry.definitions
-    .filter((def) => def.capabilities.sessions.mode !== "unsupported")
+    .filter(
+      (def) =>
+        def.catalogVisible !== false &&
+        def.capabilities.sessions.mode !== "unsupported",
+    )
     .map((def) => def.id);
 }
 

@@ -1,8 +1,8 @@
 /**
  * F6-T1/T2: public-manifest projection guarantees — the legacy marker is
- * stamped from `LEGACY_TOOL_IDS`, `skillAgentOrder` must come from the shared
- * pack and never be empty, and the checked-in generated manifest must carry
- * exactly the legacy set (drift guard).
+ * stamped from `LEGACY_TOOL_IDS`, hidden definitions stay out of the browser
+ * catalog, `skillAgentOrder` must come from the shared pack and never be empty,
+ * and the checked-in generated manifest must carry exactly the legacy set.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -51,7 +51,7 @@ function packsWith(
 }
 
 describe("generatePublicManifest legacy projection (F6-T2)", () => {
-  test("legacy sources (aipy/cline) are stamped legacy: true", () => {
+  test("public legacy sources are stamped legacy: true", () => {
     const manifest = generatePublicManifest([
       def("claude-code"),
       def("aipy"),
@@ -61,7 +61,16 @@ describe("generatePublicManifest legacy projection (F6-T2)", () => {
     const legacy = manifest.tools
       .filter((tool) => tool.legacy === true)
       .map((tool) => tool.id);
-    assert.deepEqual([...legacy], ["aipy", "cline"]);
+    assert.deepEqual([...legacy], ["cline"]);
+  });
+
+  test("hidden tools are not projected into the public manifest", () => {
+    const hidden = { ...def("aipy"), catalogVisible: false };
+    const manifest = generatePublicManifest([def("codex"), hidden]);
+    assert.deepEqual(
+      manifest.tools.map((tool) => tool.id),
+      ["codex"],
+    );
   });
 
   test("non-legacy tools carry no legacy field", () => {

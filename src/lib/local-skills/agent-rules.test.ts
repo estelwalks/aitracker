@@ -11,6 +11,7 @@ import {
   requireSkillAgentOrder,
   SKILL_AGENT_ORDER,
   SKILL_AGENTS,
+  WRITABLE_SKILL_AGENTS,
 } from "./agent-rules.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 
@@ -37,6 +38,21 @@ describe("skill-market policy derivation (TC-POL-001)", () => {
   test("SKILL_AGENTS labels stay in canonical order and are unique", () => {
     assert.equal(SKILL_AGENTS.length, policy.skillAgentOrder.length);
     assert.equal(new Set(SKILL_AGENTS).size, SKILL_AGENTS.length);
+  });
+
+  test("hidden or read-only agents are not writable targets", () => {
+    for (const label of [
+      "AiPy",
+      "Doubao Work",
+      "Kimi Work",
+      "QCode",
+      "Marvis",
+      "Trae Work",
+    ]) {
+      assert.equal(SKILL_AGENTS.includes(label), false);
+      assert.equal(WRITABLE_SKILL_AGENTS.includes(label), false);
+    }
+    assert.ok(WRITABLE_SKILL_AGENTS.includes("AStudio"));
   });
 });
 

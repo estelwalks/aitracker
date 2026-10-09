@@ -453,9 +453,10 @@ export const ToolIconSchema = z.enum(
 );
 
 /**
- * Strict v1.5 tool definition (the JSON world). `catalogVisible=false` is only
- * allowed for legacy collection sources (docs §6); the current catalog has no
- * such sources - aipy/cline are user-added extensions and visible (true).
+ * Strict v1.5 tool definition (the JSON world). `catalogVisible=false` keeps a
+ * known-but-unverified local source out of product navigation while preserving
+ * its server-side definition for future enablement once a reference project or
+ * real data source is confirmed.
  */
 export const RawToolDefinitionSchema = z
   .object({
@@ -568,19 +569,6 @@ export const RawToolDefinitionSchema = z
     modelObservation: RawModelObservationSchema.optional(),
   })
   .superRefine((raw, ctx) => {
-    // Defensive (docs §6): catalogVisible=false is reserved for legacy
-    // collection sources; nothing uses it today (aipy/cline are visible).
-    if (
-      raw.catalogVisible === false &&
-      raw.id !== "aipy" &&
-      raw.id !== "cline"
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["catalogVisible"],
-        message: `catalogVisible=false is only allowed for legacy sources (aipy/cline), got "${raw.id}"`,
-      });
-    }
     // market install-target also needs skill root storage.
     if (
       raw.capabilities.market === "install-target" &&

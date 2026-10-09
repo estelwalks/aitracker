@@ -52,8 +52,7 @@ test("has-data: a tool with available=true and events>0", () => {
   assert.equal(claude.events, 5);
   assert.equal(claude.lastScannedAt, "2026-08-03T00:00:00.000Z");
   assert.equal(out.totals.connectedCount, 1);
-  // 36 catalog tools, 1 connected -> 35 not installed.
-  assert.equal(out.totals.notInstalledCount, 35);
+  assert.equal(out.totals.notInstalledCount, AI_TOOLS.length - 1);
   assert.equal(out.totals.eventCount, 5);
 });
 
@@ -142,8 +141,8 @@ test("not-installed: tool absent from summaries", () => {
   assert.equal(cursor.status, "not-installed");
   assert.equal(cursor.events, 0);
   assert.equal(cursor.lastScannedAt, "t");
-  assert.equal(out.totals.toolCount, 36);
-  assert.equal(out.totals.notInstalledCount, 36);
+  assert.equal(out.totals.toolCount, 37);
+  assert.equal(out.totals.notInstalledCount, 37);
 });
 
 test("HOME-normalization: catalog relative path gets ~/, absolute scanner path rewritten", () => {
@@ -202,13 +201,26 @@ test("platform registry paths take precedence before the first usage snapshot", 
   const out = deriveUsageSources(
     AI_TOOLS,
     [],
-    installations(".aipyapp"),
+    installations(
+      "Library/Application Support/QoderCN/SharedClientCache/cache/db",
+    ),
     "t",
     HOME,
-    new Map([["aipy", ["~/Library/Application Support/aipy-pro"]]]),
+    new Map([
+      [
+        "qodercn",
+        [
+          "~/Library/Application Support/QoderCN/SharedClientCache/cache/db",
+          "~/.qoder-cn/projects",
+        ],
+      ],
+    ]),
   );
-  const aipy = out.entries.find((entry) => entry.id === "aipy")!;
-  assert.deepEqual(aipy.paths, ["~/Library/Application Support/aipy-pro"]);
+  const qodercn = out.entries.find((entry) => entry.id === "qodercn")!;
+  assert.deepEqual(qodercn.paths, [
+    "~/Library/Application Support/QoderCN/SharedClientCache/cache/db",
+    "~/.qoder-cn/projects",
+  ]);
 });
 
 test("totals aggregate across multiple connected tools", () => {

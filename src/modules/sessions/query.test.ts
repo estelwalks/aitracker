@@ -11,6 +11,7 @@ test("session query facade normalizes the browser-safe page contract", () => {
       projectId: "aitracker_webapp",
       keyword: "scanner",
       range: "30d",
+      dateField: "startedAt",
       status: "available",
     },
     page: 2,
@@ -24,6 +25,7 @@ test("session query facade normalizes the browser-safe page contract", () => {
       projectId: "aitracker_webapp",
       keyword: "scanner",
       range: "30d",
+      dateField: "startedAt",
       status: "available",
     },
     page: 2,
@@ -46,4 +48,15 @@ test("session query facade rejects private launch fields and invalid sources", (
     AppError,
   );
   assert.throws(() => validateSessionsPageInput({ pageSize: 101 }), AppError);
+  assert.throws(
+    () => validateSessionsPageInput({ filter: { dateField: "createdAt" } }),
+    AppError,
+  );
+});
+
+test("session query facade defaults management ordering to last activity", () => {
+  assert.deepEqual(validateSessionsPageInput({}).sort, {
+    field: "endedAt",
+    direction: "desc",
+  });
 });

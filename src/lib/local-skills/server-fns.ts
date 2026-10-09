@@ -1,12 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import {
-  SKILL_AGENTS,
+  WRITABLE_SKILL_AGENTS,
   type BatchUninstallResult,
   type SkillAgent,
   type SkillSyncResult,
 } from "./types.ts";
-import type { SkillFileList } from "./scanner.server.ts";
+import type { SkillExportResult, SkillFileList } from "./scanner.server.ts";
 import { AppError } from "../errors";
 
 const stringInput = (value: unknown): string => {
@@ -38,7 +38,7 @@ export const installSkill = createServerFn({ method: "POST" })
   .validator((input: { sourcePath: string; targetAgent: SkillAgent }) => {
     if (
       typeof input?.sourcePath !== "string" ||
-      !SKILL_AGENTS.includes(input?.targetAgent)
+      !WRITABLE_SKILL_AGENTS.includes(input?.targetAgent)
     ) {
       throw new AppError("errors.skills.installInvalid");
     }
@@ -74,9 +74,10 @@ export const syncLocalSkill = createServerFn({ method: "POST" })
         typeof input?.sourcePath !== "string" ||
         !Array.isArray(input?.targetAgents) ||
         input.targetAgents.length === 0 ||
-        input.targetAgents.length > SKILL_AGENTS.length ||
+        input.targetAgents.length > WRITABLE_SKILL_AGENTS.length ||
         input.targetAgents.some(
-          (agent) => typeof agent !== "string" || !SKILL_AGENTS.includes(agent),
+          (agent) =>
+            typeof agent !== "string" || !WRITABLE_SKILL_AGENTS.includes(agent),
         ) ||
         (input.onConflict !== "overwrite" && input.onConflict !== "skip")
       ) {
@@ -117,6 +118,51 @@ export const getSkillFiles = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<SkillFileList> => {
     const { readSkillFiles } = await import("./scanner.server.ts");
     return readSkillFiles(data.name);
+  });
+
+/** Copy the complete local Skill tree into a new folder below a user-picked directory. */
+export const exportSkillsToDirectory = createServerFn({ method: "POST" })
+  .validator(
+    (input: { destinationDirectory: string; skillIds?: readonly string[] }) => {
+      if (
+        typeof input?.destinationDirectory !== "string" ||
+        input.destinationDirectory.trim().length === 0 ||
+        input.destinationDirectory.length > 4_096
+      ) {
+        throw new AppError("errors.skills.exportDestinationInvalid");
+      }
+      if (
+        input.skillIds !== undefined &&
+        (!Array.isArray(input.skillIds) ||
+          input.skillIds.length === 0 ||
+          input.skillIds.length > 10_000 ||
+          input.skillIds.some(
+            (skillId) =>
+              typeof skillId !== "string" ||
+              skillId.trim().length === 0 ||
+              skillId.length > 512 ||
+              skillId.includes("\0"),
+          ))
+      ) {
+        throw new AppError("errors.skills.batchPathsCount");
+      }
+      return {
+        destinationDirectory: input.destinationDirectory,
+        ...(input.skillIds === undefined
+          ? {}
+          : { skillIds: [...new Set(input.skillIds)] }),
+      };
+    },
+  )
+  .handler(async ({ data }): Promise<SkillExportResult> => {
+    const { exportLocalSkills } = await import("./scanner.server.ts");
+    return exportLocalSkills(
+      data.destinationDirectory,
+      {},
+      {
+        ...(data.skillIds === undefined ? {} : { skillIds: data.skillIds }),
+      },
+    );
   });
 
 export type { SkillFileEntry, SkillFileList } from "./scanner.server.ts";

@@ -12,8 +12,8 @@
     "workbuddy",
     "openclaw",
     "antigravity",
-    "aipy",
-    "zcode"
+    "zcode",
+    "acode"
   ],
   "defaultMarkers": ["SKILL.md", "skill.md"],
   "defaultMaxDepth": 3,

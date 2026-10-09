@@ -19,6 +19,7 @@ import { APP_DATA_DIR } from "../app-config";
 import {
   assertTargetToolInstalled,
   batchUninstallLocalSkills,
+  exportLocalSkills as exportLocalSkillsWithState,
   installMarketSkill as installMarketSkillWithState,
   readSkillFiles as readSkillFilesWithState,
   refreshMarketSkillEvidence as refreshMarketSkillEvidenceWithState,
@@ -76,33 +77,82 @@ const readSkillFiles = (
   name: Parameters<typeof readSkillFilesWithState>[0],
   options: Parameters<typeof readSkillFilesWithState>[1] = {},
 ) => readSkillFilesWithState(name, { ...options, stateRepository: testState });
+const exportLocalSkills = (
+  destinationDirectory: string,
+  options: Parameters<typeof exportLocalSkillsWithState>[1] = {},
+  exportOptions: Parameters<typeof exportLocalSkillsWithState>[2] = {},
+) =>
+  exportLocalSkillsWithState(
+    destinationDirectory,
+    {
+      ...options,
+      stateRepository: testState,
+    },
+    exportOptions,
+  );
+
+test("exports selected skills across pages and still supports exporting all", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-export-"));
+  const destination = join(root, "exports");
+  const options = {
+    homeDirectory: root,
+    dataDirectory: join(root, APP_DATA_DIR),
+    platform: "darwin" as const,
+  };
+  try {
+    await mkdir(destination, { recursive: true });
+    const alpha = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "alpha");
+    const beta = join(root, SKILL_ROOT_SUFFIXES.Codex, "beta");
+    await mkdir(alpha, { recursive: true });
+    await mkdir(beta, { recursive: true });
+    await writeFile(join(alpha, "SKILL.md"), "# Alpha");
+    await writeFile(join(beta, "SKILL.md"), "# Beta");
+
+    const selected = await exportLocalSkills(destination, options, {
+      skillIds: ["beta"],
+    });
+    assert.equal(selected.skillCount, 1);
+    assert.deepEqual(await readdir(join(destination, selected.directoryName)), [
+      "beta",
+    ]);
+
+    const all = await exportLocalSkills(destination, options);
+    assert.equal(all.skillCount, 2);
+    assert.deepEqual(
+      (await readdir(join(destination, all.directoryName))).sort(),
+      ["alpha", "beta"],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("scans common agent roots without treating mtime as usage evidence", async () => {
   const root = await mkdtemp(join(tmpdir(), "aitracker-skills-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const claudeSkill = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "example");
   const codexSkill = join(root, SKILL_ROOT_SUFFIXES["Codex"], "example");
-  const aipySkill = join(root, SKILL_ROOT_SUFFIXES["AiPy"], "example");
+  const acodeSkill = join(root, SKILL_ROOT_SUFFIXES["AStudio"], "example");
   await mkdir(claudeSkill, { recursive: true });
   await mkdir(codexSkill, { recursive: true });
-  await mkdir(aipySkill, { recursive: true });
+  await mkdir(acodeSkill, { recursive: true });
   await writeFile(join(claudeSkill, "SKILL.md"), "# Example");
   await writeFile(join(codexSkill, "SKILL.md"), "# Example");
-  await writeFile(join(aipySkill, "SKILL.md"), "# Example");
+  await writeFile(join(acodeSkill, "SKILL.md"), "# Example");
 
   const snapshot = await scanLocalSkills({
     homeDirectory: root,
     dataDirectory,
     now: new Date(),
-    // The fixture mirrors the macOS/home detection layout (.aipyapp/.codex
-    // under HOME); AiPy and Codex have no Linux probe roots ("planned"), so
-    // pin the simulated platform to keep this portable across runners.
+    // The fixture mirrors the macOS/home detection layout; Codex/AStudio have
+    // no Linux probe roots ("planned"), so pin the simulated platform to keep
+    // this portable across runners.
     platform: "darwin",
   });
 
-  // All verified Skill installation targets are exposed, including AiPy.
+  // Only the visible, TokenTracker-aligned Skill installation targets are exposed.
   assert.equal(Object.keys(snapshot.roots).length, 12);
-  assert.equal(snapshot.agents["AiPy"].installed, true);
+  assert.equal(snapshot.agents["AStudio"].installed, true);
   assert.equal(snapshot.skills.length, 1);
   assert.equal(snapshot.skills[0].installations.length, 3);
   // No structured call evidence: mtime is not treated as usage evidence.
@@ -567,6 +617,34 @@ test("syncLocalSkill copies a skill to a target agent with no conflict", async (
     assert.equal(synced?.description, "A sync test skill");
     // Claude Code source + Codex target.
     assert.equal(synced?.installations.length, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("syncLocalSkill rejects read-only Kimi Work and Marvis targets", async () => {
+  const name = `sync-readonly-${randomUUID().slice(0, 8)}`;
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-op-"));
+  const sourcePath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
+  try {
+    await mkdir(sourcePath, { recursive: true });
+    await writeFile(join(sourcePath, "SKILL.md"), "# Read-only target test");
+    const result = await syncLocalSkill(
+      {
+        sourcePath,
+        targetAgents: ["Kimi Work", "Marvis"],
+        onConflict: "overwrite",
+      },
+      { homeDirectory: root },
+    );
+    assert.equal(result.succeeded.length, 0);
+    assert.deepEqual(
+      result.failed.map(({ agent, errorCode }) => ({ agent, errorCode })),
+      [
+        { agent: "Kimi Work", errorCode: "errors.skills.unsupportedAgent" },
+        { agent: "Marvis", errorCode: "errors.skills.unsupportedAgent" },
+      ],
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

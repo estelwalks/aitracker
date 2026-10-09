@@ -2,10 +2,12 @@ import {
   appendFile,
   cp,
   lstat,
+  mkdtemp,
   mkdir,
   opendir,
   readFile,
   realpath,
+  rm,
   rename,
   stat,
   writeFile,
@@ -46,6 +48,7 @@ import {
 } from "./skill-rules.server.ts";
 import {
   SKILL_AGENTS,
+  WRITABLE_SKILL_AGENTS,
   type BatchUninstallFailure,
   type BatchUninstallResult,
   type LocalSkill,
@@ -1112,6 +1115,88 @@ export interface SkillFileList {
   files: SkillFileEntry[];
 }
 
+export interface SkillExportResult {
+  /** Name of the newly created export directory, without exposing its path. */
+  directoryName: string;
+  skillCount: number;
+}
+
+export interface SkillExportOptions {
+  /** Optional content-unique skill ids; omitted means export every skill. */
+  skillIds?: readonly string[];
+}
+
+/**
+ * Copy every locally discovered Skill into a new directory below the
+ * user-selected destination. The scan is authoritative for source paths, so
+ * the renderer only supplies the destination parent and can never select an
+ * arbitrary source path for copying.
+ */
+export async function exportLocalSkills(
+  destinationDirectory: string,
+  options: ScanOptions = {},
+  exportOptions: SkillExportOptions = {},
+): Promise<SkillExportResult> {
+  if (
+    typeof destinationDirectory !== "string" ||
+    destinationDirectory.trim() === ""
+  ) {
+    throw new AppError("errors.skills.emptyInput");
+  }
+
+  const destination = resolve(destinationDirectory);
+  const destinationStat = await lstat(destination).catch(() => null);
+  if (destinationStat == null || !destinationStat.isDirectory()) {
+    throw new AppError("errors.skills.exportDestinationInvalid");
+  }
+
+  const snapshot = await scanLocalSkills(options);
+  const selectedIds =
+    exportOptions.skillIds == null ? null : new Set(exportOptions.skillIds);
+  const skills =
+    selectedIds == null
+      ? snapshot.skills
+      : snapshot.skills.filter((skill) => selectedIds.has(skill.id));
+  for (const skill of skills) {
+    const source = skill.installations[0]?.path;
+    if (
+      source != null &&
+      (resolve(source) === destination ||
+        isPathInside(resolve(source), destination))
+    ) {
+      throw new AppError("errors.skills.exportDestinationInvalid");
+    }
+  }
+  const exportRoot = await mkdtemp(join(destination, "aitracker-skills-"));
+  const exportedNames = new Set<string>();
+
+  try {
+    for (const skill of skills) {
+      const installation = skill.installations[0];
+      if (installation == null || exportedNames.has(skill.name)) continue;
+      await assertManagedSkillPath(installation.path, snapshot.roots);
+      const source = resolve(installation.path);
+      if (source === exportRoot || isPathInside(source, exportRoot)) {
+        throw new AppError("errors.skills.exportDestinationInvalid");
+      }
+      await cp(source, join(exportRoot, safeSkillName(skill.name)), {
+        recursive: true,
+        errorOnExist: true,
+      });
+      exportedNames.add(skill.name);
+    }
+  } catch (error) {
+    // Keep a failed export from leaving a misleading partial directory.
+    await rm(exportRoot, { recursive: true, force: true });
+    throw error;
+  }
+
+  return {
+    directoryName: basename(exportRoot),
+    skillCount: exportedNames.size,
+  };
+}
+
 /**
  * Read the real file tree of a locally installed skill. The skill is resolved
  * by name from a fresh scan (never from caller-supplied paths), verified
@@ -1220,7 +1305,7 @@ async function copySkillToAgent(
   },
   options: SkillOpOptions = {},
 ): Promise<string> {
-  if (!SKILL_AGENTS.includes(input.targetAgent))
+  if (!WRITABLE_SKILL_AGENTS.includes(input.targetAgent))
     throw new AppError("errors.skills.unsupportedAgent");
 
   // Tools that are not installed do not accept install/sync writes (e.g. have a residual ~/.cursor directory but no
@@ -1529,7 +1614,7 @@ export async function syncLocalSkill(
   const failed: SyncFailure[] = [];
 
   for (const targetAgent of input.targetAgents) {
-    if (!SKILL_AGENTS.includes(targetAgent as SkillAgent)) {
+    if (!WRITABLE_SKILL_AGENTS.includes(targetAgent)) {
       failed.push({
         agent: targetAgent,
         errorCode: "errors.skills.unsupportedAgent",

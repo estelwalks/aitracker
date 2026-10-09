@@ -91,6 +91,7 @@ export const skills = {
     uninstallAll: "모든 복사본 제거",
     addMonitorDir: "모니터링 디렉터리 추가",
     goMarket: "보안 마켓 보기",
+    exportAll: "모든 Skill 내보내기",
     block: "블랙리스트에 추가",
     unblock: "블랙리스트에서 제외",
   },
@@ -99,6 +100,7 @@ export const skills = {
     selectedCount: "{count}개 선택됨",
     totalCount: "총 {count}개 Skill",
     sync: "동기화",
+    export: "선택 항목 내보내기 ({count})",
     scan: "스캔",
     uninstall: "제거",
     clearSelection: "취소",
@@ -416,5 +418,8 @@ export const skills = {
       "동기화 완료: 성공 {succeeded}개 / 건너뜀 {skipped}개 / 실패 {failed}개",
     syncFailed: "동기화에 실패했습니다",
     exportedTo: "{path}에 내보냈습니다",
+    exported: "{count}개 Skill을 {folder} 폴더로 내보냈습니다",
+    exportUnavailable:
+      "현재 환경에서는 Skill 폴더 내보내기를 사용할 수 없습니다",
   },
 } as const;

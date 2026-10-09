@@ -45,12 +45,37 @@ test("reference agents expose their actual platform-specific directories", () =>
   );
   assert.deepEqual(
     sourcePathsForPlatform("qodercn", "windows", "C:\\Users\\tester"),
-    ["~/AppData/Roaming/QoderCN/SharedClientCache/cache/db"],
+    [
+      "~/AppData/Roaming/QoderCN/SharedClientCache/cache/db",
+      "~/.qoder-cn/projects",
+    ],
   );
   assert.deepEqual(
     sourcePathsForPlatform("qodercn", "macos", "/Users/tester"),
-    ["~/Library/Application Support/QoderCN/SharedClientCache/cache/db"],
+    [
+      "~/Library/Application Support/QoderCN/SharedClientCache/cache/db",
+      "~/.qoder-cn/projects",
+    ],
   );
+  assert.deepEqual(sourcePathsForPlatform("qoder", "macos", "/Users/tester"), [
+    "~/Library/Application Support/Qoder/SharedClientCache/cache/db",
+    "~/.qoder/projects",
+  ]);
+  assert.deepEqual(sourcePathsForPlatform("omo", "macos", "/Users/tester"), [
+    "~/.omo/agent/sessions",
+  ]);
+  assert.deepEqual(
+    sourcePathsForPlatform("prime-agent", "macos", "/Users/tester"),
+    ["~/.prime/agent/sessions"],
+  );
+  assert.deepEqual(
+    sourcePathsForPlatform("minimax-code", "macos", "/Users/tester"),
+    ["~/.minimax/v2/sessions"],
+  );
+  assert.deepEqual(sourcePathsForPlatform("acode", "macos", "/Users/tester"), [
+    "~/.acode/sessions",
+    "~/.acode/archived_sessions",
+  ]);
 });
 
 test("the reference local-agent universe is present in the AITracker registry", () => {
@@ -64,7 +89,6 @@ test("the reference local-agent universe is present in the AITracker registry", 
     "antigravity",
     "cline",
     "kimi-code",
-    "qwen",
     "grok",
     "github-copilot",
     "pi",
@@ -76,11 +100,14 @@ test("the reference local-agent universe is present in the AITracker registry", 
     "kiro",
     "codebuddy",
     "workbuddy",
-    "proma",
     "qodercn",
+    "qoder",
+    "omo",
+    "prime-agent",
+    "minimax-code",
+    "acode",
     "reasonix",
     "dsh",
-    "cherrystudio",
   ];
   for (const id of referenceIds) {
     assert.ok(AI_TOOL_IDS.includes(id), `${id} must be registry-backed`);

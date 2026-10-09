@@ -49,13 +49,12 @@ export interface PublicTool {
 }
 
 /**
- * Legacy collection sources (docs §6: aipy/cline). Single projection point for
- * the `legacy` marker stamped on `PublicTool` — consumers must never hardcode
- * this list themselves. Drift against the real registry is caught by the
- * manifest safety tests (the checked-in generated manifest must carry exactly
- * this set).
+ * Legacy collection sources that remain public in the catalog. Single
+ * projection point for the `legacy` marker stamped on `PublicTool` — consumers
+ * must never hardcode this list themselves. Drift against the real registry is
+ * caught by the manifest safety tests.
  */
-export const LEGACY_TOOL_IDS: readonly string[] = ["aipy", "cline"];
+export const LEGACY_TOOL_IDS: readonly string[] = ["cline"];
 
 export interface PublicToolManifest {
   configVersion: 1;

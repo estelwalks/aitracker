@@ -2,6 +2,7 @@
   "$schema": "../tool-definition.schema.json",
   "configVersion": 1,
   "id": "qwen",
+  "catalogVisible": false,
   "display": { "name": "Qwen CLI", "nameZh": "Qwen CLI", "icon": "other", "color": "#615ced" },
   "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
   "detection": {

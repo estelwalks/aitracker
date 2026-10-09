@@ -10,6 +10,7 @@ import {
   aggregateDashboardSourceSessions,
   requestDashboardSessionRefresh,
   shouldRefreshDashboardSessions,
+  shouldRefreshDashboardUsageForSessionActivity,
   toDashboardSnapshot,
   toDashboardV2Snapshot,
 } from "./api.server.ts";
@@ -57,6 +58,52 @@ test("dashboard refreshes a fresh legacy session snapshot when usage has DSH", (
       sessionSources: ["codex"],
       usageSources: ["codex", "dsh"],
       nowMs: Date.parse("2026-08-10T00:01:00.000Z"),
+    }),
+    false,
+  );
+});
+
+test("dashboard refreshes a fresh legacy session snapshot when new tool usage has sessions", () => {
+  assert.equal(
+    shouldRefreshDashboardSessions({
+      status: "fresh",
+      generatedAt: "2026-08-10T00:00:00.000Z",
+      sessionSources: ["codex"],
+      usageSources: ["codex", "omo"],
+      nowMs: Date.parse("2026-08-10T00:01:00.000Z"),
+    }),
+    true,
+  );
+});
+
+test("dashboard refreshes usage when a newer session belongs to a usage-capable source", () => {
+  assert.equal(
+    shouldRefreshDashboardUsageForSessionActivity({
+      status: "fresh",
+      usageGeneratedAt: "2026-08-10T00:00:00.000Z",
+      sessionGeneratedAt: "2026-08-10T00:01:00.000Z",
+      sessionSources: ["omo"],
+      usageSupportedSources: ["omo"],
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRefreshDashboardUsageForSessionActivity({
+      status: "fresh",
+      usageGeneratedAt: "2026-08-10T00:00:45.000Z",
+      sessionGeneratedAt: "2026-08-10T00:01:00.000Z",
+      sessionSources: ["pi"],
+      usageSupportedSources: ["omo"],
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRefreshDashboardUsageForSessionActivity({
+      status: "fresh",
+      usageGeneratedAt: "2026-08-10T00:00:45.000Z",
+      sessionGeneratedAt: "2026-08-10T00:01:00.000Z",
+      sessionSources: ["omo"],
+      usageSupportedSources: ["omo"],
     }),
     false,
   );
@@ -286,17 +333,16 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
     weeklyReports: { count: null, available: false },
     monthlyReports: { count: null, available: false },
   });
-  // pi, omp and Hermes Agent gained usage readers (milestone v1.0.1), so the
-  // supported count grows by three over the frozen baseline; ZCode, Goose and
-  // Qoder CN (sqlite adapters) add three more; Zed (threads.db native reader)
-  // adds one more.
+  // Public tools are restricted to TokenTracker-aligned sources. Hidden
+  // registry-only sources (AiPy/Qwen/Proma/Cherry Studio and the Work/Marvis/
+  // QCode/Trae set) do not produce dashboard cards.
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport !== "unsupported").length,
-    35,
+    37,
   );
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport === "unsupported").length,
-    1,
+    0,
   );
 });
 
@@ -343,6 +389,115 @@ test("dashboard session aggregates join Codex projectRef and preserve workflow c
       subagentCalls: 5,
     },
   ]);
+});
+
+test("dashboard session activity is bucketed by last conversation time", () => {
+  assert.deepEqual(
+    aggregateDashboardSourceSessions([
+      {
+        source: "trae-work",
+        startedAt: "2026-08-01T10:00:00.000Z",
+        endedAt: "2026-08-10T11:00:00.000Z",
+        turns: 1,
+        editTurns: 0,
+        subagentCalls: 0,
+      },
+    ]),
+    [
+      {
+        source: "trae-work",
+        date: "2026-08-10",
+        count: 1,
+        turns: 1,
+        editTurns: 0,
+        subagentCalls: 0,
+      },
+    ],
+  );
+});
+
+test("dashboard carries session-level token totals when usage rows are missing", () => {
+  const sessions = aggregateDashboardSourceSessions([
+    {
+      source: "kimi-work",
+      startedAt: "2026-08-10T10:00:00.000Z",
+      turns: 2,
+      editTurns: 0,
+      subagentCalls: 0,
+      totals: {
+        inputTokens: 100,
+        cachedInputTokens: 20,
+        cacheCreationInputTokens: 0,
+        outputTokens: 40,
+        reasoningOutputTokens: 10,
+        totalTokens: 170,
+      },
+    },
+  ]);
+  const result = toDashboardV2Snapshot({
+    snapshot: {
+      ...rawSnapshot,
+      details: [],
+      events: 0,
+      totals: {
+        events: 0,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+        totalTokens: 0,
+      },
+    },
+    skills: { available: true, count: 0, generatedAt: null },
+    sessions: {
+      available: true,
+      generatedAt: "2026-08-10T11:00:00.000Z",
+      byProjectDay: [],
+      bySourceDay: sessions,
+    },
+    pricingAvailable: false,
+    outputAvailability: {
+      securityRuns: { count: null, available: false },
+      distillationOutputs: { count: null, available: false },
+      distillationBreakdown: { capability: null, memory: null },
+      dailyReports: { count: null, available: false },
+      weeklyReports: { count: null, available: false },
+      monthlyReports: { count: null, available: false },
+    },
+  });
+  assert.deepEqual(
+    result.events.find((event) => event.source === "kimi-work"),
+    {
+      source: "kimi-work",
+      timestamp: "2026-08-10T12:00:00",
+      model: "unknown",
+      project: "unknown",
+      projectKind: "unknown",
+      inputTokens: 100,
+      cachedInputTokens: 20,
+      cacheCreationInputTokens: 0,
+      outputTokens: 40,
+      reasoningOutputTokens: 10,
+      totalTokens: 170,
+      events: 1,
+      context: {
+        textResponses: 0,
+        toolCalls: 0,
+        skillCalls: 0,
+        toolOutputCalls: 0,
+        tools: [],
+      },
+      evidence: {
+        textResponses: false,
+        toolCalls: false,
+        skillCalls: false,
+        toolOutputCalls: false,
+        reasoningTokens: true,
+        systemPromptTokens: false,
+      },
+    },
+  );
 });
 
 test("dashboard project session aggregates classify by projectRef and drop non-workspace sessions", () => {

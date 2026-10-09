@@ -2,6 +2,7 @@
   "$schema": "../tool-definition.schema.json",
   "configVersion": 1,
   "id": "cherrystudio",
+  "catalogVisible": false,
   "display": { "name": "Cherry Studio", "nameZh": "Cherry Studio", "icon": "other", "color": "#ec4899" },
   "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
   "detection": {

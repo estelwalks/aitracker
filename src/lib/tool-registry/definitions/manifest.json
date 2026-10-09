@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Explicit, ordered list of built-in tool definitions (docs §5: fixed import list, no runtime directory scanning). Order matches the frozen baseline UI order; aipy/cline are legacy sources (catalogVisible=false).",
+  "description": "Explicit, ordered list of built-in tool definitions (docs §5: fixed import list, no runtime directory scanning). Order matches the frozen baseline UI order; catalogVisible=false keeps known-but-unverified tools out of product navigation.",
   "tools": [
     { "id": "claude-code", "path": "claude-code.tool.json" },
     { "id": "codex", "path": "codex.tool.json" },
@@ -37,6 +37,16 @@
     { "id": "proma", "path": "proma.tool.json" },
     { "id": "qodercn", "path": "qodercn.tool.json" },
     { "id": "reasonix", "path": "reasonix.tool.json" },
-    { "id": "cherrystudio", "path": "cherrystudio.tool.json" }
+    { "id": "cherrystudio", "path": "cherrystudio.tool.json" },
+    { "id": "doubao-work", "path": "doubao-work.tool.json" },
+    { "id": "kimi-work", "path": "kimi-work.tool.json" },
+    { "id": "qcode", "path": "qcode.tool.json" },
+    { "id": "marvis", "path": "marvis.tool.json" },
+    { "id": "trae-work", "path": "trae-work.tool.json" },
+    { "id": "acode", "path": "acode.tool.json" },
+    { "id": "qoder", "path": "qoder.tool.json" },
+    { "id": "omo", "path": "omo.tool.json" },
+    { "id": "prime-agent", "path": "prime-agent.tool.json" },
+    { "id": "minimax-code", "path": "minimax-code.tool.json" }
   ]
 }

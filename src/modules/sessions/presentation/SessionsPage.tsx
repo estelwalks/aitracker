@@ -1,6 +1,14 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { MessagesSquare, RefreshCw, Sparkles, Wrench } from "lucide-react";
+import {
+  Check,
+  Download,
+  MessagesSquare,
+  RefreshCw,
+  Sparkles,
+  Wrench,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { InsightCard } from "../../insights/index.ts";
 import {
@@ -14,9 +22,15 @@ import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { brandColorOf } from "../../../components/BrandIcon.helpers.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
-import { getSessionsQuery, refreshSessionsQuery } from "../query.ts";
+import { downloadExport } from "../../../lib/export/download.ts";
+import {
+  exportSessionsQuery,
+  getSessionsQuery,
+  refreshSessionsQuery,
+} from "../query.ts";
 import type {
   SessionFilter,
+  SessionDateField,
   SessionPage,
   SessionStatus,
   SessionSummary,
@@ -36,6 +50,14 @@ const RANGE_OPTIONS: Array<{
   { value: "30d", labelKey: "sessions.range.d30" },
   { value: "90d", labelKey: "sessions.range.d90" },
   { value: "all", labelKey: "common.all" },
+];
+
+const DATE_FIELD_OPTIONS: Array<{
+  value: SessionDateField;
+  labelKey: "sessions.dateField.lastActivity" | "sessions.dateField.createdAt";
+}> = [
+  { value: "endedAt", labelKey: "sessions.dateField.lastActivity" },
+  { value: "startedAt", labelKey: "sessions.dateField.createdAt" },
 ];
 
 const STATUS_META: Record<
@@ -93,8 +115,12 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
   const [source, setSource] = useState<string | "all">("all");
   const [range, setRange] =
     useState<NonNullable<SessionFilter["range"]>>("30d");
+  const [dateField, setDateField] = useState<SessionDateField>("endedAt");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const firstRequest = useRef(true);
   const pageSize = initial.pageSize || 25;
 
@@ -116,9 +142,9 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
       filter,
       page: page.page,
       pageSize,
-      sort: { field: "startedAt" as const, direction: "desc" as const },
+      sort: { field: dateField, direction: "desc" as const },
     }),
-    [filter, page.page, pageSize],
+    [dateField, filter, page.page, pageSize],
   );
   const requestRef = useRef(request);
   requestRef.current = request;
@@ -176,6 +202,59 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
       ) {
         setLoading(false);
       }
+    }
+  };
+
+  const sessionKey = (session: SessionSummary) =>
+    `${session.source}\u0000${session.sessionId}`;
+  const toggleSelected = (session: SessionSummary) => {
+    const key = sessionKey(session);
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const togglePageSelection = () => {
+    const keys = page.sessions.map(sessionKey);
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      const allSelected = keys.length > 0 && keys.every((key) => next.has(key));
+      for (const key of keys) {
+        if (allSelected) next.delete(key);
+        else next.add(key);
+      }
+      return next;
+    });
+  };
+  const exportSessions = async (selectedOnly: boolean) => {
+    if (loading || (selectedOnly && selectedKeys.size === 0)) return;
+    setLoading(true);
+    setError(false);
+    try {
+      const selection = selectedOnly
+        ? [...selectedKeys].map((key) => {
+            const separator = key.indexOf("\u0000");
+            return {
+              source: key.slice(0, separator),
+              sessionId: key.slice(separator + 1),
+            };
+          })
+        : undefined;
+      const exported = await exportSessionsQuery({
+        data: selection == null ? {} : { sessions: selection },
+      });
+      downloadExport(JSON.stringify(exported, null, 2), "json", Date.now());
+      toast.success(
+        t("sessions.toast.exported", {
+          count: format.formatNumber(exported.sessions.length),
+        }),
+      );
+    } catch {
+      toast.error(t("sessions.toast.exportFailed"));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -238,7 +317,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     [format, page.total, rangeLabel, sources.length, t, totals.turns],
   );
 
-  /** Local-day groups, in page order (startedAt desc); counts are per page. */
+  /** Local-day groups in the current sort order. */
   const groups = useMemo(() => {
     const todayKey = localDateKey(new Date());
     const yesterdayDate = new Date();
@@ -247,7 +326,9 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     const ordered: Array<{ dateKey: string; sessions: SessionSummary[] }> = [];
     const index = new Map<string, number>();
     for (const session of page.sessions) {
-      const dateKey = localDateKey(new Date(session.startedAt));
+      const groupTime =
+        dateField === "startedAt" ? session.startedAt : session.endedAt;
+      const dateKey = localDateKey(new Date(groupTime));
       let slot = index.get(dateKey);
       if (slot === undefined) {
         slot = ordered.length;
@@ -258,9 +339,14 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     }
     return ordered.map((group) => ({
       ...group,
-      label: format.formatDate(group.sessions[0].startedAt, {
-        weekday: "short",
-      }),
+      label: format.formatDate(
+        dateField === "startedAt"
+          ? group.sessions[0].startedAt
+          : group.sessions[0].endedAt,
+        {
+          weekday: "short",
+        },
+      ),
       suffix:
         group.dateKey === todayKey
           ? t("sessions.group.today")
@@ -268,12 +354,16 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
             ? t("sessions.group.yesterday")
             : null,
     }));
-  }, [format, page.sessions, t]);
+  }, [dateField, format, page.sessions, t]);
 
   const changeFilter = (change: () => void) => {
     change();
     setPage((current) => ({ ...current, page: 1 }));
   };
+  const pageSelectionKeys = page.sessions.map(sessionKey);
+  const allCurrentPageSelected =
+    pageSelectionKeys.length > 0 &&
+    pageSelectionKeys.every((key) => selectedKeys.has(key));
 
   return (
     <div className="space-y-4 pb-12">
@@ -320,6 +410,19 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
             ariaLabel={t("sessions.searchPlaceholder")}
             className="min-w-0 flex-1"
           />
+          <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-2/40 px-1.5 py-1">
+            <span className="aitracker-text-caption whitespace-nowrap px-1 text-muted-foreground">
+              {t("sessions.dateField.label")}
+            </span>
+            <Segmented
+              value={dateField}
+              onChange={(value) => changeFilter(() => setDateField(value))}
+              options={DATE_FIELD_OPTIONS.map((option) => ({
+                value: option.value,
+                label: t(option.labelKey),
+              }))}
+            />
+          </div>
           <Segmented
             value={range}
             onChange={(value) => changeFilter(() => setRange(value))}
@@ -338,6 +441,37 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
             />
             {t(loading ? "sessions.refreshing" : "sessions.refreshNow")}
           </AITrackerButton>
+          <button
+            type="button"
+            onClick={togglePageSelection}
+            disabled={loading || page.sessions.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span className="grid size-3.5 place-items-center rounded border border-current">
+              {allCurrentPageSelected ? <Check className="size-2.5" /> : null}
+            </span>
+            {t("sessions.export.selectPage")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void exportSessions(true)}
+            disabled={loading || selectedKeys.size === 0}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Download className="size-3.5" />
+            {t("sessions.export.selected", {
+              count: format.formatNumber(selectedKeys.size),
+            })}
+          </button>
+          <button
+            type="button"
+            onClick={() => void exportSessions(false)}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary/12 px-2.5 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Download className="size-3.5" />
+            {t("sessions.export.all")}
+          </button>
         </div>
 
         <div
@@ -438,6 +572,9 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
                     key={`${session.source}:${session.sessionId}:${session.startedAt}`}
                     session={session}
                     sourceFilter={source === "all" ? undefined : source}
+                    timeField={dateField}
+                    selected={selectedKeys.has(sessionKey(session))}
+                    onToggleSelected={() => toggleSelected(session)}
                   />
                 ))}
               </ul>
@@ -469,9 +606,15 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
 function SessionRow({
   session,
   sourceFilter,
+  timeField,
+  selected,
+  onToggleSelected,
 }: {
   session: SessionSummary;
   sourceFilter?: string;
+  timeField: SessionDateField;
+  selected: boolean;
+  onToggleSelected: () => void;
 }) {
   const { t, format } = useI18n();
   const navigate = useNavigate();
@@ -517,6 +660,14 @@ function SessionRow({
         openDetail();
       }}
     >
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={onToggleSelected}
+        onClick={(event) => event.stopPropagation()}
+        aria-label={session.title || t("sessions.row.untitled")}
+        className="size-3.5 shrink-0 accent-primary"
+      />
       {/* 左侧：来源/状态 + 标题 + 项目·时间·时长·轮次·Token 元数据 */}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -544,7 +695,11 @@ function SessionRow({
         <div className="aitracker-num mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] text-muted-foreground">
           <span>{session.projectKey}</span>
           <span aria-hidden="true">·</span>
-          <span>{format.formatTime(session.startedAt)}</span>
+          <span>
+            {format.formatTime(
+              timeField === "startedAt" ? session.startedAt : session.endedAt,
+            )}
+          </span>
           <span aria-hidden="true">·</span>
           <span>{formatDuration(session.durationMs)}</span>
           <span aria-hidden="true">·</span>

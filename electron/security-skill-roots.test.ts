@@ -14,9 +14,9 @@ import {
 /**
  * The desktop security scanner keeps a mirrored list of managed skill agents
  * (Electron tsconfig boundary forbids importing the registry). Hermes Agent
- * is part of it; these tests pin the mirror to the registry rules so drift is
- * caught, and cover per-tool data-directory overrides (env/test seam) applied
- * by the main-process scanner.
+ * is part of it; these tests pin visible Skill rules to the mirror while
+ * allowing security-only roots for known hidden sources such as AiPy, and cover
+ * per-tool data-directory overrides applied by the main-process scanner.
  */
 
 test("managed security skill roots include Hermes Agent", () => {
@@ -34,12 +34,14 @@ test("managed security skill roots include Hermes Agent", () => {
 test("managed skill roots stay in sync with the registry skill rules", () => {
   const managed = MANAGED_SKILL_ROOTS.map((definition) => definition.toolId);
   const registry = SKILL_AGENT_RULES.map((rule) => rule.toolId);
-  assert.deepEqual([...managed].sort(), [...registry].sort());
-  for (const definition of MANAGED_SKILL_ROOTS) {
-    const rule = SKILL_AGENT_RULES.find(
-      (candidate) => candidate.toolId === definition.toolId,
+  for (const id of registry) {
+    assert.ok(managed.includes(id), `managed security root for ${id}`);
+    const definition = MANAGED_SKILL_ROOTS.find(
+      (candidate) => candidate.toolId === id,
     );
-    assert.ok(rule, `registry rule for ${definition.toolId}`);
+    const rule = SKILL_AGENT_RULES.find((candidate) => candidate.toolId === id);
+    assert.ok(definition, `security root for ${id}`);
+    assert.ok(rule, `registry rule for ${id}`);
     assert.deepEqual(
       [...definition.suffixes].sort(),
       [...rule.roots].sort(),

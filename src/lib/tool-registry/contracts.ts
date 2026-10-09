@@ -91,9 +91,15 @@ export type SessionReaderKey =
   | "aipy-session-v1"
   | "pi-session-v1"
   | "omp-session-v1"
+  | "omo-session-v1"
   | "hermes-session-v1"
   | "workbuddy-session-v1"
   | "zcode-session-v1"
+  | "doubao-work-session-v1"
+  | "kimi-work-session-v1"
+  | "qcode-session-v1"
+  | "marvis-session-v1"
+  | "trae-work-session-v1"
   | (string & {});
 
 export interface UsageCapability {
@@ -254,10 +260,9 @@ export interface ToolDefinition {
   id: ToolId;
   configVersion: 1;
   /**
-   * False only for legacy collection sources (aipy/cline) that must stay
-   * compatible with usage scanning but are not part of the product catalog
-   * (hidden from the public manifest, detection UI and market). Defaults to
-   * true (docs §6: catalogVisible=false only for legacy sources).
+   * False for known-but-unverified local sources that should stay compatible
+   * with server-side scanning but remain out of the product catalog until their
+   * data contract is aligned with a reference implementation. Defaults to true.
    */
   catalogVisible?: boolean;
   display: ToolDisplay;

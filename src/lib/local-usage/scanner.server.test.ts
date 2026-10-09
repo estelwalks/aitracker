@@ -56,11 +56,24 @@ test("generic usage adapters scan only paths for the active platform", async () 
     homeDirectory,
     "Library",
     "Application Support",
-    "aipy-pro",
+    "Qoder",
+    "SharedClientCache",
+    "cache",
+    "db",
   );
-  const windowsPath = join(homeDirectory, "AppData", "Roaming", "aipy-pro");
+  const windowsPath = join(
+    homeDirectory,
+    "AppData",
+    "Roaming",
+    "Qoder",
+    "SharedClientCache",
+    "cache",
+    "db",
+  );
   await mkdir(macPath, { recursive: true });
   await mkdir(windowsPath, { recursive: true });
+  const commonProjectPath = join(homeDirectory, ".qoder", "projects");
+  await mkdir(commonProjectPath, { recursive: true });
 
   try {
     const macSnapshot = await scanLocalUsage({
@@ -69,7 +82,10 @@ test("generic usage adapters scan only paths for the active platform", async () 
       platform: "darwin",
       disablePersistentCache: true,
     });
-    assert.deepEqual(sourceSummary(macSnapshot, "aipy").paths, [macPath]);
+    assert.deepEqual(sourceSummary(macSnapshot, "qoder").paths, [
+      macPath,
+      commonProjectPath,
+    ]);
 
     const windowsSnapshot = await scanLocalUsage({
       homeDirectory,
@@ -82,8 +98,9 @@ test("generic usage adapters scan only paths for the active platform", async () 
       },
       disablePersistentCache: true,
     });
-    assert.deepEqual(sourceSummary(windowsSnapshot, "aipy").paths, [
+    assert.deepEqual(sourceSummary(windowsSnapshot, "qoder").paths, [
       windowsPath,
+      commonProjectPath,
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });

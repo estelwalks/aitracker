@@ -92,22 +92,18 @@ describe("P4-T1 platform-aware probing", () => {
     }
   });
 
-  it("linux probes supported tools only; planned tools never get roots", () => {
+  it("linux probes only tools marked supported in the registry", () => {
     const roots = detectRootsForOs(AI_TOOLS, "linux");
+    const expectedRoots = new Map([
+      ["pi", [".pi", ".pi/agent/sessions"]],
+      ["omo", [".omo", ".omo/agent/sessions"]],
+      ["prime-agent", [".prime", ".prime/agent/sessions"]],
+      ["minimax-code", [".minimax", ".minimax/v2/sessions"]],
+    ]);
     for (const [id, paths] of roots) {
-      if (id === "pi") {
-        // Expected diff (pi linux support): pi ships a linux build, so its
-        // ~/.pi roots are probed on linux; every other catalog tool remains
-        // linux-planned and must never be probed.
-        assert.deepEqual(
-          [...paths],
-          [".pi", ".pi/agent/sessions"],
-          `${id} linux roots`,
-        );
-        continue;
-      }
-      assert.deepEqual(paths, [], `${id} must not be probed on linux`);
+      assert.deepEqual(paths, expectedRoots.get(id) ?? [], `${id} linux roots`);
     }
+    for (const id of expectedRoots.keys()) assert.ok(roots.has(id));
   });
 
   it("osFromProcess maps node platforms", () => {

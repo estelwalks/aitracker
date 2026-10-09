@@ -18,6 +18,15 @@ test("hygiene scanner detects secrets and private paths", () => {
   );
 });
 
+test("relative paths containing a home directory segment are not absolute paths", () => {
+  const root = mkdtempSync(join(tmpdir(), "aitracker-hygiene-"));
+  writeFileSync(
+    join(root, "relative.ts"),
+    'const sessionPath = "kimi-code/home/sessions";\n',
+  );
+  assert.deepEqual(scanRepository(root), []);
+});
+
 test("docs, fixtures and tests are excluded to avoid example false positives", () => {
   const root = mkdtempSync(join(tmpdir(), "aitracker-hygiene-"));
   mkdirSync(join(root, "docs"));

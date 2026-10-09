@@ -8,7 +8,10 @@ import { constants, zstdCompressSync } from "node:zlib";
 
 import { ENV } from "../app-config";
 import { normalizeProjectPath } from "../local-usage/project-path.ts";
-import { compileToolRegistry } from "../tool-registry/registry.ts";
+import {
+  compileToolRegistry,
+  getDefaultRegistry,
+} from "../tool-registry/registry.ts";
 import {
   __resetSessionReaders,
   registerSessionReader,
@@ -42,6 +45,16 @@ async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
 function soleSession(records: SessionRecord[]): SessionRecord {
   assert.equal(records.length, 1, `expected 1 session, got ${records.length}`);
   return records[0]!;
+}
+
+function registryWithVisibleHiddenSessionTool(toolId: string) {
+  const base = getDefaultRegistry();
+  return compileToolRegistry(
+    base.definitions.map((def) =>
+      def.id === toolId ? { ...def, catalogVisible: true } : def,
+    ),
+    base.sharedPacks ? { sharedPacks: base.sharedPacks } : undefined,
+  );
 }
 
 /** SessionRecord must NOT carry any conversation-content fields (privacy). */
@@ -2018,6 +2031,7 @@ test("AiPy: starts a session at its first USER message, not an earlier lifecycle
           // The fixture lays out AiPy's macOS app-data path; AiPy's platform
           // plan has no Linux roots, so pin the simulated platform.
           platform: "darwin",
+          registry: registryWithVisibleHiddenSessionTool("aipy"),
         })
       ).sessions,
     );
@@ -2817,5 +2831,337 @@ test("ZCode: a database with only orphaned child sessions lists nothing", async 
       summary.sessions.filter((record) => record.source === "zcode").length,
       0,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Desktop/CLI sources added after the ZCode integration. Their identities and
+// paths are registry-driven; only the on-disk record formats are reader code.
+// ---------------------------------------------------------------------------
+
+test("Doubao Work: reads trajectory metadata without inventing token usage", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "doubao-session-1";
+    const trajectoryDir = join(
+      home,
+      "Library",
+      "Application Support",
+      "DoubaoWork",
+      "Default",
+      ".doubaowork",
+      "agent_mode",
+      "workspace",
+      ".sessions",
+      sessionId,
+      "agents",
+      "main",
+      "system",
+    );
+    await mkdir(trajectoryDir, { recursive: true });
+    await writeFile(
+      join(trajectoryDir, "trajectory.jsonl"),
+      [
+        JSON.stringify({ role: "user", content: "检查这个项目的问题" }),
+        JSON.stringify({ role: "assistant", content: "SECRET RESPONSE" }),
+      ].join("\n") + "\n",
+    );
+
+    const summary = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      platform: "darwin",
+      registry: registryWithVisibleHiddenSessionTool("doubao-work"),
+    });
+    const session = soleSession(
+      summary.sessions.filter((record) => record.source === "doubao-work"),
+    );
+    assert.equal(session.sessionId, sessionId);
+    assert.equal(session.title, "检查这个项目的问题");
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.totalTokens, 0);
+    assert.equal(session.resumeSafe, false);
+    assertPrivacyClean(session);
+  });
+});
+
+test("Kimi Work: combines state metadata with wire usage records", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "kimi-session-1";
+    const sessionDir = join(
+      home,
+      "Library",
+      "Application Support",
+      "kimi-desktop",
+      "daimon-share",
+      "daimon",
+      "runtime",
+      "kimi-code",
+      "home",
+      "sessions",
+      "project-key",
+      sessionId,
+    );
+    const agentDir = join(sessionDir, "agents", "main");
+    const projectDir = join(home, "kimi-project");
+    await mkdir(agentDir, { recursive: true });
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, "state.json"),
+      JSON.stringify({
+        title: "Kimi 桌面会话",
+        workDir: projectDir,
+        createdAt: "2026-09-10T01:00:00.000Z",
+        updatedAt: "2026-09-10T01:02:00.000Z",
+        custom: { conversationKey: sessionId },
+      }),
+    );
+    await writeFile(
+      join(agentDir, "wire.jsonl"),
+      [
+        JSON.stringify({
+          time: "2026-09-10T01:00:10.000Z",
+          type: "turn.prompt",
+          prompt: "SECRET KIMI PROMPT",
+        }),
+        JSON.stringify({
+          time: "2026-09-10T01:01:00.000Z",
+          type: "llm.request",
+          model: "kimi-k2",
+        }),
+        JSON.stringify({
+          time: "2026-09-10T01:01:30.000Z",
+          type: "usage.record",
+          usage: {
+            inputOther: 100,
+            inputCacheRead: 40,
+            inputCacheCreation: 10,
+            output: 25,
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const summary = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      platform: "darwin",
+      registry: registryWithVisibleHiddenSessionTool("kimi-work"),
+    });
+    const session = soleSession(
+      summary.sessions.filter((record) => record.source === "kimi-work"),
+    );
+    assert.equal(session.title, "Kimi 桌面会话");
+    assert.equal(session.projectRef, "~/kimi-project");
+    assert.equal(session.model, "kimi-k2");
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.totalTokens, 175);
+    assert.equal(session.resumeSafe, false);
+    assertPrivacyClean(session);
+  });
+});
+
+test("QCode: reads sibling session logs and builds a safe resume command", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "qcode-session-1";
+    const projectDir = join(home, "qcode-project");
+    const sessionsDir = join(home, "sessions", "project-key");
+    await mkdir(join(home, ".q-code"), { recursive: true });
+    await mkdir(sessionsDir, { recursive: true });
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      join(sessionsDir, `${sessionId}.meta.json`),
+      JSON.stringify({
+        sessionId,
+        title: "QCode 会话",
+        cwd: projectDir,
+        createdAt: "2026-09-11T01:00:00.000Z",
+        updatedAt: "2026-09-11T01:02:00.000Z",
+      }),
+    );
+    await writeFile(
+      join(sessionsDir, `${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          ts: "2026-09-11T01:00:10.000Z",
+          sessionId,
+          role: "user",
+          content: "SECRET QCODE PROMPT",
+        }),
+        JSON.stringify({
+          ts: "2026-09-11T01:01:10.000Z",
+          sessionId,
+          event: "agent.step.end",
+          payload: {
+            model: "qwen3-coder",
+            inputTokens: 80,
+            outputTokens: 20,
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const summary = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      platform: "darwin",
+      registry: registryWithVisibleHiddenSessionTool("qcode"),
+    });
+    const session = soleSession(
+      summary.sessions.filter((record) => record.source === "qcode"),
+    );
+    assert.equal(session.title, "QCode 会话");
+    assert.equal(session.model, "qwen3-coder");
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.totalTokens, 100);
+    assert.equal(session.resumeSafe, true);
+    assert.equal(session.resumeCommand, `q-code --session ${sessionId}`);
+    assertPrivacyClean(session);
+  });
+});
+
+test("Marvis: reads conversation and token metadata from each user database", async () => {
+  await withTempHome(async (home) => {
+    const databaseDir = join(
+      home,
+      "Library",
+      "Application Support",
+      "com.tencent.mac.marvis",
+      "MarvisData",
+      "User",
+      "user-1",
+      "database",
+    );
+    const projectDir = join(home, "marvis-project");
+    await mkdir(databaseDir, { recursive: true });
+    await mkdir(projectDir, { recursive: true });
+    const database = new DatabaseSync(join(databaseDir, "data.db"));
+    database.exec(`
+      CREATE TABLE conversations(
+        conversation_id TEXT, user_id TEXT, title TEXT, status TEXT,
+        metadata TEXT, created_at TEXT, updated_at TEXT
+      );
+      CREATE TABLE messages(
+        message_id TEXT, conversation_id TEXT, response_id TEXT, role TEXT,
+        content TEXT, tool_calls TEXT, tool_call_id TEXT, tool_name TEXT,
+        message_seq INTEGER, event_seq_anchor INTEGER, metadata TEXT,
+        created_at TEXT
+      );
+      CREATE TABLE llm_token_usage(
+        id INTEGER, usage_date TEXT, conversation_id TEXT, response_id TEXT,
+        model_id TEXT, is_local INTEGER, input_tokens INTEGER,
+        output_tokens INTEGER, thinking_tokens INTEGER, cached_tokens INTEGER,
+        total_tokens INTEGER, created_at TEXT, metadata TEXT
+      );
+    `);
+    database
+      .prepare(`INSERT INTO conversations VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(
+        "marvis-session-1",
+        "user-1",
+        "Marvis 会话",
+        "active",
+        JSON.stringify({ workspacePath: projectDir }),
+        "2026-09-12T01:00:00.000Z",
+        "2026-09-12T01:02:00.000Z",
+      );
+    database
+      .prepare(
+        `INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "m1",
+        "marvis-session-1",
+        null,
+        "user",
+        "SECRET MARVIS PROMPT",
+        null,
+        null,
+        null,
+        1,
+        1,
+        null,
+        "2026-09-12T01:00:10.000Z",
+      );
+    database
+      .prepare(
+        `INSERT INTO llm_token_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        1,
+        "2026-09-12",
+        "marvis-session-1",
+        "r1",
+        "deepseek-v3",
+        0,
+        100,
+        40,
+        10,
+        20,
+        140,
+        "2026-09-12T01:01:00.000Z",
+        null,
+      );
+    database.close();
+
+    const summary = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      platform: "darwin",
+      registry: registryWithVisibleHiddenSessionTool("marvis"),
+    });
+    const session = soleSession(
+      summary.sessions.filter((record) => record.source === "marvis"),
+    );
+    assert.equal(session.title, "Marvis 会话");
+    assert.equal(session.projectRef, "~/marvis-project");
+    assert.equal(session.model, "deepseek-v3");
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.inputTokens, 80);
+    assert.equal(session.totals.cachedInputTokens, 20);
+    assert.equal(session.totals.outputTokens, 30);
+    assert.equal(session.totals.reasoningOutputTokens, 10);
+    assert.equal(session.totals.totalTokens, 140);
+    assert.equal(session.resumeSafe, false);
+    assertPrivacyClean(session);
+  });
+});
+
+test("Trae Work: lists privacy-safe memory sessions without inventing usage", async () => {
+  await withTempHome(async (home) => {
+    const memoryDir = join(
+      home,
+      ".trae-cn",
+      "memory",
+      "projects",
+      "project-key",
+    );
+    await mkdir(memoryDir, { recursive: true });
+    await writeFile(
+      join(memoryDir, "session_memory_trae-session-1.jsonl"),
+      JSON.stringify({
+        intent: "整理项目数据",
+        message_summary_time: "2026-09-13 01:02:00",
+        message_id: "trae-history-1",
+        server_history_id: "trae-session-1",
+        model: "doubao-seed",
+      }) + "\n",
+    );
+
+    const summary = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+      platform: "darwin",
+      registry: registryWithVisibleHiddenSessionTool("trae-work"),
+    });
+    const session = soleSession(
+      summary.sessions.filter((record) => record.source === "trae-work"),
+    );
+    assert.equal(session.sessionId, "trae-session-1");
+    assert.equal(session.title, "Trae Work trae-ses");
+    assert.equal(session.model, "doubao-seed");
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.totalTokens, 0);
+    assert.equal(session.resumeSafe, false);
+    assertPrivacyClean(session);
   });
 });
