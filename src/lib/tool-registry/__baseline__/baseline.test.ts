@@ -177,8 +177,12 @@ test("baseline usage adapters remain represented (native sources included)", () 
   // Antigravity contribute native usage adapters inside the frozen set, so the
   // live catalog matches it one-for-one (no extra "+1 extension"). dsh is a
   // deliberate post-baseline addition and is asserted separately below.
-  assert.ok(BUILTIN_USAGE_ADAPTERS.length >= BASELINE_USAGE_ADAPTERS.length);
-  for (const expected of BASELINE_USAGE_ADAPTERS) {
+  const visibleToolIds = new Set(AI_TOOLS.map((tool) => tool.id));
+  const visibleBaselineAdapters = BASELINE_USAGE_ADAPTERS.filter((adapter) =>
+    visibleToolIds.has(adapter.source),
+  );
+  assert.ok(BUILTIN_USAGE_ADAPTERS.length >= visibleBaselineAdapters.length);
+  for (const expected of visibleBaselineAdapters) {
     const live = BUILTIN_USAGE_ADAPTERS.find(
       (adapter) => adapter.source === expected.source,
     );

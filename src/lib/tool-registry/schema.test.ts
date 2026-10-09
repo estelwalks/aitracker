@@ -80,9 +80,20 @@ describe("RawToolDefinitionSchema - positive fixtures", () => {
     );
   });
 
-  test("catalogVisible=false allowed for aipy/cline legacy sources", () => {
-    parseOk(validTool({ id: "aipy", catalogVisible: false }));
-    parseOk(validTool({ id: "cline", catalogVisible: false }));
+  test("catalogVisible=false is supported for unverified tool definitions", () => {
+    for (const id of [
+      "aipy",
+      "qwen",
+      "proma",
+      "cherrystudio",
+      "doubao-work",
+      "kimi-work",
+      "qcode",
+      "marvis",
+      "trae-work",
+    ]) {
+      parseOk(validTool({ id, catalogVisible: false }));
+    }
   });
 
   test("adapter usage with custom mapping + sqlite query parses", () => {
@@ -340,11 +351,8 @@ describe("RawToolDefinitionSchema - invalid combinations", () => {
     );
   });
 
-  test("catalogVisible=false is only allowed for aipy/cline", () => {
-    parseFail(
-      validTool({ catalogVisible: false }),
-      "only allowed for legacy sources",
-    );
+  test("catalogVisible=false is a valid explicit visibility setting", () => {
+    parseOk(validTool({ catalogVisible: false }));
   });
 
   test("windows group + exact override at tool level is ambiguous", () => {
@@ -542,15 +550,10 @@ describe("shared policy packs (TC-POL-001)", () => {
       "grok",
       "hermes",
       "workbuddy",
-      "doubao-work",
-      "kimi-work",
-      "qcode",
-      "marvis",
-      "trae-work",
       "openclaw",
       "antigravity",
-      "aipy",
       "zcode",
+      "acode",
     ]);
     assert.deepEqual(pack.defaultMarkers, ["SKILL.md", "skill.md"]);
     assert.equal(pack.defaultMaxDepth, 3);
@@ -606,13 +609,13 @@ describe("shared policy packs (TC-POL-001)", () => {
     ) as {
       tools: { id: string; path: string }[];
     };
-    assert.equal(pack.tools.length, 41);
+    assert.equal(pack.tools.length, 46);
     assert.equal(pack.tools[0].id, "claude-code");
     assert.equal(pack.tools[27].id, "dsh");
     assert.equal(pack.tools[28].id, "aipy");
     assert.equal(pack.tools[29].id, "cline");
     const ids = new Set(pack.tools.map((t) => t.id));
-    assert.equal(ids.size, 41, "ids must be unique");
+    assert.equal(ids.size, 46, "ids must be unique");
     for (const t of pack.tools) {
       assert.equal(
         t.path,

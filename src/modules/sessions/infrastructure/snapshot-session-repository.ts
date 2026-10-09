@@ -1,14 +1,15 @@
 import type { SessionRepository } from "../contracts.ts";
-import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
+import { listTools } from "../../../lib/tool-registry/registry.ts";
 import type { SessionSnapshotData } from "./session-snapshot.contracts.ts";
 
 // AiPy emits placeholder task rows without usage; those zero-token rows are
 // intentionally hidden. Other read-only readers have no token accounting by
 // design, so their sessions must remain visible.
 const ZERO_TOKEN_SESSION_SOURCES = new Set(
-  PUBLIC_TOOL_MANIFEST.tools
+  listTools()
     .filter(
-      (tool) => tool.id === "aipy" && tool.capabilities.sessions === "read",
+      (tool) =>
+        tool.id === "aipy" && tool.capabilities.sessions.mode === "read",
     )
     .map((tool) => tool.id),
 );

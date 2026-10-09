@@ -87,6 +87,7 @@ export const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
   },
   { agent: "Gemini CLI", toolId: "gemini-cli", suffixes: [".gemini/skills"] },
   { agent: "Cursor", toolId: "cursor", suffixes: [".cursor/skills"] },
+  { agent: "AStudio", toolId: "acode", suffixes: [".acode/skills"] },
   {
     agent: "Antigravity",
     toolId: "antigravity",

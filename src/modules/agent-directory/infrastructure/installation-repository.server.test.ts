@@ -83,23 +83,26 @@ test("linux probes only linux-supported tools; planned tools are unsupported", a
     },
   });
   const snapshot = await repository.inspect({ platform: "linux" });
-  // pi ships a linux build (registry declares linux supported) and is the
-  // only catalog tool probed there; every other tool stays linux-planned.
-  assert.equal(calls, 1);
-  const pi = snapshot.installations.find((item) => item.agentId === "pi");
-  assert.equal(pi?.status, "installed");
-  assert.equal(
-    snapshot.health.find((item) => item.agentId === "pi")?.status,
-    "healthy",
-  );
+  const linuxSupported = ["pi", "omo", "prime-agent", "minimax-code"];
+  assert.equal(calls, 4);
+  for (const id of linuxSupported) {
+    assert.equal(
+      snapshot.installations.find((item) => item.agentId === id)?.status,
+      "installed",
+    );
+    assert.equal(
+      snapshot.health.find((item) => item.agentId === id)?.status,
+      "healthy",
+    );
+  }
   assert.ok(
     snapshot.installations
-      .filter((item) => item.agentId !== "pi")
+      .filter((item) => !linuxSupported.includes(item.agentId))
       .every((item) => item.status === "unsupported"),
   );
   assert.ok(
     snapshot.health
-      .filter((item) => item.agentId !== "pi")
+      .filter((item) => !linuxSupported.includes(item.agentId))
       .every((item) => item.status === "unavailable"),
   );
 });
