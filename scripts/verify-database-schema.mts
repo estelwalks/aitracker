@@ -9,6 +9,7 @@ import {
   INITIAL_SCHEMA_SQL,
   LATEST_MIGRATION_VERSION,
   MIGRATIONS,
+  PROJECT_IDENTITY_MERGES_SQL,
   TOOL_DATA_ROOTS_SQL,
 } from "../src/platform/database/migrations/index.ts";
 
@@ -77,6 +78,7 @@ const REQUIRED_TABLES = [
   "usage_aggregate_buckets",
   "usage_aggregate_bucket_tools",
   "usage_tracker_buckets",
+  "project_identity_merges",
 ] as const;
 
 /**
@@ -111,6 +113,7 @@ assert.deepEqual(files, [
   "0001_initial_schema.ts",
   "0002_drop_legacy_usage_tables.ts",
   "0003_tool_data_roots.ts",
+  "0004_project_identity_merges.ts",
   "index.ts",
 ]);
 assert.ok(MIGRATIONS.length >= 1, "at least the baseline migration must exist");
@@ -142,6 +145,7 @@ try {
   database.exec(INITIAL_SCHEMA_SQL);
   database.exec(DROP_LEGACY_USAGE_TABLES_SQL);
   database.exec(TOOL_DATA_ROOTS_SQL);
+  database.exec(PROJECT_IDENTITY_MERGES_SQL);
 
   const objects = database
     .prepare(
