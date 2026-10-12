@@ -13,7 +13,7 @@ import {
   type RoastDimension,
 } from "../application/tracker.ts";
 import { RoastBoard } from "./roast/RoastBoard.tsx";
-import { mergeProjectIdentitiesQuery } from "../query.ts";
+import { mergeProjectIdentitiesQuery } from "../server-fns.ts";
 
 /**
  * Token burn leaderboard page. All figures come from the server-side read
