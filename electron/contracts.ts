@@ -5,6 +5,7 @@ export const desktopIpc = {
   getAutoUpdate: "desktop:get-auto-update",
   setAutoUpdate: "desktop:set-auto-update",
   setUpdateProxy: "desktop:set-update-proxy",
+  getUpdateProxy: "desktop:get-update-proxy",
   getUpdateState: "desktop:get-update-state",
   checkForUpdates: "desktop:check-for-updates",
   downloadUpdate: "desktop:download-update",
@@ -420,6 +421,12 @@ export interface DesktopApi {
    * Invalid input rejects with a TypeError. Resolves with the stored state.
    */
   setUpdateProxy(config: UpdateProxyConfig): Promise<UpdateProxyState>;
+  /**
+   * Read the persisted update-proxy state. The value lives in the dedicated
+   * `update_channel_settings` table — never in `app_preferences`, whose
+   * forbidden-zone guard refuses URL-shaped values.
+   */
+  getUpdateProxy(): Promise<UpdateProxyState>;
   getUpdateState(): Promise<DesktopUpdateState>;
   checkForUpdates(): Promise<DesktopUpdateState>;
   downloadUpdate(): Promise<DesktopUpdateState>;

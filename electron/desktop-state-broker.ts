@@ -7,6 +7,7 @@ import type {
   SecurityScanScheduleRuntime,
   SecurityTokenUsageBreakdownDto,
   SecurityTokenUsageDto,
+  UpdateProxyState,
 } from "./contracts.js";
 import type { ModelConfig } from "@estelwalks/agent-threat-scanner";
 
@@ -226,6 +227,21 @@ export class DesktopStateBroker {
   /** Per-tool data-directory overrides (Sources page), main-process only. */
   readToolDataRoots(): Promise<Record<string, string>> {
     return this.#request("/tool-data-roots");
+  }
+
+  /**
+   * Update-channel proxy (Settings → 更新代理), main-process only. Stored in
+   * `update_channel_settings`; `app_preferences` rejects URL-shaped values.
+   */
+  readUpdateProxy(): Promise<UpdateProxyState> {
+    return this.#request("/update-proxy");
+  }
+
+  async writeUpdateProxy(state: UpdateProxyState): Promise<UpdateProxyState> {
+    return this.#request("/update-proxy", {
+      method: "PUT",
+      body: { enabled: state.enabled, proxy: state.proxy },
+    });
   }
 
   async setPreference(key: string, value: unknown): Promise<void> {

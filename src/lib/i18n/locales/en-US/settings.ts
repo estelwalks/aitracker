@@ -399,7 +399,9 @@ export const settings = {
       "Installing the update; the app reopens automatically when it finishes",
     updateInstallTimeout: "No installation detected; please try again",
     updateProxySaved: "Update proxy saved",
-    updateProxySaveFailed: "Invalid proxy; could not save",
+    updateProxyFormatInvalid:
+      "Invalid proxy. Check the address, for example http://127.0.0.1:7890",
+    updateProxySaveFailed: "Could not save the proxy. Try again in a moment",
     cleanupDone: "Cleaned up {count} expired cache files ({size})",
     keepForever: "Cache will be kept forever",
     retentionSaved: "Cache retention policy saved",

@@ -25,10 +25,8 @@ import { useVersionCheck } from "../../../lib/version-check";
 import {
   AUTO_UPDATE_PREFERENCE_KEY,
   DEFAULT_AUTO_UPDATE_ENABLED,
-  UPDATE_PROXY_ENABLED_KEY,
-  UPDATE_PROXY_KEY,
+  normalizeUpdateProxyInput,
   parseAutoUpdateEnabled,
-  parseUpdateProxyEnabled,
 } from "../../../lib/update-preferences";
 import {
   listPreferences,
@@ -289,20 +287,21 @@ export function SettingsPage({
     void (async () => {
       try {
         if (api) {
-          const [preference, state, preferences] = await Promise.all([
+          const [preference, state, proxyState] = await Promise.all([
             api.getAutoUpdate(),
             api.getUpdateState(),
-            api.getPreferences(),
+            // The update proxy lives in its own table behind the desktop
+            // bridge; a failure here must not blank the rest of the section.
+            api.getUpdateProxy().catch(() => null),
           ]);
           if (cancelled) return;
           setAutoUpdateEnabled(preference.enabled);
           setAutoUpdateSupported(preference.supported);
           setDesktopUpdateState(state);
-          const proxy = preferences[UPDATE_PROXY_KEY];
-          setProxyEnabled(
-            parseUpdateProxyEnabled(preferences[UPDATE_PROXY_ENABLED_KEY]),
-          );
-          setProxyValue(typeof proxy === "string" ? proxy : "");
+          if (proxyState) {
+            setProxyEnabled(proxyState.enabled);
+            setProxyValue(proxyState.proxy);
+          }
         } else {
           const preference = await getPreference(AUTO_UPDATE_PREFERENCE_KEY);
           if (cancelled) return;
@@ -485,6 +484,8 @@ export function SettingsPage({
       setProxyDialogOpen(false);
       toast.success(t("settings.toast.updateProxySaved"));
     } catch {
+      // Anything that survives the pre-flight format check is a save failure
+      // (local server or preference store), not a bad address.
       toast.error(t("settings.toast.updateProxySaveFailed"));
     } finally {
       setProxySaving(false);
@@ -516,10 +517,16 @@ export function SettingsPage({
 
   const handleSaveProxyDialog = () => {
     const enableAfterSave = proxyDialogIntent === "enable";
-    void saveProxyConfig(
-      enableAfterSave ? true : proxyEnabled,
-      proxyDraft.trim(),
-    );
+    // Pre-flight the address so an unusable one is reported as a format error
+    // instead of blaming the save. The main process re-normalizes it.
+    let normalized: string;
+    try {
+      normalized = normalizeUpdateProxyInput(proxyDraft);
+    } catch {
+      toast.error(t("settings.toast.updateProxyFormatInvalid"));
+      return;
+    }
+    void saveProxyConfig(enableAfterSave ? true : proxyEnabled, normalized);
   };
 
   // Close the manual dialog whenever the flow left the downloadable states

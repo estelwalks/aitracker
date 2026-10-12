@@ -400,7 +400,10 @@ export const settings = {
     updateInstallTimeout:
       "インストールが確認できませんでした。もう一度お試しください",
     updateProxySaved: "更新用プロキシを保存しました",
-    updateProxySaveFailed: "プロキシの形式が無効です。保存できませんでした",
+    updateProxyFormatInvalid:
+      "プロキシの形式が無効です。例：http://127.0.0.1:7890",
+    updateProxySaveFailed:
+      "プロキシを保存できませんでした。しばらくしてからお試しください",
     cleanupDone: "期限切れキャッシュ {count} 件を削除しました（{size}）",
     keepForever: "キャッシュを無期限で保持する設定にしました",
     retentionSaved: "キャッシュ保持ポリシーを保存しました",

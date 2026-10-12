@@ -11,6 +11,7 @@ import {
   MIGRATIONS,
   PROJECT_IDENTITY_MERGES_SQL,
   TOOL_DATA_ROOTS_SQL,
+  UPDATE_CHANNEL_SETTINGS_SQL,
 } from "../src/platform/database/migrations/index.ts";
 
 const migrationsDirectory = join(
@@ -38,6 +39,7 @@ const REQUIRED_TABLES = [
   "insight_generation_reservations",
   "task_preferences",
   "tool_data_roots",
+  "update_channel_settings",
   "task_runs",
   "monitoring_state",
   "monitoring_collectors",
@@ -114,6 +116,7 @@ assert.deepEqual(files, [
   "0002_drop_legacy_usage_tables.ts",
   "0003_tool_data_roots.ts",
   "0004_project_identity_merges.ts",
+  "0005_update_channel_settings.ts",
   "index.ts",
 ]);
 assert.ok(MIGRATIONS.length >= 1, "at least the baseline migration must exist");
@@ -146,6 +149,7 @@ try {
   database.exec(DROP_LEGACY_USAGE_TABLES_SQL);
   database.exec(TOOL_DATA_ROOTS_SQL);
   database.exec(PROJECT_IDENTITY_MERGES_SQL);
+  database.exec(UPDATE_CHANNEL_SETTINGS_SQL);
 
   const objects = database
     .prepare(
