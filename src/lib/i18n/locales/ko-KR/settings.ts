@@ -394,7 +394,10 @@ export const settings = {
       "업데이트를 설치하는 중입니다. 완료되면 앱이 자동으로 다시 열립니다",
     updateInstallTimeout: "설치가 감지되지 않았습니다. 다시 시도하세요",
     updateProxySaved: "업데이트 프록시가 저장되었습니다",
-    updateProxySaveFailed: "프록시 형식이 올바르지 않아 저장하지 못했습니다",
+    updateProxyFormatInvalid:
+      "프록시 형식이 올바르지 않습니다. 예: http://127.0.0.1:7890",
+    updateProxySaveFailed:
+      "프록시를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요",
     cleanupDone: "만료된 캐시 파일 {count}개를 정리했습니다（{size}）",
     keepForever: "캐시를 무기한 보존하도록 설정했습니다",
     retentionSaved: "캐시 보존 정책을 저장했습니다",

@@ -45,6 +45,11 @@ const desktopApi: DesktopApi = Object.freeze({
       enabled: boolean;
       proxy: string;
     }>,
+  getUpdateProxy: () =>
+    ipcRenderer.invoke(desktopIpc.getUpdateProxy) as Promise<{
+      enabled: boolean;
+      proxy: string;
+    }>,
   getUpdateState: () =>
     ipcRenderer.invoke(
       desktopIpc.getUpdateState,

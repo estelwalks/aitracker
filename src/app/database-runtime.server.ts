@@ -39,6 +39,7 @@ import { runMigrations } from "../platform/database/migration-runner.server.ts";
 import { LATEST_MIGRATION_VERSION } from "../platform/database/migrations/index.ts";
 import { createSqliteRuntimeFlagRepository } from "../platform/database/runtime-flag-repository.server.ts";
 import { createSqliteToolDataRootRepository } from "../platform/database/tool-data-root-repository.server.ts";
+import { createSqliteUpdateChannelSettingsRepository } from "../platform/database/update-channel-settings-repository.server.ts";
 import { createSqliteInstallationSnapshotRepository } from "../platform/discovery/sqlite-installation-snapshot-repository.server.ts";
 import { createSqliteWslSnapshotRepository } from "../platform/discovery/sqlite-wsl-snapshot-repository.server.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
@@ -118,6 +119,9 @@ export async function createDatabaseRuntime(
       appPreferences: createSqlitePreferenceRepository(host),
       runtimeFlags: createSqliteRuntimeFlagRepository(host),
       toolDataRoots: createSqliteToolDataRootRepository(host),
+      // Update-channel proxy settings (Settings → 更新代理). Carve-out table:
+      // `app_preferences` rejects URL-shaped values by design.
+      updateChannelSettings: createSqliteUpdateChannelSettingsRepository(host),
       httpCache: createSqliteHttpCacheRepository(host),
       aiExecutions: createSqliteAIExecutionRepository(host),
       insights: createSqliteInsightRepository(host),

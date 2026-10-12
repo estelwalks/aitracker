@@ -8,9 +8,14 @@ import type {
   SecurityScanRunRecord,
   SecurityScanScheduleRuntime,
   SecurityTokenUsageBreakdownDto,
+  UpdateProxyState,
 } from "../../electron/contracts.ts";
 import { SECURITY_LLM_REVIEW_PREF_KEY } from "../modules/security-assessment/llm-review.contracts.ts";
 import { assertAppPreferenceValueSafe } from "../platform/database/privacy-guard.server.ts";
+import {
+  assertUpdateChannelSettings,
+  type UpdateChannelSettingsInput,
+} from "../platform/database/update-channel-settings-repository.server.ts";
 import { getCompositionRoot } from "./composition.server.ts";
 import { getActiveModelProfileForExecution } from "../modules/ai-orchestration/model-profile.server.ts";
 import {
@@ -24,6 +29,14 @@ export const DESKTOP_STATE_API_PREFIX = "/api/desktop-state";
 export const DESKTOP_HISTORY_KEY = `${STORAGE_KEY_PREFIX}security.desktop-history.v1`;
 export const DESKTOP_SCHEDULE_KEY = `${STORAGE_KEY_PREFIX}security.scan-schedule.v1`;
 export const DESKTOP_SCHEDULE_RUNTIME_KEY = `${STORAGE_KEY_PREFIX}security.scan-schedule-runtime.v1`;
+/**
+ * Update-proxy keys written into `app_preferences` before migration 0005. They
+ * are read once so a SOCKS endpoint configured by an older build is not lost,
+ * and never written again: `app_preferences` refuses URL-shaped values by
+ * design, which is exactly why the proxy moved to `update_channel_settings`.
+ */
+export const LEGACY_UPDATE_PROXY_KEY = `${STORAGE_KEY_PREFIX}update.proxy`;
+export const LEGACY_UPDATE_PROXY_ENABLED_KEY = `${STORAGE_KEY_PREFIX}update.proxyEnabled`;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 // app_preferences rejects JSON documents larger than 64 KiB. Security history
 // is intentionally a compact summary, so keep a little headroom for schema
@@ -547,6 +560,74 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
   return projected;
 }
 
+/**
+ * Validates the update-proxy payload the desktop main process sends. Only the
+ * Settings dialog may produce it, and it is the single writer of
+ * `update_channel_settings`; the shape rules live in the repository so the HTTP
+ * boundary and SQLite agree.
+ */
+export function projectUpdateProxySettings(
+  value: unknown,
+): UpdateChannelSettingsInput {
+  if (value == null || typeof value !== "object" || Array.isArray(value))
+    throw new TypeError("Update proxy settings are required");
+  const item = value as Record<string, unknown>;
+  if (typeof item.enabled !== "boolean")
+    throw new TypeError("Update proxy enabled flag must be a boolean");
+  const proxy = item.proxy ?? "";
+  if (typeof proxy !== "string")
+    throw new TypeError("Update proxy address must be a string");
+  if (proxy === "") {
+    if (item.enabled)
+      throw new TypeError("Enabling the update proxy requires a proxy address");
+    return { proxyUrl: null, proxyEnabled: false };
+  }
+  if (proxy.trim() !== proxy) {
+    // The renderer already trims; a padded value would not be the canonical
+    // endpoint the update session dials.
+    throw new TypeError("Update proxy address must not be padded");
+  }
+  const settings: UpdateChannelSettingsInput = {
+    proxyUrl: proxy,
+    proxyEnabled: item.enabled,
+  };
+  assertUpdateChannelSettings(settings);
+  return settings;
+}
+
+/** Broker/desktop representation of a stored update-proxy setting. */
+export function projectUpdateProxyState(
+  record:
+    | { readonly proxyUrl: string | null; readonly proxyEnabled: boolean }
+    | undefined,
+): UpdateProxyState {
+  return record === undefined
+    ? { enabled: false, proxy: "" }
+    : { enabled: record.proxyEnabled, proxy: record.proxyUrl ?? "" };
+}
+
+/**
+ * Pre-0005 fallback: a SOCKS endpoint stored in `app_preferences` before the
+ * proxy moved to its own table. Read-only and shape-checked — an unreadable
+ * legacy value degrades to the system proxy instead of failing the request.
+ */
+export function legacyUpdateProxyState(
+  preferences: Readonly<Record<string, unknown>>,
+): UpdateProxyState {
+  const proxy = preferences[LEGACY_UPDATE_PROXY_KEY];
+  if (typeof proxy !== "string" || proxy.trim() === "")
+    return { enabled: false, proxy: "" };
+  const enabled = preferences[LEGACY_UPDATE_PROXY_ENABLED_KEY] === true;
+  try {
+    // The legacy key only ever held values the old guard accepted; re-check the
+    // shape so a stale or hand-edited value cannot reach the update session.
+    assertUpdateChannelSettings({ proxyUrl: proxy, proxyEnabled: enabled });
+  } catch {
+    return { enabled: false, proxy: "" };
+  }
+  return { enabled, proxy };
+}
+
 export function projectSecurityScheduleRuntime(
   value: unknown,
 ): SecurityScanScheduleRuntime {
@@ -618,9 +699,28 @@ export async function handleDesktopStateBrokerRequest(
     }
     if (request.method === "POST" && route === "/preferences/reset") {
       const keys = preferences.list().map((item) => item.key);
+      // The update proxy is an application setting too; resetting preferences
+      // restores the system proxy instead of leaving a stale endpoint behind.
+      await root.database.features.updateChannelSettings.clear();
       return json({
         removedKeys: keys.filter((key) => preferences.remove(key)).length,
       });
+    }
+    // Update-channel proxy (Settings → 更新代理), main-process only. The value
+    // is the endpoint the user typed; `app_preferences` refuses it by design,
+    // so it lives in `update_channel_settings` (migration 0005).
+    if (request.method === "GET" && route === "/update-proxy") {
+      const stored = await root.database.features.updateChannelSettings.read();
+      if (stored !== undefined) return json(projectUpdateProxyState(stored));
+      const legacy = Object.fromEntries(
+        preferences.list().map((item) => [item.key, item.value]),
+      );
+      return json(legacyUpdateProxyState(legacy));
+    }
+    if (request.method === "PUT" && route === "/update-proxy") {
+      const input = projectUpdateProxySettings(await body(request));
+      await root.database.features.updateChannelSettings.write(input);
+      return json(projectUpdateProxyState(input));
     }
     if (request.method === "GET" && route === "/security-history") {
       return json(

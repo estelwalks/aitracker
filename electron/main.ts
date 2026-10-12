@@ -100,10 +100,7 @@ import { shouldHideWindowOnClose } from "./window-close.js";
 import { isReloadShortcut } from "./reload-shortcut.js";
 import {
   AUTO_UPDATE_PREFERENCE_KEY,
-  UPDATE_PROXY_ENABLED_KEY,
-  UPDATE_PROXY_KEY,
   parseAutoUpdateEnabled,
-  parseUpdateProxyEnabled,
 } from "./update-preferences.js";
 import { UpdateManager } from "./update-manager.js";
 import { handOffInstaller } from "./update-relaunch.js";
@@ -169,6 +166,20 @@ async function applyUpdateProxy(proxy: string): Promise<void> {
   const activeSession = updateFetchSession;
   if (!activeSession) return;
   await activeSession.setProxy(updateProxyConfig(proxy));
+}
+
+/**
+ * Read the persisted update-proxy state through the desktop state broker. The
+ * value lives in the dedicated `update_channel_settings` table (migration
+ * 0005): `app_preferences` refuses URL-shaped values, which is why an
+ * `http://` endpoint could never be saved before. A broker failure is surfaced
+ * to the caller so the caller can decide between degrading to the system proxy
+ * (startup) and reporting the failure (Settings).
+ */
+async function readUpdateProxyState(): Promise<UpdateProxyState> {
+  const broker = desktopStateBroker;
+  if (!broker) throw new Error("Desktop state broker unavailable");
+  return broker.readUpdateProxy();
 }
 
 /**
@@ -806,6 +817,13 @@ function registerIpcHandlers(): void {
     },
   );
   ipcMain.handle(
+    desktopIpc.getUpdateProxy,
+    async (event): Promise<UpdateProxyState> => {
+      assertTrustedSender(event);
+      return readUpdateProxyState();
+    },
+  );
+  ipcMain.handle(
     desktopIpc.setUpdateProxy,
     async (event, raw: unknown): Promise<UpdateProxyState> => {
       assertTrustedSender(event);
@@ -815,6 +833,8 @@ function registerIpcHandlers(): void {
           : {};
       const enabled = config.enabled === true;
       const proxyValue = typeof config.proxy === "string" ? config.proxy : "";
+      // The renderer sends the raw input; normalize here so the persisted form
+      // and the session proxy are always the same canonical endpoint.
       const proxy = normalizeUpdateProxy(proxyValue);
       if (enabled && proxy.length === 0) {
         throw new TypeError(
@@ -824,10 +844,14 @@ function registerIpcHandlers(): void {
       if (!desktopStateBroker) {
         throw new Error("Desktop state broker unavailable");
       }
-      await desktopStateBroker.setPreference(UPDATE_PROXY_ENABLED_KEY, enabled);
-      await desktopStateBroker.setPreference(UPDATE_PROXY_KEY, proxy);
-      await applyUpdateProxy(enabled ? proxy : "");
-      return { enabled, proxy };
+      // Persist first: the value lands in the dedicated update-channel table,
+      // because `app_preferences` refuses URL-shaped values by design.
+      const stored = await desktopStateBroker.writeUpdateProxy({
+        enabled,
+        proxy,
+      });
+      await applyUpdateProxy(stored.enabled ? stored.proxy : "");
+      return stored;
     },
   );
   ipcMain.handle(desktopIpc.getUpdateState, (event): DesktopUpdateState => {
@@ -1405,6 +1429,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getAutoUpdate);
     ipcMain.removeHandler(desktopIpc.setAutoUpdate);
     ipcMain.removeHandler(desktopIpc.setUpdateProxy);
+    ipcMain.removeHandler(desktopIpc.getUpdateProxy);
     ipcMain.removeHandler(desktopIpc.getUpdateState);
     ipcMain.removeHandler(desktopIpc.checkForUpdates);
     ipcMain.removeHandler(desktopIpc.downloadUpdate);
@@ -1577,14 +1602,8 @@ if (!hasSingleInstanceLock) {
       // proxy by default and any user-configured update proxy otherwise.
       updateFetchSession = session.fromPartition("aitracker-update-fetch");
       try {
-        const proxyEnabled = parseUpdateProxyEnabled(
-          persistedPreferences[UPDATE_PROXY_ENABLED_KEY],
-        );
-        const persistedProxy =
-          typeof persistedPreferences[UPDATE_PROXY_KEY] === "string"
-            ? (persistedPreferences[UPDATE_PROXY_KEY] as string)
-            : "";
-        const proxy = proxyEnabled ? normalizeUpdateProxy(persistedProxy) : "";
+        const stored = await readUpdateProxyState();
+        const proxy = stored.enabled ? normalizeUpdateProxy(stored.proxy) : "";
         await applyUpdateProxy(proxy);
       } catch (error) {
         console.warn("AITracker update proxy preference is invalid", error);

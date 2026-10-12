@@ -4,8 +4,8 @@
  * proxy the user configured in Settings (HTTP/HTTPS/SOCKS).
  *
  * Credentials inside the proxy URL are deliberately rejected: the value is
- * persisted in the shared preference store, and proxy passwords do not belong
- * there.
+ * persisted in the dedicated `update_channel_settings` table (migration 0005)
+ * as plain configuration, and proxy passwords do not belong there.
  */
 
 const ALLOWED_PROXY_SCHEMES = new Set([

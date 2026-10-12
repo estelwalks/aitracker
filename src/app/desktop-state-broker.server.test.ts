@@ -1,12 +1,29 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
+
+import { ENV } from "../lib/app-config.ts";
+import {
+  getCompositionRoot,
+  resetCompositionRootForTests,
+} from "./composition.server.ts";
 
 import { assertAppPreferenceValueSafe } from "../platform/database/privacy-guard.server.ts";
 import {
   DESKTOP_HISTORY_KEY,
+  LEGACY_UPDATE_PROXY_ENABLED_KEY,
+  LEGACY_UPDATE_PROXY_KEY,
+  legacyUpdateProxyState,
   projectDesktopSecurityHistory,
   projectSecurityScheduleRuntime,
+  projectUpdateProxySettings,
+  projectUpdateProxyState,
   restoreDesktopSecurityHistory,
+  DESKTOP_STATE_API_PREFIX,
+  handleDesktopStateBrokerRequest,
 } from "./desktop-state-broker.server.ts";
 
 function historyEntry(index: number, categories: Record<string, unknown> = {}) {
@@ -247,4 +264,234 @@ test("scheduler runtime projection accepts only a hashed cursor and valid dates"
       scheduleFingerprint: "/Users/private/skills",
     }),
   );
+});
+
+// ---------------------------------------------------------------------------
+// Update-channel proxy (migration 0005)
+// ---------------------------------------------------------------------------
+
+test("the broker accepts the http endpoint the Settings dialog asks for", () => {
+  // Regression: `app_preferences` refuses this value (the drive-letter GLOB
+  // sees `p:/` in `http://`), so the proxy has its own table and this payload
+  // is what reaches it.
+  assert.deepEqual(
+    projectUpdateProxySettings({
+      enabled: true,
+      proxy: "http://127.0.0.1:7897",
+    }),
+    { proxyUrl: "http://127.0.0.1:7897", proxyEnabled: true },
+  );
+  assert.deepEqual(
+    projectUpdateProxySettings({
+      enabled: false,
+      proxy: "socks5://127.0.0.1:7897",
+    }),
+    { proxyUrl: "socks5://127.0.0.1:7897", proxyEnabled: false },
+  );
+  assert.deepEqual(projectUpdateProxySettings({ enabled: false, proxy: "" }), {
+    proxyUrl: null,
+    proxyEnabled: false,
+  });
+});
+
+test("the broker refuses non-endpoint or contradictory proxy payloads", () => {
+  for (const payload of [
+    { enabled: true, proxy: "" },
+    { enabled: "true", proxy: "http://127.0.0.1:7897" },
+    { enabled: true, proxy: 7897 },
+    { enabled: true, proxy: " http://127.0.0.1:7897" },
+    { enabled: true, proxy: "http://user:secret@127.0.0.1:7897" },
+    { enabled: true, proxy: "http://127.0.0.1:7897/dial" },
+    { enabled: true, proxy: "ftp://127.0.0.1:21" },
+    null,
+    [],
+  ]) {
+    assert.throws(() =>
+      projectUpdateProxySettings(payload as unknown as Record<string, unknown>),
+    );
+  }
+});
+
+test("stored proxy state round-trips into the desktop representation", () => {
+  assert.deepEqual(projectUpdateProxyState(undefined), {
+    enabled: false,
+    proxy: "",
+  });
+  assert.deepEqual(
+    projectUpdateProxyState({ proxyUrl: null, proxyEnabled: false }),
+    { enabled: false, proxy: "" },
+  );
+  assert.deepEqual(
+    projectUpdateProxyState({
+      proxyUrl: "http://127.0.0.1:7897",
+      proxyEnabled: true,
+    }),
+    { enabled: true, proxy: "http://127.0.0.1:7897" },
+  );
+});
+
+test("a pre-0005 SOCKS endpoint is adopted instead of silently dropped", () => {
+  assert.deepEqual(
+    legacyUpdateProxyState({
+      [LEGACY_UPDATE_PROXY_KEY]: "socks5://127.0.0.1:7897",
+      [LEGACY_UPDATE_PROXY_ENABLED_KEY]: true,
+    }),
+    { enabled: true, proxy: "socks5://127.0.0.1:7897" },
+  );
+  // The legacy key could hold anything the old guard allowed; unusable or
+  // unreadable values degrade to the system proxy.
+  assert.deepEqual(
+    legacyUpdateProxyState({ [LEGACY_UPDATE_PROXY_KEY]: "not a proxy" }),
+    { enabled: false, proxy: "" },
+  );
+  assert.deepEqual(legacyUpdateProxyState({}), { enabled: false, proxy: "" });
+});
+
+/**
+ * End-to-end regression for the Settings → 更新代理 flow: an `http://` endpoint
+ * must persist through the broker route into `update_channel_settings`, because
+ * the `app_preferences` forbidden-zone guard and its drive-letter GLOB refuse
+ * every URL-shaped value. Before migration 0005 this request failed and the
+ * renderer reported it as an invalid proxy format.
+ */
+async function withIsolatedBroker<T>(fn: () => Promise<T>): Promise<T> {
+  const directory = await mkdtemp(join(tmpdir(), "aitracker-broker-proxy-"));
+  const previousHome = process.env[ENV.USAGE_HOME];
+  const previousToken = process.env[ENV.DESKTOP_BROKER_TOKEN];
+  process.env[ENV.USAGE_HOME] = directory;
+  process.env[ENV.DESKTOP_BROKER_TOKEN] = randomUUID();
+  resetCompositionRootForTests();
+  try {
+    return await fn();
+  } finally {
+    resetCompositionRootForTests();
+    if (previousHome === undefined) delete process.env[ENV.USAGE_HOME];
+    else process.env[ENV.USAGE_HOME] = previousHome;
+    if (previousToken === undefined)
+      delete process.env[ENV.DESKTOP_BROKER_TOKEN];
+    else process.env[ENV.DESKTOP_BROKER_TOKEN] = previousToken;
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+function brokerRequest(
+  path: string,
+  init: { method: "GET" | "PUT" | "POST"; body?: unknown },
+): Request {
+  return new Request(`http://127.0.0.1${DESKTOP_STATE_API_PREFIX}${path}`, {
+    method: init.method,
+    headers: {
+      "x-aitracker-desktop-broker": process.env[ENV.DESKTOP_BROKER_TOKEN] ?? "",
+      ...(init.body === undefined
+        ? {}
+        : { "content-type": "application/json" }),
+    },
+    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+  });
+}
+
+test("the broker route persists an http proxy endpoint end to end", async () => {
+  await withIsolatedBroker(async () => {
+    const written = await handleDesktopStateBrokerRequest(
+      brokerRequest("/update-proxy", {
+        method: "PUT",
+        body: { enabled: true, proxy: "http://127.0.0.1:7897" },
+      }),
+    );
+    assert.equal(written?.status, 200);
+    assert.deepEqual(await written?.json(), {
+      enabled: true,
+      proxy: "http://127.0.0.1:7897",
+    });
+
+    const read = await handleDesktopStateBrokerRequest(
+      brokerRequest("/update-proxy", { method: "GET" }),
+    );
+    assert.equal(read?.status, 200);
+    assert.deepEqual(await read?.json(), {
+      enabled: true,
+      proxy: "http://127.0.0.1:7897",
+    });
+
+    // The URL never lands in the guarded preference store...
+    const root = await getCompositionRoot();
+    assert.equal(
+      root.database.features.appPreferences.get(LEGACY_UPDATE_PROXY_KEY),
+      undefined,
+    );
+    assert.equal(
+      root.database.features.appPreferences.get(
+        LEGACY_UPDATE_PROXY_ENABLED_KEY,
+      ),
+      undefined,
+    );
+    // ...it lives in the dedicated update-channel table.
+    assert.deepEqual(
+      {
+        ...(await root.database.features.updateChannelSettings.read()),
+        updatedAtMs: 0,
+      },
+      {
+        proxyUrl: "http://127.0.0.1:7897",
+        proxyEnabled: true,
+        updatedAtMs: 0,
+      },
+    );
+  });
+});
+
+test("the broker route rejects a non-endpoint payload with 500 and stores nothing", async () => {
+  await withIsolatedBroker(async () => {
+    const rejected = await handleDesktopStateBrokerRequest(
+      brokerRequest("/update-proxy", {
+        method: "PUT",
+        body: { enabled: true, proxy: "http://127.0.0.1:7897/dial" },
+      }),
+    );
+    assert.equal(rejected?.status, 500);
+    const root = await getCompositionRoot();
+    assert.equal(
+      await root.database.features.updateChannelSettings.read(),
+      undefined,
+    );
+  });
+});
+
+test("the broker adopts a pre-0005 socks endpoint and reset clears it", async () => {
+  await withIsolatedBroker(async () => {
+    const root = await getCompositionRoot();
+    root.database.features.appPreferences.set({
+      key: LEGACY_UPDATE_PROXY_KEY,
+      value: "socks5://127.0.0.1:7897",
+      updatedAtMs: Date.now(),
+    });
+    root.database.features.appPreferences.set({
+      key: LEGACY_UPDATE_PROXY_ENABLED_KEY,
+      value: true,
+      updatedAtMs: Date.now(),
+    });
+
+    const adopted = await handleDesktopStateBrokerRequest(
+      brokerRequest("/update-proxy", { method: "GET" }),
+    );
+    assert.deepEqual(await adopted?.json(), {
+      enabled: true,
+      proxy: "socks5://127.0.0.1:7897",
+    });
+
+    const reset = await handleDesktopStateBrokerRequest(
+      brokerRequest("/preferences/reset", { method: "POST", body: {} }),
+    );
+    assert.equal(reset?.status, 200);
+    // The legacy rows are gone with the rest of app_preferences, and the
+    // dedicated table is empty, so the update channel follows the system proxy.
+    const afterReset = await handleDesktopStateBrokerRequest(
+      brokerRequest("/update-proxy", { method: "GET" }),
+    );
+    assert.deepEqual(await afterReset?.json(), { enabled: false, proxy: "" });
+    assert.equal(
+      await root.database.features.updateChannelSettings.read(),
+      undefined,
+    );
+  });
 });

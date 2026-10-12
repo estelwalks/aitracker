@@ -10,23 +10,6 @@ export const DEFAULT_AUTO_UPDATE_ENABLED = true;
  */
 export const UPDATE_RESTART_DISMISSED_KEY = `${STORAGE_KEY_PREFIX}update.restartDismissed`;
 
-/**
- * Optional proxy used for update checks/downloads only ("" = follow the
- * system proxy). Mirrors `src/lib/update-preferences.ts`; stored normalized
- * (http/https/socks5 URL, no credentials).
- */
-export const UPDATE_PROXY_KEY = `${STORAGE_KEY_PREFIX}update.proxy`;
-
-/** Whether the configured update proxy is active (default off). */
-export const UPDATE_PROXY_ENABLED_KEY = `${STORAGE_KEY_PREFIX}update.proxyEnabled`;
-
-/** Boolean preference reader: only explicit false/"false" means disabled. */
-export function parseUpdateProxyEnabled(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "string") return value !== "false";
-  return false;
-}
-
 export function parseAutoUpdateEnabled(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") {

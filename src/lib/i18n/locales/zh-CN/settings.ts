@@ -375,7 +375,9 @@ export const settings = {
     updateInstalling: "正在安装更新，安装完成后应用会自动重新打开",
     updateInstallTimeout: "未检测到安装过程，请重试",
     updateProxySaved: "更新代理已保存",
-    updateProxySaveFailed: "代理格式无效，保存失败",
+    updateProxyFormatInvalid:
+      "代理格式无效，请检查地址，例如 http://127.0.0.1:7890",
+    updateProxySaveFailed: "代理保存失败，请稍后重试",
     cleanupDone: "已清理 {count} 个过期缓存文件（{size}）",
     keepForever: "已设置为永久保留缓存",
     retentionSaved: "已保存缓存保留策略",
