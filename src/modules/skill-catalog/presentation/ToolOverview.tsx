@@ -969,7 +969,7 @@ function ToolModelPanel({
                 ),
               });
           return (
-            <li key={row.key} className="flex items-center gap-3 py-2.5">
+            <li key={row.id} className="flex items-center gap-3 py-2.5">
               <span
                 className="w-[190px] shrink-0 truncate font-mono text-[12px] font-semibold"
                 title={row.key}

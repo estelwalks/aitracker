@@ -275,6 +275,126 @@ test("detail rows retain real priced cost semantics when pricing is available", 
   });
 });
 
+test("high-cardinality breakdowns read each grouping key once per event", () => {
+  const eventCount = 64;
+  let modelReads = 0;
+  let projectReads = 0;
+  const events = Array.from({ length: eventCount }, (_, index) => {
+    const event = { ...input.events[0] };
+    Object.defineProperties(event, {
+      model: {
+        enumerable: true,
+        get() {
+          modelReads += 1;
+          return `model-${index}`;
+        },
+      },
+      project: {
+        enumerable: true,
+        get() {
+          projectReads += 1;
+          return `project-${index}`;
+        },
+      },
+    });
+    return event;
+  });
+
+  const view = buildToolOverview(
+    { ...input, events },
+    "codex",
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.models.length, eventCount);
+  assert.equal(view.projects.length, eventCount);
+  assert.equal(modelReads, eventCount);
+  assert.equal(projectReads, eventCount);
+});
+
+test("same-named quick conversations and workspaces keep distinct project identities", () => {
+  const quickOneIdentity = "project:quick-one";
+  const quickTwoIdentity = "project:quick-two";
+  const workspaceIdentity = "project:workspace";
+  const events: DashboardV2Snapshot["events"] = [
+    {
+      ...input.events[0]!,
+      project: "scratch",
+      projectIdentity: quickOneIdentity,
+      projectKind: "quick-conversation",
+      totalTokens: 100,
+    },
+    {
+      ...input.events[0]!,
+      project: "scratch",
+      projectIdentity: quickTwoIdentity,
+      projectKind: "quick-conversation",
+      totalTokens: 200,
+    },
+    {
+      ...input.events[0]!,
+      project: "scratch",
+      projectIdentity: workspaceIdentity,
+      projectKind: "workspace",
+      totalTokens: 300,
+    },
+  ];
+  const view = buildToolOverview(
+    {
+      ...input,
+      events,
+      sessions: {
+        ...input.sessions,
+        byProjectDay: [
+          {
+            source: "codex",
+            project: "scratch",
+            projectIdentity: workspaceIdentity,
+            date: "2026-08-10",
+            count: 7,
+            ...emptyWorkflow,
+          },
+        ],
+      },
+    },
+    "codex",
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.deepEqual(
+    view.projects.map((row) => ({
+      id: row.id,
+      key: row.key,
+      tokens: row.tokens,
+      sessions: row.sessions,
+    })),
+    [
+      {
+        id: workspaceIdentity,
+        key: "scratch",
+        tokens: 300,
+        sessions: 7,
+      },
+      {
+        id: quickTwoIdentity,
+        key: "scratch",
+        tokens: 200,
+        sessions: null,
+      },
+      {
+        id: quickOneIdentity,
+        key: "scratch",
+        tokens: 100,
+        sessions: null,
+      },
+    ],
+  );
+});
+
 test("tool card names retain the canonical product labels", () => {
   const view = buildToolOverview(
     {

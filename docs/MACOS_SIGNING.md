@@ -7,14 +7,14 @@ concern: it decides whether the user's permission grants survive an upgrade.
 ## Why the signing identity matters
 
 macOS TCC — the database behind every "…would like to access files in your
-Documents folder" dialog — does not store *"this app is allowed"*. It stores a
+Documents folder" dialog — does not store _"this app is allowed"_. It stores a
 **code requirement** (`csreq`) that the running binary must still satisfy, and
 macOS derives that requirement from the app's signature:
 
-| Signature | Stored requirement |
-| --- | --- |
-| ad-hoc (`codesign --sign -`) | `cdhash H"…"` |
-| any certificate | `identifier "com.aitracker.desktop" and certificate leaf = H"…"` |
+| Signature                    | Stored requirement                                               |
+| ---------------------------- | ---------------------------------------------------------------- |
+| ad-hoc (`codesign --sign -`) | `cdhash H"…"`                                                    |
+| any certificate              | `identifier "com.aitracker.desktop" and certificate leaf = H"…"` |
 
 The ad-hoc form pins the grant to the **exact binary**. Every release produces a
 new cdhash, so macOS treats it as a brand-new app and asks the user to grant
@@ -73,7 +73,7 @@ security set-key-partition-list -S apple-tool:,apple:,codesign: \
 2. Name it `AITracker Self-Signed`, Identity Type **Self Signed Root**,
    Certificate Type **Code Signing**.
 3. Tick **Override Defaults** and raise the validity period. The default is 365
-   days; use 3650. *Do not skip this step* — see "Operating rules" below.
+   days; use 3650. _Do not skip this step_ — see "Operating rules" below.
 4. Export it together with its private key as a `.p12` (select both the
    certificate and the key, then **File → Export Items…**), and base64 it:
    `base64 -i certificate.p12 | tr -d '\n' > certificate.p12.base64`
@@ -130,7 +130,7 @@ The build log prints two lines that answer the same question:
 - **Treat the `.p12` as a secret.** Anyone holding the key can produce a binary
   that satisfies the same requirement and therefore inherits the permissions
   users already granted to AITracker. The certificate is not in the trust chain,
-  so they cannot impersonate a *trusted* developer — but the inherited grant is
+  so they cannot impersonate a _trusted_ developer — but the inherited grant is
   real.
 - **Windows** uses a separate Authenticode certificate; this document does not
   cover it.
@@ -139,7 +139,10 @@ The build log prints two lines that answer the same question:
 
 Existing installations keep their old record, which no longer matches. Users
 upgrade once, are asked for folder access one final time, and are then stable
-for the life of the new certificate. A clean re-grant can be forced with:
+for the life of the new certificate. Certificate-signed packages carry a
+signed runtime marker, so the packaged scanner uses that grant to resolve Git
+roots under Documents/Desktop/Downloads; development and ad-hoc packages keep
+the prompt-free lexical fallback. A clean re-grant can be forced with:
 
 ```sh
 tccutil reset SystemPolicyDocumentsFolder com.aitracker.desktop
@@ -147,14 +150,14 @@ tccutil reset SystemPolicyDocumentsFolder com.aitracker.desktop
 
 ## Troubleshooting
 
-| Symptom | Cause |
-| --- | --- |
-| `the app never requests…` no prompt, but project grouping is missing | Working as designed: the scanner skips TCC-protected paths. See `src/lib/local-usage/project-path.server.ts`. |
-| `security import` → "MAC verification failed … (wrong password?)" | OpenSSL 3 PKCS#12 MAC. Export with `-legacy` (the script does). |
-| `security find-identity -v -p codesigning` shows nothing | `-v` filters out untrusted self-signed roots. Drop `-v`. |
-| `codesign` → "The specified item could not be found in the keychain" | The keychain is not on the search list, or the key lacks a codesign partition. |
-| Build log says `signing ad-hoc` while secrets are set | `CSC_NAME` does not match the keychain identity name; the log above it says so. |
-| Release failed with `AITRACKER_REQUIRE_SIGNING is set` | Exactly the intended guard: the certificate was configured but not found or not usable. |
+| Symptom                                                              | Cause                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `the app never requests…` no prompt, but project grouping is missing | Confirm that the packaged build is signed with the certificate and that the user has granted folder access; unsigned/dev builds intentionally keep the lexical fallback. See `src/lib/local-usage/project-path.server.ts`. |
+| `security import` → "MAC verification failed … (wrong password?)"    | OpenSSL 3 PKCS#12 MAC. Export with `-legacy` (the script does).                                                                                                                                                            |
+| `security find-identity -v -p codesigning` shows nothing             | `-v` filters out untrusted self-signed roots. Drop `-v`.                                                                                                                                                                   |
+| `codesign` → "The specified item could not be found in the keychain" | The keychain is not on the search list, or the key lacks a codesign partition.                                                                                                                                             |
+| Build log says `signing ad-hoc` while secrets are set                | `CSC_NAME` does not match the keychain identity name; the log above it says so.                                                                                                                                            |
+| Release failed with `AITRACKER_REQUIRE_SIGNING is set`               | Exactly the intended guard: the certificate was configured but not found or not usable.                                                                                                                                    |
 
 ## Related
 

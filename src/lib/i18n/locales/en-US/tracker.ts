@@ -20,6 +20,15 @@ export const tracker = {
     projectSub: "Which projects consume the most",
     sessionSub: "Which sessions are least cost-effective",
   },
+  merge: {
+    start: "Merge projects",
+    cancel: "Cancel merge",
+    chooseSource: "Choose the project to merge, then click the target",
+    chooseTarget: "Click a target project to merge",
+    confirm: "Merge “{source}” into “{target}”?",
+    success: "Projects merged",
+    failed: "Project merge failed",
+  },
   row: {
     tokens: "{count} tokens",
     events: "{count} events",

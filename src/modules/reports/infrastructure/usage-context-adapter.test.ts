@@ -58,6 +58,43 @@ const tokenCounts = (totalTokens: number) => ({
   totalTokens,
 });
 
+type AggregateBucket = NonNullable<
+  UsageSnapshotDto["aggregateBuckets"]
+>[number];
+
+function aggregateBucket(
+  project: string,
+  totalTokens: number,
+  extra: Partial<AggregateBucket> = {},
+): AggregateBucket {
+  return {
+    date: "2026-08-15",
+    latestTimestamp: localIso(2026, 8, 15),
+    source: "codex",
+    model: "test-model",
+    project,
+    ...tokenCounts(totalTokens),
+    measurement: "observed",
+    events: 1,
+    context: {
+      textResponses: 0,
+      toolCalls: 0,
+      tools: [],
+      skillCalls: 0,
+      toolOutputCalls: 0,
+    },
+    evidence: {
+      textResponses: false,
+      toolCalls: false,
+      skillCalls: false,
+      toolOutputCalls: false,
+      reasoningTokens: false,
+      systemPromptTokens: false,
+    },
+    ...extra,
+  };
+}
+
 const AUG_SAMPLE = [
   session(localIso(2026, 8, 15, 10)), // local 08-15
   session(localIso(2026, 8, 14, 10)), // local 08-14
@@ -277,6 +314,117 @@ test("uses event-day usage for tokens while keeping session metrics", async () =
   assert.match(ctx.summary, /\| codex \| 1 \| 2\.5K \| [^|]+ \| — \|/);
   assert.doesNotMatch(ctx.summary, /unused-agent/);
   assert.match(ctx.summary, /含内部 Agent 调用/);
+});
+
+test("groups projects by opaque identity and never exposes legacy path labels", async () => {
+  const firstIdentity = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa000000000001";
+  const secondIdentity = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb000000000002";
+  const unresolvedRef = "/Volumes/team/private/scratch";
+  const identityRequests: string[] = [];
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 15), {
+        projectKey: "~/Desktop/private/scratch",
+        projectIdentity: firstIdentity,
+      }),
+    ]),
+    usage: usageSnapshotWith({
+      daily: [
+        {
+          date: "2026-08-15",
+          ...tokenCounts(300),
+          events: 2,
+          bySource: { codex: tokenCounts(300) },
+        } as UsageSnapshotDto["daily"][number],
+      ],
+      aggregateBuckets: [
+        aggregateBucket("/Users/alice/Desktop/private/scratch", 200, {
+          projectRefHash: firstIdentity,
+          projectLabel: "~/Desktop/private/scratch",
+          projectKind: "quick-conversation",
+        }),
+        aggregateBucket(unresolvedRef, 100, {
+          projectLabel: "/Volumes/team/private/scratch",
+          projectKind: "workspace",
+        }),
+      ],
+    }),
+    projectIdentity: (projectRef) => {
+      identityRequests.push(projectRef);
+      return secondIdentity;
+    },
+  });
+
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.deepEqual(identityRequests, [unresolvedRef]);
+  assert.deepEqual(ctx.stats?.projects, [
+    "scratch · 000000000001",
+    "scratch · 000000000002",
+  ]);
+  assert.deepEqual(
+    ctx.stats?.byProject?.map(({ label, kind, tokens }) => ({
+      label,
+      kind,
+      tokens,
+    })),
+    [
+      {
+        label: "scratch · 000000000001",
+        kind: "conversation",
+        tokens: 200,
+      },
+      {
+        label: "scratch · 000000000002",
+        kind: "project",
+        tokens: 100,
+      },
+    ],
+  );
+  assert.equal(ctx.stats?.sessionsDetail?.[0]?.project, "scratch");
+  assert.equal(ctx.stats?.activeProjectCount, 2);
+  assert.equal(ctx.stats?.byProject?.[0]?.sessions, 1);
+  assert.equal(ctx.stats?.byProject?.[1]?.sessions, 0);
+  const serializedContext = JSON.stringify(ctx);
+  assert.doesNotMatch(serializedContext, /~\//u);
+  assert.doesNotMatch(serializedContext, /\/Users\/alice|\/Volumes\/team/u);
+  assert.doesNotMatch(serializedContext, /Desktop|private/u);
+  assert.doesNotMatch(serializedContext, new RegExp(firstIdentity, "u"));
+});
+
+test("reports never use a persisted project identity as a quick label", async () => {
+  const projectIdentity = "q".repeat(43);
+  const port = createReportContextPort({
+    usage: usageSnapshotWith({
+      daily: [
+        {
+          date: "2026-08-15",
+          ...tokenCounts(100),
+          events: 1,
+          bySource: { codex: tokenCounts(100) },
+        } as UsageSnapshotDto["daily"][number],
+      ],
+      aggregateBuckets: [
+        aggregateBucket(projectIdentity, 100, {
+          projectRefHash: projectIdentity,
+          projectLabel: "quick-conversation",
+          projectKind: "quick-conversation",
+        }),
+      ],
+    }),
+  });
+
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.deepEqual(ctx.stats?.projects, ["quick-conversation"]);
+  assert.equal(ctx.stats?.byProject?.[0]?.label, "quick-conversation");
+  assert.doesNotMatch(JSON.stringify(ctx), new RegExp(projectIdentity, "u"));
 });
 
 test("omits edit metrics when no edits are identified", async () => {

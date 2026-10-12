@@ -15,6 +15,9 @@ function memoryRepository(): ClassificationIndexRepository {
     entries: {},
   };
   return {
+    identityFor(ref) {
+      return `identity:${ref}`;
+    },
     async get(ref) {
       return value.entries[ref];
     },

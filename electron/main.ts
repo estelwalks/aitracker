@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,6 +65,8 @@ import {
   LOCALE_PREF_KEY,
 } from "./prefs.js";
 import { APP_NAME, ENV } from "./app-config.js";
+
+const TCC_PROJECT_PROBE_MARKER = "aitracker-tcc-project-probe-enabled";
 import { SecurityScannerService } from "./security-scanner-service.js";
 import { registerDesktopSecurityScanner } from "./desktop-scanner-seam.js";
 import { isTrustedIpcSender } from "./ipc-security.js";
@@ -1460,6 +1462,18 @@ if (!hasSingleInstanceLock) {
       // supplied, intentionally wins.
       process.env[ENV.USAGE_HOME] ??= app.getPath("home");
       process.env[ENV.DESKTOP_BROKER_TOKEN] ??= randomUUID();
+      // The release workflow signs packaged macOS builds with a stable
+      // certificate and after-pack embeds a signed marker. Opt only those
+      // builds into Git-root probing so the user's one-time Documents grant
+      // can merge nested project directories. Local ad-hoc/dev runs keep the
+      // prompt-free fallback by default.
+      if (
+        process.platform === "darwin" &&
+        app.isPackaged &&
+        existsSync(join(process.resourcesPath, TCC_PROJECT_PROBE_MARKER))
+      ) {
+        process.env.AITRACKER_ALLOW_TCC_PROJECT_PROBES ??= "1";
+      }
       desktopStateBroker = new DesktopStateBroker({
         origin: () => allowedOrigin,
         capabilityToken: () => localWebServer?.capabilityToken,

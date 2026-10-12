@@ -20,6 +20,15 @@ export const tracker = {
     projectSub: "哪些项目消耗最凶",
     sessionSub: "哪些会话最不划算",
   },
+  merge: {
+    start: "合并项目",
+    cancel: "取消合并",
+    chooseSource: "先选择要合并的项目，再点击目标项目",
+    chooseTarget: "点击目标项目即可合并",
+    confirm: "确认将「{source}」合并到「{target}」？",
+    success: "项目已合并",
+    failed: "项目合并失败",
+  },
   row: {
     tokens: "{count} tokens",
     events: "{count} 事件",

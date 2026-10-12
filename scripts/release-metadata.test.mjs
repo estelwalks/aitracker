@@ -22,10 +22,10 @@ const SCRIPT = join(
 // 1.0.3, so a release publishes exactly these four files and the metadata
 // names them as they are.
 const files = [
-  "AITracker-arm64.dmg",
-  "AITracker-x64.dmg",
-  "AITracker-Setup-arm64.exe",
-  "AITracker-Setup-x64.exe",
+  "AITracker-macOS-arm64.dmg",
+  "AITracker-macOS-x64.dmg",
+  "AITracker-Windows-arm64.exe",
+  "AITracker-Windows-x64.exe",
 ];
 
 async function fixtureDirectory() {

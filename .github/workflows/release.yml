@@ -33,9 +33,11 @@ jobs:
       - name: Verify tag and package versions
         run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel "$RELEASE_CHANNEL"
 
-      # Installer names are versionless so `releases/latest/download/<name>`
-      # stays valid across releases. Fail before four runners start if the
-      # packaging config, the release scripts or the READMEs have drifted.
+      # Installer names carry the operating system and no version, so
+      # `releases/latest/download/<name>` stays valid across releases. Fail
+      # before four runners start if the packaging config, the release scripts
+      # or the READMEs have drifted apart — a name that reaches the packaging
+      # config but not release-metadata.json breaks every in-app update.
       - name: Verify versionless installer names and README download links
         run: |
           npm run verify:release-artifact-names
@@ -68,8 +70,8 @@ jobs:
             artifact_name: release-windows-x64
           # Windows on ARM is cross-built on the x64 runner: electron-builder
           # downloads the win32-arm64 Electron payload and NSIS emits a
-          # separate AITracker-Setup-<version>-arm64.exe. No ARM64 runner is
-          # required to produce the installer.
+          # separate AITracker-Windows-arm64.exe. No ARM64 runner is required to
+          # produce the installer.
           - name: Windows arm64
             os: windows-latest
             platform: win32-arm64
@@ -247,7 +249,7 @@ jobs:
 
           ## Download
 
-          Installers are attached below: `AITracker-*.dmg` for macOS and `AITracker-Setup-*.exe` for Windows, with SHA-256 checksums in `checksums.txt`. The builds are unsigned, so macOS Gatekeeper or Windows SmartScreen may ask for a per-file confirmation on first launch.
+          Installers are attached below: `AITracker-macOS-*.dmg` for macOS and `AITracker-Windows-*.exe` for Windows, with SHA-256 checksums in `checksums.txt`. The builds are unsigned, so macOS Gatekeeper or Windows SmartScreen may ask for a per-file confirmation on first launch.
 
           Install commands and platform notes: see the [README](https://github.com/estelwalks/aitracker#install), or run `npx --yes @estelwalks/aitracker@latest`.
           EOF
@@ -268,10 +270,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "$GITHUB_REF_NAME" \
-            release/AITracker-*.dmg \
-            release/AITracker-Setup-*.exe \
+            release/AITracker-macOS-*.dmg \
+            release/AITracker-Windows-*.exe \
             release/release-metadata.json \
             release/checksums.txt
+
+      # An install selects its installer by extension and architecture, then
+      # requires the name recorded in that release's metadata to be an asset of
+      # that same release. Half a rename — new asset names with metadata still
+      # naming the old ones — therefore fails the in-app update on every install
+      # of 1.0.3 and later. Compare the assets GitHub actually holds against the
+      # metadata that was uploaded with them, which is the one pairing the
+      # build-time checks cannot see.
+      - name: Verify the draft's assets and metadata agree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" --jq '[.assets[].name]' > drafted-assets.json
+          gh release download "$GITHUB_REF_NAME" --pattern release-metadata.json --output drafted-release-metadata.json --clobber
+          node scripts/verify-release-asset-agreement.mjs --assets drafted-assets.json --metadata drafted-release-metadata.json
 
       - name: Confirm draft outcome
         run: echo "Draft release created for $RELEASE_CHANNEL channel. A maintainer must inspect it before publication."

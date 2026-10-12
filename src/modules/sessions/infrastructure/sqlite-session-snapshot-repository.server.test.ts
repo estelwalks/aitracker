@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { DatabaseHost } from "../../../platform/database/database-host.server.ts";
 import { runMigrations } from "../../../platform/database/migration-runner.server.ts";
+import { hashSensitiveRef } from "../../../platform/database/snapshot-generation.server.ts";
 import type { SnapshotEnvelope } from "../../../platform/snapshot-runtime/contracts.ts";
 import type { SessionSummary } from "../contracts.ts";
 import type { SessionSnapshotData } from "./session-snapshot.contracts.ts";
@@ -64,7 +65,7 @@ const session = (
 });
 
 function envelope(
-  sessions: readonly SessionSummary[],
+  sessions: SessionSnapshotData["sessions"],
 ): SnapshotEnvelope<SessionSnapshotData> {
   return {
     schemaVersion: 1,
@@ -163,6 +164,41 @@ test("P1-11: load({ limit, offset }) pages at the SQL layer and defaults to the 
       offsetOnly.envelope.data!.sessions.map((item) => item.sessionId),
       ["middle", "oldest"],
     );
+    host.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("hydrate restores the persisted project HMAC as a server-only identity", async () => {
+  const directory = mkdtempSync(
+    join(tmpdir(), "aitracker-session-repo-project-identity-"),
+  );
+  try {
+    const host = openHost(directory);
+    const hmacKey = "test-key";
+    const projectRef = "/private/work/shared";
+    const repository = createSqliteSessionSnapshotRepository({
+      database: host,
+      hmacKey,
+    });
+    await repository.save(
+      envelope([
+        {
+          ...session("s1", "codex", "2026-08-07T00:01:00.000Z"),
+          projectRef,
+        },
+      ]),
+    );
+
+    const loaded = await repository.load();
+    const hydrated = loaded.envelope.data?.sessions[0];
+    assert.equal(hydrated?.projectRef, undefined);
+    assert.equal(
+      hydrated?.projectIdentity,
+      hashSensitiveRef(hmacKey, "project", projectRef),
+    );
+    assert.equal(JSON.stringify(hydrated).includes(projectRef), false);
     host.close();
   } finally {
     rmSync(directory, { recursive: true, force: true });

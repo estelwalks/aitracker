@@ -28,22 +28,68 @@ export function safeProjectLabel(value: string): string {
 
 /** Persisted project labels share the sessions `project_key` bound. */
 const PROJECT_LABEL_MAX_LENGTH = 128;
+const PROJECT_IDENTITY_SUFFIX_LENGTH = 12;
 
 /**
  * Display label for a `quick-conversation` project ref. The classifier labels
  * every marker-less directory with the same literal, so the breakdown row
  * loses its meaning; derive the display value from the ref instead. Paths stay
- * inside the documented display contract: the home-relative `~/…` form is
- * kept, every other absolute path keeps only its final segment, and anything
- * else (a task title, `unknown`) falls back to {@link safeProjectLabel}.
+ * inside the browser/report privacy contract by keeping only the final path
+ * segment. Distinct refs with the same segment are disambiguated separately by
+ * their opaque installation-scoped identity.
  */
 export function quickConversationProjectLabel(value: string): string {
-  const normalized = value.trim().replaceAll("\\", "/").replace(/\/+$/u, "");
-  if (normalized === "~") return "~";
-  if (normalized.startsWith("~/")) {
-    return normalized.slice(0, PROJECT_LABEL_MAX_LENGTH);
-  }
   return safeProjectLabel(value);
+}
+
+/**
+ * Keep display labels readable without ever using them as identity. Duplicate
+ * labels receive a short suffix from the already-opaque project HMAC; raw refs
+ * must never be passed as `identity`.
+ */
+export function disambiguateProjectLabels(
+  projects: readonly { readonly identity: string; readonly label: string }[],
+): ReadonlyMap<string, string> {
+  const unique = new Map<
+    string,
+    { readonly identity: string; readonly label: string }
+  >();
+  for (const project of projects) {
+    if (!unique.has(project.identity)) unique.set(project.identity, project);
+  }
+
+  const groups = new Map<
+    string,
+    Array<{ readonly identity: string; readonly label: string }>
+  >();
+  for (const project of unique.values()) {
+    const label = project.label.trim().slice(0, PROJECT_LABEL_MAX_LENGTH);
+    const safeLabel = label || "unknown";
+    const group = groups.get(safeLabel) ?? [];
+    group.push({ identity: project.identity, label: safeLabel });
+    groups.set(safeLabel, group);
+  }
+
+  const labels = new Map<string, string>();
+  for (const [label, group] of groups) {
+    if (group.length === 1) {
+      labels.set(group[0]!.identity, label);
+      continue;
+    }
+    for (const project of group) {
+      const suffix =
+        project.identity.slice(-PROJECT_IDENTITY_SUFFIX_LENGTH) || "unknown";
+      const maxBaseLength = Math.max(
+        1,
+        PROJECT_LABEL_MAX_LENGTH - suffix.length - " · ".length,
+      );
+      labels.set(
+        project.identity,
+        `${label.slice(0, maxBaseLength)} · ${suffix}`,
+      );
+    }
+  }
+  return labels;
 }
 
 export function isoToMs(value: string | null | undefined): number | null {

@@ -28,10 +28,10 @@ import {
  * reason a platform key had to be withheld.
  */
 const TARGET_FILES = Object.freeze([
-  ["darwin-arm64", "AITracker-arm64.dmg"],
-  ["darwin-x64", "AITracker-x64.dmg"],
-  ["win32-arm64", "AITracker-Setup-arm64.exe"],
-  ["win32-x64", "AITracker-Setup-x64.exe"],
+  ["darwin-arm64", "AITracker-macOS-arm64.dmg"],
+  ["darwin-x64", "AITracker-macOS-x64.dmg"],
+  ["win32-arm64", "AITracker-Windows-arm64.exe"],
+  ["win32-x64", "AITracker-Windows-x64.exe"],
 ]);
 
 export function parseReleaseMetadataArgs(argv) {

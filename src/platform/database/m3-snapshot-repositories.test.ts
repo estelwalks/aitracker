@@ -201,6 +201,131 @@ test("usage aggregate generation is atomic and never reads or writes legacy even
   );
 });
 
+test("usage hydrated projection survives stale reuse without rehashing identities", async (t) => {
+  const database = openDatabase(t);
+  const hmacKey = "stale-reuse-identity-key";
+  const project = "/Users/alice/work/identity-project";
+  await createSqliteClassificationIndexRepository({ database, hmacKey }).commit(
+    [
+      {
+        ref: project,
+        kind: "workspace",
+        label: "identity-project",
+        classifiedAt: "2026-08-19T01:01:00.000Z",
+        fingerprint: "workspace-fingerprint",
+      },
+    ],
+  );
+  const repository = createSqliteUsageSnapshotRepository({ database, hmacKey });
+  const snapshot = buildLocalUsageSnapshot(
+    [
+      {
+        source: "codex",
+        timestamp: "2026-08-19T01:00:00.000Z",
+        model: "gpt-test",
+        project,
+        sessionId: "raw-session",
+        inputTokens: 10,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        outputTokens: 5,
+        reasoningOutputTokens: 0,
+        totalTokens: 15,
+        context: { skills: [{ name: "review", calls: 1 }] },
+      },
+    ],
+    [],
+    new Date("2026-08-19T01:05:00.000Z"),
+  );
+  await repository.save(envelope("before-stale-reuse", snapshot));
+  const hydrated = await repository.load();
+  assert.ok(hydrated.envelope.data);
+
+  const currentRows = () => ({
+    aggregate: database
+      .prepare(
+        `SELECT project_ref_hash, project_label, project_kind
+         FROM usage_aggregate_buckets
+         WHERE snapshot_id = (
+           SELECT snapshot_id FROM snapshot_heads WHERE domain = 'usage'
+         )`,
+      )
+      .all(),
+    tracker: database
+      .prepare(
+        `SELECT dimension, entity_key, entity_label, project_kind
+         FROM usage_tracker_buckets
+         WHERE snapshot_id = (
+           SELECT snapshot_id FROM snapshot_heads WHERE domain = 'usage'
+         )
+         ORDER BY dimension`,
+      )
+      .all(),
+  });
+  const before = currentRows();
+
+  await repository.save({
+    ...hydrated.envelope,
+    revision: "after-stale-reuse",
+    status: "stale",
+    data: hydrated.envelope.data,
+  });
+
+  assert.equal(stringifySqliteRows(currentRows()), stringifySqliteRows(before));
+  const rehydrated = await repository.load();
+  assert.equal(
+    rehydrated.envelope.data?.aggregateBuckets?.[0]?.projectRefHash,
+    hashSensitiveRef(hmacKey, "project", project),
+  );
+  assert.equal(
+    rehydrated.envelope.data?.aggregateBuckets?.[0]?.projectKind,
+    "workspace",
+  );
+  assert.equal(
+    rehydrated.envelope.data?.aggregateBuckets?.[0]?.projectLabel,
+    "identity-project",
+  );
+
+  const rawBase64urlSessionId = "s".repeat(43);
+  const hydratedSessionTracker = rehydrated.envelope.data?.trackerBuckets?.find(
+    (bucket) => bucket.dimension === "session",
+  );
+  assert.ok(hydratedSessionTracker);
+  await repository.save({
+    ...rehydrated.envelope,
+    revision: "mixed-retained-and-fresh",
+    status: "stale",
+    data: {
+      ...rehydrated.envelope.data!,
+      trackerBuckets: [
+        ...(rehydrated.envelope.data?.trackerBuckets ?? []),
+        {
+          ...hydratedSessionTracker,
+          identity: rawBase64urlSessionId,
+          label: rawBase64urlSessionId,
+        },
+      ],
+    },
+  });
+  const freshSessionRow = database
+    .prepare(
+      `SELECT entity_key FROM usage_tracker_buckets
+       WHERE snapshot_id = (
+         SELECT snapshot_id FROM snapshot_heads WHERE domain = 'usage'
+       ) AND dimension = 'session' AND entity_label = ?`,
+    )
+    .get(rawBase64urlSessionId);
+  assert.equal(
+    freshSessionRow?.entity_key,
+    hashSensitiveRef(
+      hmacKey,
+      "usage-tracker-session",
+      `codex\0${rawBase64urlSessionId}`,
+    ),
+  );
+  assert.notEqual(freshSessionRow?.entity_key, rawBase64urlSessionId);
+});
+
 test("usage aggregate keeps quick conversations distinct per directory", async (t) => {
   const database = openDatabase(t);
   const hmacKey = "quick-conversation-label-key";
@@ -208,7 +333,7 @@ test("usage aggregate keeps quick conversations distinct per directory", async (
     "~/WorkBuddyWorkSpace/2026-08-17-09-02-16",
     "D:\\WorkBuddyWorkSpace\\2026-08-17-09-02-16",
     "/tmp/scratch",
-    "quick-conversation",
+    "/tmp/quick-conversation",
   ];
   await createSqliteClassificationIndexRepository({
     database,
@@ -259,11 +384,16 @@ test("usage aggregate keeps quick conversations distinct per directory", async (
       )
       .get(refHash)?.label;
   };
+  const disambiguatedLabel = (ref: string, label: string) =>
+    `${label} · ${hashSensitiveRef(hmacKey, "project", ref).slice(-12)}`;
 
-  assert.equal(persistedLabel(refs[0]!, "usage_aggregate_buckets"), refs[0]);
+  assert.equal(
+    persistedLabel(refs[0]!, "usage_aggregate_buckets"),
+    disambiguatedLabel(refs[0]!, "2026-08-17-09-02-16"),
+  );
   assert.equal(
     persistedLabel(refs[1]!, "usage_aggregate_buckets"),
-    "2026-08-17-09-02-16",
+    disambiguatedLabel(refs[1]!, "2026-08-17-09-02-16"),
   );
   assert.equal(persistedLabel(refs[2]!, "usage_aggregate_buckets"), "scratch");
   assert.equal(
@@ -271,26 +401,185 @@ test("usage aggregate keeps quick conversations distinct per directory", async (
     "quick-conversation",
   );
   // The tracker projection shares resolveProjectForWrite with the aggregates.
-  assert.equal(persistedLabel(refs[0]!, "usage_tracker_buckets"), refs[0]);
+  assert.equal(
+    persistedLabel(refs[0]!, "usage_tracker_buckets"),
+    disambiguatedLabel(refs[0]!, "2026-08-17-09-02-16"),
+  );
   assert.equal(
     persistedLabel(refs[1]!, "usage_tracker_buckets"),
-    "2026-08-17-09-02-16",
+    disambiguatedLabel(refs[1]!, "2026-08-17-09-02-16"),
   );
-  // A raw drive-letter ref is never persisted; only the `~/…` form and
-  // basename projections keep a path-free label.
-  assert.equal(
-    stringifySqliteRows(
-      database.prepare("SELECT * FROM usage_aggregate_buckets").all(),
-    ).includes("\\"),
-    false,
+  // No raw path form is persisted; collisions only expose a short suffix from
+  // the already-opaque HMAC identity.
+  const persistedText = stringifySqliteRows(
+    database.prepare("SELECT * FROM usage_aggregate_buckets").all(),
   );
+  assert.equal(persistedText.includes("\\"), false);
+  assert.equal(persistedText.includes("~/"), false);
+  assert.equal(persistedText.includes("WorkBuddyWorkSpace"), false);
   const loaded = await repository.load();
+  assert.equal(loaded.envelope.data?.requiresProjectLabelRefresh, undefined);
   assert.deepEqual(
     loaded.envelope.data?.aggregateBuckets
       ?.map((bucket) => bucket.projectLabel)
       .sort(),
-    ["2026-08-17-09-02-16", "quick-conversation", "scratch", refs[0]!].sort(),
+    [
+      disambiguatedLabel(refs[0]!, "2026-08-17-09-02-16"),
+      disambiguatedLabel(refs[1]!, "2026-08-17-09-02-16"),
+      "quick-conversation",
+      "scratch",
+    ].sort(),
   );
+
+  // The pre-fix projection used the same literal for every quick
+  // conversation. Its unversioned generation must rebuild once, while the
+  // current projection above accepts a real directory with that basename.
+  database
+    .prepare(
+      "UPDATE snapshot_generations SET source_fingerprint = 'legacy-usage-projection' WHERE domain = 'usage'",
+    )
+    .run();
+  const legacy = await repository.load();
+  assert.equal(legacy.envelope.data?.requiresProjectLabelRefresh, true);
+});
+
+test("usage aggregate disambiguates quick and workspace projects with the same basename", async (t) => {
+  const database = openDatabase(t);
+  const hmacKey = "mixed-project-label-key";
+  const projects = [
+    { ref: "/tmp/first/src", kind: "quick-conversation" as const },
+    { ref: "/tmp/second/src", kind: "quick-conversation" as const },
+    { ref: "/Users/alice/work/src", kind: "workspace" as const },
+  ];
+  await createSqliteClassificationIndexRepository({ database, hmacKey }).commit(
+    projects.map(({ ref, kind }) => ({
+      ref,
+      kind,
+      label: kind === "workspace" ? "src" : "quick-conversation",
+      classifiedAt: "2026-08-19T01:01:00.000Z",
+      fingerprint: null,
+    })),
+  );
+  const repository = createSqliteUsageSnapshotRepository({ database, hmacKey });
+  const snapshot = buildLocalUsageSnapshot(
+    projects.map(({ ref }, index) => ({
+      source: "codex" as const,
+      timestamp: `2026-08-19T01:0${index}:00.000Z`,
+      model: "gpt-test",
+      project: ref,
+      inputTokens: 10,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 5,
+      reasoningOutputTokens: 0,
+      totalTokens: 15,
+    })),
+    [],
+    new Date("2026-08-19T01:05:00.000Z"),
+  );
+  await repository.save(envelope("mixed-project-labels", snapshot));
+
+  const expectedLabels = new Map(
+    projects.map(({ ref }) => {
+      const identity = hashSensitiveRef(hmacKey, "project", ref);
+      return [identity, `src · ${identity.slice(-12)}`];
+    }),
+  );
+  const rows = database
+    .prepare(
+      "SELECT project_ref_hash, project_label, project_kind FROM usage_aggregate_buckets",
+    )
+    .all();
+  assert.equal(rows.length, 3);
+  for (const row of rows) {
+    assert.equal(
+      row.project_label,
+      expectedLabels.get(String(row.project_ref_hash)),
+    );
+  }
+  assert.equal(new Set(rows.map((row) => row.project_label)).size, 3);
+  assert.equal(stringifySqliteRows(rows).includes("/tmp/"), false);
+  assert.equal(stringifySqliteRows(rows).includes("/Users/"), false);
+
+  const loaded = await repository.load();
+  assert.equal(loaded.envelope.data?.requiresProjectLabelRefresh, undefined);
+  assert.equal(
+    new Set(
+      loaded.envelope.data?.aggregateBuckets?.map(
+        (bucket) => bucket.projectRefHash,
+      ),
+    ).size,
+    3,
+  );
+  assert.equal(
+    new Set(
+      loaded.envelope.data?.aggregateBuckets?.map(
+        (bucket) => bucket.projectLabel,
+      ),
+    ).size,
+    3,
+  );
+});
+
+test("usage hydration sanitizes legacy home-relative quick labels", async (t) => {
+  const database = openDatabase(t);
+  const hmacKey = "legacy-quick-label-key";
+  const project = "~/Desktop/private/scratch";
+  await createSqliteClassificationIndexRepository({ database, hmacKey }).commit(
+    [
+      {
+        ref: project,
+        kind: "quick-conversation",
+        label: "quick-conversation",
+        classifiedAt: "2026-08-19T01:01:00.000Z",
+        fingerprint: null,
+      },
+    ],
+  );
+  const repository = createSqliteUsageSnapshotRepository({ database, hmacKey });
+  const snapshot = buildLocalUsageSnapshot(
+    [
+      {
+        source: "codex",
+        timestamp: "2026-08-19T01:00:00.000Z",
+        model: "gpt-test",
+        project,
+        inputTokens: 10,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        outputTokens: 5,
+        reasoningOutputTokens: 0,
+        totalTokens: 15,
+      },
+    ],
+    [],
+    new Date("2026-08-19T01:05:00.000Z"),
+  );
+  await repository.save(envelope("legacy-quick-label", snapshot));
+  database
+    .prepare(
+      "UPDATE usage_aggregate_buckets SET project_label = '~/Desktop/private/scratch'",
+    )
+    .run();
+  database
+    .prepare(
+      "UPDATE usage_tracker_buckets SET entity_label = '~/Desktop/private/scratch' WHERE dimension = 'project'",
+    )
+    .run();
+
+  const loaded = await repository.load();
+  assert.equal(loaded.envelope.data?.requiresProjectLabelRefresh, true);
+  assert.equal(
+    loaded.envelope.data?.aggregateBuckets?.[0]?.projectLabel,
+    "scratch",
+  );
+  assert.equal(
+    loaded.envelope.data?.trackerBuckets?.find(
+      (bucket) => bucket.dimension === "project",
+    )?.label,
+    "scratch",
+  );
+  assert.equal(JSON.stringify(loaded).includes("~/Desktop/private"), false);
 });
 
 test("usage aggregate keeps safe labels for unknown task-like project refs", async (t) => {
@@ -394,7 +683,12 @@ test("same-name projects keep distinct HMAC identities and persisted classificat
   assert.equal(new Set(projectRows.map((row) => row.project_ref_hash)).size, 2);
   assert.deepEqual(
     projectRows.map((row) => `${row.project_label}:${row.project_kind}`).sort(),
-    ["shared · a:workspace", "shared · b:workspace"],
+    projects
+      .map(
+        (project) =>
+          `shared · ${hashSensitiveRef(hmacKey, "project", project).slice(-12)}:workspace`,
+      )
+      .sort(),
   );
   const trackerProjects = database
     .prepare(
@@ -408,7 +702,12 @@ test("same-name projects keep distinct HMAC identities and persisted classificat
     trackerProjects
       .map((row) => `${row.entity_label}:${row.project_kind}`)
       .sort(),
-    ["shared · a:workspace", "shared · b:workspace"],
+    projects
+      .map(
+        (project) =>
+          `shared · ${hashSensitiveRef(hmacKey, "project", project).slice(-12)}:workspace`,
+      )
+      .sort(),
   );
   const persistedText = stringifySqliteRows([
     ...projectRows,
@@ -421,7 +720,7 @@ test("same-name projects keep distinct HMAC identities and persisted classificat
   assert.equal(hydrated.envelope.data?.recent.length, 0);
   assert.equal(
     hydrated.envelope.data?.aggregateBuckets?.filter((bucket) =>
-      ["shared · a", "shared · b"].includes(bucket.projectLabel ?? ""),
+      (bucket.projectLabel ?? "").startsWith("shared · "),
     ).length,
     2,
   );

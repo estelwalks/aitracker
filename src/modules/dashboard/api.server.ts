@@ -27,6 +27,7 @@ import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
 import { getDashboardAIInsightService } from "./ai-insight.server.ts";
 import type { DashboardProjectClassification } from "./project-classification.server.ts";
 import {
+  disambiguateProjectLabels,
   quickConversationProjectLabel,
   safeProjectLabel,
 } from "../../platform/database/snapshot-generation.server.ts";
@@ -101,6 +102,35 @@ export function requestDashboardSessionRefresh(runtime: {
   void runtime.requestRefresh({ reason: "event" }).catch(() => {});
 }
 
+/** Rebuild persisted usage labels from older snapshot formats in the
+ * background. Multiple legacy buckets still schedule only one refresh. */
+export function requestDashboardUsageLabelRefresh(
+  buckets: readonly Pick<
+    UsageAggregateBucket,
+    "source" | "projectKind" | "projectLabel"
+  >[],
+  runtime: {
+    requestRefresh(request: { reason: "event" }): Promise<void>;
+  },
+  hydratedLegacyLabel = false,
+): void {
+  const needsRefresh =
+    hydratedLegacyLabel ||
+    buckets.some((bucket) => {
+      const label = bucket.projectLabel;
+      return (
+        (bucket.projectKind === "quick-conversation" &&
+          label != null &&
+          label !== quickConversationProjectLabel(label)) ||
+        (bucket.source === "aipy" &&
+          bucket.projectKind === "unknown" &&
+          (label === "unknown" || !/^\S+\s-\s/u.test(label ?? "")))
+      );
+    });
+  if (!needsRefresh) return;
+  void runtime.requestRefresh({ reason: "event" }).catch(() => {});
+}
+
 function projectKey(project: string): string {
   const normalized = project.replaceAll("\\", "/").replace(/\/+$/u, "");
   if (!normalized || normalized === "~" || normalized === "unknown")
@@ -139,6 +169,7 @@ export function aggregateDashboardProjectSessions(
   sessions: readonly {
     projectKey: string;
     projectRef?: string | null;
+    projectIdentity?: string;
     source: string;
     startedAt: string;
     endedAt?: string;
@@ -150,11 +181,21 @@ export function aggregateDashboardProjectSessions(
     string,
     DashboardProjectClassification
   > = new Map(),
-) {
-  const counts = new Map<
+  projectIdentities: ReadonlyMap<string, string> = new Map(),
+  projectKindsByIdentity: ReadonlyMap<
     string,
-    { count: number; turns: number; editTurns: number; subagentCalls: number }
-  >();
+    DashboardUsageEvent["projectKind"]
+  > = new Map(),
+) {
+  const resolved: Array<{
+    project: string;
+    projectIdentity?: string;
+    source: string;
+    date: string;
+    turns: number;
+    editTurns: number;
+    subagentCalls: number;
+  }> = [];
   for (const session of sessions) {
     const date =
       localDateKey(session.endedAt ?? "") ?? localDateKey(session.startedAt);
@@ -170,47 +211,95 @@ export function aggregateDashboardProjectSessions(
     // Recover those rows only through a verified workspace label already
     // present in the classification index; never promote an unclassified
     // path or expose the reference itself.
-    const classification =
-      directClassification ??
-      (projectRef == null
-        ? [...classifications.values()].find(
-            (candidate) =>
+    const legacyClassification =
+      projectRef == null
+        ? [...classifications.entries()].find(
+            ([, candidate]) =>
               candidate.kind === "workspace" &&
               candidate.label === session.projectKey,
           )
-        : undefined);
+        : undefined;
+    const classification = directClassification ?? legacyClassification?.[1];
+    const persistedKind = session.projectIdentity
+      ? projectKindsByIdentity.get(session.projectIdentity)
+      : undefined;
+    const projectKind = classification?.kind ?? persistedKind;
     if (
-      classification?.kind !== undefined &&
-      classification.kind !== "workspace"
+      (projectKind !== undefined && projectKind !== "workspace") ||
+      // A hydrated session has no raw ref to classify. Only a matching usage
+      // identity can prove it belongs in the workspace-only project view.
+      (session.projectIdentity != null &&
+        projectRef == null &&
+        projectKind == null)
     ) {
       continue;
     }
     const project =
       classification?.label ?? projectKey(projectRef ?? session.projectKey);
-    const key = `${project}\u0000${session.source}\u0000${date}`;
+    const identityRef = projectRef ?? legacyClassification?.[0];
+    const projectIdentity =
+      session.projectIdentity ??
+      (identityRef == null ? undefined : projectIdentities.get(identityRef));
+    resolved.push({
+      project: safeProjectLabel(project),
+      ...(projectIdentity == null ? {} : { projectIdentity }),
+      source: session.source,
+      date,
+      turns: session.turns,
+      editTurns: session.editTurns,
+      subagentCalls: session.subagentCalls,
+    });
+  }
+  const labels = disambiguateProjectLabels(
+    resolved.flatMap((row) =>
+      row.projectIdentity == null
+        ? []
+        : [{ identity: row.projectIdentity, label: row.project }],
+    ),
+  );
+  const counts = new Map<
+    string,
+    {
+      project: string;
+      projectIdentity?: string;
+      source: string;
+      date: string;
+      count: number;
+      turns: number;
+      editTurns: number;
+      subagentCalls: number;
+    }
+  >();
+  for (const row of resolved) {
+    const project =
+      (row.projectIdentity == null
+        ? undefined
+        : labels.get(row.projectIdentity)) ?? row.project;
+    const key = `${row.projectIdentity ?? project}\u0000${row.source}\u0000${row.date}`;
     const current = counts.get(key) ?? {
+      project,
+      ...(row.projectIdentity == null
+        ? {}
+        : { projectIdentity: row.projectIdentity }),
+      source: row.source,
+      date: row.date,
       count: 0,
       turns: 0,
       editTurns: 0,
       subagentCalls: 0,
     };
     current.count += 1;
-    current.turns += session.turns;
-    current.editTurns += session.editTurns;
-    current.subagentCalls += session.subagentCalls;
+    current.turns += row.turns;
+    current.editTurns += row.editTurns;
+    current.subagentCalls += row.subagentCalls;
     counts.set(key, current);
   }
-  return [...counts.entries()]
-    .map(([key, aggregate]) => {
-      const [project, source, date] = key.split("\u0000");
-      return { project: project!, source: source!, date: date!, ...aggregate };
-    })
-    .sort(
-      (left, right) =>
-        left.project.localeCompare(right.project) ||
-        left.source.localeCompare(right.source) ||
-        left.date.localeCompare(right.date),
-    );
+  return [...counts.values()].sort(
+    (left, right) =>
+      left.project.localeCompare(right.project) ||
+      left.source.localeCompare(right.source) ||
+      left.date.localeCompare(right.date),
+  );
 }
 
 export function aggregateDashboardSourceSessions(
@@ -347,46 +436,102 @@ function sessionTokenFallbackEvents(
   });
 }
 
-function toDashboardEvent(
-  event: {
-    source: DashboardUsageEvent["source"];
-    timestamp: string;
-    model: string;
-    project: string;
-    projectRefHash?: string;
-    projectLabel?: string;
-    projectKind?: DashboardUsageEvent["projectKind"];
-    inputTokens: number;
-    cachedInputTokens: number;
-    cacheCreationInputTokens: number;
-    outputTokens: number;
-    reasoningOutputTokens: number;
-    totalTokens: number;
-    measurement?: DashboardUsageEvent["measurement"];
-    context?: DashboardUsageEvent["context"] & { commands?: unknown };
-    eventCount?: number;
-    contextCounts?: DashboardUsageEvent["contextCounts"];
-    aggregateEvidence?: DashboardUsageEvent["aggregateEvidence"];
-  },
+interface DashboardProjectInput {
+  readonly project: string;
+  readonly projectRefHash?: string;
+  readonly projectLabel?: string;
+  readonly projectKind?: DashboardUsageEvent["projectKind"];
+}
+
+interface DashboardEventInput extends DashboardProjectInput {
+  readonly source: DashboardUsageEvent["source"];
+  readonly timestamp: string;
+  readonly model: string;
+  readonly inputTokens: number;
+  readonly cachedInputTokens: number;
+  readonly cacheCreationInputTokens: number;
+  readonly outputTokens: number;
+  readonly reasoningOutputTokens: number;
+  readonly totalTokens: number;
+  readonly measurement?: DashboardUsageEvent["measurement"];
+  readonly context?: DashboardUsageEvent["context"] & { commands?: unknown };
+  readonly eventCount?: number;
+  readonly contextCounts?: DashboardUsageEvent["contextCounts"];
+  readonly aggregateEvidence?: DashboardUsageEvent["aggregateEvidence"];
+}
+
+function dashboardProjectKind(
+  event: DashboardProjectInput,
   classifications: ReadonlyMap<string, DashboardProjectClassification>,
-): DashboardUsageEvent {
+): DashboardUsageEvent["projectKind"] {
+  return (
+    event.projectKind ?? classifications.get(event.project)?.kind ?? "unknown"
+  );
+}
+
+function dashboardProjectBaseLabel(
+  event: DashboardProjectInput,
+  classifications: ReadonlyMap<string, DashboardProjectClassification>,
+): string {
   const classification = classifications.get(event.project);
-  // Mirrors the persistence layer (sqlite-usage-snapshot-repository): an
-  // in-memory refresh carries no projectLabel, so quick conversations must
-  // derive their directory label here or the row falls back to the classifier
-  // literal until the snapshot is rehydrated.
-  const classifiedLabel =
-    classification?.kind === "quick-conversation"
-      ? quickConversationProjectLabel(event.project)
-      : classification?.kind === "unknown"
-        ? safeProjectLabel(event.project)
-        : classification?.label;
+  const kind = dashboardProjectKind(event, classifications);
+  // Treat persisted labels as untrusted compatibility input: PR #47 wrote
+  // `~/...` quick labels, and old databases can remain fresh for hours. The
+  // browser boundary always reduces them to one final segment.
+  if (event.projectLabel != null) return safeProjectLabel(event.projectLabel);
+  if (kind === "quick-conversation")
+    return quickConversationProjectLabel(event.project);
+  if (classification?.kind === "unknown")
+    return safeProjectLabel(event.project);
+  return safeProjectLabel(classification?.label ?? projectKey(event.project));
+}
+
+function dashboardProjectIdentity(
+  event: DashboardProjectInput,
+  projectIdentities: ReadonlyMap<string, string>,
+): string | undefined {
+  return event.projectRefHash ?? projectIdentities.get(event.project);
+}
+
+function dashboardProjectLabels(
+  events: readonly DashboardEventInput[],
+  classifications: ReadonlyMap<string, DashboardProjectClassification>,
+  projectIdentities: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  return disambiguateProjectLabels(
+    events.flatMap((event) => {
+      const identity = dashboardProjectIdentity(event, projectIdentities);
+      return identity == null
+        ? []
+        : [
+            {
+              identity,
+              label: dashboardProjectBaseLabel(event, classifications),
+            },
+          ];
+    }),
+  );
+}
+
+function toDashboardEvent(
+  event: DashboardEventInput,
+  classifications: ReadonlyMap<string, DashboardProjectClassification>,
+  projectIdentities: ReadonlyMap<string, string>,
+  projectLabels: ReadonlyMap<string, string>,
+): DashboardUsageEvent {
+  const projectIdentity = dashboardProjectIdentity(event, projectIdentities);
+  const project =
+    (projectIdentity == null
+      ? undefined
+      : projectLabels.get(projectIdentity)) ??
+    dashboardProjectBaseLabel(event, classifications);
   return {
     source: event.source,
     timestamp: event.timestamp,
     model: event.model,
-    project: event.projectLabel ?? classifiedLabel ?? projectKey(event.project),
-    projectKind: event.projectKind ?? classification?.kind ?? "unknown",
+    project,
+    ...(projectIdentity == null ? {} : { projectIdentity }),
+    projectKind: dashboardProjectKind(event, classifications),
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
     cacheCreationInputTokens: event.cacheCreationInputTokens,
@@ -424,11 +569,12 @@ export function toDashboardSnapshot(
     string,
     DashboardProjectClassification
   > = new Map(),
+  projectIdentities: ReadonlyMap<string, string> = new Map(),
 ): DashboardUsageSnapshot {
-  const aggregateEvents = snapshot.aggregateBuckets?.map(
-    (bucket: UsageAggregateBucket) =>
-      toDashboardEvent(
-        {
+  const aggregateInputs: DashboardEventInput[] | undefined =
+    snapshot.aggregateBuckets?.map(
+      (bucket: UsageAggregateBucket) =>
+        ({
           source: bucket.source,
           timestamp: bucket.latestTimestamp,
           model: bucket.model,
@@ -463,18 +609,26 @@ export function toDashboardSnapshot(
             toolOutputCalls: bucket.context.toolOutputCalls,
           },
           aggregateEvidence: bucket.evidence,
-        },
-        classifications,
-      ),
-  );
-  const details =
-    aggregateEvents ??
-    snapshot.details.map((event) => toDashboardEvent(event, classifications));
-  const recent = aggregateEvents
-    ? [...aggregateEvents]
+        }) satisfies DashboardEventInput,
+    );
+  const detailInputs: readonly DashboardEventInput[] =
+    aggregateInputs ?? snapshot.details;
+  const recentInputs: readonly DashboardEventInput[] = aggregateInputs
+    ? [...aggregateInputs]
         .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
         .slice(0, 50)
-    : snapshot.recent.map((event) => toDashboardEvent(event, classifications));
+    : snapshot.recent;
+  const projectLabels = dashboardProjectLabels(
+    [...detailInputs, ...recentInputs],
+    classifications,
+    projectIdentities,
+  );
+  const details = detailInputs.map((event) =>
+    toDashboardEvent(event, classifications, projectIdentities, projectLabels),
+  );
+  const recent = recentInputs.map((event) =>
+    toDashboardEvent(event, classifications, projectIdentities, projectLabels),
+  );
   return {
     generatedAt: snapshot.generatedAt,
     mode: snapshot.mode,
@@ -510,11 +664,23 @@ export function toDashboardSnapshot(
         ? snapshot.byProject.flatMap((row) => {
             const classification = classifications.get(row.key);
             if (classification?.kind !== "workspace") return [];
-            return [{ ...row, key: classification.label }];
+            const identity = projectIdentities.get(row.key);
+            return [
+              {
+                ...row,
+                key:
+                  (identity == null
+                    ? undefined
+                    : projectLabels.get(identity)) ??
+                  safeProjectLabel(classification.label),
+              },
+            ];
           })
         : aggregateDashboardProjects(
             snapshot.aggregateBuckets,
             classifications,
+            projectIdentities,
+            projectLabels,
           ),
     daily: snapshot.daily,
     details,
@@ -525,6 +691,8 @@ export function toDashboardSnapshot(
 function aggregateDashboardProjects(
   buckets: readonly UsageAggregateBucket[],
   classifications: ReadonlyMap<string, DashboardProjectClassification>,
+  projectIdentities: ReadonlyMap<string, string>,
+  projectLabels: ReadonlyMap<string, string>,
 ) {
   const rows = new Map<
     string,
@@ -543,12 +711,14 @@ function aggregateDashboardProjects(
     const classification = classifications.get(bucket.project);
     const kind = bucket.projectKind ?? classification?.kind ?? "unknown";
     if (kind !== "workspace") continue;
-    const identity = bucket.projectRefHash ?? bucket.project;
+    const identity =
+      bucket.projectRefHash ??
+      projectIdentities.get(bucket.project) ??
+      bucket.project;
     const current = rows.get(identity) ?? {
       key:
-        bucket.projectLabel ??
-        classification?.label ??
-        projectKey(bucket.project),
+        projectLabels.get(identity) ??
+        dashboardProjectBaseLabel(bucket, classifications),
       events: 0,
       inputTokens: 0,
       cachedInputTokens: 0,
@@ -673,6 +843,9 @@ export function toDashboardV2Snapshot(input: {
       timestamp: event.timestamp,
       model: event.model,
       project: event.project,
+      ...(event.projectIdentity == null
+        ? {}
+        : { projectIdentity: event.projectIdentity }),
       projectKind: event.projectKind,
       events: event.eventCount ?? 1,
       inputTokens: event.inputTokens,
@@ -868,20 +1041,14 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
       : createEmptyUsageSnapshot();
   const rawBuckets = rawSnapshot.aggregateBuckets ?? [];
   // AiPy snapshots created before task ids were added have either the generic
-  // `unknown` label or a bare title. Request a non-blocking rebuild so an
-  // already-fresh snapshot can migrate itself. Workspace labels are excluded
-  // because they intentionally remain paths rather than task labels.
-  if (
-    rawBuckets.some(
-      (bucket) =>
-        bucket.source === "aipy" &&
-        bucket.projectKind === "unknown" &&
-        (bucket.projectLabel === "unknown" ||
-          !/^\S+\s-\s/u.test(bucket.projectLabel ?? "")),
-    )
-  ) {
-    void usageSnapshot.requestRefresh({ reason: "event" }).catch(() => {});
-  }
+  // `unknown` label or a bare title. Older quick-conversation snapshots retain
+  // either the generic classifier label or a home-relative path. Request one
+  // non-blocking rebuild so an already-fresh snapshot can migrate itself.
+  requestDashboardUsageLabelRefresh(
+    rawBuckets,
+    usageSnapshot,
+    rawSnapshot.requiresProjectLabelRefresh === true,
+  );
   const [pricingResult, monitoringResult] = await Promise.allSettled([
     getPricingSnapshot({
       data: [...new Set(rawBuckets.map((bucket) => bucket.model))],
@@ -1014,15 +1181,23 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
       detectedPaths: fact.paths,
     })),
   };
-  const projectRefs = [
-    ...rawBuckets
-      .map((bucket) => bucket.project)
-      .filter(isPathShapedProjectRef),
-    ...(sessionsResult.status === "fulfilled"
+  const rawUsageProjectRefs =
+    rawBuckets.length > 0
+      ? rawBuckets
+          .filter((bucket) => bucket.projectRefHash == null)
+          .map((bucket) => bucket.project)
+      : [...rawSnapshot.details, ...rawSnapshot.recent].map(
+          (event) => event.project,
+        );
+  const sessionProjectRefs =
+    sessionsResult.status === "fulfilled"
       ? sessionsResult.value.sessions.map(
           (session) => session.projectRef ?? session.projectKey,
         )
-      : []),
+      : [];
+  const projectRefs = [
+    ...rawUsageProjectRefs.filter(isPathShapedProjectRef),
+    ...sessionProjectRefs,
   ];
   // P3-T3-06: resolve from the persisted classification index (O(1), no
   // filesystem probing on the query path).
@@ -1031,6 +1206,10 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   const { classificationService } = await getCompositionRoot();
   const projectClassifications =
     await classificationService.resolve(projectRefs);
+  const projectIdentities = classificationService.identities([
+    ...rawUsageProjectRefs,
+    ...sessionProjectRefs,
+  ]);
   // A usage snapshot can predate the classification index (for example after
   // an app upgrade). Keep this response useful through the safe fallback in
   // `toDashboardSnapshot`, while backfilling only the raw usage refs in the
@@ -1048,7 +1227,18 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
       .classifyIncrementally(missingUsageRefs)
       .catch(() => {});
   }
-  const snapshot = toDashboardSnapshot(rawSnapshot, projectClassifications);
+  const snapshot = toDashboardSnapshot(
+    rawSnapshot,
+    projectClassifications,
+    projectIdentities,
+  );
+  const usageProjectKindsByIdentity = new Map(
+    snapshot.details.flatMap((event) =>
+      event.projectIdentity == null || event.projectKind == null
+        ? []
+        : [[event.projectIdentity, event.projectKind] as const],
+    ),
+  );
   const skills =
     skillsResult.status === "fulfilled"
       ? {
@@ -1068,6 +1258,8 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
           byProjectDay: aggregateDashboardProjectSessions(
             sessionsResult.value.sessions,
             projectClassifications,
+            projectIdentities,
+            usageProjectKindsByIdentity,
           ),
           bySourceDay: aggregateDashboardSourceSessions(
             sessionsResult.value.sessions,

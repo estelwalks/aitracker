@@ -20,6 +20,15 @@ export const tracker = {
     projectSub: "어떤 프로젝트가 가장 많이 소비하나",
     sessionSub: "어떤 세션이 가장 손해인가",
   },
+  merge: {
+    start: "프로젝트 병합",
+    cancel: "병합 취소",
+    chooseSource: "병합할 프로젝트를 선택한 다음 대상 프로젝트를 클릭하세요",
+    chooseTarget: "대상 프로젝트를 클릭하면 병합됩니다",
+    confirm: "‘{source}’을(를) ‘{target}’에 병합할까요?",
+    success: "프로젝트를 병합했습니다",
+    failed: "프로젝트 병합에 실패했습니다",
+  },
   row: {
     tokens: "{count} tokens",
     events: "{count} 이벤트",

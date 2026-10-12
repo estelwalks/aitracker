@@ -20,10 +20,10 @@ const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const PACKAGING_CONFIG = "electron-builder.yml";
 
 export const EXPECTED_ARTIFACT_NAMES = Object.freeze([
-  "AITracker-arm64.dmg",
-  "AITracker-x64.dmg",
-  "AITracker-Setup-arm64.exe",
-  "AITracker-Setup-x64.exe",
+  "AITracker-macOS-arm64.dmg",
+  "AITracker-macOS-x64.dmg",
+  "AITracker-Windows-arm64.exe",
+  "AITracker-Windows-x64.exe",
 ]);
 
 /**
@@ -31,9 +31,9 @@ export const EXPECTED_ARTIFACT_NAMES = Object.freeze([
  * stays, because it selects the architecture; `${version}` (or any other
  * version reference) may not appear in an artifact name.
  */
-const EXPECTED_TEMPLATES = Object.freeze([
-  "${productName}-${arch}.${ext}",
-  "${productName}-Setup-${arch}.${ext}",
+export const EXPECTED_TEMPLATES = Object.freeze([
+  "${productName}-macOS-${arch}.${ext}",
+  "${productName}-Windows-${arch}.${ext}",
 ]);
 
 /** `${version}`, `${ buildVersion }`, `${env.VERSION}` … */
@@ -42,31 +42,43 @@ const VERSION_PLACEHOLDER = /\$\{[^}]*\bversion\b[^}]*\}/iu;
 const ARTIFACT_NAME_LINE = /^\s+artifactName:\s*(.+?)\s*$/gmu;
 
 /**
- * Modules that name the installers explicitly, with the names each one owns.
- * The contract gate requires all four installers to exist in the release; the
- * metadata generator lists only the three platforms release-metadata.json may
- * carry (see TARGET_FILES there — Windows on ARM is attached but not listed,
- * because a pre-1.0.2 client rejects a document with an unknown platform key).
+ * Every module that names an installer file, with the names it must contain.
+ *
+ * A rename has to reach all of them in one release: a packaging config that
+ * renders new names while release-metadata.json still records the old ones
+ * makes every install of 1.0.3 and later reject the document and report a
+ * download failure, because the client requires the name in the metadata to be
+ * an asset of that same release. `scripts/verify-release-asset-agreement.mjs`
+ * then re-checks the assembled release, so the pairing is verified twice: once
+ * here against the sources, once against the actual asset list.
  */
 const ARTIFACT_NAME_SOURCES = Object.freeze([
   {
     path: "scripts/verify-release-contract.mjs",
     names: [
-      "AITracker-arm64.dmg",
-      "AITracker-x64.dmg",
-      "AITracker-Setup-arm64.exe",
-      "AITracker-Setup-x64.exe",
+      "AITracker-macOS-arm64.dmg",
+      "AITracker-macOS-x64.dmg",
+      "AITracker-Windows-arm64.exe",
+      "AITracker-Windows-x64.exe",
     ],
   },
   {
     path: "scripts/release-metadata.mjs",
     names: [
-      "AITracker-arm64.dmg",
-      "AITracker-x64.dmg",
-      "AITracker-Setup-x64.exe",
+      "AITracker-macOS-arm64.dmg",
+      "AITracker-macOS-x64.dmg",
+      "AITracker-Windows-arm64.exe",
+      "AITracker-Windows-x64.exe",
     ],
   },
 ]);
+
+/** The installer file names a module records, in the order it records them. */
+function installerNamesIn(text) {
+  return [...text.matchAll(/"([^"\\/]+\.(?:dmg|exe))"/gu)].map(
+    (match) => match[1],
+  );
+}
 
 export function inspectPackagingConfig({ config }) {
   const problems = [];
@@ -122,6 +134,16 @@ export async function verifyReleaseArtifactNames({
       if (!text.includes(`"${name}"`)) {
         problems.push(`${path} does not name ${name}`);
       }
+    }
+    // The four names must also be the same set, in the same order: a module
+    // that records fewer names, or the same names against the wrong platforms,
+    // is exactly the half-rename the release breaks on.
+    const recorded = installerNamesIn(text);
+    if (recorded.join(",") !== names.join(",")) {
+      problems.push(
+        `${path} records ${recorded.join(", ") || "no installer names"}; ` +
+          `each module must name all four in the same order (${names.join(", ")})`,
+      );
     }
   }
   return problems;

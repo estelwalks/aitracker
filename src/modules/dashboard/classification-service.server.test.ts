@@ -13,6 +13,9 @@ function repository(
 ): ClassificationIndexRepository {
   const indexed = new Map(entries.map((entry) => [entry.ref, entry]));
   return {
+    identityFor(ref) {
+      return `identity:${ref}`;
+    },
     async get(ref) {
       return indexed.get(ref);
     },
@@ -65,6 +68,18 @@ test("resolve omits refs missing from the classification index", async () => {
     [["indexed", { kind: "workspace", label: "Indexed" }]],
   );
   assert.equal(result.has("missing"), false);
+});
+
+test("identities returns opaque keys even before classification", () => {
+  const service = createClassificationService({
+    repository: repository([]),
+    classifier,
+  });
+
+  assert.deepEqual(
+    [...service.identities(["pending", "pending"])],
+    [["pending", "identity:pending"]],
+  );
 });
 
 test("resolve preserves an explicit unknown classification", async () => {

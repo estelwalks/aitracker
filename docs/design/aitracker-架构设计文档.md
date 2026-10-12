@@ -146,19 +146,19 @@ flowchart LR
   "publishedAt": "<ISO-8601>",
   "artifacts": {
     "darwin-arm64": {
-      "name": "AITracker-arm64.dmg",
-      "url": "https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-arm64.dmg",
+      "name": "AITracker-macOS-arm64.dmg",
+      "url": "https://github.com/estelwalks/aitracker/releases/download/v1.0.0/AITracker-macOS-arm64.dmg",
       "sha256": "<hex>",
       "size": 0
     },
     "darwin-x64": {
-      "name": "AITracker-x64.dmg",
+      "name": "AITracker-macOS-x64.dmg",
       "url": "<immutable-url>",
       "sha256": "<hex>",
       "size": 0
     },
     "win32-arm64": {
-      "name": "AITracker-Setup-arm64.exe",
+      "name": "AITracker-Windows-arm64.exe",
       "url": "<immutable-url>",
       "sha256": "<hex>",
       "size": 0,
@@ -166,7 +166,7 @@ flowchart LR
       "scope": "machine"
     },
     "win32-x64": {
-      "name": "AITracker-Setup-x64.exe",
+      "name": "AITracker-Windows-x64.exe",
       "url": "<immutable-url>",
       "sha256": "<hex>",
       "size": 0,
@@ -177,7 +177,7 @@ flowchart LR
 }
 ```
 
-安装包文件名不带版本号（`AITracker-arm64.dmg`、`AITracker-Setup-x64.exe` 等），版本只记录在 `appVersion`/`gitTag` 中，这样 `releases/latest/download/<文件名>` 才能跨版本稳定指向最新发布，README 与 `npx` 入口无需每次发版修改。生成器必须校验：制品 URL 属于本仓库的 Release 下载地址、每个必需平台恰好一个制品、hash 为 64 位小写十六进制、文件大小大于零；`scripts/verify-release-artifact-names.mjs` 另外守住打包配置，禁止版本号重新进入文件名模板。
+安装包文件名带操作系统、但不带版本号（`AITracker-macOS-arm64.dmg`、`AITracker-Windows-x64.exe` 等），版本只记录在 `appVersion`/`gitTag` 中，这样 `releases/latest/download/<文件名>` 才能跨版本稳定指向最新发布，README 与 `npx` 入口无需每次发版修改。生成器必须校验：制品 URL 属于本仓库的 Release 下载地址、每个必需平台恰好一个制品、hash 为 64 位小写十六进制、文件大小大于零；`scripts/verify-release-artifact-names.mjs` 另外守住打包配置与所有点名安装包的脚本，禁止版本号重新进入文件名模板，并要求各模块记录的四个文件名完全一致；文件名与 `release-metadata.json` 必须同一次发布一起改——客户端只看扩展名与架构挑安装包，再要求 metadata 里记录的文件名是该次发布的资产之一，只改一半会让所有 1.0.3 及以上安装的自动更新失败。
 
 ### 6.2 版本与频道契约
 
@@ -336,14 +336,14 @@ Cask 使用当前两份版本化 DMG，并通过 `arch` 为 Apple Silicon/Intel 
 
 ## 15. 风险与待确认项
 
-| 风险/待确认                                 | 概率 | 影响 | 应对                                                            |
-| ------------------------------------------- | ---- | ---- | --------------------------------------------------------------- |
-| macOS/Windows 签名凭据尚未准备              | 中   | 高   | 不阻塞未签名 beta；作为稳定渠道和官方 Cask 的硬阻塞项           |
-| Homebrew 官方收录受 notability/安全要求影响 | 中   | 中   | 自有 Tap 作为立即可用路径，官方命令待上游合并后公布             |
-| WinGet Publisher 与安装器注册表不一致       | 中   | 高   | 在干净 Windows 主机读取真实 ARP 字段后锁定 identifier/metadata  |
-| npm 非 scope 名称与现有包过于相似          | 已确认 | 中   | 采用 `@estelwalks/aitracker` 并使用 `--access public` 发布         |
-| npm 包和自有 Tap 尚未完成真实远程发布       | 高   | 高   | Phase 1 先完成本地生成与 draft 验证，再执行维护者授权的外部发布 |
-| GitHub community PR 审核时延                | 高   | 低   | 状态矩阵显示 lagging，不把外部合并时间纳入核心发布原子性        |
+| 风险/待确认                                 | 概率   | 影响 | 应对                                                            |
+| ------------------------------------------- | ------ | ---- | --------------------------------------------------------------- |
+| macOS/Windows 签名凭据尚未准备              | 中     | 高   | 不阻塞未签名 beta；作为稳定渠道和官方 Cask 的硬阻塞项           |
+| Homebrew 官方收录受 notability/安全要求影响 | 中     | 中   | 自有 Tap 作为立即可用路径，官方命令待上游合并后公布             |
+| WinGet Publisher 与安装器注册表不一致       | 中     | 高   | 在干净 Windows 主机读取真实 ARP 字段后锁定 identifier/metadata  |
+| npm 非 scope 名称与现有包过于相似           | 已确认 | 中   | 采用 `@estelwalks/aitracker` 并使用 `--access public` 发布      |
+| npm 包和自有 Tap 尚未完成真实远程发布       | 高     | 高   | Phase 1 先完成本地生成与 draft 验证，再执行维护者授权的外部发布 |
+| GitHub community PR 审核时延                | 高     | 低   | 状态矩阵显示 lagging，不把外部合并时间纳入核心发布原子性        |
 
 ## 16. 自检摘要
 

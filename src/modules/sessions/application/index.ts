@@ -11,6 +11,19 @@ import type {
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const MAX_PAGE_SIZE = 100;
 
+/** Defense-in-depth for every browser-facing query result. */
+function toQuerySafeSession(session: SessionSummary): SessionSummary {
+  const {
+    projectRef: _ref,
+    projectIdentity: _identity,
+    ...safe
+  } = session as SessionSummary & {
+    readonly projectRef?: string;
+    readonly projectIdentity?: string;
+  };
+  return safe;
+}
+
 function matches(
   session: SessionSummary,
   filter: SessionFilter,
@@ -82,7 +95,9 @@ export function createSessionQueryService(
       // memory (snapshot architecture), so paging runs against it without
       // materializing a second full copy. Direct SQL readers can additionally
       // page at the source via the repository `load({ limit, offset })`.
-      const all = await repository.list(request.signal);
+      const all = (await repository.list(request.signal)).map(
+        toQuerySafeSession,
+      );
       const now = Date.now();
       const filtered = all.filter((item) =>
         matches(item, request.filter ?? {}, now),

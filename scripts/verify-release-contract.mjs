@@ -129,19 +129,19 @@ export function expectedReleaseArtifacts(platform) {
   const artifacts = [
     Object.freeze({
       platform: "darwin-arm64",
-      name: "AITracker-arm64.dmg",
+      name: "AITracker-macOS-arm64.dmg",
     }),
     Object.freeze({
       platform: "darwin-x64",
-      name: "AITracker-x64.dmg",
+      name: "AITracker-macOS-x64.dmg",
     }),
     Object.freeze({
       platform: "win32-arm64",
-      name: "AITracker-Setup-arm64.exe",
+      name: "AITracker-Windows-arm64.exe",
     }),
     Object.freeze({
       platform: "win32-x64",
-      name: "AITracker-Setup-x64.exe",
+      name: "AITracker-Windows-x64.exe",
     }),
   ];
   return Object.freeze(

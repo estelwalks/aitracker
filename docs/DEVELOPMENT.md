@@ -100,13 +100,17 @@ npm run dist:win:x64
 
 Before packaging or tagging, run the release contract gate. It reads the root
 and CLI package manifests, requires matching strict semantic versions, and
-prints the four electron-builder artifact names. Those names carry no version
-(`AITracker-arm64.dmg`, `AITracker-x64.dmg`, `AITracker-Setup-x64.exe`,
-`AITracker-Setup-arm64.exe`) so that `releases/latest/download/<name>` keeps
-resolving to the newest release; `npm run verify:release-artifact-names` fails
-if a `${version}` placeholder returns to `electron-builder.yml`. `--tag` and
-`--channel` are optional for local checks; `--release-dir` additionally
-requires all four installers to be present:
+prints the four electron-builder artifact names. Those names carry the operating
+system and no version (`AITracker-macOS-arm64.dmg`, `AITracker-macOS-x64.dmg`,
+`AITracker-Windows-x64.exe`, `AITracker-Windows-arm64.exe`) so that
+`releases/latest/download/<name>` keeps resolving to the newest release;
+`npm run verify:release-artifact-names` fails if a `${version}` placeholder
+returns to `electron-builder.yml`, and it also pins every module that names an
+installer to the same four names in the same order — a rename that stops at the
+packaging config would publish assets whose names no install can match against
+`release-metadata.json`, which breaks in-app updating for every 1.0.3+ install.
+`--tag` and `--channel` are optional for local checks; `--release-dir`
+additionally requires all four installers to be present:
 
 ```bash
 npm run verify:release-contract

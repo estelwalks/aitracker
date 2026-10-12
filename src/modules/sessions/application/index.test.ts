@@ -147,6 +147,26 @@ test("can sort session management by creation time", async () => {
   }
 });
 
+test("query pages never expose server-only project fields", async () => {
+  const internal = {
+    ...session("safe-session-id", new Date().toISOString()),
+    projectRef: "/private/work/project-a",
+    projectIdentity: "opaque-project-hmac",
+  };
+  const result = await createSessionQueryService({
+    list: async () => [internal],
+  }).query();
+
+  assert.equal(isOk(result), true);
+  if (isOk(result)) {
+    const serialized = JSON.stringify(result.value);
+    assert.equal("projectRef" in result.value.sessions[0]!, false);
+    assert.equal("projectIdentity" in result.value.sessions[0]!, false);
+    assert.equal(serialized.includes("/private/work"), false);
+    assert.equal(serialized.includes("opaque-project-hmac"), false);
+  }
+});
+
 test("cancelled query returns a stable error code", async () => {
   const controller = new AbortController();
   controller.abort();

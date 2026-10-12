@@ -11,6 +11,7 @@ import {
 } from "../modules/ai-orchestration/infrastructure/sqlite-model-profile-repository.server.ts";
 import { createModelProfileNetworkOperations } from "../modules/ai-orchestration/model-profile.server.ts";
 import { createSqliteClassificationIndexRepository } from "../modules/dashboard/sqlite-classification-index.server.ts";
+import { createSqliteProjectIdentityMergeRepository } from "../platform/database/project-identity-merge-repository.server.ts";
 import { createSqliteCandidatePersistence } from "../modules/distillation/infrastructure/sqlite-candidate-store.server.ts";
 import { createSqliteDistillQuotaStore } from "../modules/distillation/infrastructure/sqlite-quota-store.server.ts";
 import { createSha256HashPort } from "../modules/knowledge/infrastructure/hash-port.server.ts";
@@ -109,6 +110,10 @@ export async function createDatabaseRuntime(
     const hmacKey = createHash("sha256")
       .update(`aitracker:${options.dataRoot}`)
       .digest();
+    const projectIdentityMerges =
+      createSqliteProjectIdentityMergeRepository(host);
+    const resolveProjectIdentity = (identity: string): string =>
+      projectIdentityMerges.resolve(identity);
     const features = {
       appPreferences: createSqlitePreferenceRepository(host),
       runtimeFlags: createSqliteRuntimeFlagRepository(host),
@@ -126,10 +131,12 @@ export async function createDatabaseRuntime(
       usageSnapshots: createSqliteUsageSnapshotRepository({
         database: host,
         hmacKey,
+        resolveProjectIdentity,
       }),
       sessionSnapshots: createSqliteSessionSnapshotRepository({
         database: host,
         hmacKey,
+        resolveProjectIdentity,
       }),
       skillSnapshots: createSqliteSkillSnapshotRepository({
         database: host,
@@ -148,7 +155,9 @@ export async function createDatabaseRuntime(
       classifications: createSqliteClassificationIndexRepository({
         database: host,
         hmacKey,
+        resolveProjectIdentity,
       }),
+      projectIdentityMerges,
       reports: createSqliteReportStore(host),
       knowledge: createSqliteKnowledgeRepository({
         database: host,

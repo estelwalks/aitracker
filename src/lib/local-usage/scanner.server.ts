@@ -271,6 +271,8 @@ export interface LocalUsageScanOptions {
   toolDataRoots?: ReadonlyMap<string, string>;
   /** Test seam for Windows-only topology behavior. */
   platform?: NodeJS.Platform;
+  /** Allow signed, user-authorized macOS builds to resolve Git roots in TCC folders. */
+  allowTccProtectedPathProbe?: boolean;
   /** P5-T5-02: real cancellation; directory loops and file reads check it. */
   signal?: AbortSignal;
 }
@@ -6362,6 +6364,7 @@ export async function scanLocalUsage(
           event.project,
           homeDirectory,
           platform,
+          { allowTccProtectedPathProbe: options.allowTccProtectedPathProbe },
         );
         canonicalProjectPaths.set(event.project, canonicalProject);
       }

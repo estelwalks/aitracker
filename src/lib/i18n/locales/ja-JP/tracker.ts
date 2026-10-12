@@ -20,6 +20,15 @@ export const tracker = {
     projectSub: "どのプロジェクトが最も消費しているか",
     sessionSub: "どのセッションが最も割に合わないか",
   },
+  merge: {
+    start: "プロジェクトを統合",
+    cancel: "統合をキャンセル",
+    chooseSource: "統合するプロジェクトを選び、次に統合先をクリック",
+    chooseTarget: "統合先のプロジェクトをクリック",
+    confirm: "「{source}」を「{target}」に統合しますか？",
+    success: "プロジェクトを統合しました",
+    failed: "プロジェクトの統合に失敗しました",
+  },
   row: {
     tokens: "{count} tokens",
     events: "{count} イベント",

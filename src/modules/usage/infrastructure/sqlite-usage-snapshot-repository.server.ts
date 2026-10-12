@@ -3,6 +3,7 @@ import {
   clearGenerations,
   commitGeneration,
   currentSnapshotRow,
+  disambiguateProjectLabels,
   hashSensitiveRef,
   isoToMs,
   loadGeneration,
@@ -34,6 +35,8 @@ export interface SqliteUsageSnapshotRepositoryOptions {
   readonly database: SqliteDatabasePort;
   /** Installation-scoped secret; never stored in SQLite. */
   readonly hmacKey: string | Uint8Array;
+  /** Optional opaque project-merge resolver. */
+  readonly resolveProjectIdentity?: (identity: string) => string;
   readonly now?: () => number;
   readonly createId?: () => string;
 }
@@ -47,58 +50,55 @@ interface PersistedProjectIdentity {
   readonly kind: UsageProjectKind;
 }
 
-interface ProjectIdentityWithRef extends PersistedProjectIdentity {
-  readonly ref: string;
+const USAGE_PROJECT_LABEL_PROJECTION_PREFIX = "usage-project-label-v2:";
+const PROJECT_IDENTITY_SUFFIX_PATTERN = /\s·\s[A-Za-z0-9_-]{8,12}$/u;
+
+function unsuffixProjectLabel(value: string): string {
+  return value.trim().replace(PROJECT_IDENTITY_SUFFIX_PATTERN, "");
 }
 
-function parentPathSegment(ref: string): string | null {
-  const segments = ref
-    .trim()
-    .replaceAll("\\", "/")
-    .split("/")
-    .filter((segment) => segment.length > 0 && segment !== "~");
-  return segments.length > 1 ? segments[segments.length - 2]! : null;
+function hasCurrentProjectLabelProjection(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    value.startsWith(USAGE_PROJECT_LABEL_PROJECTION_PREFIX)
+  );
 }
 
-/**
- * Keep distinct workspace identities distinct while making equal base labels
- * understandable in the UI. The path is never persisted; only a parent
- * segment (or an installation-scoped short HMAC suffix) is used for display.
- */
-function disambiguateWorkspaceProjectLabels(
-  projects: readonly ProjectIdentityWithRef[],
-): ReadonlyMap<string, string> {
-  const labels = new Map<string, string>();
-  const groups = new Map<string, ProjectIdentityWithRef[]>();
-  for (const project of projects) {
-    if (project.kind !== "workspace") {
-      labels.set(project.refHash, project.label);
-      continue;
-    }
-    const group = groups.get(project.label) ?? [];
-    group.push(project);
-    groups.set(project.label, group);
+function currentProjectLabelFingerprint(value: string | null): string {
+  if (
+    typeof value === "string" &&
+    value.startsWith(USAGE_PROJECT_LABEL_PROJECTION_PREFIX)
+  ) {
+    return value;
   }
+  return `${USAGE_PROJECT_LABEL_PROJECTION_PREFIX}${value ?? "none"}`;
+}
 
-  for (const group of groups.values()) {
-    if (group.length === 1) {
-      labels.set(group[0]!.refHash, group[0]!.label);
-      continue;
-    }
+function isOpaqueProjectIdentity(value: unknown): value is string {
+  // SHA-256 base64url without padding, as emitted by hashSensitiveRef().
+  return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/u.test(value);
+}
 
-    const parentLabels = group.map((project) => parentPathSegment(project.ref));
-    const parentsAreDistinct =
-      parentLabels.every((parent): parent is string => parent !== null) &&
-      new Set(parentLabels).size === parentLabels.length;
-    group.forEach((project, index) => {
-      const parent = parentLabels[index];
-      const suffix = parentsAreDistinct
-        ? parent!
-        : `${parent ?? "project"} · ${project.refHash.slice(-8)}`;
-      labels.set(project.refHash, `${project.label} · ${suffix}`);
-    });
+function persistedProjectIdentity(input: {
+  readonly refHash: unknown;
+  readonly label: string | undefined;
+  readonly kind: UsageProjectKind | undefined;
+}): PersistedProjectIdentity | null {
+  if (
+    !isOpaqueProjectIdentity(input.refHash) ||
+    input.label == null ||
+    input.kind == null
+  ) {
+    return null;
   }
-  return labels;
+  return {
+    refHash: input.refHash,
+    label:
+      input.kind === "quick-conversation"
+        ? quickConversationProjectLabel(unsuffixProjectLabel(input.label))
+        : safeProjectLabel(unsuffixProjectLabel(input.label)),
+    kind: input.kind,
+  };
 }
 
 function emptyHydration(): SnapshotHydrateResult<UsageSnapshotDto> {
@@ -149,10 +149,16 @@ export function createSqliteUsageSnapshotRepository(
   options: SqliteUsageSnapshotRepositoryOptions,
 ): SnapshotRepository<UsageSnapshotDto> {
   const { database } = options;
+  const mergeIdentity = (identity: string): string =>
+    isOpaqueProjectIdentity(identity)
+      ? (options.resolveProjectIdentity?.(identity) ?? identity)
+      : identity;
   const resolveProjectIdentity = (
     projectRef: string,
   ): PersistedProjectIdentity => {
-    const refHash = hashSensitiveRef(options.hmacKey, "project", projectRef);
+    const refHash = mergeIdentity(
+      hashSensitiveRef(options.hmacKey, "project", projectRef),
+    );
     const row = database
       .prepare(
         "SELECT kind, label FROM project_classifications WHERE ref_hash = ?",
@@ -169,10 +175,10 @@ export function createSqliteUsageSnapshotRepository(
       //
       // Quick conversations hit the same problem: the classifier labels every
       // marker-less directory with the same literal, so the breakdown merges
-      // unrelated directories. Derive the label from the ref instead — the
-      // home-relative `~/…` form is kept, every other absolute path keeps only
-      // its final segment. Only this display value changes; the classification
-      // kind (and therefore the mtime-fingerprinted cache) stays untouched.
+      // unrelated directories. Derive a basename-only label from the ref and
+      // disambiguate collisions with the opaque ref HMAC. Only this display
+      // value changes; the classification kind (and therefore the
+      // mtime-fingerprinted cache) stays untouched.
       label:
         kind === "quick-conversation"
           ? quickConversationProjectLabel(projectRef)
@@ -271,22 +277,66 @@ export function createSqliteUsageSnapshotRepository(
             });
             toolsByBucket.set(bucketId, tools);
           }
-          const buckets: UsageAggregateBucket[] = database
+          const bucketRows = database
             .prepare(
               `SELECT * FROM usage_aggregate_buckets
                WHERE snapshot_id = ?
                ORDER BY date_key, source_id, model_id, project_label, bucket_id`,
             )
-            .all(id)
-            .map((row) => ({
+            .all(id);
+          const legacyProjectLabelProjection =
+            !hasCurrentProjectLabelProjection(generation.source_fingerprint);
+          const requiresProjectLabelRefresh = bucketRows.some((row) => {
+            if (String(row.project_kind) !== "quick-conversation") return false;
+            const label = String(row.project_label || "unknown");
+            return (
+              label !== quickConversationProjectLabel(label) ||
+              (legacyProjectLabelProjection && label === "quick-conversation")
+            );
+          });
+          const canonicalProjectLabels = new Map<string, string>();
+          for (const row of bucketRows) {
+            const rawIdentity = String(row.project_ref_hash || "unknown");
+            const identity = mergeIdentity(rawIdentity);
+            const label = unsuffixProjectLabel(
+              String(row.project_label || "unknown"),
+            );
+            if (
+              !canonicalProjectLabels.has(identity) ||
+              rawIdentity === identity
+            ) {
+              canonicalProjectLabels.set(identity, label);
+            }
+          }
+          const loadedProjectLabels = disambiguateProjectLabels(
+            bucketRows.map((row) => {
+              const kind = String(row.project_kind) as UsageProjectKind;
+              const rawIdentity = String(row.project_ref_hash || "unknown");
+              const identity = mergeIdentity(rawIdentity);
+              const label = canonicalProjectLabels.get(identity) ?? "unknown";
+              return {
+                identity,
+                label:
+                  kind === "quick-conversation"
+                    ? quickConversationProjectLabel(label)
+                    : label,
+              };
+            }),
+          );
+          const buckets: UsageAggregateBucket[] = bucketRows.map((row) => {
+            const projectRefHash = mergeIdentity(
+              String(row.project_ref_hash || "unknown"),
+            );
+            return {
               date: String(row.date_key),
               latestTimestamp:
                 msToIso(row.latest_at_ms) ?? new Date(0).toISOString(),
               source: String(row.source_id) as LocalUsageSource,
               model: String(row.model_id),
-              project: String(row.project_ref_hash || "unknown"),
-              projectRefHash: String(row.project_ref_hash || "unknown"),
-              projectLabel: String(row.project_label || "unknown"),
+              project: projectRefHash,
+              projectRefHash,
+              projectLabel:
+                loadedProjectLabels.get(projectRefHash) ?? "unknown",
               projectKind: String(row.project_kind) as UsageProjectKind,
               measurement: String(row.measurement) as "observed" | "estimated",
               events: n(row.event_count),
@@ -311,43 +361,91 @@ export function createSqliteUsageSnapshotRepository(
                 reasoningTokens: b(row.evidence_reasoning_tokens),
                 systemPromptTokens: b(row.evidence_system_prompt_tokens),
               },
-            }));
-          const trackerBuckets: UsageTrackerBucket[] = database
+            };
+          });
+          const trackerRows = database
             .prepare(
               `SELECT * FROM usage_tracker_buckets
                WHERE snapshot_id = ?
                ORDER BY dimension, date_key, entity_key, source_id`,
             )
-            .all(id)
-            .map((row) => ({
-              dimension: String(
+            .all(id);
+          const canonicalTrackerLabels = new Map<string, string>();
+          for (const row of trackerRows) {
+            if (String(row.dimension) !== "project") continue;
+            const rawIdentity = String(row.entity_key);
+            const identity = mergeIdentity(rawIdentity);
+            const label = unsuffixProjectLabel(
+              String(row.entity_label || "unknown"),
+            );
+            if (
+              !canonicalTrackerLabels.has(identity) ||
+              rawIdentity === identity
+            ) {
+              canonicalTrackerLabels.set(identity, label);
+            }
+          }
+          const loadedTrackerProjectLabels = disambiguateProjectLabels(
+            trackerRows
+              .filter((row) => String(row.dimension) === "project")
+              .map((row) => {
+                const kind = String(row.project_kind) as UsageProjectKind;
+                const identity = mergeIdentity(String(row.entity_key));
+                const label = canonicalTrackerLabels.get(identity) ?? "unknown";
+                return {
+                  identity,
+                  label:
+                    kind === "quick-conversation"
+                      ? quickConversationProjectLabel(label)
+                      : label,
+                };
+              }),
+          );
+          const trackerBuckets: UsageTrackerBucket[] = trackerRows.map(
+            (row) => {
+              const dimension = String(
                 row.dimension,
-              ) as UsageTrackerBucket["dimension"],
-              date: String(row.date_key),
-              source: String(row.source_id) as LocalUsageSource,
-              identity: String(row.entity_key),
-              label: String(row.entity_label),
-              ...(row.project_kind == null
-                ? {}
-                : {
-                    projectKind: String(row.project_kind) as UsageProjectKind,
-                  }),
-              events: n(row.event_count),
-              calls: n(row.calls),
-              inputTokens: n(row.input_tokens),
-              cachedInputTokens: n(row.cached_input_tokens),
-              cacheCreationInputTokens: n(row.cache_creation_input_tokens),
-              outputTokens: n(row.output_tokens),
-              reasoningOutputTokens: n(row.reasoning_output_tokens),
-              totalTokens: n(row.total_tokens),
-            }));
-          return buildUsageSnapshotFromProjection({
+              ) as UsageTrackerBucket["dimension"];
+              const rawIdentity = String(row.entity_key);
+              const identity =
+                dimension === "project"
+                  ? mergeIdentity(rawIdentity)
+                  : rawIdentity;
+              return {
+                dimension,
+                date: String(row.date_key),
+                source: String(row.source_id) as LocalUsageSource,
+                identity,
+                label:
+                  dimension === "project"
+                    ? (loadedTrackerProjectLabels.get(identity) ?? "unknown")
+                    : String(row.entity_label),
+                ...(row.project_kind == null
+                  ? {}
+                  : {
+                      projectKind: String(row.project_kind) as UsageProjectKind,
+                    }),
+                events: n(row.event_count),
+                calls: n(row.calls),
+                inputTokens: n(row.input_tokens),
+                cachedInputTokens: n(row.cached_input_tokens),
+                cacheCreationInputTokens: n(row.cache_creation_input_tokens),
+                outputTokens: n(row.output_tokens),
+                reasoningOutputTokens: n(row.reasoning_output_tokens),
+                totalTokens: n(row.total_tokens),
+              };
+            },
+          );
+          const snapshot = buildUsageSnapshotFromProjection({
             generatedAt:
               msToIso(generation.generated_at_ms) ?? new Date(0).toISOString(),
             sources,
             buckets,
             trackerBuckets,
           });
+          return requiresProjectLabelRefresh
+            ? { ...snapshot, requiresProjectLabelRefresh: true }
+            : snapshot;
         },
       });
     },
@@ -355,32 +453,145 @@ export function createSqliteUsageSnapshotRepository(
     async save(envelope) {
       if (envelope.data == null) throw new TypeError("snapshot data required");
       const compact = compactUsageSnapshot(envelope.data);
-      const projectRefs = new Set<string>();
+      const aggregateProjects = new Map<
+        UsageAggregateBucket,
+        PersistedProjectIdentity
+      >();
+      const trackerProjects = new Map<
+        UsageTrackerBucket,
+        PersistedProjectIdentity
+      >();
+      const resolvedProjects: PersistedProjectIdentity[] = [];
       for (const bucket of compact.aggregateBuckets ?? []) {
-        projectRefs.add(bucket.project);
+        const project =
+          persistedProjectIdentity({
+            refHash:
+              bucket.projectRefHash == null
+                ? undefined
+                : mergeIdentity(bucket.projectRefHash),
+            label: bucket.projectLabel,
+            kind: bucket.projectKind,
+          }) ?? resolveProjectIdentity(bucket.project);
+        aggregateProjects.set(bucket, project);
+        resolvedProjects.push(project);
       }
       for (const bucket of compact.trackerBuckets ?? []) {
-        if (bucket.dimension === "project") projectRefs.add(bucket.identity);
+        if (bucket.dimension !== "project") continue;
+        const project =
+          persistedProjectIdentity({
+            refHash: mergeIdentity(bucket.identity),
+            label: bucket.label,
+            kind: bucket.projectKind,
+          }) ?? resolveProjectIdentity(bucket.identity);
+        trackerProjects.set(bucket, project);
+        resolvedProjects.push(project);
       }
-      const resolvedProjects = [...projectRefs].map((ref) => ({
-        ref,
-        ...resolveProjectIdentity(ref),
-      }));
-      const projectLabels =
-        disambiguateWorkspaceProjectLabels(resolvedProjects);
-      const resolveProjectForWrite = (
-        projectRef: string,
+      const projectLabels = disambiguateProjectLabels(
+        resolvedProjects.map((project) => ({
+          identity: project.refHash,
+          label: project.label,
+        })),
+      );
+      const projectForWrite = (
+        project: PersistedProjectIdentity,
       ): PersistedProjectIdentity => {
-        const project = resolveProjectIdentity(projectRef);
         return {
           ...project,
           label: projectLabels.get(project.refHash) ?? project.label,
         };
       };
+      type PersistedTrackerBucket = {
+        readonly dimension: UsageTrackerBucket["dimension"];
+        readonly entityKey: string;
+        readonly entityLabel: string;
+        readonly projectKind: UsageProjectKind | null;
+        readonly source: UsageTrackerBucket["source"];
+        readonly date: string;
+        events: number;
+        calls: number;
+        inputTokens: number;
+        cachedInputTokens: number;
+        cacheCreationInputTokens: number;
+        outputTokens: number;
+        reasoningOutputTokens: number;
+        totalTokens: number;
+      };
+      // A manual merge can make two fresh project tracker buckets share the
+      // same SQLite primary key. Fold them before writing instead of relying
+      // on the database to accept duplicate (dimension, identity, source,
+      // date) rows.
+      const trackerWrites = new Map<string, PersistedTrackerBucket>();
+      for (const bucket of compact.trackerBuckets ?? []) {
+        let entityKey = bucket.identity;
+        let entityLabel = bucket.label;
+        let projectKind: UsageProjectKind | null = null;
+        if (bucket.dimension === "project") {
+          const project = projectForWrite(trackerProjects.get(bucket)!);
+          entityKey = project.refHash;
+          entityLabel = project.label;
+          projectKind = project.kind;
+        } else if (bucket.dimension === "session") {
+          entityKey =
+            isOpaqueProjectIdentity(bucket.identity) &&
+            bucket.identity !== bucket.label
+              ? bucket.identity
+              : hashSensitiveRef(
+                  options.hmacKey,
+                  "usage-tracker-session",
+                  `${bucket.source}\0${bucket.identity}`,
+                );
+        } else {
+          entityKey = isOpaqueProjectIdentity(bucket.identity)
+            ? bucket.identity
+            : hashSensitiveRef(
+                options.hmacKey,
+                "usage-tracker-skill",
+                bucket.identity,
+              );
+        }
+        const key = [
+          bucket.dimension,
+          entityKey,
+          bucket.source,
+          bucket.date,
+        ].join("\0");
+        const current = trackerWrites.get(key);
+        if (current == null) {
+          trackerWrites.set(key, {
+            dimension: bucket.dimension,
+            entityKey,
+            entityLabel,
+            projectKind,
+            source: bucket.source,
+            date: bucket.date,
+            events: bucket.events,
+            calls: bucket.calls,
+            inputTokens: bucket.inputTokens,
+            cachedInputTokens: bucket.cachedInputTokens,
+            cacheCreationInputTokens: bucket.cacheCreationInputTokens,
+            outputTokens: bucket.outputTokens,
+            reasoningOutputTokens: bucket.reasoningOutputTokens,
+            totalTokens: bucket.totalTokens,
+          });
+        } else {
+          current.events += bucket.events;
+          current.calls += bucket.calls;
+          current.inputTokens += bucket.inputTokens;
+          current.cachedInputTokens += bucket.cachedInputTokens;
+          current.cacheCreationInputTokens += bucket.cacheCreationInputTokens;
+          current.outputTokens += bucket.outputTokens;
+          current.reasoningOutputTokens += bucket.reasoningOutputTokens;
+          current.totalTokens += bucket.totalTokens;
+        }
+      }
+      const sourceFingerprint =
+        compact.requiresProjectLabelRefresh === true
+          ? envelope.sourceFingerprint
+          : currentProjectLabelFingerprint(envelope.sourceFingerprint);
       commitGeneration({
         database,
         domain: "usage",
-        envelope: { ...envelope, data: compact },
+        envelope: { ...envelope, sourceFingerprint, data: compact },
         now: options.now,
         createId: options.createId,
         writeData(snapshotId, data) {
@@ -451,7 +662,7 @@ export function createSqliteUsageSnapshotRepository(
           }
 
           buckets.forEach((bucket, sequence) => {
-            const project = resolveProjectForWrite(bucket.project);
+            const project = projectForWrite(aggregateProjects.get(bucket)!);
             const bucketId = hashSensitiveRef(
               options.hmacKey,
               "usage-aggregate-bucket",
@@ -516,28 +727,7 @@ export function createSqliteUsageSnapshotRepository(
             }
           });
 
-          for (const bucket of data.trackerBuckets ?? []) {
-            let entityKey = bucket.identity;
-            let entityLabel = bucket.label;
-            let projectKind: UsageProjectKind | null = null;
-            if (bucket.dimension === "project") {
-              const project = resolveProjectForWrite(bucket.identity);
-              entityKey = project.refHash;
-              entityLabel = project.label;
-              projectKind = project.kind;
-            } else if (bucket.dimension === "session") {
-              entityKey = hashSensitiveRef(
-                options.hmacKey,
-                "usage-tracker-session",
-                `${bucket.source}\0${bucket.identity}`,
-              );
-            } else {
-              entityKey = hashSensitiveRef(
-                options.hmacKey,
-                "usage-tracker-skill",
-                bucket.identity,
-              );
-            }
+          for (const bucket of trackerWrites.values()) {
             database
               .prepare(
                 `INSERT INTO usage_tracker_buckets (
@@ -551,9 +741,9 @@ export function createSqliteUsageSnapshotRepository(
               .run(
                 snapshotId,
                 bucket.dimension,
-                entityKey,
-                entityLabel,
-                projectKind,
+                bucket.entityKey,
+                bucket.entityLabel,
+                bucket.projectKind,
                 bucket.source,
                 bucket.date,
                 bucket.events,

@@ -1,4 +1,5 @@
 const { execFileSync, spawnSync } = require("node:child_process");
+const { rmSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { pathToFileURL } = require("node:url");
 
@@ -41,11 +42,11 @@ const COPY_LICENSE_SCRIPT = join(
  * build/entitlements.mac.plist can adopt it if this project ever wants that,
  * but the ad-hoc/self-signed build is verified to launch without it.
  *
- * TCC-protected directories: the scanners no longer resolve project paths
- * inside Documents/Desktop/Downloads on disk (see
- * src/lib/local-usage/project-path.server.ts). macOS only asks when the user
- * picks or drops a file in one of them, which is the OS-mandated behavior for
- * any non-sandboxed app.
+ * TCC-protected directories: certificate-signed packaged builds receive a
+ * signed marker and opt into project-path probing after the user grants access
+ * (see src/lib/local-usage/project-path.server.ts). Development/ad-hoc runs
+ * keep the prompt-free lexical fallback, so a rebuild does not repeatedly ask
+ * for Documents access.
  */
 
 /**
@@ -54,6 +55,11 @@ const COPY_LICENSE_SCRIPT = join(
  * certificate accordingly (e.g. "AITracker Self-Signed").
  */
 const SELF_SIGNED_IDENTITY_PATTERN = /aitracker/i;
+
+// Presence of this resource is the runtime contract for stable TCC probing.
+// It is written before the final codesign so it is covered by the signature;
+// ad-hoc packages intentionally do not receive it.
+const TCC_PROJECT_PROBE_MARKER = "aitracker-tcc-project-probe-enabled";
 
 /**
  * List the keychain identities usable for code signing.
@@ -258,6 +264,22 @@ exports.default = async function afterPack(context) {
       `[after-pack] signing with "${identity.name}"${
         identity.hardenedRuntime ? " (hardened runtime)" : ""
       }`,
+    );
+  }
+
+  const tccProbeMarkerPath = join(
+    appPath,
+    "Contents",
+    "Resources",
+    TCC_PROJECT_PROBE_MARKER,
+  );
+  if (identity.name === "-") {
+    rmSync(tccProbeMarkerPath, { force: true });
+  } else {
+    writeFileSync(
+      tccProbeMarkerPath,
+      "Stable code-signing identity verified by electron/after-pack.cjs.\n",
+      "utf8",
     );
   }
 

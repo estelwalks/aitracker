@@ -21,14 +21,15 @@ const INTEL_SHA = "b".repeat(64);
 
 function fixture(channel = "stable") {
   const version = channel === "stable" ? "1.2.3" : "1.2.3-beta.1";
-  // release-metadata.json names the versioned installer at its tag-addressed
-  // URL, which is what clients released before 1.0.2 require; the cask must
-  // still end up pointing at the versionless URL.
-  const base = `https://github.com/estelwalks/aitracker/releases/download/v${version}`;
+  // release-metadata.json names the versionless installer at the stable
+  // `releases/latest/download/<name>` URL, which is exactly what the cask
+  // points at; a tag-addressed URL for the same name is accepted too.
+  const base =
+    "https://github.com/estelwalks/aitracker/releases/latest/download";
   const artifacts = [
-    ["darwin-arm64", `AITracker-${version}-arm64.dmg`, ARM_SHA, 123456],
-    ["darwin-x64", `AITracker-${version}-x64.dmg`, INTEL_SHA, 123457],
-    ["win32-x64", `AITracker-Setup-${version}-x64.exe`, "c".repeat(64), 123458],
+    ["darwin-arm64", `AITracker-macOS-arm64.dmg`, ARM_SHA, 123456],
+    ["darwin-x64", `AITracker-macOS-x64.dmg`, INTEL_SHA, 123457],
+    ["win32-x64", `AITracker-Windows-x64.exe`, "c".repeat(64), 123458],
   ];
   return {
     schemaVersion: 1,
@@ -83,7 +84,7 @@ test("renders stable Cask with distinct arm/intel URL and SHA mappings", () => {
   assert.match(output, /version "1\.2\.3"/u);
   assert.match(
     output,
-    /on_arch_conditional\(\n\s+arm:\s+"https:\/\/github\.com\/estelwalks\/aitracker\/releases\/latest\/download\/AITracker-arm64\.dmg",\n\s+intel:\s+"https:\/\/github\.com\/estelwalks\/aitracker\/releases\/latest\/download\/AITracker-x64\.dmg",/u,
+    /on_arch_conditional\(\n\s+arm:\s+"https:\/\/github\.com\/estelwalks\/aitracker\/releases\/latest\/download\/AITracker-macOS-arm64\.dmg",\n\s+intel:\s+"https:\/\/github\.com\/estelwalks\/aitracker\/releases\/latest\/download\/AITracker-macOS-x64\.dmg",/u,
   );
   assert.match(
     output,
@@ -109,8 +110,8 @@ test("renders beta with its separate token and channel version", () => {
   assert.match(output, /version "1\.2\.3-beta\.1"/u);
   // Installer names are versionless on both channels; the Cask still pins the
   // exact version through its own `version` stanza above.
-  assert.match(output, /AITracker-arm64\.dmg/u);
-  assert.match(output, /AITracker-x64\.dmg/u);
+  assert.match(output, /AITracker-macOS-arm64\.dmg/u);
+  assert.match(output, /AITracker-macOS-x64\.dmg/u);
   assert.match(output, /name "AITracker Beta"/u);
   assert.match(
     output,

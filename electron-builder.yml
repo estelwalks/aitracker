@@ -51,12 +51,21 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
 dmg:
-  # Installer names carry no version: `releases/latest/download/<name>` is the
-  # stable URL the READMEs, the updater and `npx @estelwalks/aitracker` all
-  # rely on, and it only resolves while the asset name stays the same across
-  # releases. scripts/verify-release-artifact-names.mjs enforces that, and the
-  # app version inside the DMG/app.asar is unaffected.
-  artifactName: "${productName}-${arch}.${ext}"
+  # Installer names carry the operating system but never a version: the name is
+  # what `releases/latest/download/<name>` resolves, so it must stay stable
+  # across releases, and the READMEs, the updater, `npx @estelwalks/aitracker`
+  # and the Homebrew casks all depend on it. The app version inside the
+  # DMG/app.asar is unaffected.
+  #
+  # Renaming any of these is a one-release change that MUST reach
+  # release-metadata.json in the same release: a client selects the installer by
+  # extension and architecture, then requires the name recorded in that
+  # release's metadata to be an asset of that same release. Half a rename — new
+  # asset names with metadata still naming the old ones — fails the in-app
+  # update on every install of 1.0.3 and later. `npm run test:release` and the
+  # post-draft check in .github/workflows/release.yml both fail on that state.
+  # scripts/verify-release-artifact-names.mjs pins the four rendered names.
+  artifactName: "${productName}-macOS-${arch}.${ext}"
   # Explicit volume icon for the installer mounted on the desktop.
   icon: build/native-icons/mac-app.icns
 win:
@@ -72,7 +81,7 @@ win:
         #
         # These entries only apply when no target/arch is named on the command
         # line. `npm run dist:win` (bare `--win`) then emits a combined
-        # AITracker-Setup-<version>.exe carrying both payloads plus one
+        # AITracker-Windows-<arch>.exe carrying both payloads plus one
         # installer per architecture, while `npm run dist:win:x64` and
         # `npm run dist:win:arm64` pass an explicit arch (which overrides this
         # list) and emit exactly one installer each — that is what the release
@@ -83,7 +92,7 @@ win:
   icon: build/native-icons/icon.ico
 nsis:
   # Versionless for the same reason as the DMG name above.
-  artifactName: "${productName}-Setup-${arch}.${ext}"
+  artifactName: "${productName}-Windows-${arch}.${ext}"
   oneClick: false
   # Install for all users. Note the default directory, which comes from
   # electron-builder's multiUser.nsh: it only promotes $PROGRAMFILES to

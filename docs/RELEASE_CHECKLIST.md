@@ -54,16 +54,26 @@ evidence without adding another CI workflow or slowing ordinary pull requests.
 - Run `npm ci` from a clean checkout.
 - Run the release contract gate against the exact tag:
   `npm run verify:release-contract -- --tag v<version> --channel <stable|beta>`.
-- Confirm the installer names are still versionless and that the READMEs match:
-  `npm run verify:release-artifact-names` pins `electron-builder.yml` and the
-  release scripts to `AITracker-arm64.dmg`, `AITracker-x64.dmg`,
-  `AITracker-Setup-x64.exe`, `AITracker-Setup-arm64.exe`;
-  `npm run verify:readme-release-links` then confirms the install links in
-  `README.md`, `docs/README_CN.md`, `docs/README_JA.md` and `docs/README_KO.md`
-  use `/releases/latest/download/<name>` for exactly those four. A `${version}`
-  in an artifact name would silently break every one of those URLs, so the
-  guard fails on it. The `npx` examples in the READMEs still carry the current
-  version.
+- Confirm the installer names and that the READMEs match:
+  `npm run verify:release-artifact-names` pins `electron-builder.yml`, the
+  release scripts and the READMEs to `AITracker-macOS-arm64.dmg`,
+  `AITracker-macOS-x64.dmg`, `AITracker-Windows-x64.exe`,
+  `AITracker-Windows-arm64.exe` — every module must name all four, in the same
+  order; `npm run verify:readme-release-links` then confirms the install links
+  in `README.md`, `docs/README_CN.md`, `docs/README_JA.md` and
+  `docs/README_KO.md` use `/releases/latest/download/<name>` for exactly those
+  four. A `${version}` in an artifact name would silently break every one of
+  those URLs, so the guard fails on it. The `npx` examples in the READMEs still
+  carry the current version.
+- Renaming an installer is a one-release change, and `release-metadata.json` has
+  to move with it: a desktop install selects its installer by file extension and
+  architecture — never by name — and then requires the name recorded in that
+  release's metadata to be an asset of that same release. Publishing the new
+  names while the metadata still names the old ones fails the in-app update for
+  every install of 1.0.3 and later, with a download error and no recovery short
+  of a manual download. `npm run test:release` and the post-draft
+  `verify-release-asset-agreement` step in `.github/workflows/release.yml` both
+  fail on that state, so a rename cannot reach a published release half-applied.
 
 ## Automated evidence
 
@@ -169,13 +179,13 @@ release/release-metadata.json --channel <stable|beta> --token
 ## Publish
 
 - The workflow's draft Release is not a publication approval. An authorized
-  maintainer must manually inspect the exact tag, the four versionless
-  installers, `release-metadata.json`, and `checksums.txt`, then publish the
-  draft only after the above evidence is recorded.
+  maintainer must manually inspect the exact tag, the four installers,
+  `release-metadata.json`, and `checksums.txt`, then publish the draft only
+  after the above evidence is recorded.
 - After publishing, verify the README links resolve to the new release, for
   example
   `curl -sIL -o /dev/null -w '%{http_code} %{url_effective}\n'
-https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg`
+https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-macOS-arm64.dmg`
   should end on the new tag's asset URL, not the previous release's.
 - This workflow does not publish npm packages, create or update a Homebrew Tap,
   or notarize macOS builds. The only external credentials it reads are the

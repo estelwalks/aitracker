@@ -181,7 +181,7 @@ test("Windows hand-off reports failures instead of throwing", async () => {
   assert.match(writeFailure.reason ?? "", /disk full/u);
 });
 
-const macInstallerPath = "/var/folders/xy/T/aitracker-AITracker-x64.dmg";
+const macInstallerPath = "/var/folders/xy/T/aitracker-AITracker-macOS-x64.dmg";
 const macAppExecutable = "/Applications/AITracker.app/Contents/MacOS/AITracker";
 
 test("appBundleFromExecutable finds the bundle and rejects foreign paths", () => {
@@ -213,7 +213,7 @@ test("the macOS script installs in place and only falls back on failure", () => 
   assert.ok(script.includes('-mountpoint "$MOUNT_POINT"'));
   assert.ok(
     script.includes(
-      'MOUNT_POINT="/var/folders/xy/T/aitracker-AITracker-x64.dmg.mnt"',
+      'MOUNT_POINT="/var/folders/xy/T/aitracker-AITracker-macOS-x64.dmg.mnt"',
     ),
   );
   assert.ok(!script.includes("/Volumes/AITracker"));

@@ -13,6 +13,69 @@ the tag, so a numbered section means "this version shipped" and is never
 opened early. Individual fixes do not have to touch this file.
 -->
 
+## [1.0.5] - 2026-10-12
+
+### Highlights
+
+> Published as this release's GitHub notes; keep these short and user-facing.
+
+- Ten more agents are tracked, including Doubao Work, Trae Work, Kimi Work, Qoder and QCode
+- Sessions and Skills can be exported from the app: sessions as a JSON file, Skills into a folder you pick
+- Project attribution is fixed across seven usage readers that reported everything as "unknown"
+- The project breakdown stops folding unrelated directories into one "quick conversation" row, and two project rows can be merged by hand
+- Installer names now carry the operating system (macOS/Windows) instead of the `Setup` token; the download URLs do not change
+
+### Details
+
+- Ten agent tools joined the registry: AStudio, Doubao Work, Kimi Work,
+  Marvis, MiniMax Code, OmO, Prime Agent, QCode, Qoder and Trae Work. Each is
+  detected from its own install footprint and read from its own data
+  directory, and the tools that record it report the model each request used.
+- Sessions export as a JSON file from the Sessions page — the selected
+  sessions or every session matching the current filter. Each entry carries
+  the session summary and its transcript (user/assistant messages and
+  reasoning blocks, up to 10,000 sessions per export), read from the local
+  tool logs for Claude Code, Codex, Grok, DSH, ZCode and the other supported
+  agents. Skill Management exports all Skills, or just the selected ones, into
+  a folder chosen in the native directory picker.
+- Seven usage readers pinned every event's project to `unknown`, which
+  collapsed their per-project breakdown into a single bucket. CodeBuddy, Grok,
+  Gemini CLI, OpenClaw, Droid, Kilocode and Zed now read the project from the
+  record that actually carries it.
+- The project breakdown no longer collapses every marker-less directory into a
+  single literal `quick-conversation` row, which could absorb a large share of a
+  tool's tokens. The label is derived from the reference instead — the
+  home-relative `~/…` form is kept, any other absolute path keeps only its final
+  segment — so unrelated directories stop sharing one row.
+- The Tracker page gained a manual merge for projects that really are one
+  repository: pick a source row, then a target row, and the two report as one
+  project from then on. Merges are stored as opaque, installation-scoped
+  identities, so the raw path never reaches that table.
+- A macOS build signed with a stable certificate probes protected project paths
+  again, so a nested working directory under `~/Documents` collapses onto its
+  Git repository root and rejoins project-level grouping. That grouping is what
+  1.0.4 traded away to stop the repeated folder prompt; the one-time
+  Documents/Desktop/Downloads grant is now reused instead. Ad-hoc and
+  development builds keep the prompt-free fallback, and the app never probes
+  those directories before the grant exists.
+- Installer names now carry the operating system: the DMGs are published as
+  `AITracker-macOS-arm64.dmg` / `AITracker-macOS-x64.dmg` and the NSIS
+  installers as `AITracker-Windows-x64.exe` / `AITracker-Windows-arm64.exe`
+  (the `Setup` token is gone). The names stay versionless, so
+  `releases/latest/download/<name>` and the README download links keep resolving
+  to the newest release, and the DMG contents and the app version are unchanged:
+  only the download page and the installer file names move. Updating is
+  unaffected — an install picks its installer by file extension and
+  architecture, never by name, and this release's `release-metadata.json` names
+  the new files, which is the only pairing it checks.
+- A rename is now guarded on both sides, because a half-applied one is silent
+  until an install tries to update: `npm run test:release` fails when the
+  packaging config, the release scripts and the READMEs do not all name the same
+  four installers in the same order, and a new post-draft step
+  (`scripts/verify-release-asset-agreement.mjs`) compares the draft release's
+  actual asset list against the `release-metadata.json` uploaded with it, so new
+  asset names paired with the old metadata can no longer be published.
+
 ## [1.0.4] - 2026-09-11
 
 ### Highlights

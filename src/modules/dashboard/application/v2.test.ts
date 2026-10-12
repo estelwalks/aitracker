@@ -375,6 +375,92 @@ test("Dashboard V2 maps multiple project sessions and reports zero when none exi
   );
 });
 
+test("Dashboard V2 keeps same-label projects separate by opaque identity", () => {
+  const projectEvent = (
+    timestamp: string,
+    projectIdentity: string,
+    totalTokens: number,
+  ): DashboardV2Snapshot["events"][number] => ({
+    ...snapshot.events[0]!,
+    timestamp,
+    model: "gpt-4o",
+    project: "shared",
+    projectIdentity,
+    inputTokens: totalTokens,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    totalTokens,
+  });
+  const sameLabelProjects: DashboardV2Snapshot = {
+    ...snapshot,
+    pricingAvailable: true,
+    events: [
+      projectEvent("2026-08-09T10:00:00.000Z", "project:alpha", 50),
+      projectEvent("2026-08-09T11:00:00.000Z", "project:beta", 200),
+      projectEvent("2026-08-10T10:00:00.000Z", "project:alpha", 300),
+      projectEvent("2026-08-10T11:00:00.000Z", "project:beta", 100),
+    ],
+    sessions: {
+      available: true,
+      generatedAt: "2026-08-10T12:00:00.000Z",
+      byProjectDay: [
+        {
+          project: "shared",
+          projectIdentity: "project:alpha",
+          source: "codex",
+          date: "2026-08-10",
+          count: 2,
+          ...emptyWorkflow,
+        },
+        {
+          project: "shared",
+          projectIdentity: "project:beta",
+          source: "codex",
+          date: "2026-08-10",
+          count: 5,
+          ...emptyWorkflow,
+        },
+      ],
+      bySourceDay: [
+        {
+          source: "codex",
+          date: "2026-08-10",
+          count: 7,
+          ...emptyWorkflow,
+        },
+      ],
+    },
+  };
+
+  const view = createDashboardV2View(
+    sameLabelProjects,
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.projectCount, 2);
+  assert.deepEqual(
+    view.projects.map((project) => ({
+      key: project.key,
+      tokens: project.tokens,
+      previousTokens: project.previousTokens,
+      sessions: project.sessions,
+    })),
+    [
+      { key: "shared", tokens: 300, previousTokens: 50, sessions: 2 },
+      { key: "shared", tokens: 100, previousTokens: 200, sessions: 5 },
+    ],
+  );
+  assert.equal(
+    view.projects.every((project) => project.estimatedCostUsd != null),
+    true,
+  );
+  assert.equal(view.models.length, 1);
+  assert.equal(view.models[0]?.tokens, 400);
+  assert.equal(view.models[0]?.previousTokens, 250);
+});
+
 test("Dashboard V2 preserves catalog detection while keeping activity range-specific", () => {
   const view = createDashboardV2View(
     {
