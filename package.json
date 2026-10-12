@@ -48,7 +48,7 @@
     "verify:release-contract": "node scripts/verify-release-contract.mjs",
     "release:metadata": "node scripts/release-metadata.mjs",
     "test:cli": "node --test packages/cli/test/*.test.mjs",
-    "test:release": "node --test scripts/release-metadata.test.mjs scripts/verify-release-contract.test.mjs scripts/changelog-release-notes.test.mjs scripts/verify-readme-release-links.test.mjs scripts/verify-release-artifact-names.test.mjs scripts/verify-release-asset-agreement.test.mjs packages/cli/test/*.test.mjs",
+    "test:release": "node --test scripts/release-metadata.test.mjs scripts/verify-release-contract.test.mjs scripts/changelog-release-notes.test.mjs scripts/verify-readme-release-links.test.mjs scripts/verify-release-artifact-names.test.mjs scripts/verify-release-asset-agreement.test.mjs scripts/verify-release-workflows.test.mjs packages/cli/test/*.test.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:empty-home": "playwright test -c playwright.config.empty-home.ts",

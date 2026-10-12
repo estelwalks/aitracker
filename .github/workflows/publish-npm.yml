@@ -49,7 +49,13 @@ jobs:
               exit 1
             fi
           fi
-          echo "Publishing @estelwalks/aitracker@$version"
+          # A prerelease publishes under the npm dist-tag the READMEs document
+          # for beta builds; a stable version follows `latest`. Deriving it here
+          # keeps the publish and the assertion below on one source of truth.
+          dist_tag=latest
+          if [[ "$version" == *-* ]]; then dist_tag=beta; fi
+          echo "dist_tag=$dist_tag" >> "$GITHUB_ENV"
+          echo "Publishing @estelwalks/aitracker@$version under the $dist_tag dist-tag"
 
       - name: Check whether npm already serves this version
         id: existing
@@ -64,18 +70,30 @@ jobs:
 
       # `files` in packages/cli/package.json limits the tarball to bin/, src/
       # and README.md, so the CLI needs no build step.
+      #
+      # `--tag` is not optional for a prerelease. Without it npm publishes a
+      # prerelease under `latest` as well as leaving the `beta` tag untouched,
+      # so a beta would silently become what `npx @estelwalks/aitracker@latest`
+      # installs.
       - name: Publish package
         if: steps.existing.outputs.published == 'false'
-        run: npm publish ./packages/cli --provenance --access public
+        run: npm publish ./packages/cli --provenance --access public --tag "$dist_tag"
 
-      # `latest` and `beta` must follow the release: every README and the
-      # generated release notes document `npx --yes @estelwalks/aitracker@latest`,
-      # which resolves through the dist-tag.
-      - name: Point the dist-tag at this release
+      # Assert the dist-tag rather than setting it: trusted publishing
+      # authorizes `npm publish` through the OIDC token, but `npm dist-tag add`
+      # is an ordinary registry write that gets no such token and fails with
+      # E401. `--tag` above is what moves the tag, and this step proves it
+      # moved, which is the property every README and the generated release
+      # notes depend on: `npx --yes @estelwalks/aitracker@latest` has to resolve
+      # to this release.
+      - name: Confirm the dist-tag follows this release
         if: steps.existing.outputs.published == 'false'
         shell: bash
         run: |
-          dist_tag=latest
-          if [[ "$version" == *-* ]]; then dist_tag=beta; fi
-          npm dist-tag add "@estelwalks/aitracker@${version}" "$dist_tag"
-          npm dist-tag ls @estelwalks/aitracker >> "$GITHUB_STEP_SUMMARY"
+          resolved="$(npm view "@estelwalks/aitracker@${dist_tag}" version)"
+          if [[ "$resolved" != "$version" ]]; then
+            echo "::error::dist-tag $dist_tag resolves to $resolved, not $version"
+            exit 1
+          fi
+          echo "$dist_tag resolves to $resolved" >> "$GITHUB_STEP_SUMMARY"
+          npm dist-tag ls "@estelwalks/aitracker" >> "$GITHUB_STEP_SUMMARY"

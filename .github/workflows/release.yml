@@ -282,12 +282,18 @@ jobs:
       # of 1.0.3 and later. Compare the assets GitHub actually holds against the
       # metadata that was uploaded with them, which is the one pairing the
       # build-time checks cannot see.
+      #
+      # `gh release view` is deliberate: this runs while the release is still a
+      # draft, and `GET /releases/tags/<tag>` answers 404 for a draft — not
+      # because the tag or the assets are missing, but because the endpoint
+      # serves published releases only. Reading the list that way failed the
+      # v1.0.5 assembly after every installer had been built and uploaded.
       - name: Verify the draft's assets and metadata agree
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" --jq '[.assets[].name]' > drafted-assets.json
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '[.assets[].name]' > drafted-assets.json
           gh release download "$GITHUB_REF_NAME" --pattern release-metadata.json --output drafted-release-metadata.json --clobber
           node scripts/verify-release-asset-agreement.mjs --assets drafted-assets.json --metadata drafted-release-metadata.json
 
