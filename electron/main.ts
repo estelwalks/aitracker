@@ -90,6 +90,13 @@ import {
   type WindowRectangle,
 } from "./main-window-size.js";
 import {
+  NATIVE_WAYLAND_ENV,
+  OZONE_PLATFORM_ARG,
+  X11_RELAUNCH_ENV,
+  shouldPreferX11Backend,
+  xwaylandLooksAvailable,
+} from "./display-backend.js";
+import {
   probeLinuxAutostartSupported,
   readLinuxAutostartEnabled,
   writeLinuxAutostartEnabled,
@@ -1673,6 +1680,38 @@ if (process.platform === "linux") {
         "AppImage with --appimage-extract-and-run, to restore it.",
     );
   }
+}
+
+// Make sure the tray icon can exist. Electron's Linux tray creates a
+// GtkStatusIcon, which only ever gets an XEmbed window under X11, and XWayland
+// provides the `_NET_SYSTEM_TRAY_S<n>` selection owner it docks against. Under
+// native Wayland Electron registers nothing usable, so the tray simply does not
+// exist. Measured with scripts/linux-tray-probe.sh: with the X11 argument the
+// 16x16 icon appears in the panel strip within 2s; without it, never.
+//
+// This has to happen before Chromium starts, and `appendSwitch` from here is too
+// late, so the process replaces itself with one that has the argument. The
+// single-instance lock is deliberately taken afterwards: an early `app.quit()`
+// would otherwise release it while the replacement is still starting.
+if (
+  process.platform === "linux" &&
+  shouldPreferX11Backend({
+    platform: process.platform,
+    env: process.env,
+    trayEnabled: true,
+    xwaylandAvailable: () => xwaylandLooksAvailable(),
+  }) &&
+  !process.argv.some((arg) => arg.startsWith("--ozone-platform"))
+) {
+  // RelaunchOptions has no `env` field, so the guard is exported to our own
+  // environment: the replacement process is spawned by Electron and inherits it.
+  process.env[X11_RELAUNCH_ENV] = "1";
+  app.relaunch({ args: [OZONE_PLATFORM_ARG, ...process.argv.slice(1)] });
+  console.info(
+    "AITracker: restarting on the X11 (XWayland) backend so the tray icon works. " +
+      `${NATIVE_WAYLAND_ENV}=1 prefers native Wayland instead, without a tray icon.`,
+  );
+  app.exit(0);
 }
 
 // Must run before the single-instance lock and before any window exists.
