@@ -37,7 +37,12 @@ test("accepts matching strict-semver packages and derives beta contract", () => 
       { platform: "darwin-x64", name: "AITracker-macOS-x64.dmg" },
       { platform: "win32-arm64", name: "AITracker-Windows-arm64.exe" },
       { platform: "win32-x64", name: "AITracker-Windows-x64.exe" },
+      // Linux publishes three installers under one platform key. The
+      // AppImage is the one release-metadata-linux.json records; the deb and
+      // the rpm are attached for the READMEs' package instructions.
       { platform: "linux-x64", name: "AITracker-Linux-x64.AppImage" },
+      { platform: "linux-x64", name: "AITracker-Linux-x64.deb" },
+      { platform: "linux-x64", name: "AITracker-Linux-x64.rpm" },
     ],
   );
 });

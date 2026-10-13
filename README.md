@@ -86,6 +86,10 @@ names carry no version, so the release tag is the only thing that changes.
   [AITracker-Windows-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-arm64.exe)
 - Linux (x64, AppImage):
   [AITracker-Linux-x64.AppImage](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.AppImage)
+- Linux (x64, Debian/Ubuntu package):
+  [AITracker-Linux-x64.deb](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.deb)
+- Linux (x64, Fedora/RHEL package):
+  [AITracker-Linux-x64.rpm](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.rpm)
 
 Each release lists its own `release-metadata.json` and `checksums.txt`, which
 record the exact version and SHA-256 of the files in that release. For a

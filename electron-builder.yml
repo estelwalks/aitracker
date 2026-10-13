@@ -117,6 +117,11 @@ linux:
     - target: deb
       arch:
         - x64
+    # Red Hat family. fpm builds the payload, so this needs no rpmbuild and no
+    # Fedora runner: the existing ubuntu-22.04 leg produces it.
+    - target: rpm
+      arch:
+        - x64
   # `${arch}` does NOT render "x64" on Linux: builder-util switches it to
   # x86_64 for AppImage/rpm and amd64 for deb. That would give one platform two
   # different suffixes, breaking the "one stable name per platform" contract the
@@ -196,6 +201,58 @@ deb:
     # One of the two sonames, because distributions ship either the ayatana or
     # the legacy package.
     - libayatana-appindicator3-1 | libappindicator3-1
+rpm:
+  # Same artifact template as the other Linux targets, so the RPM is named
+  # AITracker-Linux-x64.rpm rather than fpm's default
+  # `AITracker-<version>-1.x86_64.rpm`. The versionless name is what
+  # releases/latest/download resolves and what the READMEs and the CLI link, and
+  # scripts/verify-release-artifact-names.mjs fails a template containing a
+  # version placeholder.
+  artifactName: "${productName}-Linux-x64.${ext}"
+  # RPM package names are NOT the Debian ones — `libgtk-3-0` does not exist in
+  # the Red Hat family. Each entry below is the soname the packaged binary
+  # actually needs (`objdump -p release/linux-unpacked/aitracker | grep NEEDED`
+  # in a packaged build) mapped to its Fedora/RHEL 9+ provider.
+  depends:
+    - gtk3 # libgtk-3.so.0, libgdk-3.so.0, libatk-1.0.so.0
+    - nss # libnss3.so, libnssutil3.so, libsmime3.so, libnspr4.so
+    - alsa-lib # libasound.so.2
+    - mesa-libgbm # libgbm.so.1 — Electron needs this and gtk3 does not pull it
+    - cups-libs # libcups.so.2
+    - libsecret # libsecret-1.so.0, through safeStorage
+    - at-spi2-core # libatspi.so.0
+    - libdrm
+    - pango
+    - cairo
+    - libxkbcommon
+    - libXcomposite
+    - libXdamage
+    - libXext
+    - libXfixes
+    - libXrandr
+    - libXtst # libXtst.so.6
+    - libXScrnSaver # libXss.so.1, the Debian libxss1
+    - libuuid
+    - xdg-utils # shell.openExternal / openPath hand offs
+
+  # Deliberately NOT depended on, and NOT expressible as weak dependencies:
+  #
+  #   libnotify                  — notifications, already optional in code
+  #   libayatana-appindicator-gtk3 — the status-area icon
+  #
+  # electron-builder's RPM target has no `recommends` (RpmOptions sets
+  # additionalProperties: false and offers only depends/afterInstall/...), so an
+  # optional dependency can only be a hard one here. A hard dependency on
+  # libayatana-appindicator-gtk3 would make the package uninstallable on RHEL,
+  # where that build lives in EPEL rather than the base repositories — a worse
+  # outcome than a missing tray icon.
+  #
+  # Both are safe to omit because the code degrades instead of failing:
+  # notifications are gated on Notification.isSupported(), and with no
+  # StatusNotifierItem host the tray is unavailable, which the window-all-closed
+  # fallback already handles by quitting rather than stranding a hidden window.
+  # A user who wants the tray installs the package from EPEL; the deb keeps
+  # listing it as a real Recommends, so Debian/Ubuntu loses nothing.
 appImage:
   # Versionless for the same reason as the DMG and NSIS names above.
   artifactName: "${productName}-Linux-x64.${ext}"

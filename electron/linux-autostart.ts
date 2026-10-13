@@ -110,21 +110,46 @@ export interface LinuxAutostartOptions {
 }
 
 /**
+ * Paths an AppImage payload is extracted to, none of which survive the session.
+ *
+ * The type-2 runtime mounts at `/tmp/.mount_XXXXXX`, and
+ * `--appimage-extract-and-run` unpacks to `/tmp/appimage_extracted_<hash>`. An
+ * autostart entry pointing at either is dead by the next login, so they are
+ * treated the same as a moved-away file.
+ */
+function isTransientAppImagePath(value: string): boolean {
+  return (
+    /^\/tmp\/\.mount_/u.test(value) ||
+    /^\/tmp\/appimage_extracted_/u.test(value)
+  );
+}
+
+/**
  * What an autostart entry should launch.
  *
- * `process.execPath` is wrong for an AppImage. The type-2 runtime sets
- * `$APPIMAGE` to the real file and runs the payload from a temporary mount
- * (`/tmp/.mount_XXXX/…`), so an entry written from `execPath` would point into
- * a directory that no longer exists at the next login — autostart would fail
- * silently. `$APPIMAGE` is the documented, stable answer, and is preferred
- * whenever it names a real path.
+ * Order matters, and both branches exist for a reason:
+ *
+ * 1. `$APPIMAGE` — the type-2 runtime sets it to the real AppImage file. This
+ *    is the documented, stable answer and wins whenever it names an absolute
+ *    path.
+ * 2. `process.execPath` — correct for a deb/rpm install, where the launcher
+ *    really is `/opt/AITracker/aitracker` (electron-builder's Linux packages
+ *    install no `/usr/bin` symlink, so there is nothing else to point at). It
+ *    is *also* correct for a development run.
+ *
+ * `process.execPath` is only wrong when `$APPIMAGE` is missing but the process
+ * is still running out of an extracted payload — an AppImage started with an
+ * environment that dropped `$APPIMAGE`. That case is detected and refused, so
+ * the caller hides the autostart switch rather than writing an entry that
+ * cannot work.
  */
 export function resolveAutostartExecPath(
   options: Pick<LinuxAutostartOptions, "env" | "execPath">,
   pathIsAbsolute: (value: string) => boolean = isAbsolute,
-): string {
+): string | null {
   const appImage = options.env.APPIMAGE?.trim();
   if (appImage && pathIsAbsolute(appImage)) return appImage;
+  if (isTransientAppImagePath(options.execPath)) return null;
   return options.execPath;
 }
 
@@ -157,6 +182,10 @@ export async function probeLinuxAutostartSupported(
   options: LinuxAutostartOptions,
   dependencies: LinuxAutostartDependencies = {},
 ): Promise<boolean> {
+  // A stable executable is a precondition, not a detail: with no $APPIMAGE and
+  // a transient payload path there is nothing an entry could launch, so the
+  // switch must be hidden rather than offered.
+  if (resolveAutostartExecPath(options) == null) return false;
   const directory = dirname(
     linuxAutostartEntryPath(options.env, options.homeDirectory),
   );
@@ -217,12 +246,18 @@ export async function writeLinuxAutostartEnabled(
       await remove(path, { force: true });
       return true;
     }
+    const execPath = resolveAutostartExecPath(options);
+    // No stable executable: an AppImage running out of an extracted payload
+    // with no $APPIMAGE. Writing anything here would produce an entry that is
+    // dead by the next login, so fail the write and let the caller hide the
+    // switch.
+    if (execPath == null) return false;
     await makeDirectory(dirname(path), { recursive: true });
     await write(
       path,
       linuxAutostartEntryContent({
         exec: desktopEntryExec(
-          normaliseExecPath(resolveAutostartExecPath(options)),
+          normaliseExecPath(execPath),
           options.devArguments ?? [],
         ),
       }),

@@ -46,7 +46,7 @@
     "dist:win:x64": "npm run build:desktop && electron-builder --win nsis --x64 --publish never",
     "dist:win:arm64": "npm run build:desktop && electron-builder --win nsis --arm64 --publish never",
     "dist:linux": "npm run build:desktop && electron-builder --linux",
-    "dist:linux:x64": "npm run build:desktop && electron-builder --linux AppImage deb --x64 --publish never",
+    "dist:linux:x64": "npm run build:desktop && electron-builder --linux AppImage deb rpm --x64 --publish never",
     "packaging:cli": "npm pack --dry-run ./packages/cli",
     "verify:release-contract": "node scripts/verify-release-contract.mjs",
     "release:metadata": "node scripts/release-metadata.mjs",

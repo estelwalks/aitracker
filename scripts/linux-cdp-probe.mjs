@@ -227,6 +227,26 @@ check(
   routeProbe,
 );
 
+// The work-area clamp is only observable from the renderer: `window.innerWidth`
+// is the viewport the app asked for, while an X11 frame is that plus Chromium's
+// own client offset. On a display narrower than the 1440x940 default, the
+// viewport must have been reduced to the work area.
+const viewport = JSON.parse(
+  await evaluate(
+    socket,
+    "JSON.stringify({ inner: [innerWidth, innerHeight], avail: [screen.availWidth, screen.availHeight], outer: [outerWidth, outerHeight] })",
+  ),
+);
+console.log(
+  `        viewport ${viewport.inner.join("x")} / work area ${viewport.avail.join("x")} / outer ${viewport.outer.join("x")}`,
+);
+check(
+  "first-run viewport fits the work area",
+  viewport.inner[0] <= viewport.avail[0] &&
+    viewport.inner[1] <= viewport.avail[1],
+  `inner=${viewport.inner.join("x")} avail=${viewport.avail.join("x")}`,
+);
+
 socket.close();
 console.log(`== CDP summary: ${passed} passed, ${failed} failed ==`);
 process.exit(failed);

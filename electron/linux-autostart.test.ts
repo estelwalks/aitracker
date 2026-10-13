@@ -148,7 +148,9 @@ test("an AppImage autostart entry targets $APPIMAGE, not the temp mount", () => 
     resolveAutostartExecPath({ env: { APPIMAGE: image }, execPath: mount }),
     image,
   );
-  // A relative or blank $APPIMAGE is ignored rather than trusted.
+  // A relative or blank $APPIMAGE is ignored rather than trusted — and because
+  // the process is then still running out of the mount, there is no stable
+  // executable at all and the answer is null rather than the transient path.
   for (const value of [
     undefined,
     "",
@@ -158,10 +160,45 @@ test("an AppImage autostart entry targets $APPIMAGE, not the temp mount", () => 
   ]) {
     assert.equal(
       resolveAutostartExecPath({ env: { APPIMAGE: value }, execPath: mount }),
-      mount,
+      null,
       String(value),
     );
   }
+
+  // The deb/rpm launcher is a real path, so it is used as-is: electron-builder's
+  // Linux packages install no /usr/bin symlink, which leaves /opt/... as the
+  // only thing an entry could launch.
+  assert.equal(
+    resolveAutostartExecPath({
+      env: {},
+      execPath: "/opt/AITracker/aitracker",
+    }),
+    "/opt/AITracker/aitracker",
+  );
+});
+
+test("an extracted AppImage payload is refused in both write and probe", async () => {
+  // `--appimage-extract-and-run` unpacks to /tmp and leaves $APPIMAGE unset when
+  // the environment is filtered, e.g. launched through a wrapper.
+  const extracted = "/tmp/appimage_extracted_088b6219/aitracker";
+  const extractedOptions = {
+    env: {},
+    homeDirectory: HOME,
+    execPath: extracted,
+  };
+
+  const fs = recordingFileSystem();
+  assert.equal(
+    await writeLinuxAutostartEnabled(true, extractedOptions, fs.dependencies),
+    false,
+  );
+  assert.equal(fs.writes.length, 0, "nothing may be written");
+  assert.equal(
+    await probeLinuxAutostartSupported(extractedOptions, fs.dependencies),
+    false,
+    "the switch must report unsupported so the UI hides it",
+  );
+  assert.equal(fs.writes.length, 0, "the probe must not write either");
 });
 
 test("a non-AppImage install still autostarts through process.execPath", async () => {

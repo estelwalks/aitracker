@@ -7,7 +7,9 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   EXPECTED_ARTIFACT_NAMES,
+  EXPECTED_TEMPLATE_SECTIONS,
   EXPECTED_TEMPLATES,
+  inspectLinuxDistScripts,
   inspectPackagingConfig,
   verifyReleaseArtifactNames,
 } from "./verify-release-artifact-names.mjs";
@@ -19,16 +21,20 @@ const SCRIPT = join(
 const REPOSITORY_ROOT = join(dirname(SCRIPT), "..");
 
 // The fixture must declare exactly the templates the live guard expects,
-// otherwise every case below also reports the fixture's own drift.
+// otherwise every case below also reports the fixture's own drift. deb and rpm
+// inherit the `linux:` template, so they declare none of their own.
+const SECTION_TEMPLATES = {
+  dmg: EXPECTED_TEMPLATE_SECTIONS.dmg.template,
+  nsis: EXPECTED_TEMPLATE_SECTIONS.nsis.template,
+  linux: EXPECTED_TEMPLATE_SECTIONS.linux.template,
+};
 const CONFIG = [
   "appId: com.aitracker.desktop",
   "productName: AITracker",
-  "dmg:",
-  `  artifactName: ${EXPECTED_TEMPLATES[0]}`,
-  "nsis:",
-  `  artifactName: ${EXPECTED_TEMPLATES[1]}`,
-  "linux:",
-  `  artifactName: ${EXPECTED_TEMPLATES[2]}`,
+  ...Object.entries(SECTION_TEMPLATES).flatMap(([section, template]) => [
+    `${section}:`,
+    `  artifactName: ${template}`,
+  ]),
   "",
 ].join("\n");
 
@@ -68,44 +74,37 @@ test("the expected names are exactly what electron-builder renders", async () =>
     join(REPOSITORY_ROOT, "electron-builder.yml"),
     "utf8",
   );
-  // One template per target section: dmg renders .dmg for macOS, nsis renders
-  // .exe for Windows, so the same ${productName}-${arch}.${ext} shape yields
-  // different names per section.
   // macOS and Windows use `${arch}` and are expanded per architecture; Linux
   // spells the architecture out (`-x64`) because electron-builder renders
-  // `${arch}` as x86_64 for AppImage and amd64 for deb, which would give one
-  // platform two different suffixes.
-  const templates = {
-    dmg: {
-      pattern:
-        /^dmg:\n(?:(?!^\S)[\s\S])*?^\s+artifactName:\s*"?([^"\n]+?)"?\s*$/mu,
-      ext: "dmg",
-      archs: ["arm64", "x64"],
-    },
-    nsis: {
-      pattern:
-        /^nsis:\n(?:(?!^\S)[\s\S])*?^\s+artifactName:\s*"?([^"\n]+?)"?\s*$/mu,
-      ext: "exe",
-      archs: ["arm64", "x64"],
-    },
-    linux: {
-      pattern:
-        /^linux:\n(?:(?!^\S)[\s\S])*?^\s+artifactName:\s*"?([^"\n]+?)"?\s*$/mu,
-      ext: "AppImage",
-      archs: ["x64"],
-    },
-  };
+  // `${arch}` as x86_64 for AppImage and rpm and amd64 for deb, which would
+  // give one platform three different suffixes.
+  //
+  // Each section renders one extension per entry, so `linux:` has to yield the
+  // AppImage, the deb and the rpm from its single template.
   const rendered = new Set();
-  for (const [section, { pattern, ext, archs }] of Object.entries(templates)) {
-    const template = config.match(pattern)?.[1]?.trim();
-    assert.ok(template, `${section} must declare an artifactName`);
-    for (const arch of archs) {
-      rendered.add(
-        template
-          .replace("${productName}", "AITracker")
-          .replace("${arch}", arch)
-          .replace("${ext}", ext),
-      );
+  for (const [section, { template, extensions, archs }] of Object.entries(
+    EXPECTED_TEMPLATE_SECTIONS,
+  )) {
+    const pattern = new RegExp(
+      `^${section}:\\n(?:(?!^\\S)[\\s\\S])*?^\\s+artifactName:\\s*"?([^"\\n]+?)"?\\s*$`,
+      "mu",
+    );
+    const declared = config.match(pattern)?.[1]?.trim();
+    assert.ok(declared, `${section} must declare an artifactName`);
+    assert.equal(
+      declared,
+      template,
+      `${section} must declare ${template}, found ${declared}`,
+    );
+    for (const extension of extensions) {
+      for (const arch of archs) {
+        rendered.add(
+          template
+            .replace("${productName}", "AITracker")
+            .replace("${arch}", arch)
+            .replace("${ext}", extension),
+        );
+      }
     }
   }
   assert.deepEqual([...rendered].sort(), [...EXPECTED_ARTIFACT_NAMES].sort());
@@ -114,14 +113,14 @@ test("the expected names are exactly what electron-builder renders", async () =>
 test("a reintroduced ${version} placeholder is reported", () => {
   const { problems } = inspectPackagingConfig({
     config: CONFIG.replace(
-      `  artifactName: ${EXPECTED_TEMPLATES[0]}`,
+      `  artifactName: ${SECTION_TEMPLATES.dmg}`,
       "  artifactName: ${productName}-${version}-${arch}.${ext}",
     ),
   });
   assert.equal(problems.length, 2);
   assert.match(problems[0], /puts a version in an artifact name/u);
   assert.ok(
-    problems[1].includes(`must declare artifactName ${EXPECTED_TEMPLATES[0]}`),
+    problems[1].includes(`must declare artifactName ${SECTION_TEMPLATES.dmg}`),
     problems[1],
   );
 });
@@ -129,13 +128,13 @@ test("a reintroduced ${version} placeholder is reported", () => {
 test("a renamed artifact template is reported", () => {
   const { problems } = inspectPackagingConfig({
     config: CONFIG.replace(
-      `  artifactName: ${EXPECTED_TEMPLATES[1]}`,
+      `  artifactName: ${SECTION_TEMPLATES.nsis}`,
       "  artifactName: ${productName}-Installer-${arch}.${ext}",
     ),
   });
   assert.equal(problems.length, 1);
   assert.ok(
-    problems[0].includes(`must declare artifactName ${EXPECTED_TEMPLATES[1]}`),
+    problems[0].includes(`must declare artifactName ${SECTION_TEMPLATES.nsis}`),
     problems[0],
   );
 });
@@ -181,7 +180,7 @@ test("a missing packaging config is reported", async () => {
 test("the CLI exits non-zero when the names drift", async () => {
   const root = await fixtureRoot({
     config: CONFIG.replace(
-      `  artifactName: ${EXPECTED_TEMPLATES[0]}`,
+      `  artifactName: ${SECTION_TEMPLATES.dmg}`,
       "  artifactName: ${productName}-${version}-${arch}.${ext}",
     ),
   });
@@ -194,4 +193,31 @@ test("the CLI exits non-zero when the names drift", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a dist:linux script that omits a configured target is reported", () => {
+  // `electron-builder --linux AppImage deb` overrides linux.target, so a target
+  // present in the config but absent from the command line is built by nobody.
+  // This is how rpm was silently skipped before the guard existed.
+  const problems = inspectLinuxDistScripts({
+    scripts: {
+      "dist:linux": "npm run build:desktop && electron-builder --linux",
+      "dist:linux:x64":
+        "npm run build:desktop && electron-builder --linux AppImage deb --x64 --publish never",
+      "dist:mac": "node scripts/package-mac.mjs",
+    },
+  });
+  assert.deepEqual(problems, [
+    'package.json dist:linux:x64 passes "AppImage deb" to --linux, which overrides linux.target and omits rpm; the release would publish no rpm',
+  ]);
+});
+
+test("the shipped dist:linux scripts declare every configured Linux target", async () => {
+  const packageJson = JSON.parse(
+    await readFile(join(REPOSITORY_ROOT, "package.json"), "utf8"),
+  );
+  assert.deepEqual(
+    inspectLinuxDistScripts({ scripts: packageJson.scripts }),
+    [],
+  );
 });

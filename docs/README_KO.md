@@ -83,6 +83,10 @@ npm run dev:desktop
   [AITracker-Windows-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-arm64.exe)
 - Linux (x64, AppImage):
   [AITracker-Linux-x64.AppImage](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.AppImage)
+- Linux (x64, Debian/Ubuntu 패키지):
+  [AITracker-Linux-x64.deb](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.deb)
+- Linux (x64, Fedora/RHEL 패키지):
+  [AITracker-Linux-x64.rpm](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.rpm)
 
 각 릴리스에는 해당 버전의 `release-metadata.json`과 `checksums.txt`가 첨부되어 정확한
 버전과 SHA-256을 기록합니다. 특정 빌드를 재현해야 할 때는 `latest`가 아니라 해당 태그의

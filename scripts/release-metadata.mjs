@@ -41,6 +41,33 @@ const WINDOWS_ARM64 = "AITracker-Windows-arm64.exe";
 const WINDOWS_X64 = "AITracker-Windows-x64.exe";
 const LINUX_X64 = "AITracker-Linux-x64.AppImage";
 
+/**
+ * The two Linux system packages attached to every release beside the AppImage.
+ *
+ * They are named here, and attached by the release workflow, but deliberately
+ * NOT recorded in `release-metadata-linux.json`: that document allows exactly
+ * one artifact per platform key, and the CLI's validator rejects an artifact
+ * carrying an unknown field — so widening the record would make every shipped
+ * client reject the whole document. A deb/rpm install therefore updates through
+ * its own package manager, not through the in-app updater, and the READMEs are
+ * where these two names are advertised.
+ *
+ * `scripts/verify-release-artifact-names.mjs` requires this module to name them
+ * in this order, so a release cannot drop one while the READMEs still link it.
+ */
+const LINUX_X64_DEB = "AITracker-Linux-x64.deb";
+const LINUX_X64_RPM = "AITracker-Linux-x64.rpm";
+
+/**
+ * The Linux system packages published beside the AppImage but kept out of the
+ * metadata document (see above). Exported so the release tests can assert they
+ * are attached without widening the artifact record.
+ */
+export const LINUX_PACKAGE_NAMES = Object.freeze([
+  LINUX_X64_DEB,
+  LINUX_X64_RPM,
+]);
+
 const TARGET_FILES = Object.freeze([
   ["darwin-arm64", MACOS_ARM64],
   ["darwin-x64", MACOS_X64],

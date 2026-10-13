@@ -726,4 +726,19 @@ test("opens Linux installers without ever elevating privileges", async () => {
   const printed = output.join("");
   assert.match(printed, /sudo apt install \/tmp\/AITracker-Linux-x64\.deb/);
   assert.doesNotMatch(printed, /sudo (?!apt|dnf|zypper)/);
+
+  // The Red Hat family goes through the same hand-off: the rpm is not spawned
+  // either, and the printed command names dnf (with zypper as the alternative
+  // for the SUSE family) rather than apt.
+  const rpmOutput = [];
+  await openInstaller("linux", "/tmp/AITracker-Linux-x64.rpm", spawnImpl, {
+    chmodImpl: async () => {},
+    accessImpl: async () => {},
+    stdout: { write: (chunk) => rpmOutput.push(String(chunk)) },
+  });
+  assert.equal(commands.length, before, "rpm must not spawn anything");
+  const printedRpm = rpmOutput.join("");
+  assert.match(printedRpm, /sudo dnf install \/tmp\/AITracker-Linux-x64\.rpm/);
+  assert.match(printedRpm, /zypper install/);
+  assert.doesNotMatch(printedRpm, /apt install/);
 });
