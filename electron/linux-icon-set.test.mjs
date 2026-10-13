@@ -115,3 +115,71 @@ test("status icons carry more ink than the app-icon mark at panel size", async (
     assert.equal(colors, file === "favicon.svg");
   }
 });
+
+/**
+ * The hicolor app icon is one file installed by the package manager, so it
+ * cannot follow the theme. It therefore carries its own plate: without one, the
+ * dark-ink mark is invisible in a dark dock (~1.3:1) and the light-ink mark is
+ * invisible in a light one. This asserts the plate exists and stays opaque, so
+ * a future regeneration cannot silently return to a transparent mark.
+ */
+test("the hicolor app icon carries an opaque plate", async () => {
+  const { Resvg } = await import("@resvg/resvg-js");
+  const { linuxAppArtwork } =
+    await import("../scripts/generate-native-icons.mjs");
+  const source = readFileSync(
+    join(projectRoot, "public", "favicon.svg"),
+    "utf8",
+  );
+  const size = 64;
+  const px = new Resvg(linuxAppArtwork(source), {
+    fitTo: { mode: "width", value: size },
+  }).render().pixels;
+
+  // Plate-only points. The mark's bracket frame is thick and occupies the
+  // diagonal corners, so a probe there measures the frame rather than the plate;
+  // these sit just inside the plate's rounded rect and clear of the frame.
+  const at = (fx, fy) => {
+    const x = Math.floor(size * fx),
+      y = Math.floor(size * fy);
+    return { a: px[(y * size + x) * 4 + 3], r: px[(y * size + x) * 4] };
+  };
+  // The centre is deliberately absent: the brightest node sits there, so it
+  // reports ink rather than plate.
+  for (const [fx, fy] of [
+    [0.12, 0.5],
+    [0.88, 0.5],
+    [0.5, 0.12],
+    [0.5, 0.88],
+  ]) {
+    const { a, r } = at(fx, fy);
+    assert.equal(a, 255, `plate must be opaque at ${fx},${fy}`);
+    assert.ok(r > 200, `plate must be light at ${fx},${fy}, got ${r}`);
+  }
+  // The three node dots must survive: the mark is stroke-only except for them,
+  // and a blanket fill rule silently deleted them once already.
+  const inkPixels = (() => {
+    let n = 0;
+    for (let i = 0; i < size * size; i++) if (px[i * 4] < 80) n += 1;
+    return n;
+  })();
+  assert.ok(
+    inkPixels > size,
+    `the mark must be drawn, found ${inkPixels} ink px`,
+  );
+  // The outer edge stays transparent so the plate reads as a rounded tile.
+  for (let i = 0; i < size; i++) {
+    for (const idx of [
+      i,
+      (size - 1) * size + i,
+      i * size,
+      i * size + size - 1,
+    ]) {
+      assert.equal(
+        px[idx * 4 + 3],
+        0,
+        "the plate must not fill the canvas edge",
+      );
+    }
+  }
+});

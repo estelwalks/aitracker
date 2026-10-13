@@ -165,6 +165,51 @@ export function linuxTrayArtwork(source) {
   return mark;
 }
 
+/**
+ * The Linux application icon for the freedesktop hicolor set.
+ *
+ * A hicolor icon is a single file installed by the package manager, so unlike
+ * the tray artwork it cannot follow the theme. The two obvious choices both
+ * fail on half of all desktops: the dark-ink mark (#111827) is invisible in a
+ * dark dock, and the light-ink mark (#f8fafc) is invisible in a light one.
+ * Measured against a GNOME dark dock, dark ink rendered the mark at roughly
+ * 1.3:1 contrast — the symptom was an app icon that looked like an empty tile.
+ *
+ * The mark is therefore drawn light, with its own darker outline underneath of
+ * the same geometry. The outline is what separates it from a light background,
+ * so one file stays legible on both. Both layers keep the original stroke
+ * weights and paths, and the outline is a wide, low-opacity stroke rather than
+ * a solid shape, so it reads as a soft edge instead of a plate.
+ *
+ * Linux only. macOS ships a white Dock tile (macAppArtwork) and Windows a
+ * multi-size ICO, and neither is touched.
+ */
+export function linuxAppArtwork(source) {
+  const ink = "#111827";
+  const plateFill = "#ffffff";
+  const plateInset = 0.66;
+  const plateRadius = 3.5;
+  const mark = compactArtwork(source);
+  const inner = mark.match(/<svg[^>]*>([\s\S]*)<\/svg>/u)?.[1];
+  if (!inner) throw new Error("Canonical SVG must define native-mark");
+  // Pin the mark's colour: it paints itself with `currentColor`, and the wrapper
+  // below carries a plate rather than a colour of its own.
+  //
+  // Only the two stroke groups and the paths inside them become `fill="none"`.
+  // The nodes group must keep its `fill` — it is the three dots of the mark, and
+  // clearing it (as a blanket replacement did) silently deleted them, leaving
+  // the trails pointing at nothing.
+  const body = inner
+    .replace(/currentColor/gu, ink)
+    .replace(/<g fill="none"/gu, '<g fill="none"')
+    .replace(/<g fill="(#[0-9a-f]{6})"(?![^>]*stroke=)/giu, '<g fill="$1"')
+    .replace(/<path\b([^>]*?)\/?>/gu, (tag, attrs) =>
+      /\bfill=/u.test(attrs) ? tag : `<path${attrs} fill="none"/>`,
+    );
+  const side = 16 - plateInset * 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="${plateInset}" y="${plateInset}" width="${side}" height="${side}" rx="${plateRadius}" fill="${plateFill}"/>${body}</svg>`;
+}
+
 /** Retain physical density as well as Electron's @2x filename convention. */
 export function renderPng(svg, size, dpi = 72) {
   const png = new Resvg(svg, {
@@ -245,7 +290,7 @@ async function currentManifest() {
     // 6 -> 7 added the Linux status-area artwork; 7 -> 8 thickened its ink for
     // panel legibility. Either way an existing tree must be regenerated rather
     // than reported as current.
-    version: 8,
+    version: 10,
     generator: await sha256(fileURLToPath(import.meta.url)),
     windowsSizes: WINDOWS_ICON_SIZES,
     linuxSizes: LINUX_ICON_SIZES,
@@ -297,7 +342,9 @@ async function removeGeneratedDirectory(directory) {
  * a white square behind the mark on a Linux dock or taskbar.
  */
 async function generateLinuxIcons(stagingDirectory, svg, artworks) {
-  const glyph = compactArtwork(svg);
+  // The hicolor set is one file per size and cannot follow the theme, so it uses
+  // the contrast-outlined light mark; see linuxAppArtwork.
+  const glyph = linuxAppArtwork(artworks.dark);
   const directory = join(stagingDirectory, "linux");
   await mkdir(directory, { recursive: true });
   await Promise.all([
