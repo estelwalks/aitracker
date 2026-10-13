@@ -2,6 +2,7 @@ import { RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useI18n } from "../../../lib/i18n/context";
+import { usePlatform } from "../../../lib/platform";
 import {
   resetWidgetPrefs,
   useWidgetPrefs,
@@ -78,6 +79,11 @@ function SectionTitle({ children }: { children: ReactNode }) {
 /**
  * Widget configuration panel: menu bar/floating window/desktop widget three sets of options, SQLite persistence.
  * For the "widget" classification of the settings page and ⚙ lightweight configuration reuse in the floating window.
+ *
+ * The "bar" section configures the status-area title, which is drawn with
+ * `Tray.setTitle` — a macOS-only Electron API. On Windows and Linux every
+ * option behind it is inert, so the section is dropped instead of presenting
+ * controls that cannot do anything.
  */
 export function WidgetConfigPanel({
   sections = ["bar", "panel", "desktop"],
@@ -87,10 +93,17 @@ export function WidgetConfigPanel({
   className?: string;
 }) {
   const { t } = useI18n();
+  const { isMac } = usePlatform();
+  const visibleSections = sections.filter(
+    (section) => section !== "bar" || isMac,
+  );
+  // A caller asking only for the status-area section gets nothing on Windows and
+  // Linux; an empty framed panel would look like a broken control.
+  if (visibleSections.length === 0) return null;
 
   return (
     <div className={`aitracker-widget-config-panel ${className}`}>
-      {sections.includes("bar") && (
+      {visibleSections.includes("bar") && (
         <section className="aitracker-widget-config-section">
           <SectionTitle>{t("widget.configBar")}</SectionTitle>
           <Row label={t("widget.dynamicBar")}>
@@ -124,7 +137,7 @@ export function WidgetConfigPanel({
         </section>
       )}
 
-      {sections.includes("panel") && (
+      {visibleSections.includes("panel") && (
         <section className="aitracker-widget-config-section">
           <SectionTitle>{t("widget.configPanel")}</SectionTitle>
           <Row label={t("widget.defaultTab")}>
@@ -162,7 +175,7 @@ export function WidgetConfigPanel({
         </section>
       )}
 
-      {sections.includes("desktop") && (
+      {visibleSections.includes("desktop") && (
         <section className="aitracker-widget-config-section">
           <SectionTitle>{t("widget.configDesktop")}</SectionTitle>
           <Row label={t("widget.smallContent")}>

@@ -174,7 +174,7 @@ export function MarkdownView({
       out.push(
         <pre
           key={`f${i}`}
-          className="my-3 overflow-x-auto rounded-lg border border-border bg-surface-2 px-3 py-2.5"
+          className="aitracker-xscroll my-3 overflow-x-auto rounded-lg border border-border bg-surface-2 px-3 py-2.5"
         >
           <code className="block font-mono text-[12px] leading-relaxed">
             {buffer.join("\n")}

@@ -94,7 +94,7 @@ export const sources = {
     none: "未设置：使用默认位置",
     manual: "直接输入路径",
     placeholder: "例如：~/.hermes 或输入绝对路径",
-    manualHint: "支持 ~ 展开；macOS 目录弹窗按 ⌘⇧. 可显示隐藏目录。",
+    manualHint: "支持 ~ 展开；目录弹窗按 {mod}+{reveal} 可显示隐藏目录。",
     apply: "应用输入路径",
     choose: "选择目录…",
     unavailable: "当前环境不支持目录选择",

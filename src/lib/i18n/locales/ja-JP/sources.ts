@@ -97,7 +97,7 @@ export const sources = {
     manual: "パスを入力",
     placeholder: "例: ~/.hermes または絶対パス",
     manualHint:
-      "先頭の ~ はホームに展開されます。macOS のダイアログ内で ⌘⇧. を押すと隠しフォルダーが表示されます。",
+      "先頭の ~ はホームに展開されます。ディレクトリのダイアログ内で {mod}+{reveal} を押すと隠しフォルダーが表示されます。",
     apply: "パスを適用",
     choose: "ディレクトリを選択…",
     unavailable: "この環境ではディレクトリ選択を利用できません",

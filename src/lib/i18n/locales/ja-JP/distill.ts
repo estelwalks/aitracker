@@ -62,9 +62,9 @@ export const distill = {
   presetPromptSources:
     "各結論に素材の出典リンクやセッション参照を添付してください。",
   presetPromptChinese: "すべて日本語で出力してください。",
-  proPromptPlaceholder: "蒸留プロンプトをカスタマイズ…（⌘↵ で実行）",
+  proPromptPlaceholder: "蒸留プロンプトをカスタマイズ…（{mod}↵ で実行）",
   rangeSessions: "範囲内 {count} セッション",
-  promptCount: "{count} 文字 · ⌘↵ で実行",
+  promptCount: "{count} 文字 · {mod}↵ で実行",
   runLabel: "蒸留を実行",
   running: "蒸留中…",
   runNeedProject: "先にプロジェクトを選択してください",

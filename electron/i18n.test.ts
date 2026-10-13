@@ -129,15 +129,26 @@ test("createTrayTemplate: 结构正确且复选框状态保留", () => {
       autoLaunchEnabled: true,
       autoLaunchSupported: true,
     },
-    { onToggleAutoLaunch() {}, onQuit() {} },
+    {
+      onOpenDashboard() {},
+      onOpenSettings() {},
+      onToggleAutoLaunch() {},
+      onQuit() {},
+    },
   );
-  assert.equal(template.length, 3);
-  assert.equal(template[0]?.label, electronMessages["en-US"].menu.autoLaunch);
-  assert.equal(template[0]?.type, "checkbox");
-  assert.equal(template[0]?.checked, true);
-  assert.equal(template[0]?.enabled, true);
-  assert.equal(template[1]?.type, "separator");
-  assert.equal(template[2]?.label, electronMessages["en-US"].menu.quit);
+  // Window entries first: on Linux the tray activation event is usually
+  // consumed by the menu, so the menu is the only route back to the window.
+  assert.equal(template.length, 6);
+  assert.equal(template[0]?.label, electronMessages["en-US"].menu.dashboard);
+  assert.equal(template[1]?.label, electronMessages["en-US"].menu.settings);
+  assert.equal(template[2]?.type, "separator");
+  const autoLaunch = template[3];
+  assert.equal(autoLaunch?.label, electronMessages["en-US"].menu.autoLaunch);
+  assert.equal(autoLaunch?.type, "checkbox");
+  assert.equal(autoLaunch?.checked, true);
+  assert.equal(autoLaunch?.enabled, true);
+  assert.equal(template[4]?.type, "separator");
+  assert.equal(template[5]?.label, electronMessages["en-US"].menu.quit);
 });
 
 test("createTrayTemplate: 不支持自启时禁用复选框", () => {
@@ -147,15 +158,22 @@ test("createTrayTemplate: 不支持自启时禁用复选框", () => {
       autoLaunchEnabled: false,
       autoLaunchSupported: false,
     },
-    { onToggleAutoLaunch() {}, onQuit() {} },
+    {
+      onOpenDashboard() {},
+      onOpenSettings() {},
+      onToggleAutoLaunch() {},
+      onQuit() {},
+    },
   );
-  assert.equal(template[0]?.enabled, false);
-  assert.equal(template[0]?.checked, false);
+  assert.equal(template[3]?.enabled, false);
+  assert.equal(template[3]?.checked, false);
 });
 
 test("createTrayTemplate: 点击回调接线正确", () => {
   let toggled: boolean | null = null;
   let quit = 0;
+  let dashboard = 0;
+  let settings = 0;
   createTrayTemplate(
     "zh-CN",
     {
@@ -163,11 +181,15 @@ test("createTrayTemplate: 点击回调接线正确", () => {
       autoLaunchSupported: true,
     },
     {
+      onOpenDashboard: () => dashboard++,
+      onOpenSettings: () => settings++,
       onToggleAutoLaunch: (checked) => (toggled = checked),
       onQuit: () => quit++,
     },
   ).forEach((item) => item.click?.());
   assert.equal(toggled, false); // Reverse from currently enabled
+  assert.equal(dashboard, 1);
+  assert.equal(settings, 1);
   assert.equal(quit, 1);
 });
 

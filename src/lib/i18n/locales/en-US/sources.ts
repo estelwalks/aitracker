@@ -98,7 +98,7 @@ export const sources = {
     manual: "Enter a path",
     placeholder: "e.g. ~/.hermes or an absolute path",
     manualHint:
-      "Leading ~ expands to your home directory; press ⌘⇧. inside the macOS dialog to reveal hidden folders.",
+      "Leading ~ expands to your home directory; press {mod}+{reveal} inside the directory dialog to reveal hidden folders.",
     apply: "Apply path",
     choose: "Choose directory…",
     unavailable: "Directory selection is unavailable in this environment",

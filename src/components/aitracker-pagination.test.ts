@@ -19,14 +19,20 @@ function moduleTsxFiles(directory: string): string[] {
 
 test("shared pagination anchors page controls on the right", () => {
   const rangeIndex = componentSource.indexOf("{rangeLabel ?");
+  // The control container mixes the shared pagination classes with a gutter
+  // utility, so the anchor pins the stable leading classes and checks the
+  // gutter separately below.
   const controlsIndex = componentSource.indexOf(
-    'className="aitracker-pagination-controls ml-auto',
+    'className="aitracker-pagination-controls',
   );
 
   assert.ok(rangeIndex >= 0);
   assert.ok(controlsIndex > rangeIndex);
   assert.match(componentSource, /paginationWindow\(current, safePageCount\)/);
   assert.match(componentSource, /min-w-\[var\(--aitracker-control-height\)\]/);
+  // A classic, space-taking scrollbar appears on Linux once the controls
+  // overflow; the gutter keeps the buttons from sliding under it.
+  assert.match(componentSource, /aitracker-xscroll ml-auto flex max-w-full/);
 });
 
 test("every module page uses the shared pagination component", () => {

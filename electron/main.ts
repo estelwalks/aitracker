@@ -64,7 +64,12 @@ import {
   LOCALE_MODE_PREF_KEY,
   LOCALE_PREF_KEY,
 } from "./prefs.js";
-import { APP_DESKTOP_NAME, APP_NAME, ENV } from "./app-config.js";
+import {
+  APP_DESKTOP_NAME,
+  APP_NAME,
+  ENV,
+  STORAGE_KEY_PREFIX,
+} from "./app-config.js";
 import {
   canUseLinuxChromiumSandbox,
   executableDirectoryOf,
@@ -79,7 +84,16 @@ import { isTrustedIpcSender } from "./ipc-security.js";
 import { DesktopStateBroker } from "./desktop-state-broker.js";
 import { createStartupDocument } from "./startup-screen.js";
 import { startupFailureDialogMessage } from "./startup-failure.js";
-import { resolveMainWindowSize } from "./main-window-size.js";
+import {
+  parseStoredWindowBounds,
+  resolveMainWindowGeometry,
+  type WindowRectangle,
+} from "./main-window-size.js";
+import {
+  probeLinuxAutostartSupported,
+  readLinuxAutostartEnabled,
+  writeLinuxAutostartEnabled,
+} from "./linux-autostart.js";
 import {
   normalizeTrayTitle,
   persistTrayTitleBestEffort,
@@ -90,6 +104,7 @@ import {
 } from "./tray-title.js";
 import {
   findAppIconPath,
+  findLinuxTrayRetinaIconPath,
   findTrayIconPath,
   findTrayRetinaIconPath,
   type NativeIconAppearance,
@@ -112,6 +127,16 @@ import { UpdateManager } from "./update-manager.js";
 import { handOffInstaller } from "./update-relaunch.js";
 import { normalizeUpdateProxy, updateProxyConfig } from "./update-proxy.js";
 
+/**
+ * Main-window rectangle, in the same SQLite preference namespace as the tray
+ * title and the locale. Stored as `{x,y,width,height}` and validated on read:
+ * a truncated or hand-edited value must fall back to the default rectangle
+ * instead of producing an invisible window.
+ */
+const WINDOW_BOUNDS_PREF_KEY = `${STORAGE_KEY_PREFIX}windowBounds`;
+/** Debounce for `resize`/`move`, which fire continuously while dragging. */
+const WINDOW_BOUNDS_PERSIST_DELAY_MS = 400;
+
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
 const isDevelopment = Boolean(developmentUrl);
@@ -133,6 +158,14 @@ function reportStartupMilestone(name: string): void {
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+/**
+ * Whether a status-area icon actually exists. On Linux the tray is provided by
+ * libappindicator over StatusNotifierItem and can fail outright on a desktop
+ * without it; the flag then decides whether closing the window may hide the app
+ * or must quit it, because a hidden window with no tray has no way back.
+ */
+let trayActive = false;
+let windowBoundsTimer: NodeJS.Timeout | null = null;
 let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
 let isQuitting = false;
@@ -423,7 +456,44 @@ function assertTrustedSender(event: IpcMainInvokeEvent): void {
   }
 }
 
+/**
+ * Linux autostart lives in `$XDG_CONFIG_HOME/autostart`, not in the login-item
+ * API. `app.getPath("home")` is safe to call before `whenReady()`, but the
+ * environment's `HOME` is what the session actually launched us with, so it
+ * wins when present.
+ */
+function linuxAutostartOptions() {
+  return {
+    env: process.env,
+    homeDirectory: process.env.HOME || app.getPath("home"),
+    execPath: process.execPath,
+    devArguments: isDevelopment ? [app.getAppPath()] : [],
+  } as const;
+}
+
+/**
+ * Whether the autostart directory is writable. Probed once before the tray is
+ * built; an unwritable `~/.config` means the switch is hidden rather than shown
+ * as a control that cannot work.
+ */
+let linuxAutostartSupported: boolean | null = null;
+
+async function probeLinuxAutostart(): Promise<void> {
+  if (process.platform !== "linux" || linuxAutostartSupported != null) return;
+  linuxAutostartSupported = await probeLinuxAutostartSupported(
+    linuxAutostartOptions(),
+  );
+}
+
 function getAutoLaunchState(): AutoLaunchState {
+  if (process.platform === "linux") {
+    return {
+      enabled:
+        linuxAutostartSupported === true &&
+        readLinuxAutostartEnabled(linuxAutostartOptions()),
+      supported: linuxAutostartSupported === true,
+    };
+  }
   const supported =
     process.platform === "darwin" || process.platform === "win32";
   return {
@@ -438,6 +508,21 @@ function setAutoLaunch(enabled: boolean): AutoLaunchState {
   const currentState = getAutoLaunchState();
   if (!currentState.supported) {
     return currentState;
+  }
+
+  if (process.platform === "linux") {
+    // Synchronous API surface, asynchronous implementation: rebuild the menu
+    // once the entry is on disk so the checkbox reflects the real state.
+    void writeLinuxAutostartEnabled(enabled, linuxAutostartOptions()).then(
+      () => {
+        try {
+          rebuildTray();
+        } catch (error) {
+          console.warn("AITracker tray was not rebuilt", error);
+        }
+      },
+    );
+    return { enabled, supported: true };
   }
 
   app.setLoginItemSettings({
@@ -1186,7 +1271,14 @@ async function applyPreferences(prefs: Record<string, unknown>): Promise<void> {
   const resolved = resolveDesktopPreferences(prefs, app.getLocale());
   const localeChanged = resolved.locale !== currentPreferences.locale;
   currentPreferences = resolved;
-  if (localeChanged) rebuildTray();
+  if (localeChanged) {
+    // A language switch must never fail the preference write it arrived with.
+    try {
+      rebuildTray();
+    } catch (error) {
+      console.warn("AITracker tray was not rebuilt", error);
+    }
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(desktopIpc.localeChanged, resolved.locale);
     mainWindow.webContents.send(desktopIpc.preferencesChanged, resolved);
@@ -1199,10 +1291,8 @@ async function applyPreferences(prefs: Record<string, unknown>): Promise<void> {
 
 /** Load the native Windows ICO or the transparent macOS template with Retina pixels. */
 function loadNativeTrayIcon(): Electron.NativeImage | string {
-  const trayIconPath = findTrayIconPath(
-    nativeIconLocationInput(),
-    nativeSystemIconAppearance(),
-  );
+  const appearance = nativeSystemIconAppearance();
+  const trayIconPath = findTrayIconPath(nativeIconLocationInput(), appearance);
   if (!trayIconPath) {
     throw new Error(
       "Native tray icons are missing; run npm run generate:native-icons",
@@ -1224,6 +1314,20 @@ function loadNativeTrayIcon(): Electron.NativeImage | string {
     }
     trayIcon.setTemplateImage(true);
   }
+  if (process.platform === "linux") {
+    // StatusNotifierItem panels draw at 22–24px and at 2× on HiDPI. The 22px
+    // bitmap is the icon itself; the 44px one is its 2× representation.
+    const retinaIconPath = findLinuxTrayRetinaIconPath(
+      nativeIconLocationInput(),
+      appearance,
+    );
+    if (retinaIconPath) {
+      trayIcon.addRepresentation({
+        scaleFactor: 2,
+        buffer: readFileSync(retinaIconPath),
+      });
+    }
+  }
   return trayIcon;
 }
 
@@ -1238,6 +1342,11 @@ function rebuildTray(): void {
       autoLaunchSupported: autoLaunch.supported,
     },
     {
+      // Window entries matter most where the tray click is unreliable: under
+      // libappindicator the activation event is usually consumed by the menu,
+      // so without these a GNOME user has no way back to the window.
+      onOpenDashboard: () => openMainWindowRoute("/"),
+      onOpenSettings: () => openMainWindowRoute("/settings", "menu-bar-app"),
       onToggleAutoLaunch: (checked) => {
         setAutoLaunch(checked);
       },
@@ -1249,7 +1358,16 @@ function rebuildTray(): void {
   );
 
   if (tray) tray.destroy();
-  tray = new Tray(trayIcon);
+  try {
+    tray = new Tray(trayIcon);
+  } catch (error) {
+    // `new Tray` throws outright when no StatusNotifier watcher is running.
+    tray = null;
+    trayActive = false;
+    console.warn("AITracker tray unavailable", error);
+    return;
+  }
+  trayActive = true;
   tray.setToolTip(electronMessages[currentPreferences.locale].tray.tooltip);
   if (process.platform === "darwin") {
     // Use the persisted last-known compact summary immediately. A new install
@@ -1280,10 +1398,71 @@ function rebuildTray(): void {
   });
 }
 
+/**
+ * Read the last persisted main-window rectangle.
+ *
+ * Best effort by design: a preference read failure or a malformed value must
+ * fall back to the default rectangle, never block startup.
+ */
+async function readStoredWindowBounds(): Promise<WindowRectangle | null> {
+  if (!desktopStateBroker) return null;
+  try {
+    const stored = await desktopStateBroker.preferences();
+    return parseStoredWindowBounds(stored[WINDOW_BOUNDS_PREF_KEY]);
+  } catch (error) {
+    console.warn("AITracker window bounds unavailable", error);
+    return null;
+  }
+}
+
+/**
+ * Persist the window rectangle, debounced.
+ *
+ * `resize`/`move` fire continuously while dragging; writing each event would
+ * queue a preference request per frame.
+ */
+function scheduleWindowBoundsPersist(window: BrowserWindow): void {
+  if (windowBoundsTimer) clearTimeout(windowBoundsTimer);
+  windowBoundsTimer = setTimeout(() => {
+    windowBoundsTimer = null;
+    persistWindowBounds(window);
+  }, WINDOW_BOUNDS_PERSIST_DELAY_MS);
+}
+
+/**
+ * Write the current rectangle now, unless the window is in a transient state
+ * whose geometry is not the user's chosen one.
+ */
+function persistWindowBounds(window: BrowserWindow): void {
+  if (window.isDestroyed() || window.isMinimized()) return;
+  // Maximized/full-screen geometry is the screen, not the size the user picked;
+  // storing it would make "restore" a no-op on the next launch.
+  if (window.isMaximized() || window.isFullScreen()) return;
+  const bounds = window.getBounds();
+  void desktopStateBroker
+    ?.setPreference(WINDOW_BOUNDS_PREF_KEY, bounds)
+    .catch((error: unknown) =>
+      console.warn("AITracker window bounds were not persisted", error),
+    );
+}
+
+/** Flush a debounced rectangle before the app exits. */
+function flushWindowBoundsPersist(): void {
+  if (windowBoundsTimer) {
+    clearTimeout(windowBoundsTimer);
+    windowBoundsTimer = null;
+  }
+  if (mainWindow) persistWindowBounds(mainWindow);
+}
+
 async function createMainWindow(): Promise<void> {
-  const mainWindowSize = resolveMainWindowSize();
+  const display = screen.getPrimaryDisplay();
+  const geometry = resolveMainWindowGeometry({
+    stored: await readStoredWindowBounds(),
+    workArea: display.workArea,
+  });
   mainWindow = new BrowserWindow({
-    ...mainWindowSize,
+    ...geometry,
     icon: currentAppIconPath() ?? undefined,
     // Borderless + self-drawn title bar: hide the system's native title bar and
     // window buttons; the renderer draws a theme-consistent bar instead (macOS
@@ -1329,6 +1508,14 @@ async function createMainWindow(): Promise<void> {
   };
   mainWindow.on("maximize", () => broadcastMaximized(true));
   mainWindow.on("unmaximize", () => broadcastMaximized(false));
+  // Remember the user's rectangle. Only a settled, non-maximized window is
+  // stored, so reopening restores the size the user actually chose.
+  mainWindow.on("resize", () => {
+    if (mainWindow) scheduleWindowBoundsPersist(mainWindow);
+  });
+  mainWindow.on("move", () => {
+    if (mainWindow) scheduleWindowBoundsPersist(mainWindow);
+  });
   mainWindow.on("close", (event) => {
     if (!shouldHideWindowOnClose(isQuitting)) return;
     event.preventDefault();
@@ -1485,9 +1672,16 @@ if (!hasSingleInstanceLock) {
     isQuitting = true;
   });
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-      mainWindow = null;
+    if (process.platform === "darwin") return;
+    // A status-area icon is the only way back to a hidden window. With no tray
+    // the app would keep running invisibly and holding the single-instance
+    // lock, so a later launch would appear to do nothing. Quit instead.
+    if (process.platform === "linux" && !trayActive) {
+      isQuitting = true;
+      app.quit();
+      return;
     }
+    mainWindow = null;
   });
   app.on("activate", () => {
     if (mainWindow) {
@@ -1497,6 +1691,9 @@ if (!hasSingleInstanceLock) {
     }
   });
   app.on("will-quit", () => {
+    // A rectangle the user moved moments before quitting is still inside the
+    // debounce window; write it out before the preference store goes away.
+    flushWindowBoundsPersist();
     if (automaticUpdateTimer) {
       clearInterval(automaticUpdateTimer);
       automaticUpdateTimer = null;
@@ -1553,13 +1750,22 @@ if (!hasSingleInstanceLock) {
       nativeTheme.on("updated", () => {
         applyNativeAppIcon();
         // Updating in place preserves tray position and any open context menu.
-        if (tray) tray.setImage(loadNativeTrayIcon());
+        if (!tray) return;
+        try {
+          tray.setImage(loadNativeTrayIcon());
+        } catch (error) {
+          console.warn("AITracker tray icon was not updated", error);
+        }
       });
       app.on("activate", () => {
         if (mainWindow && !mainWindow.isDestroyed()) showMainWindow();
         else void createMainWindow();
       });
       reportStartupMilestone("electron-ready");
+      // Linux "Launch at Login" is an XDG autostart entry, not a login item.
+      // Probing the config directory first keeps the tray and Settings from
+      // offering a switch that cannot write.
+      await probeLinuxAutostart();
       powerMonitor.on("suspend", suspendAutomaticSecurityScan);
       powerMonitor.on("resume", resumeAutomaticSecurityScan);
       // Resolve the same interactive user's home in packaged builds. The explicit
@@ -1707,7 +1913,15 @@ if (!hasSingleInstanceLock) {
       currentTrayTitle = persistedTrayState.title;
       await securityScanner.recoverInterruptedRuns();
       registerIpcHandlers();
-      rebuildTray();
+      try {
+        rebuildTray();
+      } catch (error) {
+        // A missing or unreadable icon set must not abort startup: the window
+        // is already usable, and the user can still reach it. `trayActive`
+        // stays false, so closing the window quits on Linux instead of leaving
+        // a process with no way back.
+        console.warn("AITracker tray was not created", error);
+      }
       // Let the renderer own the first document request. A second hidden SSR
       // request duplicates route-loader, hydration, and SQLite work precisely
       // when the visible page needs those resources most.

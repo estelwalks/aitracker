@@ -63,9 +63,9 @@ export const distill = {
   presetPromptSources:
     "Attach the material's source links or session references to each conclusion.",
   presetPromptChinese: "Output everything in Chinese.",
-  proPromptPlaceholder: "Custom distillation prompt… (⌘↵ to run)",
+  proPromptPlaceholder: "Custom distillation prompt… ({mod}↵ to run)",
   rangeSessions: "{count} sessions in range",
-  promptCount: "{count} chars · ⌘↵ to run",
+  promptCount: "{count} chars · {mod}↵ to run",
   runLabel: "Run distillation",
   running: "Distilling…",
   runNeedProject: "Pick a project first",

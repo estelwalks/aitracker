@@ -7,8 +7,11 @@ import { fileURLToPath } from "node:url";
 import {
   APP_ICON_FILENAMES,
   findAppIconPath,
+  findLinuxTrayRetinaIconPath,
   findTrayIconPath,
   findTrayRetinaIconPath,
+  LINUX_TRAY_ICON_FILENAMES,
+  LINUX_TRAY_RETINA_ICON_FILENAMES,
   MAC_APP_ICON_FILENAME,
   MAC_TRAY_ICON_FILENAMES,
   TRAY_ICON_FILENAMES,
@@ -95,6 +98,81 @@ test("Windows development paths select the multi-resolution ICO", () => {
       ),
       trayPath,
     );
+  }
+});
+
+test("Linux selects the panel-size artwork instead of the 16px favicon", () => {
+  for (const appearance of ["light", "dark"] as const) {
+    const trayPath = join(
+      projectRoot,
+      "build",
+      "native-icons",
+      LINUX_TRAY_ICON_FILENAMES[appearance],
+    );
+    assert.equal(
+      findTrayIconPath(
+        {
+          isPackaged: false,
+          resourcesPath: "/unused",
+          appPath: projectRoot,
+          platform: "linux",
+        },
+        appearance,
+        (candidate) => candidate === trayPath,
+      ),
+      trayPath,
+    );
+    // A Linux panel draws 22–24px and the shared fallback is 16px, which the
+    // panel would upscale.
+    assert.notEqual(
+      trayPath,
+      join(
+        projectRoot,
+        "build",
+        "native-icons",
+        TRAY_ICON_FILENAMES[appearance],
+      ),
+    );
+  }
+});
+
+test("Linux resolves a 2× status icon for HiDPI panels", () => {
+  for (const appearance of ["light", "dark"] as const) {
+    const retinaPath = join(
+      projectRoot,
+      "build",
+      "native-icons",
+      LINUX_TRAY_RETINA_ICON_FILENAMES[appearance],
+    );
+    assert.equal(
+      findLinuxTrayRetinaIconPath(
+        {
+          isPackaged: false,
+          resourcesPath: "/unused",
+          appPath: projectRoot,
+          platform: "linux",
+        },
+        appearance,
+        (candidate) => candidate === retinaPath,
+      ),
+      retinaPath,
+    );
+  }
+});
+
+test("the generated Linux status icons exist at their panel sizes", () => {
+  // The generator writes these files; a rename would otherwise only surface as
+  // a blurry or missing tray icon on a real desktop.
+  for (const name of [
+    ...Object.values(LINUX_TRAY_ICON_FILENAMES),
+    ...Object.values(LINUX_TRAY_RETINA_ICON_FILENAMES),
+  ]) {
+    const file = readFileSync(join(projectRoot, "build", "native-icons", name));
+    assert.equal(file.subarray(1, 4).toString(), "PNG", name);
+    // IHDR width/height.
+    const expected = name.includes("-44") ? 44 : 22;
+    assert.equal(file.readUInt32BE(16), expected, name);
+    assert.equal(file.readUInt32BE(20), expected, name);
   }
 });
 

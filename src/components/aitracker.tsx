@@ -268,7 +268,7 @@ export function Pagination({
       className={`aitracker-text-body-sm flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-muted-foreground ${className}`}
     >
       {rangeLabel ? <span className="aitracker-num">{rangeLabel}</span> : null}
-      <div className="aitracker-pagination-controls ml-auto flex max-w-full items-center justify-end gap-1 overflow-x-auto pb-px">
+      <div className="aitracker-pagination-controls aitracker-xscroll ml-auto flex max-w-full items-center justify-end gap-1 overflow-x-auto pb-px">
         <button
           type="button"
           disabled={current <= 1}

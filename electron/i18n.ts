@@ -487,6 +487,8 @@ export interface TrayTemplateState {
 }
 
 export interface TrayTemplateCallbacks {
+  onOpenDashboard(): void;
+  onOpenSettings(): void;
   onToggleAutoLaunch(checked: boolean): void;
   onQuit(): void;
 }
@@ -511,7 +513,14 @@ export function createMacWidgetTrayTemplate(
   ];
 }
 
-/** Build the tray context-menu template in the current locale. */
+/**
+ * Build the non-macOS tray context-menu template in the current locale.
+ *
+ * The window entries lead the menu on purpose. On Linux the tray is drawn by
+ * libappindicator (through the StatusNotifierItem D-Bus protocol) and the
+ * activation event that would otherwise show the window is routinely swallowed
+ * by the menu, so a menu entry is the only dependable way back to the window.
+ */
 export function createTrayTemplate(
   locale: DesktopLocale,
   state: TrayTemplateState,
@@ -519,6 +528,9 @@ export function createTrayTemplate(
 ): TrayTemplateItem[] {
   const t = electronMessages[locale];
   return [
+    { label: t.menu.dashboard, click: callbacks.onOpenDashboard },
+    { label: t.menu.settings, click: callbacks.onOpenSettings },
+    { type: "separator" },
     {
       label: t.menu.autoLaunch,
       type: "checkbox",

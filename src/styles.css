@@ -956,6 +956,10 @@ body:not(.aitracker-widget-float-document)
 @utility aitracker-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-strong) transparent;
+  /* Chromium on Linux paints a classic, space-taking scrollbar where macOS
+     overlays it. Reserving the gutter keeps card padding and rounded edges
+     from being covered by the track. */
+  scrollbar-gutter: stable;
 }
 
 /* Desktop scaling: horizontal scrolling of containers (wide content such as tables, heat maps, etc.) */
@@ -1781,8 +1785,11 @@ body:not(.aitracker-widget-float-document)
   display: flex;
   gap: 0.5rem;
   overflow-x: auto;
-  padding-bottom: 0.25rem;
+  /* A classic horizontal scrollbar is ~12px on Linux; 0.25rem of padding left
+     the bottom of the chips clipped by the track. */
+  padding-bottom: 0.5rem;
   scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 
 .dashboard-tool-rail > button {

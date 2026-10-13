@@ -42,6 +42,22 @@ export const LINUX_ICON_SIZES = [16, 24, 32, 48, 64, 128, 256, 512];
 export function linuxIconName(size) {
   return `linux/${size}x${size}.png`;
 }
+
+/**
+ * Dedicated status-area artwork for Linux.
+ *
+ * The shared `favicon-*.png` tray files are 16px, while a Linux panel draws the
+ * status icon at 22–24px (and at 2× that on HiDPI). Handing the panel a 16px
+ * bitmap makes it upscale a blurry icon, so the panel size is rasterized
+ * directly. Both appearances are emitted: unlike macOS there is no template
+ * mask, and `nativeTheme.shouldUseDarkColors` follows the GTK theme, which does
+ * not always match the panel background.
+ */
+export function linuxTrayIconName(appearance, size) {
+  return `linux/tray-${appearance}-${size}.png`;
+}
+
+export const LINUX_TRAY_ICON_SIZES = [22, 24, 44, 48];
 const ICNS_ENTRIES = [
   ["icp4", 16],
   ["icp5", 32],
@@ -70,6 +86,9 @@ const outputNames = [
     `favicon-${appearance}-1024.png`,
   ]),
   ...LINUX_ICON_SIZES.map(linuxIconName),
+  ...Object.keys(sources).flatMap((appearance) =>
+    LINUX_TRAY_ICON_SIZES.map((size) => linuxTrayIconName(appearance, size)),
+  ),
   "manifest.json",
 ];
 
@@ -174,12 +193,13 @@ async function exists(path) {
 
 async function currentManifest() {
   return {
-    // Bumped 5 -> 6 when the Linux hicolor set was added, so an existing tree
-    // is regenerated instead of being reported as current.
-    version: 6,
+    // Bumped 6 -> 7 when the Linux status-area artwork was added, so an
+    // existing tree is regenerated instead of being reported as current.
+    version: 7,
     generator: await sha256(fileURLToPath(import.meta.url)),
     windowsSizes: WINDOWS_ICON_SIZES,
     linuxSizes: LINUX_ICON_SIZES,
+    linuxTraySizes: LINUX_TRAY_ICON_SIZES,
     macTemplateSizes: [16, 32],
     sources: {
       light: await sha256(sources.light),
@@ -226,18 +246,27 @@ async function removeGeneratedDirectory(directory) {
  * ICO and the running window — never the macOS white Dock tile, which would put
  * a white square behind the mark on a Linux dock or taskbar.
  */
-async function generateLinuxIcons(stagingDirectory, svg) {
+async function generateLinuxIcons(stagingDirectory, svg, artworks) {
   const glyph = compactArtwork(svg);
   const directory = join(stagingDirectory, "linux");
   await mkdir(directory, { recursive: true });
-  await Promise.all(
-    LINUX_ICON_SIZES.map((size) =>
+  await Promise.all([
+    ...LINUX_ICON_SIZES.map((size) =>
       writeFile(
         join(stagingDirectory, linuxIconName(size)),
         renderPng(glyph, size, 96),
       ),
     ),
-  );
+    ...Object.entries(artworks).flatMap(([appearance, artwork]) =>
+      LINUX_TRAY_ICON_SIZES.map((size) =>
+        writeFile(
+          join(stagingDirectory, linuxTrayIconName(appearance, size)),
+          // 96dpi keeps the panel-size bitmap at its native pixel dimensions.
+          renderPng(compactArtwork(artwork), size, 96),
+        ),
+      ),
+    ),
+  ]);
 }
 
 async function generateAppearance(stagingDirectory, appearance, svg) {
@@ -333,7 +362,7 @@ export async function generateNativeIcons() {
         `${JSON.stringify(manifest, null, 2)}\n`,
         "utf8",
       ),
-      generateLinuxIcons(stagingDirectory, artworks.light),
+      generateLinuxIcons(stagingDirectory, artworks.light, artworks),
     ]);
     await removeGeneratedDirectory(outputDirectory);
     await rename(stagingDirectory, outputDirectory);
