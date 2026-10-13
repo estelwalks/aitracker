@@ -186,9 +186,13 @@ export function linuxTrayArtwork(source) {
  */
 export function linuxAppArtwork(source) {
   const ink = "#111827";
-  const plateFill = "#ffffff";
-  const plateInset = 0.66;
-  const plateRadius = 3.5;
+  /** Plate geometry, in the mark's own 16-unit coordinate space. */
+  const plateInset = 0.9;
+  const plateRadius = 3.4;
+  /** The mark is drawn at 84% and centred, leaving even padding inside the plate. */
+  const markZoom = 0.84;
+  /** Slightly lighter frame: at plate scale the full weight reads as a slab. */
+  const markInkScale = 0.92;
   const mark = compactArtwork(source);
   const inner = mark.match(/<svg[^>]*>([\s\S]*)<\/svg>/u)?.[1];
   if (!inner) throw new Error("Canonical SVG must define native-mark");
@@ -201,13 +205,28 @@ export function linuxAppArtwork(source) {
   // the trails pointing at nothing.
   const body = inner
     .replace(/currentColor/gu, ink)
-    .replace(/<g fill="none"/gu, '<g fill="none"')
+    .replace(
+      /stroke-width="([0-9.]+)"/gu,
+      (_match, width) =>
+        `stroke-width="${(Number(width) * markInkScale).toFixed(3)}"`,
+    )
     .replace(/<g fill="(#[0-9a-f]{6})"(?![^>]*stroke=)/giu, '<g fill="$1"')
     .replace(/<path\b([^>]*?)\/?>/gu, (tag, attrs) =>
       /\bfill=/u.test(attrs) ? tag : `<path${attrs} fill="none"/>`,
     );
   const side = 16 - plateInset * 2;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="${plateInset}" y="${plateInset}" width="${side}" height="${side}" rx="${plateRadius}" fill="${plateFill}"/>${body}</svg>`;
+  const offset = 8 - 8 * markZoom;
+  return [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">',
+    '<defs><linearGradient id="aitracker-plate" x1="0" y1="0" x2="0" y2="1">',
+    '<stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eaedf2"/>',
+    "</linearGradient></defs>",
+    // The hairline outline is what separates the tile from a light dock, where a
+    // white plate on a near-white background would otherwise have no edge.
+    `<rect x="${plateInset}" y="${plateInset}" width="${side}" height="${side}" rx="${plateRadius}" fill="url(#aitracker-plate)" stroke="#d6dbe3" stroke-width="0.08"/>`,
+    `<g transform="translate(${offset.toFixed(3)} ${offset.toFixed(3)}) scale(${markZoom})">${body}</g>`,
+    "</svg>",
+  ].join("");
 }
 
 /** Retain physical density as well as Electron's @2x filename convention. */
@@ -290,7 +309,7 @@ async function currentManifest() {
     // 6 -> 7 added the Linux status-area artwork; 7 -> 8 thickened its ink for
     // panel legibility. Either way an existing tree must be regenerated rather
     // than reported as current.
-    version: 10,
+    version: 11,
     generator: await sha256(fileURLToPath(import.meta.url)),
     windowsSizes: WINDOWS_ICON_SIZES,
     linuxSizes: LINUX_ICON_SIZES,
