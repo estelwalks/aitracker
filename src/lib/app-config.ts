@@ -39,15 +39,28 @@ export const APP_VERSION = packageJson.version;
 export const APP_REPO_URL = "https://github.com/estelwalks/aitracker";
 
 /**
- * Linux desktop entry / application id. electron-builder writes the `.desktop`
- * file from `linux.desktop.entry` in electron-builder.yml, and Electron must be
- * told the same name: `app.setDesktopName(...)` becomes the Wayland `app_id`
- * and the X11 `WM_CLASS`. Left unset, Electron falls back to a hyphenated slug
- * of the app name, which is not a valid portal identity — taskbar icons and
- * grouping break, and xdg-desktop-portal can refuse sessions for an app id with
- * no matching installed `.desktop` file. [safe]
+ * Linux desktop entry / application id.
+ *
+ * Must equal the basename of the installed `.desktop` file, because
+ * freedesktop startup notification and the portal frontends resolve an app id
+ * to `<app_id>.desktop`. electron-builder names that file from
+ * `executableName` unless `linux.syncDesktopName` is on, in which case it names
+ * it from package.json `desktopName`. Both sides are pinned here so the chain
+ * cannot drift:
+ *
+ *   package.json desktopName = "aitracker.desktop"
+ *   linux.syncDesktopName    = true
+ *   -> /usr/share/applications/aitracker.desktop   (deb)
+ *      <AppDir>/aitracker.desktop                  (AppImage)
+ *   app.setDesktopName("aitracker.desktop")
+ *   -> Wayland app_id / X11 WM_CLASS = "aitracker"
+ *
+ * Getting this wrong breaks icon association and can make xdg-desktop-portal
+ * refuse a session for an app id with no matching installed file — the first
+ * packaged build wrote `aitracker.desktop` while the app announced
+ * `AITracker.desktop`. [safe]
  */
-export const APP_DESKTOP_NAME = "AITracker.desktop";
+export const APP_DESKTOP_NAME = `${APP_ID}.desktop`;
 
 /** Local data root directory name under the user's home (`~/.aitracker`). [compat: user data] */
 export const APP_DATA_DIR = `.${APP_ID}`;

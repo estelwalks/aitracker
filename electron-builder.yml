@@ -136,6 +136,17 @@ linux:
   # Keep executableName under linux:. A ROOT-level executableName also renames
   # the macOS payload through appInfo.productFilename.
   executableName: aitracker
+  # Window association, end to end. Without syncDesktopName the entry is named
+  # from `executableName`; with it, from package.json `desktopName`. Both are
+  # "aitracker" here, matching APP_DESKTOP_NAME, so the installed basename and
+  # Electron's app_id / WM_CLASS agree:
+  #   /usr/share/applications/aitracker.desktop  (deb)
+  #   <AppDir>/aitracker.desktop                 (AppImage)
+  # They did NOT agree before this was pinned: a real build wrote
+  # aitracker.desktop while the app announced AITracker.desktop, which breaks
+  # portal app-id lookup on every desktop. See
+  # dev-docs/linux/07-测试与验收.md §3.
+  syncDesktopName: true
   # Linux needs a directory of sized PNGs — .icns and .ico are not usable here.
   # Without an explicit linux.icon the resolver falls back to mac.icon and would
   # ship the white-plate Dock artwork, converting it through a downloaded
@@ -149,10 +160,11 @@ linux:
       Comment: AI development asset dashboard
       # An override is written verbatim, so the trailing ";" is required.
       Categories: Development;
-      # Must equal Electron's app_id (app.setDesktopName in electron/main.ts) or
-      # the taskbar icon and grouping break and xdg-desktop-portal can refuse
-      # sessions for an app id with no matching installed .desktop file.
-      StartupWMClass: AITracker
+      # StartupWMClass is the X11 window class, which Electron derives from
+      # `app.setDesktopName(...)` (APP_DESKTOP_NAME, i.e. "aitracker") and not
+      # from the product name. It must match or the taskbar icon and window
+      # grouping break.
+      StartupWMClass: aitracker
 deb:
   priority: optional
   # electron-builder's default list omits libgbm1 (a hard Electron dependency
@@ -178,9 +190,25 @@ deb:
     - libdrm2
     - libpango-1.0-0
     - libcairo2
+    # Status-area icon. Without a StatusNotifierItem host Electron falls back to
+    # the deprecated GtkStatusIcon, which native GNOME Shell does not display at
+    # all: the app would keep running with no visible way back to its window.
+    # One of the two sonames, because distributions ship either the ayatana or
+    # the legacy package.
+    - libayatana-appindicator3-1 | libappindicator3-1
 appImage:
   # Versionless for the same reason as the DMG and NSIS names above.
   artifactName: "${productName}-Linux-x64.${ext}"
-  # The default FUSE2 runtime is used. Documented consequence: Ubuntu 24.04
-  # users need libfuse2t64, or must run the AppImage with
-  # `--appimage-extract-and-run`.
+  # The default FUSE2 runtime is used. Verified on a libfuse3-only host (Kali
+  # rolling): plain execution fails with `dlopen(): error loading libfuse.so.2`
+  # and the documented `--appimage-extract-and-run` fallback starts the app
+  # normally. Ubuntu 22.04 ships libfuse2; 24.04+ and Debian 12+ need
+  # libfuse2t64 / libfuse2, which cannot be expressed as a deb dependency
+  # because an AppImage carries no package metadata.
+  #
+  # AppImageTarget.js:26 injects `--no-sandbox` into the generated Exec= unless
+  # `toolsets.appimage` is configured, so an AppImage started from the desktop
+  # menu runs without the Chromium sandbox. Setting `executableArgs: []` lets
+  # AppRun probe unprivileged user namespaces instead — at the cost of failing
+  # to start on hosts that disable them. See
+  # dev-docs/linux/07-测试与验收.md §4.
