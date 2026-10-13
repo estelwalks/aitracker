@@ -37,6 +37,7 @@ test("accepts matching strict-semver packages and derives beta contract", () => 
       { platform: "darwin-x64", name: "AITracker-macOS-x64.dmg" },
       { platform: "win32-arm64", name: "AITracker-Windows-arm64.exe" },
       { platform: "win32-x64", name: "AITracker-Windows-x64.exe" },
+      { platform: "linux-x64", name: "AITracker-Linux-x64.AppImage" },
     ],
   );
 });
@@ -117,8 +118,13 @@ test("parses supported options and rejects invalid option values", () => {
     () => parseReleaseContractArgs(["--release-dir"]),
     (error) => error.errorCode === ERROR_CODES.usage,
   );
+  // linux-x64 is a valid platform now; a genuinely unknown one still fails.
+  assert.equal(
+    parseReleaseContractArgs(["--platform", "linux-x64"]).platform,
+    "linux-x64",
+  );
   assert.throws(
-    () => parseReleaseContractArgs(["--platform", "linux-x64"]),
+    () => parseReleaseContractArgs(["--platform", "freebsd-x64"]),
     (error) =>
       error.errorCode === ERROR_CODES.platformInvalid &&
       error.exitCode === EXIT_CODES.usage,
@@ -178,14 +184,14 @@ test("the CLI entry point actually runs when invoked as a script", () => {
   // without checking anything.
   const result = spawnSync(
     process.execPath,
-    [SCRIPT, "--platform", "linux-x64"],
+    [SCRIPT, "--platform", "freebsd-x64"],
     { encoding: "utf8" },
   );
   assert.equal(result.status, EXIT_CODES.usage);
   assert.match(result.stderr, /RC_PLATFORM_INVALID/);
 });
 
-test("checks all four artifacts only when release-dir is explicitly supplied", async () => {
+test("checks every published artifact only when release-dir is explicitly supplied", async () => {
   const rootDir = await mkdtemp(join(tmpdir(), "aitracker-contract-test-"));
   const releaseDir = join(rootDir, "release");
   try {
@@ -200,7 +206,11 @@ test("checks all four artifacts only when release-dir is explicitly supplied", a
     );
 
     const withoutDirectory = await verifyReleaseContract({ rootDir });
-    assert.equal(withoutDirectory.artifacts.length, 4);
+    // Derived rather than hardcoded: the published set grows with each platform.
+    assert.equal(
+      withoutDirectory.artifacts.length,
+      expectedReleaseArtifacts().length,
+    );
     await assert.rejects(
       () => verifyReleaseContract({ rootDir, releaseDir, cwd: rootDir }),
       (error) => error.errorCode === ERROR_CODES.artifactDirectory,

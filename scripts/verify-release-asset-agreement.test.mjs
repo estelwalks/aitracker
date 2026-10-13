@@ -18,6 +18,10 @@ const SCRIPT = join(
 
 const METADATA_NAME = "release-metadata.json";
 
+// A deliberately self-contained pre-rename release: the four macOS/Windows
+// installers under their old names. It does not mirror
+// EXPECTED_ARTIFACT_NAMES — the point is that this stale release is missing
+// whatever the config now renders, including the Linux AppImage.
 const PLATFORM_KEYS = Object.freeze([
   "darwin-arm64",
   "darwin-x64",
@@ -123,10 +127,16 @@ test("assets still carrying the old names while the config renders new ones fail
     assets: assetsOf(PREVIOUS_NAMES),
     metadata: metadataOf(PREVIOUS_NAMES),
   });
+  // One problem per name the config renders that this stale release lacks: the
+  // four old macOS/Windows names no longer match, and the Linux AppImage this
+  // pre-Linux build never produced is missing entirely — so the stale release
+  // is reported against every name in EXPECTED_ARTIFACT_NAMES.
   assert.equal(problems.length, EXPECTED_ARTIFACT_NAMES.length);
   assert.ok(
     problems.every((problem) =>
-      /the release does not publish AITracker-(macOS|Windows)/u.test(problem),
+      /the release does not publish AITracker-(macOS|Windows|Linux)/u.test(
+        problem,
+      ),
     ),
     problems.join("\n"),
   );

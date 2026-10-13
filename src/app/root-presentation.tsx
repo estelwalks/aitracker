@@ -27,6 +27,7 @@ import { useTheme } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
 import { AppProviders } from "./providers";
 import type { QueryClient } from "@tanstack/react-query";
+import { PlatformProvider } from "../lib/platform";
 import type { RootLoaderData } from "./root-route-config";
 
 /**
@@ -76,7 +77,9 @@ export function RootComponent({
       initialDisplayCurrency={loaderData.displayCurrency}
       initialRates={loaderData.rates}
     >
-      <RootAppContent />
+      <PlatformProvider platform={loaderData.hostPlatform}>
+        <RootAppContent />
+      </PlatformProvider>
     </AppProviders>
   );
 }

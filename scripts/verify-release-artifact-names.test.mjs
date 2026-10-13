@@ -27,6 +27,8 @@ const CONFIG = [
   `  artifactName: ${EXPECTED_TEMPLATES[0]}`,
   "nsis:",
   `  artifactName: ${EXPECTED_TEMPLATES[1]}`,
+  "linux:",
+  `  artifactName: ${EXPECTED_TEMPLATES[2]}`,
   "",
 ].join("\n");
 
@@ -61,7 +63,7 @@ test("the shipped packaging config and release scripts agree on the names", asyn
   );
 });
 
-test("the four expected names are exactly what electron-builder renders", async () => {
+test("the expected names are exactly what electron-builder renders", async () => {
   const config = await readFile(
     join(REPOSITORY_ROOT, "electron-builder.yml"),
     "utf8",
@@ -69,16 +71,35 @@ test("the four expected names are exactly what electron-builder renders", async 
   // One template per target section: dmg renders .dmg for macOS, nsis renders
   // .exe for Windows, so the same ${productName}-${arch}.${ext} shape yields
   // different names per section.
+  // macOS and Windows use `${arch}` and are expanded per architecture; Linux
+  // spells the architecture out (`-x64`) because electron-builder renders
+  // `${arch}` as x86_64 for AppImage and amd64 for deb, which would give one
+  // platform two different suffixes.
   const templates = {
-    dmg: /^dmg:\n(?:(?!^\S)[\s\S])*?^\s+artifactName:\s*"?([^"\n]+?)"?\s*$/mu,
-    nsis: /^nsis:\n(?:(?!^\S)[\s\S])*?^\s+artifactName:\s*"?([^"\n]+?)"?\s*$/mu,
+    dmg: {
+      pattern:
+        /^dmg:\n(?:(?!^\S)[\s\S])*?^\s+artifactName:\s*"?([^"\n]+?)"?\s*$/mu,
+      ext: "dmg",
+      archs: ["arm64", "x64"],
+    },
+    nsis: {
+      pattern:
+        /^nsis:\n(?:(?!^\S)[\s\S])*?^\s+artifactName:\s*"?([^"\n]+?)"?\s*$/mu,
+      ext: "exe",
+      archs: ["arm64", "x64"],
+    },
+    linux: {
+      pattern:
+        /^linux:\n(?:(?!^\S)[\s\S])*?^\s+artifactName:\s*"?([^"\n]+?)"?\s*$/mu,
+      ext: "AppImage",
+      archs: ["x64"],
+    },
   };
   const rendered = new Set();
-  for (const [section, pattern] of Object.entries(templates)) {
+  for (const [section, { pattern, ext, archs }] of Object.entries(templates)) {
     const template = config.match(pattern)?.[1]?.trim();
     assert.ok(template, `${section} must declare an artifactName`);
-    const ext = section === "dmg" ? "dmg" : "exe";
-    for (const arch of ["arm64", "x64"]) {
+    for (const arch of archs) {
       rendered.add(
         template
           .replace("${productName}", "AITracker")

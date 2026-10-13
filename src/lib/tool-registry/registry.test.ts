@@ -510,8 +510,15 @@ describe("platform-profiles drive path resolution (P2-1 F5)", () => {
     assert.equal(win?.skippedLocations, undefined);
   });
 
-  it("linux planned never produces scan paths", () => {
-    const reg = regWithPacks(profileFixture());
+  it("a planned platform never produces scan paths", () => {
+    // Linux ships as supported now, so the "planned status is inert" rule is
+    // exercised through an explicitly planned fixture platform instead.
+    const fixture = profileFixture({
+      macos: "supported",
+      windows: "supported",
+      linux: "planned",
+    });
+    const reg = regWithPacks(fixture);
     const linux = resolvePlatformPlan(
       "profile-fixture",
       "detection",
@@ -528,7 +535,7 @@ describe("platform-profiles drive path resolution (P2-1 F5)", () => {
     const reg = regWithPacks(def);
     assert.equal(
       resolvePlatformPlan("profile-fixture", "detection", "linux", reg)?.status,
-      "planned",
+      "supported",
     );
     assert.equal(
       resolvePlatformPlan("profile-fixture", "detection", "macos", reg)?.status,

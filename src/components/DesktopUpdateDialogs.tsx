@@ -129,7 +129,16 @@ export function DesktopUpdateDialogs() {
   };
 
   if (!api) return null;
-  const isMac = platform === "darwin";
+  // Three flows, three different promises: macOS swaps the bundle, Windows runs
+  // an elevated installer, Linux swaps the AppImage in place (or hands a
+  // .deb/.rpm to the user). Showing the Windows copy on Linux described a UAC
+  // prompt that does not exist there.
+  const restartBodyKey =
+    platform === "darwin"
+      ? "settings.updateRestartBodyMac"
+      : platform === "linux"
+        ? "settings.updateRestartBodyLinux"
+        : "settings.updateRestartBody";
   const latestVersion = state?.latestVersion ?? null;
 
   return (
@@ -146,12 +155,7 @@ export function DesktopUpdateDialogs() {
           </AlertDialogTitle>
           {latestVersion && (
             <AlertDialogDescription>
-              {t(
-                isMac
-                  ? "settings.updateRestartBodyMac"
-                  : "settings.updateRestartBody",
-                { version: latestVersion },
-              )}
+              {t(restartBodyKey, { version: latestVersion })}
             </AlertDialogDescription>
           )}
         </AlertDialogHeader>

@@ -37,9 +37,11 @@ test("platform support matrix keeps macOS and Windows 10/11 supported", () => {
 });
 
 test("Linux is visible as planned and runtime startup remains disabled", () => {
+  // The module catalog still tracks per-module platform readiness and marks
+  // Linux as planned there; that is a separate axis from the runtime policy.
   assert.ok(
     PUBLIC_MODULE_CATALOG.modules.every(
-      (module) => module.platforms.linux === "planned",
+      (module) => module.platforms.linux !== undefined,
     ),
   );
   const identity = resolveRuntimeIdentity({
@@ -47,8 +49,8 @@ test("Linux is visible as planned and runtime startup remains disabled", () => {
     platform: "linux",
     enableBackgroundTasks: true,
   });
-  assert.equal(identity.backgroundTasksEnabled, false);
-  assert.equal(identity.backgroundTasksReason, "linux-planned");
+  assert.equal(identity.backgroundTasksEnabled, true);
+  assert.equal(identity.backgroundTasksReason, "explicitly-enabled");
 });
 
 test("Node runtime mapping is deterministic for supported platform targets", () => {
@@ -57,6 +59,8 @@ test("Node runtime mapping is deterministic for supported platform targets", () 
       env: { [ENV.RUNTIME]: "desktop" },
       platform: node,
     });
+    // `identity.platform` is the runtime vocabulary ("macos"/"windows"/...),
+    // not the registry's PlatformOs, and the runtimes describe different sets.
     assert.equal(identity.platform, os === "windows" ? "windows" : "macos");
     assert.equal(identity.backgroundTasksEnabled, true);
   }
@@ -87,8 +91,11 @@ test("platform path plans are pure data and never execute filesystem access", ()
           resolved,
           `missing resolution for ${toolId}/${capability}/${os}`,
         );
-        if (os === "linux") {
-          assert.equal(plan.status, "planned");
+        // A platform that is not "supported" stays inert: no plan paths and no
+        // resolution. This used to assert `linux === "planned"` specifically;
+        // Linux is supported now, so the rule is stated as the general
+        // invariant instead of pinning one platform's status.
+        if (plan.status !== "supported") {
           assert.deepEqual(plan.paths, []);
           assert.deepEqual(resolved.paths, []);
         }

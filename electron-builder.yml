@@ -109,3 +109,78 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  # `${arch}` does NOT render "x64" on Linux: builder-util switches it to
+  # x86_64 for AppImage/rpm and amd64 for deb. That would give one platform two
+  # different suffixes, breaking the "one stable name per platform" contract the
+  # release metadata, the README links and the CLI all resolve against. The arch
+  # is therefore spelled literally, and an arm64 build must override this name
+  # on the command line rather than reintroducing ${arch}.
+  artifactName: "${productName}-Linux-x64.${ext}"
+  # deb/rpm/pacman cannot be built without a maintainer: fpm fails with
+  # authorEmailIsMissed when neither `linux.maintainer` nor a package.json
+  # `author` with an email is present.
+  maintainer: AITracker Maintainers <maintainers@aitracker.dev>
+  vendor: AITracker
+  # Freedesktop main category (see the desktop entry below).
+  category: Development
+  synopsis: AI development asset dashboard
+  description: Local-first dashboard for AI token usage, cost, skills and memory.
+  # Keep executableName under linux:. A ROOT-level executableName also renames
+  # the macOS payload through appInfo.productFilename.
+  executableName: aitracker
+  # Linux needs a directory of sized PNGs — .icns and .ico are not usable here.
+  # Without an explicit linux.icon the resolver falls back to mac.icon and would
+  # ship the white-plate Dock artwork, converting it through a downloaded
+  # toolset. A directory of `NxN.png` files is used verbatim, with no download.
+  # scripts/generate-native-icons.mjs produces this set (16..512; a 1024 entry
+  # would create a non-standard hicolor/1024x1024 directory).
+  icon: build/native-icons/linux
+  desktop:
+    entry:
+      Name: AITracker
+      Comment: AI development asset dashboard
+      # An override is written verbatim, so the trailing ";" is required.
+      Categories: Development;
+      # Must equal Electron's app_id (app.setDesktopName in electron/main.ts) or
+      # the taskbar icon and grouping break and xdg-desktop-portal can refuse
+      # sessions for an app id with no matching installed .desktop file.
+      StartupWMClass: AITracker
+deb:
+  priority: optional
+  # electron-builder's default list omits libgbm1 (a hard Electron dependency
+  # that libgtk-3-0 does not pull in) and predates Ubuntu 24.04's t64 rename of
+  # libasound2, hence the alternative dependency below.
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - libgbm1
+    - libasound2 | libasound2t64
+    - libxkbcommon0
+    - libxdamage1
+    - libxcomposite1
+    - libxrandr2
+    - libcups2
+    - libdrm2
+    - libpango-1.0-0
+    - libcairo2
+appImage:
+  # Versionless for the same reason as the DMG and NSIS names above.
+  artifactName: "${productName}-Linux-x64.${ext}"
+  # The default FUSE2 runtime is used. Documented consequence: Ubuntu 24.04
+  # users need libfuse2t64, or must run the AppImage with
+  # `--appimage-extract-and-run`.

@@ -26,6 +26,22 @@ const sources = {
 // Include the intermediate Windows DPI sizes; a 16px-only PNG is upscaled at
 // 125/150/200%. Each frame is rasterized directly at its final size.
 export const WINDOWS_ICON_SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
+
+/**
+ * Sizes for the freedesktop icon set Linux packaging needs.
+ *
+ * electron-builder installs each file as
+ * `/usr/share/icons/hicolor/<size>x<size>/apps/<executableName>.png` and reads
+ * the size from the file name, so these must be the standard hicolor sizes.
+ * 1024 is deliberately absent: it is not a hicolor directory and would install
+ * into a non-standard `hicolor/1024x1024/`.
+ */
+export const LINUX_ICON_SIZES = [16, 24, 32, 48, 64, 128, 256, 512];
+
+/** Relative name of each Linux icon inside the output directory. */
+export function linuxIconName(size) {
+  return `linux/${size}x${size}.png`;
+}
 const ICNS_ENTRIES = [
   ["icp4", 16],
   ["icp5", 32],
@@ -53,6 +69,7 @@ const outputNames = [
     `favicon-${appearance}-512.png`,
     `favicon-${appearance}-1024.png`,
   ]),
+  ...LINUX_ICON_SIZES.map(linuxIconName),
   "manifest.json",
 ];
 
@@ -157,9 +174,12 @@ async function exists(path) {
 
 async function currentManifest() {
   return {
-    version: 5,
+    // Bumped 5 -> 6 when the Linux hicolor set was added, so an existing tree
+    // is regenerated instead of being reported as current.
+    version: 6,
     generator: await sha256(fileURLToPath(import.meta.url)),
     windowsSizes: WINDOWS_ICON_SIZES,
+    linuxSizes: LINUX_ICON_SIZES,
     macTemplateSizes: [16, 32],
     sources: {
       light: await sha256(sources.light),
@@ -199,6 +219,25 @@ async function removeGeneratedDirectory(directory) {
     throw new Error(`Refusing to remove non-generated directory: ${target}`);
   }
   await rm(target, { recursive: true, force: true });
+}
+
+/**
+ * The freedesktop hicolor set. Uses the same transparent artwork as the Windows
+ * ICO and the running window — never the macOS white Dock tile, which would put
+ * a white square behind the mark on a Linux dock or taskbar.
+ */
+async function generateLinuxIcons(stagingDirectory, svg) {
+  const glyph = compactArtwork(svg);
+  const directory = join(stagingDirectory, "linux");
+  await mkdir(directory, { recursive: true });
+  await Promise.all(
+    LINUX_ICON_SIZES.map((size) =>
+      writeFile(
+        join(stagingDirectory, linuxIconName(size)),
+        renderPng(glyph, size, 96),
+      ),
+    ),
+  );
 }
 
 async function generateAppearance(stagingDirectory, appearance, svg) {
@@ -294,11 +333,12 @@ export async function generateNativeIcons() {
         `${JSON.stringify(manifest, null, 2)}\n`,
         "utf8",
       ),
+      generateLinuxIcons(stagingDirectory, artworks.light),
     ]);
     await removeGeneratedDirectory(outputDirectory);
     await rename(stagingDirectory, outputDirectory);
     console.log(
-      "Generated native icons: macOS white app tiles, transparent menu-bar templates and Windows multi-size ICOs.",
+      "Generated native icons: macOS white app tiles, transparent menu-bar templates, Windows multi-size ICOs and the Linux hicolor PNG set.",
     );
   } catch (error) {
     await removeGeneratedDirectory(stagingDirectory);

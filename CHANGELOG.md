@@ -5,6 +5,53 @@ uses semantic versioning for published releases.
 
 ## [Unreleased]
 
+### Details
+
+- Linux is a supported desktop platform. Every release now also ships
+  `AITracker-Linux-x64.AppImage` and `AITracker-Linux-x64.deb`; the download
+  links, the `npx @estelwalks/aitracker` launcher and the in-app updater all
+  resolve them, and `npm run dist:linux:x64` builds them (on Linux — Electron is
+  not cross-compiled here).
+- Linux artifacts are recorded in a **separate** `release-metadata-linux.json`
+  asset, not in `release-metadata.json`. That document keeps exactly its four
+  macOS/Windows keys: a client shipped before Linux support rejects any fifth
+  key outright, so adding `linux-x64` there would have stopped every existing
+  install from updating itself for every later release. Release a version
+  carrying this change _before_ publishing a release whose assets include the
+  Linux installers.
+- The in-app update flow works on Linux. Previously it fell through to a
+  best-effort `spawn` of the downloaded file, which is written 0644 — the
+  resulting `EACCES` arrived after success had already been reported, so
+  "Restart and update" did nothing and said nothing. An AppImage is now swapped
+  in place by a detached script (the app quits, the new image replaces the old
+  one, and it relaunches); a `.deb`/`.rpm` is handed to the system installer
+  with the exact command printed for the user, and the app never elevates on
+  their behalf.
+- Window chrome and desktop integration: Linux runs frameless (`titleBarStyle`
+  is ignored there, so the app previously showed the GTK header bar _and_ its
+  own title bar), the window is registered with `app.setDesktopName` so the
+  taskbar icon and grouping match the installed `.desktop` file, and the
+  self-drawn title bar now handles double-click-to-maximize.
+- The Chromium sandbox is probed before startup on Linux. With the SUID helper
+  unusable and unprivileged user namespaces disabled, Electron aborts before any
+  window exists — no window, no dialog, a stale single-instance lock. The app
+  now detects that combination and starts with `--no-sandbox`, saying so on
+  stderr. Any inconclusive result keeps the sandbox.
+- Twenty more agent tools are tracked on Linux (the ones whose data lives in a
+  `~/.<tool>` directory, verified against a Linux-shipping reference
+  implementation). Five tools with no Linux build — AiPy, Doubao Work, Kimi
+  Work, Marvis and Trae Work — are now reported as unsupported rather than
+  "planned", because a planned status rendered them as "not installed".
+- Linux locale handling: an unset or `C`/`POSIX` locale used to resolve to
+  Chinese, which is the normal state in containers and some minimal sessions.
+  It now resolves to English.
+- `reports` no longer tells Linux users to "use the macOS/Windows app"; the
+  scheduler runs there now.
+- Fixed a latent skill-root bug: skill roots are resolved through a projection
+  that pins the XDG bases to their fallback defaults, so a custom
+  `XDG_CONFIG_HOME`/`XDG_DATA_HOME` would have sent discovery — and, since the
+  first root is the write path, installation — to the wrong directory.
+
 <!--
 Unreleased work is summarised here. The release branch turns this whole
 section into `## [X.Y.Z] - YYYY-MM-DD` when the version is actually

@@ -39,12 +39,21 @@ jobs:
       # Installer names carry no version so /releases/latest/download/<name>
       # keeps resolving across releases; both sides of that contract are pinned
       # by these two gates (electron-builder.yml + the release scripts, and the
-      # four READMEs).
+      # READMEs).
       - name: Release artifact names
         run: npm run verify:release-artifact-names
 
       - name: README release links
         run: npm run verify:readme-release-links
+
+      # The gates above are the scripts; these are their unit tests. They pin the
+      # artifact-name lists and the metadata key contract, and they only ran
+      # locally before — so a rename could pass CI while `npm run test:release`
+      # failed on the developer's machine. Linux added a fifth installer name and
+      # a second metadata document, which is exactly the kind of change that
+      # drifts silently without this step.
+      - name: Release contract tests
+        run: npm run test:release
 
       - name: Typecheck (app + Electron + scanner)
         run: npm run typecheck

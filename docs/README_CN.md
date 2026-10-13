@@ -78,6 +78,8 @@ Release：安装包文件名不带版本号，每次发布变化的只有 tag。
   [AITracker-Windows-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-x64.exe)
 - Windows（ARM64）：
   [AITracker-Windows-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-arm64.exe)
+- Linux（x64，AppImage）：
+  [AITracker-Linux-x64.AppImage](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.AppImage)
 
 每个 Release 都带有该版本的 `release-metadata.json` 和 `checksums.txt`，其中记录了
 该 Release 的准确版本号与 SHA-256。需要精确复现某个构建时，请到对应 tag 的 Release

@@ -240,6 +240,20 @@ async function writeMarkerAtomically(
 }
 
 /**
+ * Packaged desktop platforms that run the one-time data reset.
+ *
+ * The initial-schema-v1 release deliberately replaced the prior migration
+ * lineage, and a database from before it makes the strict forward-only
+ * migration check reject startup. That is not a macOS/Windows-only situation:
+ * a Linux user can already have `~/.aitracker` from an earlier CLI install, so
+ * leaving Linux out would strand exactly those users with a startup failure and
+ * no recovery path.
+ */
+function isResetSupportedPlatform(platform: NodeJS.Platform): boolean {
+  return platform === "darwin" || platform === "win32" || platform === "linux";
+}
+
+/**
  * Prepare the one-time packaged desktop data reset. This function removes the
  * old product data but intentionally does not mark success; the caller owns
  * the later initialization gate and must explicitly persist completion.
@@ -248,14 +262,11 @@ export async function prepareReleaseDataReset(
   options: ReleaseDataResetOptions,
 ): Promise<ReleaseDataReset> {
   // The initial-schema-v1 release deliberately replaced the prior migration
-  // lineage. Keeping an old Windows database would make the strict
-  // forward-only migration check reject startup, while macOS was already
-  // reset here. Both supported packaged desktop platforms must therefore
-  // follow the same one-time, marker-guarded reset.
-  if (
-    (options.platform !== "darwin" && options.platform !== "win32") ||
-    !options.isPackaged
-  ) {
+  // lineage. Keeping an old database would make the strict forward-only
+  // migration check reject startup, so every supported packaged desktop
+  // platform follows the same one-time, marker-guarded reset. The user is
+  // always asked to confirm before anything is removed.
+  if (!isResetSupportedPlatform(options.platform) || !options.isPackaged) {
     return {
       status: "not-applicable",
       markInitializationComplete: async () => undefined,
@@ -295,10 +306,7 @@ export async function prepareReleaseDataReset(
 export async function markReleaseDataResetComplete(
   options: ReleaseDataResetOptions,
 ): Promise<void> {
-  if (
-    (options.platform !== "darwin" && options.platform !== "win32") ||
-    !options.isPackaged
-  ) {
+  if (!isResetSupportedPlatform(options.platform) || !options.isPackaged) {
     return;
   }
   const { markerPath } = resolveResetPaths(options);
@@ -309,10 +317,7 @@ export async function markReleaseDataResetComplete(
 export async function readReleaseDataResetMarker(
   options: ReleaseDataResetOptions,
 ): Promise<string | null> {
-  if (
-    (options.platform !== "darwin" && options.platform !== "win32") ||
-    !options.isPackaged
-  ) {
+  if (!isResetSupportedPlatform(options.platform) || !options.isPackaged) {
     return null;
   }
   const { markerPath } = resolveResetPaths(options);

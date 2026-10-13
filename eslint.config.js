@@ -65,7 +65,9 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/lib/theme.tsx"],
+    // Context modules necessarily export the provider component next to their
+    // hook, type guard and small pure helpers (same shape as theme.tsx).
+    files: ["src/lib/theme.tsx", "src/lib/platform.tsx"],
     rules: {
       "react-refresh/only-export-components": "off",
     },

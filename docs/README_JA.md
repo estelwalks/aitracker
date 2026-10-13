@@ -81,6 +81,8 @@ npm run dev:desktop
   [AITracker-Windows-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-x64.exe)
 - Windows（ARM64）：
   [AITracker-Windows-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-arm64.exe)
+- Linux（x64、AppImage）:
+  [AITracker-Linux-x64.AppImage](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.AppImage)
 
 各リリースにはそのバージョンの `release-metadata.json` と `checksums.txt` が添付され、
 正確なバージョンと SHA-256 が記録されています。特定のビルドを再現したい場合は、

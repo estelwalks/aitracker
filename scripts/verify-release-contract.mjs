@@ -36,6 +36,8 @@ export const RELEASE_PLATFORMS = Object.freeze([
   "darwin-x64",
   "win32-arm64",
   "win32-x64",
+  "linux-x64",
+  "linux-arm64",
 ]);
 
 const VALUE_OPTIONS = new Set([
@@ -142,6 +144,16 @@ export function expectedReleaseArtifacts(platform) {
     Object.freeze({
       platform: "win32-x64",
       name: "AITracker-Windows-x64.exe",
+    }),
+    // Linux ships an AppImage. Only x64 is built at launch: the linux
+    // artifactName spells the architecture out instead of using `${arch}`
+    // (electron-builder renders that as x86_64 for AppImage and amd64 for deb),
+    // so there is no arm64 template yet and no arm64 name to verify.
+    // `RELEASE_PLATFORMS` still accepts linux-arm64 so an arm64 release can be
+    // verified once its template exists.
+    Object.freeze({
+      platform: "linux-x64",
+      name: "AITracker-Linux-x64.AppImage",
     }),
   ];
   return Object.freeze(

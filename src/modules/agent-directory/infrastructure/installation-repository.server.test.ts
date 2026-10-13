@@ -1,4 +1,9 @@
 import assert from "node:assert/strict";
+import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
+import {
+  getDefaultRegistry,
+  resolvePlatformPlan,
+} from "../../../lib/tool-registry/registry.ts";
 import test from "node:test";
 
 import { findDtoDisclosureViolations } from "../../../test-support/privacy-contract.ts";
@@ -83,8 +88,23 @@ test("linux probes only linux-supported tools; planned tools are unsupported", a
     },
   });
   const snapshot = await repository.inspect({ platform: "linux" });
-  const linuxSupported = ["pi", "omo", "prime-agent", "minimax-code"];
-  assert.equal(calls, 4);
+  // Derived rather than hardcoded: the Linux launch promoted 21 tools to
+  // supported, so a fixed list and a fixed probe count would both be wrong.
+  // The expectation is the tools that actually resolve at least one Linux
+  // detection path — a tool can be marked supported yet declare no Linux
+  // detection location, and such a tool is correctly never probed.
+  const registry = getDefaultRegistry();
+  const linuxProbed = PUBLIC_TOOL_MANIFEST.tools
+    .filter((tool) => tool.platforms.linux === "supported")
+    .map((tool) => tool.id)
+    .filter(
+      (id) =>
+        (resolvePlatformPlan(id, "detection", "linux", registry)?.paths
+          .length ?? 0) > 0,
+    );
+  const linuxSupported = linuxProbed;
+  assert.ok(linuxSupported.length > 0, "linux has probed tools");
+  assert.equal(calls, linuxSupported.length);
   for (const id of linuxSupported) {
     assert.equal(
       snapshot.installations.find((item) => item.agentId === id)?.status,

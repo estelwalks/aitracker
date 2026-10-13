@@ -3,7 +3,7 @@
   "configVersion": 1,
   "id": "commandcode",
   "display": { "name": "Command Code", "nameZh": "Command Code", "icon": "other", "color": "#8b5cf6" },
-  "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
+  "platforms": { "macos": "supported", "windows": "supported", "linux": "supported" },
   "detection": {
     "locations": [{ "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".commandcode/projects" }]
   },

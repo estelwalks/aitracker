@@ -64,7 +64,13 @@ import {
   LOCALE_MODE_PREF_KEY,
   LOCALE_PREF_KEY,
 } from "./prefs.js";
-import { APP_NAME, ENV } from "./app-config.js";
+import { APP_DESKTOP_NAME, APP_NAME, ENV } from "./app-config.js";
+import {
+  canUseLinuxChromiumSandbox,
+  executableDirectoryOf,
+  NO_SANDBOX_SWITCH,
+  sandboxDisabledByEnvironment,
+} from "./linux-sandbox.js";
 
 const TCC_PROJECT_PROBE_MARKER = "aitracker-tcc-project-probe-enabled";
 import { SecurityScannerService } from "./security-scanner-service.js";
@@ -219,6 +225,20 @@ function startPeriodicUpdateChecks(): void {
 }
 
 /**
+ * Where the downloaded installer and its hand-off script are written.
+ *
+ * macOS and Windows keep using the OS temp directory. Linux does not: `/tmp` is
+ * frequently a `tmpfs` (so a 100-200 MB AppImage is held in RAM) and is
+ * sometimes mounted `noexec`, which would make the hand-off script impossible
+ * to run at all. `userData` is on disk, is already per-user (0700), and is where
+ * the update is going to be needed anyway.
+ */
+function updateHandoffDirectory(): string {
+  if (process.platform !== "linux") return app.getPath("temp");
+  return join(app.getPath("userData"), "updates");
+}
+
+/**
  * Hand the verified downloaded installer over to the platform. On Windows a
  * generated `.cmd` hand-off script is opened through ShellExecute
  * (`shell.openPath`), which starts the silent installer with its UAC prompt;
@@ -243,8 +263,12 @@ async function restartToInstallNow(): Promise<{ started: boolean }> {
     processId: process.pid,
     // The macOS script refuses to install a build older than this one.
     currentVersion: manager.state.latestVersion ?? app.getVersion(),
-    tempDirectory: app.getPath("temp"),
+    tempDirectory: updateHandoffDirectory(),
+    // Inside an AppImage `execPath` is the ephemeral mount point, so the file
+    // to replace is the one the user actually launched.
+    ...(process.env.APPIMAGE ? { appImagePath: process.env.APPIMAGE } : {}),
     openPathFn: (path) => shell.openPath(path),
+    showItemInFolderFn: (path) => shell.showItemInFolder(path),
   });
   if (!result.launched) {
     console.error(
@@ -260,6 +284,15 @@ async function restartToInstallNow(): Promise<{ started: boolean }> {
     // Both macOS hand-offs run outside this process, which has to step aside:
     // the auto-install script waits for this pid to exit before replacing the
     // bundle, and the manual flow shows the mounted volume.
+    isQuitting = true;
+    app.quit();
+  } else if (
+    process.platform === "linux" &&
+    result.method === "linux-appimage-swap"
+  ) {
+    // An AppImage cannot overwrite itself while it is running, so the swap
+    // script waits for this pid — which means the app has to actually exit.
+    // Only for the swap method: the package and manual flows keep running.
     isQuitting = true;
     app.quit();
   }
@@ -1252,9 +1285,17 @@ async function createMainWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     ...mainWindowSize,
     icon: currentAppIconPath() ?? undefined,
-    // Borderless + self-drawn title bar: Hide the system's native title bar and window buttons, and the rendering process
-    // Provides a theme-consistent dark title bar (macOS retains native traffic light buttons).
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    // Borderless + self-drawn title bar: hide the system's native title bar and
+    // window buttons; the renderer draws a theme-consistent bar instead (macOS
+    // keeps its native traffic lights through `hiddenInset`).
+    //
+    // `titleBarStyle` is a macOS/Windows option and is IGNORED on Linux, where
+    // only `frame: false` removes the decorations. Relying on `titleBarStyle`
+    // alone left Linux with the GTK header bar AND this app's own 36px bar —
+    // two title bars and two sets of minimize/maximize/close buttons.
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hiddenInset" as const }
+      : { frame: false }),
     autoHideMenuBar: true,
     // Show window immediately (dark background to avoid white screen flickering): the first complete scan may take a long time,
     // Waiting for ready-to-show will make the user think that the application has not started.
@@ -1394,6 +1435,46 @@ async function confirmReleaseDataReset(): Promise<boolean> {
   });
   return response === 0;
 }
+
+// Decide the Chromium sandbox before anything else. With the sandbox unusable,
+// Electron does not warn and continue: the browser process aborts before a
+// window exists, so the user gets no window, no dialog and a stale
+// single-instance lock. Selecting the fallback here — and saying so on stderr,
+// because there is no UI yet — is the only place this can be handled.
+if (process.platform === "linux") {
+  if (sandboxDisabledByEnvironment(process.env)) {
+    console.warn(
+      "AITracker: ELECTRON_DISABLE_SANDBOX=1 is set; the Chromium sandbox is off by explicit request.",
+    );
+  } else if (
+    !canUseLinuxChromiumSandbox({
+      platform: process.platform,
+      executableDirectory: executableDirectoryOf(process.execPath),
+      isPackaged: app.isPackaged,
+    })
+  ) {
+    // Chromium reads this switch from the command line. Disabling it is worse
+    // than keeping it, so it only happens when the probe could prove both the
+    // SUID helper and unprivileged user namespaces are unusable — otherwise the
+    // app would not start at all.
+    app.commandLine.appendSwitch(NO_SANDBOX_SWITCH);
+    console.warn(
+      "AITracker: the Chromium sandbox is unavailable on this system " +
+        "(no usable chrome-sandbox helper and unprivileged user namespaces are disabled), " +
+        "so it has been disabled to let the app start. Install the .deb package, or run the " +
+        "AppImage with --appimage-extract-and-run, to restore it.",
+    );
+  }
+}
+
+// Must run before the single-instance lock and before any window exists.
+// `setDesktopName` is what makes the Wayland `app_id` / X11 `WM_CLASS` match the
+// `.desktop` file electron-builder installs (linux.desktop.entry in
+// electron-builder.yml). Without it Electron uses a hyphenated slug of the app
+// name, so the taskbar shows a generic icon, windows do not group, and
+// xdg-desktop-portal can refuse to open a directory picker for an app id it
+// cannot resolve. Harmless on macOS and Windows, where the call is ignored.
+app.setDesktopName(APP_DESKTOP_NAME);
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {

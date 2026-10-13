@@ -246,6 +246,8 @@ export const settings = {
     "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出，随后系统会弹出权限确认，请选择「是/继续」以完成安装；安装完成后应用会自动重新打开。",
   updateRestartBodyMac:
     "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出、自动完成安装并重新打开；首次启动时 macOS 会弹一次安全确认，选择「打开」即可。",
+  updateRestartBodyLinux:
+    "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出，并自动替换为新版本后重新打开。（若下载的是 .deb / .rpm 安装包，应用会打开文件所在目录，请在终端执行提示的安装命令完成安装。）",
   updateRestartNow: "立即重启更新",
   updateInstallingShort: "安装中…",
   updateLater: "稍后",

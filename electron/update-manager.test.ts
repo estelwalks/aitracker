@@ -439,10 +439,94 @@ test("the released metadata shape is accepted", async () => {
   assert.equal(state.downloadUrl, `${tagBase}/AITracker-macOS-x64.dmg`);
 });
 
-test("a document listing an unknown platform is still rejected", async () => {
-  // The three known keys plus win32-arm64 are accepted; anything else means the
-  // document is not ours. Covered by the metadata shape test above together
-  // with the fixtures, and asserted here through a bogus platform key.
+test("a platform-shaped extra artifact key is tolerated and ignored", async () => {
+  // Forward tolerance (dev-docs/linux/01-架构决策.md §3.1): a release may add a
+  // fifth platform key this client does not know yet. Rejecting the whole
+  // document would strand this install's own updates for every later release,
+  // so a key shaped `<platform>-<arch>` is accepted and ignored while the four
+  // required keys still decide the outcome.
+  //
+  // The extra keys here name assets the release does NOT carry, so darwin must
+  // still resolve to the darwin artifact — proof the extra keys were ignored
+  // rather than consulted.
+  const latestBase =
+    "https://github.com/estelwalks/aitracker/releases/latest/download";
+  const tagBase =
+    "https://github.com/estelwalks/aitracker/releases/download/v1.0.4";
+  const payload = Buffer.from("installer-bytes-1.0.4");
+  const sha256 = createHash("sha256").update(payload).digest("hex");
+  const names: Record<string, string> = {
+    "darwin-arm64": "AITracker-macOS-arm64.dmg",
+    "darwin-x64": "AITracker-macOS-x64.dmg",
+    "win32-arm64": "AITracker-Windows-arm64.exe",
+    "win32-x64": "AITracker-Windows-x64.exe",
+  };
+  const artifactFor = (name: string) => ({
+    name,
+    url: `${latestBase}/${name}`,
+    sha256,
+    size: payload.byteLength,
+  });
+  const manager = new UpdateManager({
+    currentVersion: "1.0.3",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) {
+        return response([
+          {
+            tag_name: "v1.0.4",
+            prerelease: false,
+            draft: false,
+            assets: [
+              ...Object.values(names).map((name) => ({
+                name,
+                browser_download_url: `${tagBase}/${name}`,
+              })),
+              {
+                name: "release-metadata.json",
+                browser_download_url: `${tagBase}/release-metadata.json`,
+              },
+            ],
+          },
+        ]);
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response({
+          schemaVersion: 1,
+          appVersion: "1.0.4",
+          channel: "stable",
+          repository: "estelwalks/aitracker",
+          gitTag: "v1.0.4",
+          artifacts: {
+            ...Object.fromEntries(
+              Object.entries(names).map(([key, name]) => [
+                key,
+                artifactFor(name),
+              ]),
+            ),
+            "linux-x64": artifactFor("AITracker-Linux-x64.AppImage"),
+            "linux-arm64": artifactFor("AITracker-Linux-arm64.AppImage"),
+          },
+        });
+      }
+      return new Response(payload, { status: 200 });
+    },
+    mkdirFn: async () => undefined,
+    writeFileFn: async () => undefined,
+  });
+
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "available");
+  assert.equal(state.assetName, "AITracker-macOS-x64.dmg");
+});
+
+test("a document with a non-platform extra key is still rejected", async () => {
+  // Tolerance is limited to keys shaped `<platform>-<arch>`. Anything else means
+  // the document is not ours, which is what keeps the "is this our release
+  // metadata" check meaningful.
   const base =
     "https://github.com/estelwalks/aitracker/releases/download/v1.0.2";
   const payload = Buffer.from("bytes");
@@ -496,13 +580,81 @@ test("a document listing an unknown platform is still rejected", async () => {
                 },
               ]),
             ),
-            "linux-x64": {
+            "not-a-platform-key": {
               name: "AITracker.AppImage",
               url: `${base}/AITracker.AppImage`,
               sha256,
               size: payload.byteLength,
             },
           },
+        });
+      }
+      return new Response(payload, { status: 200 });
+    },
+    mkdirFn: async () => undefined,
+    writeFileFn: async () => undefined,
+  });
+
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "error");
+  assert.equal(state.errorCode, "download");
+});
+
+test("a document missing a required platform key is still rejected", async () => {
+  // `win32-arm64` is required (the compatibility window that let it be optional
+  // closed at 1.0.3) and is deliberately absent here.
+  const base =
+    "https://github.com/estelwalks/aitracker/releases/download/v1.0.2";
+  const payload = Buffer.from("bytes");
+  const sha256 = createHash("sha256").update(payload).digest("hex");
+  const names: Record<string, string> = {
+    "darwin-arm64": "AITracker-1.0.2-arm64.dmg",
+    "darwin-x64": "AITracker-1.0.2-x64.dmg",
+    "win32-x64": "AITracker-Setup-1.0.2-x64.exe",
+  };
+  const manager = new UpdateManager({
+    currentVersion: "1.0.1",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) {
+        return response([
+          {
+            tag_name: "v1.0.2",
+            prerelease: false,
+            assets: [
+              ...Object.values(names).map((name) => ({
+                name,
+                browser_download_url: `${base}/${name}`,
+              })),
+              {
+                name: "release-metadata.json",
+                browser_download_url: `${base}/release-metadata.json`,
+              },
+            ],
+          },
+        ]);
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response({
+          schemaVersion: 1,
+          appVersion: "1.0.2",
+          channel: "stable",
+          repository: "estelwalks/aitracker",
+          gitTag: "v1.0.2",
+          artifacts: Object.fromEntries(
+            Object.entries(names).map(([key, name]) => [
+              key,
+              {
+                name,
+                url: `${base}/${name}`,
+                sha256,
+                size: payload.byteLength,
+              },
+            ]),
+          ),
         });
       }
       return new Response(payload, { status: 200 });

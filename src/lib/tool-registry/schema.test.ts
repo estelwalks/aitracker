@@ -598,8 +598,9 @@ describe("shared policy packs (TC-POL-001)", () => {
       "windows11",
     ]);
     assert.deepEqual(pack.basePlatforms.configHome, ["macos", "linux"]);
-    assert.equal(pack.defaultStatus.linux, "planned");
+    assert.equal(pack.defaultStatus.linux, "supported");
     assert.equal(pack.defaultStatus.macos, "supported");
+    assert.equal(pack.defaultStatus.windows, "supported");
   });
 
   test("manifest lists all built-in tools in frozen UI order", () => {

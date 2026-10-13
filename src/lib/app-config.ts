@@ -38,6 +38,17 @@ export const APP_VERSION = packageJson.version;
 /** Source repository link shown on the About page. */
 export const APP_REPO_URL = "https://github.com/estelwalks/aitracker";
 
+/**
+ * Linux desktop entry / application id. electron-builder writes the `.desktop`
+ * file from `linux.desktop.entry` in electron-builder.yml, and Electron must be
+ * told the same name: `app.setDesktopName(...)` becomes the Wayland `app_id`
+ * and the X11 `WM_CLASS`. Left unset, Electron falls back to a hyphenated slug
+ * of the app name, which is not a valid portal identity — taskbar icons and
+ * grouping break, and xdg-desktop-portal can refuse sessions for an app id with
+ * no matching installed `.desktop` file. [safe]
+ */
+export const APP_DESKTOP_NAME = "AITracker.desktop";
+
 /** Local data root directory name under the user's home (`~/.aitracker`). [compat: user data] */
 export const APP_DATA_DIR = `.${APP_ID}`;
 /** Namespace for SQLite-backed application preference keys (`aitracker.*`). */

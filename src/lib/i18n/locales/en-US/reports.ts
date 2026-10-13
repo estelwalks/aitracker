@@ -108,7 +108,7 @@ export const reports = {
     schedulerOff:
       "The background scheduler is not running; scheduled generation will not fire.",
     schedulerOffHint:
-      "Background tasks are not enabled on this platform or the scheduler failed to start; use the macOS/Windows app and check the application logs.",
+      "Background tasks are turned off, or the scheduler failed to start; check the app's settings and the application logs.",
     runSummary: "{time} · {result}",
     loadFailed: "Failed to load the report schedule",
     runStatus: {

@@ -11,7 +11,7 @@
   "platforms": {
     "macos": "supported",
     "windows": "supported",
-    "linux": "planned"
+    "linux": "supported"
   },
   "detection": {
     "locations": [

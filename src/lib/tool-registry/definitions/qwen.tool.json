@@ -4,7 +4,7 @@
   "id": "qwen",
   "catalogVisible": false,
   "display": { "name": "Qwen CLI", "nameZh": "Qwen CLI", "icon": "other", "color": "#615ced" },
-  "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
+  "platforms": { "macos": "supported", "windows": "supported", "linux": "supported" },
   "detection": {
     "locations": [{ "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".qwen/projects" }]
   },

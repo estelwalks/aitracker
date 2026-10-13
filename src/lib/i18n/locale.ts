@@ -72,14 +72,28 @@ export function resolveCurrencyFromSearch(
 }
 
 /**
+ * Language tags that mean "no locale was configured" rather than naming a
+ * language. `LANG=C` and `LANG=POSIX` are the portable C locale, and Linux
+ * sessions, containers and `sudo` without `-E` hand them out routinely. They
+ * must not be read as an unparseable language tag: doing so would show Chinese
+ * to a user who never asked for it.
+ */
+const UNCONFIGURED_LOCALE_TAGS = new Set(["c", "posix"]);
+
+/**
  * Map an OS/browser language tag to a supported locale. Accepts both
- * `app.getLocale()`-style tags ("zh-CN", "en-US", "ja") and full BCP-47
- * tags ("zh-Hans-CN", "en-GB"). Matches on the primary language subtag;
- * anything unknown falls back to zh-CN.
+ * `app.getLocale()`-style tags ("zh-CN", "en-US", "ja") and full POSIX/BCP-47
+ * tags ("zh-Hans-CN", "en_US.UTF-8", "C.UTF-8"). Only the language subtag
+ * matters: the codeset follows a dot and the territory an underscore or dash.
+ *
+ * A recognised primary subtag maps to its locale. An explicit "no locale"
+ * marker (see {@link UNCONFIGURED_LOCALE_TAGS}) resolves to en-US, the neutral
+ * choice. Anything else unknown falls back to zh-CN, the product's primary
+ * audience.
  */
 export function mapSystemLocale(raw: string | null | undefined): Locale {
   if (raw == null) return "zh-CN";
-  const primary = raw.toLowerCase().split(/[-_]/)[0];
+  const primary = raw.toLowerCase().split(/[._-]/u)[0];
   switch (primary) {
     case "zh":
       return "zh-CN";
@@ -90,7 +104,7 @@ export function mapSystemLocale(raw: string | null | undefined): Locale {
     case "ko":
       return "ko-KR";
     default:
-      return "zh-CN";
+      return UNCONFIGURED_LOCALE_TAGS.has(primary) ? "en-US" : "zh-CN";
   }
 }
 

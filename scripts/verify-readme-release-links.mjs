@@ -18,6 +18,7 @@ export const README_DOWNLOAD_NAMES = Object.freeze([
   "AITracker-macOS-x64.dmg",
   "AITracker-Windows-x64.exe",
   "AITracker-Windows-arm64.exe",
+  "AITracker-Linux-x64.AppImage",
 ]);
 
 /** Paths whose links must stay on the versionless installer contract. */

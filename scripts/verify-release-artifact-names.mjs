@@ -24,16 +24,24 @@ export const EXPECTED_ARTIFACT_NAMES = Object.freeze([
   "AITracker-macOS-x64.dmg",
   "AITracker-Windows-arm64.exe",
   "AITracker-Windows-x64.exe",
+  "AITracker-Linux-x64.AppImage",
 ]);
 
 /**
- * electron-builder templates that render exactly those four names. `${arch}`
- * stays, because it selects the architecture; `${version}` (or any other
- * version reference) may not appear in an artifact name.
+ * electron-builder templates that render exactly those names. `${arch}` stays
+ * for macOS and Windows, because it selects the architecture; `${version}` (or
+ * any other version reference) may not appear in an artifact name.
+ *
+ * Linux deliberately spells the architecture out (`-x64`) instead of using
+ * `${arch}`: electron-builder renders `${arch}` as `x86_64` for AppImage and
+ * `amd64` for deb, which would give one platform two different suffixes and
+ * break the single stable name the metadata, README links and CLI resolve
+ * against.
  */
 export const EXPECTED_TEMPLATES = Object.freeze([
   "${productName}-macOS-${arch}.${ext}",
   "${productName}-Windows-${arch}.${ext}",
+  "${productName}-Linux-x64.${ext}",
 ]);
 
 /** `${version}`, `${ buildVersion }`, `${env.VERSION}` … */
@@ -60,6 +68,7 @@ const ARTIFACT_NAME_SOURCES = Object.freeze([
       "AITracker-macOS-x64.dmg",
       "AITracker-Windows-arm64.exe",
       "AITracker-Windows-x64.exe",
+      "AITracker-Linux-x64.AppImage",
     ],
   },
   {
@@ -69,15 +78,16 @@ const ARTIFACT_NAME_SOURCES = Object.freeze([
       "AITracker-macOS-x64.dmg",
       "AITracker-Windows-arm64.exe",
       "AITracker-Windows-x64.exe",
+      "AITracker-Linux-x64.AppImage",
     ],
   },
 ]);
 
 /** The installer file names a module records, in the order it records them. */
 function installerNamesIn(text) {
-  return [...text.matchAll(/"([^"\\/]+\.(?:dmg|exe))"/gu)].map(
-    (match) => match[1],
-  );
+  return [
+    ...text.matchAll(/"([^"\\/]+\.(?:dmg|exe|AppImage|deb|rpm|tar\.gz))"/gu),
+  ].map((match) => match[1]);
 }
 
 export function inspectPackagingConfig({ config }) {
@@ -135,14 +145,14 @@ export async function verifyReleaseArtifactNames({
         problems.push(`${path} does not name ${name}`);
       }
     }
-    // The four names must also be the same set, in the same order: a module
-    // that records fewer names, or the same names against the wrong platforms,
-    // is exactly the half-rename the release breaks on.
+    // The names must also be the same set, in the same order: a module that
+    // records fewer names, or the same names against the wrong platforms, is
+    // exactly the half-rename the release breaks on.
     const recorded = installerNamesIn(text);
     if (recorded.join(",") !== names.join(",")) {
       problems.push(
         `${path} records ${recorded.join(", ") || "no installer names"}; ` +
-          `each module must name all four in the same order (${names.join(", ")})`,
+          `each module must name all of them in the same order (${names.join(", ")})`,
       );
     }
   }
