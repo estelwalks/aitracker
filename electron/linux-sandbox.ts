@@ -1,4 +1,4 @@
-import { accessSync, constants, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 /**
@@ -43,13 +43,30 @@ export interface LinuxSandboxProbe {
   readonly readUsernsClone?: (path: string) => string | null;
 }
 
-/** True when `path` is a readable file at all. */
-function isReadableFile(path: string): boolean {
+/**
+ * Whether a SUID helper exists at all, asked through the injected reader.
+ *
+ * This deliberately does not consult the filesystem directly. The probe's
+ * metadata reader is the seam every caller and test drives, and reading the
+ * real path here meant a host without `/opt/.../chrome-sandbox` skipped the
+ * injected verdict entirely: `statHelper` throwing ENOENT was never reached, so
+ * a caller that said "no helper" was answered from this machine's filesystem
+ * instead. An `accessSync`/`statSync` fallback remains only for the default
+ * reader, which is `statSync` itself.
+ */
+function helperPresence(
+  helperPath: string,
+  statHelper: NonNullable<LinuxSandboxProbe["statHelper"]>,
+): { readonly present: boolean; readonly unreadable: boolean } {
   try {
-    accessSync(path, constants.R_OK);
-    return statSync(path).isFile();
-  } catch {
-    return false;
+    statHelper(helperPath);
+    return { present: true, unreadable: false };
+  } catch (error) {
+    // ENOENT (or any miss) means there is no helper to use. Anything else —
+    // EACCES being the realistic case — is inconclusive, and inconclusive must
+    // keep the sandbox rather than strip it.
+    const code = (error as { code?: string } | null)?.code;
+    return { present: false, unreadable: code !== "ENOENT" && code != null };
   }
 }
 
@@ -101,7 +118,9 @@ export function canUseLinuxChromiumSandbox(probe: LinuxSandboxProbe): boolean {
     });
 
   const helperPath = join(probe.executableDirectory, "chrome-sandbox");
-  if (!isReadableFile(helperPath)) {
+  const presence = helperPresence(helperPath, statHelper);
+  if (presence.unreadable) return true;
+  if (!presence.present) {
     // No helper beside the executable. That is normal for an AppImage, where
     // SUID bits cannot survive the squashfs mount, so fall through to the
     // user-namespace question rather than treating it as fatal.

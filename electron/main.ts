@@ -339,17 +339,38 @@ let currentPreferences: LocalePreferences = {
   currencySource: "fallback",
 };
 
+/**
+ * Force the artwork variant, e.g. when a panel's background disagrees with the
+ * reported theme. Written as `light` or `dark`.
+ *
+ * Linux panels are the reason this exists: a panel can be light while the GTK
+ * theme reports dark, or the reverse, and no heuristic can see the panel. The
+ * value is ignored outside Linux, so macOS and Windows keep their behaviour.
+ */
+const ICON_APPEARANCE_OVERRIDE_ENV = "AITRACKER_ICON_APPEARANCE";
+
+function forcedIconAppearance(): NativeIconAppearance | null {
+  if (process.platform !== "linux") return null;
+  const override =
+    process.env[ICON_APPEARANCE_OVERRIDE_ENV]?.trim().toLowerCase();
+  return override === "light" || override === "dark" ? override : null;
+}
+
 function nativeIconAppearance(): NativeIconAppearance {
-  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+  return (
+    forcedIconAppearance() ??
+    (nativeTheme.shouldUseDarkColors ? "dark" : "light")
+  );
 }
 
 function nativeSystemIconAppearance(): NativeIconAppearance {
   // Windows lets the taskbar stay dark while application windows are light.
-  const useDarkColors =
-    process.platform === "win32"
-      ? nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
-      : nativeTheme.shouldUseDarkColors;
-  return useDarkColors ? "dark" : "light";
+  if (process.platform === "win32") {
+    return nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
+      ? "dark"
+      : "light";
+  }
+  return nativeIconAppearance();
 }
 
 function nativeIconLocationInput() {

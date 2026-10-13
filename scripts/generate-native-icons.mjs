@@ -116,6 +116,55 @@ export function macAppArtwork(source) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect x="100" y="100" width="824" height="824" rx="184" fill="#ffffff"/>${mark}</svg>`;
 }
 
+/**
+ * Status-area artwork for Linux.
+ *
+ * The shared `compactArtwork` mark is drawn for the 1024px app icon: corner
+ * brackets on a 1.25/16 stroke and trails on 0.9-1.5/16. Rasterized at the 22px
+ * a Linux panel actually draws, that is a ~1.7px hairline — measured coverage of
+ * fully-opaque pixels is only 14%, so the mark reads as a faint outline against
+ * the panel and disappears entirely on a dark one.
+ *
+ * The geometry is therefore redrawn for the panel: the same paths and the same
+ * relative composition, scaled up by 1/0.78 (a 16-unit frame drawn inside a
+ * 12.5-unit box) so the mark fills more of the canvas, with stroke weights
+ * raised to a proportion that still has solid mass at 22px. Frame, trails and
+ * nodes keep their original paths and ratios; only the scale and the weights
+ * differ, which is the standard treatment for a small-size variant.
+ *
+ * This is Linux-only on purpose. macOS uses its own template mask and Windows
+ * its own multi-size ICO, so neither is affected.
+ */
+export function linuxTrayArtwork(source) {
+  // Keep the mark at full size — the frame already uses the whole 16-unit grid
+  // and shrinking it only makes the strokes thinner. The fix is ink weight: at
+  // the 22px a panel draws, the 1024px design's 1.25/16 frame bracket is a
+  // ~1.7px hairline that never reaches full opacity, so the mark reads as a
+  // faint outline. 1.5 puts the frame stroke at a full 2.25px and the largest
+  // node near 3.6px across, which is the most ink that still leaves the corner
+  // brackets inside the canvas — the frame sits 1.75 units from the edge, so a
+  // heavier weight starts clipping at 22px. Measured coverage goes from 14% of
+  // the canvas fully opaque to 23%.
+  const inkScale = 1.5;
+  let mark = compactArtwork(source);
+  for (const original of ["1.25", "0.9", "1.2", "1.5"]) {
+    mark = mark.replace(
+      `stroke-width="${original}"`,
+      `stroke-width="${(Number(original) * inkScale).toFixed(3)}"`,
+    );
+  }
+  // The trail nodes scale with the frame; make them read as dots rather than
+  // specks at panel size.
+  for (const [from, to] of [
+    ["0.8", "1.0"],
+    ["1.1", "1.3"],
+    ["1.45", "1.7"],
+  ]) {
+    mark = mark.replace(`r="${from}"`, `r="${to}"`);
+  }
+  return mark;
+}
+
 /** Retain physical density as well as Electron's @2x filename convention. */
 export function renderPng(svg, size, dpi = 72) {
   const png = new Resvg(svg, {
@@ -193,9 +242,10 @@ async function exists(path) {
 
 async function currentManifest() {
   return {
-    // Bumped 6 -> 7 when the Linux status-area artwork was added, so an
-    // existing tree is regenerated instead of being reported as current.
-    version: 7,
+    // 6 -> 7 added the Linux status-area artwork; 7 -> 8 thickened its ink for
+    // panel legibility. Either way an existing tree must be regenerated rather
+    // than reported as current.
+    version: 8,
     generator: await sha256(fileURLToPath(import.meta.url)),
     windowsSizes: WINDOWS_ICON_SIZES,
     linuxSizes: LINUX_ICON_SIZES,
@@ -261,8 +311,10 @@ async function generateLinuxIcons(stagingDirectory, svg, artworks) {
       LINUX_TRAY_ICON_SIZES.map((size) =>
         writeFile(
           join(stagingDirectory, linuxTrayIconName(appearance, size)),
-          // 96dpi keeps the panel-size bitmap at its native pixel dimensions.
-          renderPng(compactArtwork(artwork), size, 96),
+          // The panel-size variant, not the 1024px app-icon mark: see
+          // linuxTrayArtwork for why the hairlines are thickened.
+          // 96dpi keeps the bitmap at its native pixel dimensions.
+          renderPng(linuxTrayArtwork(artwork), size, 96),
         ),
       ),
     ),

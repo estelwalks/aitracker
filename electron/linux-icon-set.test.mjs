@@ -62,3 +62,56 @@ test("the generated manifest records both Linux size sets", () => {
   assert.deepEqual(manifest.linuxSizes, LINUX_ICON_SIZES);
   assert.deepEqual(manifest.linuxTraySizes, LINUX_TRAY_ICON_SIZES);
 });
+
+/**
+ * The panel-size artwork is a deliberately bolder treatment of the same mark.
+ * The 1024px design draws its corner brackets on a 1.25/16 stroke, which
+ * rasterizes to a ~1.7px hairline at the 22px a panel renders and reads as a
+ * faint outline. This guards the extra ink so a future regeneration cannot
+ * quietly return to the hairline.
+ */
+test("status icons carry more ink than the app-icon mark at panel size", async () => {
+  const { Resvg } = await import("@resvg/resvg-js");
+  const { linuxTrayArtwork } =
+    await import("../scripts/generate-native-icons.mjs");
+  const solidIn = (svg, size) => {
+    const px = new Resvg(svg, {
+      fitTo: { mode: "width", value: size },
+    }).render().pixels;
+    let solid = 0;
+    for (let i = 3; i < px.length; i += 4) if (px[i] >= 200) solid += 1;
+    return solid;
+  };
+  for (const [file, colors] of [
+    ["favicon.svg", true],
+    ["favicon-dark.svg", false],
+  ]) {
+    const source = readFileSync(join(projectRoot, "public", file), "utf8");
+    const size = 22;
+    const plain = solidIn(source, size);
+    const tray = solidIn(linuxTrayArtwork(source), size);
+    assert.ok(
+      tray > plain * 1.4,
+      `${file}: panel artwork must add ink (app-icon mark ${plain} solid px, status icon ${tray})`,
+    );
+    // Small-size artwork must stay inside the canvas rather than clip at the edge.
+    const px = new Resvg(linuxTrayArtwork(source), {
+      fitTo: { mode: "width", value: size },
+    }).render().pixels;
+    for (let i = 0; i < size; i++) {
+      for (const edge of [
+        i,
+        (size - 1) * size + i,
+        i * size,
+        i * size + size - 1,
+      ]) {
+        assert.equal(
+          px[edge * 4 + 3],
+          0,
+          `${file}: artwork must not touch the edge`,
+        );
+      }
+    }
+    assert.equal(colors, file === "favicon.svg");
+  }
+});
