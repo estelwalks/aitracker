@@ -117,57 +117,53 @@ test("status icons carry more ink than the app-icon mark at panel size", async (
 });
 
 /**
- * The hicolor app icon is one file installed by the package manager, so it
- * cannot follow the theme. It therefore carries its own plate: without one, the
- * dark-ink mark is invisible in a dark dock (~1.3:1) and the light-ink mark is
- * invisible in a light one. This asserts the plate exists and stays opaque, so
- * a future regeneration cannot silently return to a transparent mark.
+ * The hicolor app icon must be the macOS app tile, not a second design.
+ *
+ * The two platforms used to differ on purpose and the difference was visible
+ * side by side: the Linux variant drew its plate edge-to-edge with a heavier
+ * mark, which reads as crowded next to the macOS tile's margin. Delegating to
+ * macAppArtwork is what keeps them identical, so this asserts the delegation
+ * rather than any particular geometry — if the app tile changes, both platforms
+ * change together and this still passes, while a re-introduced Linux-only design
+ * fails.
+ *
+ * The status-area artwork is deliberately not covered here: it is a separate
+ * 22px panel glyph with its own weights, and macOS uses a template mask there.
  */
-test("the hicolor app icon carries an opaque plate", async () => {
-  const { Resvg } = await import("@resvg/resvg-js");
-  const { linuxAppArtwork } =
+test("the hicolor app icon is the macOS app tile", async () => {
+  const { macAppArtwork, linuxAppArtwork } =
     await import("../scripts/generate-native-icons.mjs");
   const source = readFileSync(
     join(projectRoot, "public", "favicon.svg"),
     "utf8",
   );
-  const size = 64;
-  const px = new Resvg(linuxAppArtwork(source), {
-    fitTo: { mode: "width", value: size },
-  }).render().pixels;
-
-  // Plate-only points. The mark's bracket frame is thick and occupies the
-  // diagonal corners, so a probe there measures the frame rather than the plate;
-  // these sit just inside the plate's rounded rect and clear of the frame.
-  const at = (fx, fy) => {
-    const x = Math.floor(size * fx),
-      y = Math.floor(size * fy);
-    return { a: px[(y * size + x) * 4 + 3], r: px[(y * size + x) * 4] };
-  };
-  // The centre is deliberately absent: the brightest node sits there, so it
-  // reports ink rather than plate.
-  for (const [fx, fy] of [
-    [0.12, 0.5],
-    [0.88, 0.5],
-    [0.5, 0.12],
-    [0.5, 0.88],
-  ]) {
-    const { a, r } = at(fx, fy);
-    assert.equal(a, 255, `plate must be opaque at ${fx},${fy}`);
-    assert.ok(r > 200, `plate must be light at ${fx},${fy}, got ${r}`);
-  }
-  // The three node dots must survive: the mark is stroke-only except for them,
-  // and a blanket fill rule silently deleted them once already.
-  const inkPixels = (() => {
-    let n = 0;
-    for (let i = 0; i < size * size; i++) if (px[i * 4] < 80) n += 1;
-    return n;
-  })();
-  assert.ok(
-    inkPixels > size,
-    `the mark must be drawn, found ${inkPixels} ink px`,
+  assert.equal(
+    linuxAppArtwork(source),
+    macAppArtwork(source),
+    "the Linux application icon must reuse the macOS tile",
   );
-  // The outer edge stays transparent so the plate reads as a rounded tile.
+
+  // And the files on disk must agree, so a stale tree cannot pass.
+  const { Resvg } = await import("@resvg/resvg-js");
+  const size = 512;
+  const render = (svg) =>
+    Buffer.from(
+      new Resvg(svg, { fitTo: { mode: "width", value: size } }).render().pixels,
+    );
+  assert.ok(
+    render(linuxAppArtwork(source)).equals(render(macAppArtwork(source))),
+    "rendered Linux and macOS tiles must be identical at 512px",
+  );
+
+  // The tile is a white rounded plate, so most of the canvas is opaque.
+  const px = render(linuxAppArtwork(source));
+  let opaque = 0;
+  for (let i = 3; i < px.length; i += 4) if (px[i] === 255) opaque += 1;
+  assert.ok(
+    opaque > size * size * 0.5,
+    `the app tile must be mostly opaque, got ${opaque} of ${size * size}`,
+  );
+  // Its outer margin stays transparent so it sits like a Dock tile.
   for (let i = 0; i < size; i++) {
     for (const idx of [
       i,
@@ -178,7 +174,7 @@ test("the hicolor app icon carries an opaque plate", async () => {
       assert.equal(
         px[idx * 4 + 3],
         0,
-        "the plate must not fill the canvas edge",
+        "the tile must not fill the canvas edge",
       );
     }
   }

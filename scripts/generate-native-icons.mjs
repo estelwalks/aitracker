@@ -185,48 +185,17 @@ export function linuxTrayArtwork(source) {
  * multi-size ICO, and neither is touched.
  */
 export function linuxAppArtwork(source) {
-  const ink = "#111827";
-  /** Plate geometry, in the mark's own 16-unit coordinate space. */
-  const plateInset = 0.9;
-  const plateRadius = 3.4;
-  /** The mark is drawn at 84% and centred, leaving even padding inside the plate. */
-  const markZoom = 0.84;
-  /** Slightly lighter frame: at plate scale the full weight reads as a slab. */
-  const markInkScale = 0.92;
-  const mark = compactArtwork(source);
-  const inner = mark.match(/<svg[^>]*>([\s\S]*)<\/svg>/u)?.[1];
-  if (!inner) throw new Error("Canonical SVG must define native-mark");
-  // Pin the mark's colour: it paints itself with `currentColor`, and the wrapper
-  // below carries a plate rather than a colour of its own.
+  // Linux reuses the macOS app tile verbatim so the two platforms show the same
+  // icon. They were deliberately different before, and the difference was
+  // visible side by side: the Linux variant drew its plate edge-to-edge with a
+  // heavier mark, which reads as crowded next to the macOS tile's margin. Rather
+  // than hand-tune a second design that would drift, this delegates, so any
+  // future change to the app tile applies to both platforms at once.
   //
-  // Only the two stroke groups and the paths inside them become `fill="none"`.
-  // The nodes group must keep its `fill` — it is the three dots of the mark, and
-  // clearing it (as a blanket replacement did) silently deleted them, leaving
-  // the trails pointing at nothing.
-  const body = inner
-    .replace(/currentColor/gu, ink)
-    .replace(
-      /stroke-width="([0-9.]+)"/gu,
-      (_match, width) =>
-        `stroke-width="${(Number(width) * markInkScale).toFixed(3)}"`,
-    )
-    .replace(/<g fill="(#[0-9a-f]{6})"(?![^>]*stroke=)/giu, '<g fill="$1"')
-    .replace(/<path\b([^>]*?)\/?>/gu, (tag, attrs) =>
-      /\bfill=/u.test(attrs) ? tag : `<path${attrs} fill="none"/>`,
-    );
-  const side = 16 - plateInset * 2;
-  const offset = 8 - 8 * markZoom;
-  return [
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">',
-    '<defs><linearGradient id="aitracker-plate" x1="0" y1="0" x2="0" y2="1">',
-    '<stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eaedf2"/>',
-    "</linearGradient></defs>",
-    // The hairline outline is what separates the tile from a light dock, where a
-    // white plate on a near-white background would otherwise have no edge.
-    `<rect x="${plateInset}" y="${plateInset}" width="${side}" height="${side}" rx="${plateRadius}" fill="url(#aitracker-plate)" stroke="#d6dbe3" stroke-width="0.08"/>`,
-    `<g transform="translate(${offset.toFixed(3)} ${offset.toFixed(3)}) scale(${markZoom})">${body}</g>`,
-    "</svg>",
-  ].join("");
+  // Only the application icon is shared. The Linux status-area artwork stays
+  // separate on purpose: it is a 22px panel glyph that needs its own stroke
+  // weights (see linuxTrayArtwork), and macOS uses a template mask there.
+  return macAppArtwork(source);
 }
 
 /** Retain physical density as well as Electron's @2x filename convention. */
