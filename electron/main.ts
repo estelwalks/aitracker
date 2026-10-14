@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -91,9 +91,12 @@ import {
   type WindowRectangle,
 } from "./main-window-size.js";
 import {
+  ENV_PREFIX,
   NATIVE_WAYLAND_ENV,
-  OZONE_PLATFORM_ARG,
   X11_RELAUNCH_ENV,
+  consumeRelaunchEnvironment,
+  inheritedAppEnvironment,
+  planX11Relaunch,
   shouldPreferX11Backend,
   xwaylandLooksAvailable,
 } from "./display-backend.js";
@@ -1384,19 +1387,55 @@ function trayMenuProbeRequested(): boolean {
   return process.platform === "linux" && (value === "1" || value === "true");
 }
 
+/**
+ * Write a probe observation to the file named by AITRACKER_TRAY_MENU_PROBE_REPORT.
+ *
+ * A file rather than stdout because the relaunched process is not connected to the
+ * caller's log: when the X11 relaunch happens — the normal case for a tray icon —
+ * everything this hook printed went nowhere, which is what made an earlier probe
+ * look like the hook had never run.
+ */
+function probeReport(message: string): void {
+  const target = process.env.AITRACKER_TRAY_MENU_PROBE_REPORT;
+  const line = `${new Date().toISOString()} ${message}\n`;
+  process.stdout.write(`AITracker tray menu probe: ${message}\n`);
+  if (!target) return;
+  try {
+    appendFileSync(target, line);
+  } catch {
+    // The probe is a diagnostic; a failed write must not affect the app.
+  }
+}
+
 function scheduleTrayMenuProbe(): void {
   // The tray window exists before the shell adopts it, and the shell is what
   // positions it. Popping the menu before then asks GTK to open a menu with no
   // place to attach it, and no menu appears at all — measured while building
   // this probe. So wait for the reported bounds to leave the origin.
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + 10_000;
+  let attempts = 0;
   const waitForTray = (): void => {
+    attempts += 1;
     const bounds = tray?.getBounds();
+    // `getBounds()` reports the real position only once the desktop shell has
+    // adopted the icon; before that it stays at the origin, and opening a menu
+    // then shows nothing at all.
     const placed = bounds != null && (bounds.x !== 0 || bounds.y !== 0);
     if (!placed && Date.now() < deadline) {
       setTimeout(waitForTray, 500);
       return;
     }
+    if (!placed) {
+      // Report and stop rather than opening a menu with nowhere to attach it: a
+      // menu popped before the shell adopts the icon does not appear at all.
+      probeReport(
+        `tray never placed after ${attempts} checks (bounds=${JSON.stringify(bounds ?? null)}); skipping the menu`,
+      );
+      return;
+    }
+    probeReport(
+      `tray placed at ${bounds.x},${bounds.y} after ${attempts} checks`,
+    );
     openProbeMenu(bounds);
   };
   setTimeout(waitForTray, 1_000);
@@ -1405,7 +1444,7 @@ function scheduleTrayMenuProbe(): void {
 function openProbeMenu(bounds: Electron.Rectangle | undefined): void {
   setTimeout(() => {
     if (!trayMenu || !tray) return;
-    console.info("AITracker tray menu probe: opening the tray menu");
+    probeReport("opening the tray menu");
     tray.popUpContextMenu(trayMenu, {
       x: Math.round(bounds?.x ?? 0),
       y: Math.round(bounds?.y ?? 0),
@@ -1416,10 +1455,10 @@ function openProbeMenu(bounds: Electron.Rectangle | undefined): void {
     // false failure.
     setTimeout(() => {
       const id = probeMenuWindowId();
-      console.info(
+      probeReport(
         id === null
-          ? "AITracker tray menu probe: no mapped menu window found"
-          : `AITracker tray menu probe: menu window ${id}`,
+          ? "menu opened but no mapped menu window was found"
+          : `menu window ${id}`,
       );
     }, 1_500);
   }, 4_000);
@@ -1802,14 +1841,28 @@ if (
   }) &&
   !process.argv.some((arg) => arg.startsWith("--ozone-platform"))
 ) {
-  // RelaunchOptions has no `env` field, so the guard is exported to our own
-  // environment: the replacement process is spawned by Electron and inherits it.
-  process.env[X11_RELAUNCH_ENV] = "1";
-  app.relaunch({ args: [OZONE_PLATFORM_ARG, ...process.argv.slice(1)] });
-  console.info(
-    "AITracker: restarting on the X11 (XWayland) backend so the tray icon works. " +
-      `${NATIVE_WAYLAND_ENV}=1 prefers native Wayland instead, without a tray icon.`,
-  );
+  // RelaunchOptions has no `env` field, and `app.relaunch()` does not carry the
+  // environment across; the argument-plan builder explains why the Ozone choice
+  // and the environment both have to travel this way.
+  const args = planX11Relaunch({
+    platform: process.platform,
+    env: process.env,
+    trayEnabled: true,
+    xwaylandAvailable: () => xwaylandLooksAvailable(),
+    argv: process.argv,
+    inheritedEnvironment: inheritedAppEnvironment({ env: process.env }),
+  });
+  if (args) {
+    process.env[X11_RELAUNCH_ENV] = "1";
+    app.relaunch({
+      args: [...args],
+    });
+    console.info(
+      "AITracker: restarting on the X11 (XWayland) backend so the tray icon works. " +
+        `${NATIVE_WAYLAND_ENV}=1 prefers native Wayland instead, without a tray icon.`,
+    );
+    app.exit(0);
+  }
   app.exit(0);
 }
 
@@ -1821,6 +1874,15 @@ if (
 // xdg-desktop-portal can refuse to open a directory picker for an app id it
 // cannot resolve. Harmless on macOS and Windows, where the call is ignored.
 app.setDesktopName(APP_DESKTOP_NAME);
+
+// Variables the relaunch had to pass through the command line, applied before
+// anything reads them. See planX11Relaunch for why they cannot simply be
+// inherited.
+for (const [key, value] of Object.entries(
+  consumeRelaunchEnvironment(process.argv),
+)) {
+  process.env[key] = value;
+}
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {

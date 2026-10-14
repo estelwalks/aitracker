@@ -4,9 +4,11 @@ import { test } from "node:test";
 import {
   NATIVE_WAYLAND_ENV,
   OZONE_PLATFORM_ARG,
+  RELAUNCH_ENV_ASSIGNMENT,
   X11_RELAUNCH_ENV,
+  consumeRelaunchEnvironment,
+  planX11Relaunch,
   shouldPreferX11Backend,
-  x11RelaunchArgs,
   xwaylandLooksAvailable,
 } from "./display-backend.js";
 
@@ -106,43 +108,61 @@ test("XWayland availability needs a real socket, not just DISPLAY", () => {
   );
 });
 
-test("an X11 relaunch is requested exactly once", () => {
+test("the relaunch plan carries the environment as one surviving argument", () => {
   const base = {
     platform: "linux" as NodeJS.Platform,
     env: { ...WAYLAND_SESSION } as Record<string, string | undefined>,
     trayEnabled: true,
     xwaylandAvailable: () => true,
     argv: ["/opt/AITracker/aitracker"],
+    inheritedEnvironment: {
+      AITRACKER_TRAY_MENU_PROBE: "1",
+      AITRACKER_TRAY_MENU_PROBE_REPORT: "/tmp/a dir/report.txt",
+    },
   };
-  assert.deepEqual(x11RelaunchArgs(base), [OZONE_PLATFORM_ARG]);
+  const args = planX11Relaunch(base);
+  assert.ok(args, "a Wayland session with a tray must plan a relaunch");
+  assert.equal(args[0], OZONE_PLATFORM_ARG);
 
-  // The replacement process carries the argument, so it must not relaunch again
-  // or the two instances would restart each other forever. The guard covers the
-  // case where the argument is somehow absent.
+  // `app.relaunch()` consumes an unrecognised flag *and every argument after it*:
+  // measured on Electron 43, a plan of ["--ozone-platform=x11", "--aitracker-env",
+  // "AITRACKER_X=1"] reached the child as ["--ozone-platform=x11"]. The carried
+  // variables therefore travel as a single assignment, which is not a flag. If this
+  // ever becomes two tokens again, the settings silently stop arriving.
+  const carried = args.filter((arg) => arg.startsWith("AITRACKER_"));
   assert.equal(
-    x11RelaunchArgs({ ...base, argv: [base.argv[0], OZONE_PLATFORM_ARG] }),
-    null,
+    carried.length,
+    1,
+    `exactly one carried argument, got ${carried.length}`,
   );
+  assert.ok(carried[0].startsWith(`${RELAUNCH_ENV_ASSIGNMENT}=`), carried[0]);
+  // No shell quoting is involved, so a value containing a space stays intact.
+  assert.ok(!carried[0].includes("'"), "the payload must not be shell-quoted");
+
+  // The child must read back exactly what was sent, and remove it from argv.
+  const childArgv = ["/opt/AITracker/aitracker", ...args];
+  const restored = consumeRelaunchEnvironment(childArgv);
+  assert.equal(restored.AITRACKER_TRAY_MENU_PROBE, "1");
   assert.equal(
-    x11RelaunchArgs({
-      ...base,
-      env: { ...base.env, [X11_RELAUNCH_ENV]: "1" },
-    }),
-    null,
+    restored.AITRACKER_TRAY_MENU_PROBE_REPORT,
+    "/tmp/a dir/report.txt",
   );
-  // An explicit --ozone-platform choice from the user is never overridden.
-  assert.equal(
-    x11RelaunchArgs({
-      ...base,
-      argv: [base.argv[0], "--ozone-platform=wayland"],
-    }),
-    null,
-  );
-  // Nothing to do when the conditions for X11 are absent.
-  assert.equal(x11RelaunchArgs({ ...base, trayEnabled: false }), null);
-  assert.equal(
-    x11RelaunchArgs({ ...base, xwaylandAvailable: () => false }),
-    null,
-  );
-  assert.equal(x11RelaunchArgs({ ...base, platform: "darwin" }), null);
+  assert.equal(restored[X11_RELAUNCH_ENV], "1");
+  assert.deepEqual(childArgv, ["/opt/AITracker/aitracker", OZONE_PLATFORM_ARG]);
+});
+
+test("a malformed relaunch payload injects nothing", () => {
+  for (const payload of ["", "not-base64!!", "bnVsbA==", "WzEsMl0=", "e30="]) {
+    const argv = [
+      "/opt/AITracker/aitracker",
+      `${RELAUNCH_ENV_ASSIGNMENT}=${payload}`,
+    ];
+    assert.deepEqual(
+      consumeRelaunchEnvironment(argv),
+      {},
+      `payload ${payload} must not produce variables`,
+    );
+    // The marker is consumed either way, so it can never reach the app as an argument.
+    assert.deepEqual(argv, ["/opt/AITracker/aitracker"]);
+  }
 });

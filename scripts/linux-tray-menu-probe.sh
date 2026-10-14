@@ -44,7 +44,13 @@ if pgrep -x aitracker >/dev/null 2>&1 || pgrep -x aitracker-bin >/dev/null 2>&1;
   exit 2
 fi
 
-AITRACKER_TRAY_MENU_PROBE=1 AITRACKER_NATIVE_WAYLAND=1 \
+# AITRACKER_NATIVE_WAYLAND is deliberately NOT set: the tray only exists on the
+# X11 backend, so suppressing that relaunch would leave nothing to test. The
+# relaunch carries the variables below across explicitly, and the report file is
+# how their arrival is confirmed — the replacement process does not share this
+# shell's stdout.
+REPORT="$HOME_DIR/menu-report.txt"
+AITRACKER_TRAY_MENU_PROBE=1 AITRACKER_TRAY_MENU_PROBE_REPORT="$REPORT" \
 HOME="$HOME_DIR" XDG_CONFIG_HOME="$HOME_DIR/.config" \
   "$BINARY" >"$LOG" 2>&1 &
 APP_PID=$!
@@ -90,7 +96,7 @@ fi
 menu_window=""
 for _ in $(seq 1 40); do
   sleep 1
-  menu_window="$(sed -n 's/.*tray menu probe: menu window \(0x[0-9a-f]*\).*/\1/p' "$LOG" | tail -1)"
+  menu_window="$(sed -n 's/.*menu window \(0x[0-9a-f]*\).*/\1/p' "$REPORT" 2>/dev/null | tail -1)"
   [ -n "$menu_window" ] && break
 done
 check "the app opened the tray menu" "$([ -n "$menu_window" ] && echo 0 || echo 1)"
