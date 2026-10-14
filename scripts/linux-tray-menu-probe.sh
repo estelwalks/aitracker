@@ -31,10 +31,34 @@ check() { if [ "$2" = "0" ]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1)); 
 echo "== tray menu probe: $BINARY on $DISPLAY_NUM =="
 echo "   session: XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-unset} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-unset}"
 
+# A running instance holds the single-instance lock, and a second launch does not
+# start a second app: it exits immediately and raises the first one's window via
+# `second-instance`. That is what this script used to do — it activated whatever
+# the user already had open, produced no tray to inspect, and left the impression
+# that the app had hung. Refuse to run rather than disturb a live session.
+if pgrep -x aitracker >/dev/null 2>&1 || pgrep -x aitracker-bin >/dev/null 2>&1; then
+  echo "  FAIL  AITracker is already running."
+  echo "        A second launch exits at once (single-instance lock) and raises the"
+  echo "        existing window instead of starting a probe instance."
+  echo "        Close AITracker, then run this again."
+  exit 2
+fi
+
 AITRACKER_TRAY_MENU_PROBE=1 AITRACKER_NATIVE_WAYLAND=1 \
 HOME="$HOME_DIR" XDG_CONFIG_HOME="$HOME_DIR/.config" \
   "$BINARY" >"$LOG" 2>&1 &
 APP_PID=$!
+
+# Confirm the probe instance is actually the one running, rather than a launch that
+# lost the lock race.
+sleep 2
+if ! kill -0 "$APP_PID" 2>/dev/null; then
+  echo "  FAIL  the probe instance exited during startup."
+  sed -n '1,5p' "$LOG" | sed 's/^/          /'
+  echo "== tray menu summary: 0 passed, 1 failed =="
+  echo "   log: $LOG"
+  exit 1
+fi
 
 # The tray window is created immediately but sits at (0,0) until the shell adopts
 # it, so waiting for existence is not enough: an early click lands in the corner.
