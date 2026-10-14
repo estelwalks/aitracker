@@ -6,6 +6,11 @@ import type {
   ReportStats,
 } from "../contracts.ts";
 import type { Locale } from "../../../lib/i18n/locale";
+import {
+  WORK_PROFILE_BEHAVIOR_LABELS,
+  workProfileSection,
+  type WorkProfileCopy,
+} from "./work-profile-section.ts";
 
 const BAR_SIZE = 20;
 
@@ -64,6 +69,14 @@ interface DailyCopy {
   readonly riskSkill: string;
   readonly attention: string;
   readonly stable: string;
+  readonly workProfile: string;
+  readonly crossPeriodNote: string;
+  readonly workBehaviors: string;
+  readonly workTools: string;
+  readonly workTopics: string;
+  readonly workCalls: string;
+  readonly itemSeparator: string;
+  readonly labelColon: string;
   readonly footer: string;
 }
 
@@ -121,6 +134,14 @@ const COPY: Record<Locale, DailyCopy> = {
     completedScan: "完成安全扫描",
     pendingScan: "待扫描",
     riskSkill: "风险 Skill",
+    crossPeriodNote: "\\* 跨周期会话，数值为整段会话累计。",
+    workProfile: "工作画像",
+    workBehaviors: "行为构成",
+    workTools: "主要工具行为",
+    workTopics: "会话主题",
+    workCalls: "工具调用",
+    itemSeparator: "、",
+    labelColon: "：",
     attention: "今日关注",
     stable: "今日 AI 使用整体平稳，暂无需要特别关注的事项。",
     footer:
@@ -179,6 +200,15 @@ const COPY: Record<Locale, DailyCopy> = {
     completedScan: "Security scans completed",
     pendingScan: "Pending scans",
     riskSkill: "Skills with risks",
+    crossPeriodNote:
+      "\\* Cross-period session: the figure is the whole-session cumulative total.",
+    workProfile: "Work profile",
+    workBehaviors: "Work mix",
+    workTools: "Top tool activity",
+    workTopics: "Session topics",
+    workCalls: "Tool calls",
+    itemSeparator: ", ",
+    labelColon: ": ",
     attention: "Today's highlights",
     stable:
       "AI usage was broadly steady today; there are no items requiring special attention.",
@@ -238,6 +268,15 @@ const COPY: Record<Locale, DailyCopy> = {
     completedScan: "完了した安全スキャン",
     pendingScan: "未スキャン",
     riskSkill: "リスクのある Skill",
+    crossPeriodNote:
+      "\\* 期間をまたぐセッションのため、セッション全体の累計値です。",
+    workProfile: "作業プロファイル",
+    workBehaviors: "作業の内訳",
+    workTools: "主なツール利用",
+    workTopics: "セッションのテーマ",
+    workCalls: "ツール呼び出し",
+    itemSeparator: "、",
+    labelColon: "：",
     attention: "今日のポイント",
     stable:
       "本日の AI 利用は概ね安定しており、特に注目すべき項目はありません。",
@@ -297,6 +336,14 @@ const COPY: Record<Locale, DailyCopy> = {
     completedScan: "완료된 보안 검사",
     pendingScan: "검사 대기",
     riskSkill: "위험 Skill",
+    crossPeriodNote: "\\* 기간을 넘는 세션이므로 세션 전체 누적값입니다.",
+    workProfile: "작업 프로필",
+    workBehaviors: "작업 구성",
+    workTools: "주요 도구 활동",
+    workTopics: "세션 주제",
+    workCalls: "도구 호출",
+    itemSeparator: ", ",
+    labelColon: ": ",
     attention: "오늘의 주요 내용",
     stable:
       "오늘 AI 사용은 전반적으로 안정적이며, 특별히 주의할 항목이 없습니다.",
@@ -525,14 +572,16 @@ function projectSection(stats: ReportStats, copy: DailyCopy): string[] {
 function sessionSection(stats: ReportStats, copy: DailyCopy): string[] {
   const rows = topRows(stats.sessionsDetail ?? [], 5);
   if (rows.length === 0) return [copy.empty];
-  return [
+  const lines = [
     `| ${copy.sessions} | ${copy.project} | ${copy.agent} | ${copy.rounds} | ${copy.tokens} | ${copy.duration} | ${copy.status} |`,
     "| --- | --- | --- | ---: | ---: | ---: | --- |",
     ...rows.map(
       (row) =>
-        `| **${cell(row.title)}** | ${cell(row.project ?? "—")} | ${cell(row.source)} | **${row.turns}** | **${tokens(row.tokens)}** | ${duration(row.durationMin, copy.empty)} | ${row.repeated ? copy.distilled : copy.normal} |`,
+        `| **${cell(row.title)}** | ${cell(row.project ?? "—")} | ${cell(row.source)} | **${row.turns}** | **${tokens(row.tokens)}**${row.crossPeriod ? "\\*" : ""} | ${duration(row.durationMin, copy.empty)} | ${row.repeated ? copy.distilled : copy.normal} |`,
     ),
   ];
+  if (rows.some((row) => row.crossPeriod)) lines.push("", copy.crossPeriodNote);
+  return lines;
 }
 
 function modelSection(stats: ReportStats, copy: DailyCopy): string[] {
@@ -600,7 +649,7 @@ ${copy.tokens} share: **${percent(project.tokens / stats.tokens, copy.empty)}** 
   const session = stats.sessionsDetail?.[0];
   if (session && stats.sessionsDetail && stats.sessionsDetail.length > 1) {
     items.push(`**${items.length + 1}. ${copy.sessions}**\\
-「${cell(session.title)}」 · **${tokens(session.tokens)} ${copy.tokens}** · ${session.turns} ${copy.rounds} · ${duration(session.durationMin, copy.empty)}.`);
+「${cell(session.title)}」 · **${tokens(session.tokens)}**${session.crossPeriod ? "\\*" : ""} ${copy.tokens} · ${session.turns} ${copy.rounds} · ${duration(session.durationMin, copy.empty)}.${session.crossPeriod ? ` ${copy.crossPeriodNote}` : ""}`);
   }
   if (stats.cache?.cacheHitRate !== undefined && stats.cache.cachedTokens) {
     items.push(`**${items.length + 1}. ${copy.cacheHit}**\\
@@ -614,6 +663,20 @@ ${copy.cacheHitRate}: **${percent(stats.cache.cacheHitRate, copy.empty)}** · **
  * Strict daily report document. This renderer is intentionally independent of
  * model output: headings, tables, ordering and fallback values are fixed.
  */
+function workProfileCopy(copy: DailyCopy, locale: Locale): WorkProfileCopy {
+  return {
+    behaviors: copy.workBehaviors,
+    tools: copy.workTools,
+    agent: copy.agent,
+    calls: copy.workCalls,
+    topics: copy.workTopics,
+    empty: copy.empty,
+    separator: copy.itemSeparator,
+    colon: copy.labelColon,
+    behaviorLabels: WORK_PROFILE_BEHAVIOR_LABELS[locale]!,
+  };
+}
+
 export function buildDailyReportDocument(
   context: ReportContext,
   locale: Locale = "zh-CN",
@@ -657,6 +720,12 @@ export function buildDailyReportDocument(
     `## ${copy.overview}`,
     "",
     ...overviewRows(stats, copy),
+    "",
+    "---",
+    "",
+    `## ${copy.workProfile}`,
+    "",
+    ...workProfileSection(stats, workProfileCopy(copy, locale)),
     "",
     "---",
     "",

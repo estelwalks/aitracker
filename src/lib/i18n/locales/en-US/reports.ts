@@ -4,6 +4,14 @@
  * LLM or hard-coded number — including the honest "model not configured" hint.
  */
 export const reports = {
+  contentInsight: {
+    title: "Deep session-content insight",
+    hintOff:
+      "When off, reports stay strictly statistical and no session content is read. When on, this period's sessions are read locally and only a redacted digest is sent to your own configured model for the daily/weekly/monthly summary.",
+    hintOn:
+      "On: this period's sessions are read locally and only a redacted digest (paths, keys and e-mails removed) is sent to your own configured model. Raw content is never written into the report or persisted.",
+    saveFailed: "Could not save — please retry",
+  },
   insight: {
     title: "Today's insight",
     reports: "{count} briefings generated",

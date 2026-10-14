@@ -352,3 +352,62 @@ test("successful refresh clears accumulated warning codes (P2-2)", async () => {
   await coordinator2.refreshNow();
   assert.deepEqual(coordinator2.readLatest().warningCodes, []);
 });
+
+const emptyEnvelope = (): SnapshotEnvelope<UsageData> => ({
+  schemaVersion: 1,
+  revision: "empty",
+  generatedAt: null,
+  sourceFingerprint: null,
+  status: "empty" as const,
+  data: null,
+  diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
+});
+
+test("reloadAfterCommit serves the persisted payload, not the raw collected one", async () => {
+  let stored: SnapshotEnvelope<UsageData> | null = null;
+  const repository: SnapshotRepository<UsageData> = {
+    async load() {
+      return {
+        envelope: stored ?? emptyEnvelope(),
+        source: stored ? "stored" : "default",
+        schemaVersion: 1,
+      };
+    },
+    async save(envelope) {
+      // The repository normalises while writing — the usage snapshot resolves
+      // project display labels against the classification store this way.
+      stored = { ...envelope, data: { events: 99, tokens: 9_900 } };
+    },
+    async clear() {
+      stored = null;
+    },
+  };
+  const coordinator = createSnapshotCoordinator<UsageData>({
+    repository,
+    freshForMs: 15 * 60 * 1000,
+    now: () => Date.parse("2026-08-01T00:10:00.000Z"),
+    collect: async () => ({ data: { events: 1, tokens: 100 } }),
+    reloadAfterCommit: async () => (await repository.load()).envelope,
+  });
+
+  await coordinator.refreshNow();
+
+  assert.equal(coordinator.readLatest().data?.events, 99);
+  assert.equal(coordinator.readLatest().data?.tokens, 9_900);
+});
+
+test("a failing reloadAfterCommit keeps the committed payload readable", async () => {
+  const repo = memoryRepository();
+  const coordinator = createCoordinator(repo, {
+    collect: async () => ({ data: { events: 7, tokens: 700 } }),
+    reloadAfterCommit: async () => {
+      throw new Error("reload failed");
+    },
+  });
+
+  await coordinator.refreshNow();
+
+  assert.equal(repo.writes(), 1);
+  assert.equal(coordinator.readLatest().data?.events, 7);
+  assert.equal(coordinator.readLatest().data?.tokens, 700);
+});

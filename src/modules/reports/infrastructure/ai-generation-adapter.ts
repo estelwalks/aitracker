@@ -26,6 +26,10 @@ import type {
   AIRequest,
 } from "../../../modules/ai-orchestration/contracts.ts";
 import { safeReportText, templateForLocale } from "../domain.ts";
+import {
+  redactSessionText,
+  renderSessionDigest,
+} from "./session-content-digest.ts";
 import type {
   ReportContext,
   ReportDefinition,
@@ -79,6 +83,26 @@ export interface ReportGenerationAdapterOptions {
   readonly resolveModelId?: () => Promise<string | null>;
 }
 
+/**
+ * The model always receives the fixed document. When the user opted into
+ * content-based reporting it also receives the bounded, already-redacted
+ * session digests — the input that lets the summary describe the work instead
+ * of restating totals.
+ */
+function buildSummaryInput(body: string, context: ReportContext): string {
+  const digests = context.sessionDigests ?? [];
+  if (digests.length === 0) return body;
+  return [
+    body,
+    "",
+    "---",
+    "",
+    "## 会话内容洞察（本地读取并脱敏，仅用于本次总结）",
+    "",
+    ...digests.map((digest) => renderSessionDigest(digest)),
+  ].join("\n");
+}
+
 function fixedReportBody(
   definition: ReportDefinition,
   context: ReportContext,
@@ -105,7 +129,9 @@ function hasReportUsage(stats: ReportStats): boolean {
 
 function normalizeAISummary(value: string): string | null {
   try {
-    const summary = safeReportText(value, 2_400)
+    // Room for an opted-in per-session walkthrough (monthly can reach ~1400 CJK
+    // characters) without truncating it mid-sentence.
+    const summary = safeReportText(value, 8_000)
       .split(/\r?\n/u)
       .filter((line) => !/^\s*(?:#{1,6}\s|```|\|.*\|\s*$)/u.test(line))
       .map((line) => line.replace(/^\s*>\s?/u, ""))
@@ -503,7 +529,7 @@ export function createReportGenerationPort(
               version: prompt.version,
               template: prompt.template,
             },
-            input: { text: body },
+            input: { text: buildSummaryInput(body, context) },
             budgetUsd,
             timeoutMs: REPORT_TIMEOUT_MS,
           });
@@ -511,7 +537,12 @@ export function createReportGenerationPort(
             aiResult.summary.status === "completed" &&
             aiResult.response?.providerId !== "offline" &&
             aiResult.response?.text
-              ? normalizeAISummary(aiResult.response.text)
+              ? normalizeAISummary(
+                  // The model may echo a path or key it saw in a digest or a
+                  // session title. Redact here so one such token cannot make the
+                  // write gate discard the whole report.
+                  redactSessionText(aiResult.response.text).text,
+                )
               : null;
           return {
             status: "succeeded",

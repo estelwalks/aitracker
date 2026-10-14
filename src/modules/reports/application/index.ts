@@ -2,6 +2,7 @@ import { err, ok, type Result } from "../../../shared/result.ts";
 import {
   BUILTIN_REPORT_DEFINITIONS,
   canTransition,
+  MONTHLY_REPORT_TITLE,
   safeReportText,
   templateForLocale,
   toDefinitionSummary,
@@ -29,7 +30,7 @@ import { periodStartDate } from "../period.ts";
 // Task-scheduler-facing report primitives are re-exported from this public
 // application entry so other modules do not depend on presentation exports or
 // deep-import report internals.
-export { monthKeyOf } from "../period.ts";
+export { monthKeyOf, periodKeyOf } from "../period.ts";
 export {
   REPORT_TASK_IDS,
   reportDefinitionIdForSchedule,
@@ -281,7 +282,8 @@ export function createReportsApplication(
       status: "draft",
       // Monthly reports reuse the weekly definition for storage compatibility,
       // so keep an explicit title marker to distinguish them in the archive.
-      title: templateKind === "monthly" ? "Monthly review" : definition.title,
+      title:
+        templateKind === "monthly" ? MONTHLY_REPORT_TITLE : definition.title,
       generatedAt,
       templateVersion: templateForLocale(definition, input.locale, templateKind)
         .version,

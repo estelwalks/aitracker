@@ -66,10 +66,14 @@ import type { ModelSecretCodec } from "../modules/ai-orchestration/infrastructur
 import { createFileSecretCodec } from "../modules/ai-orchestration/infrastructure/file-secret-codec.server.ts";
 import { deterministicOfflineFallback } from "../modules/ai-orchestration/application.ts";
 import { createReportsApplication } from "../modules/reports/application/index.ts";
-import type { ReportsApplication } from "../modules/reports/contracts.ts";
+import type {
+  ReportOutputPort,
+  ReportsApplication,
+} from "../modules/reports/contracts.ts";
 import {
   parseReportSchedule,
   parseReportSchedulesWithMigration,
+  REPORT_CONTENT_INSIGHT_KEY,
   REPORT_SCHEDULE_KEY,
   reportSchedulePreferenceRequests,
   reportSchedulesPreferenceValue,
@@ -761,6 +765,68 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // Report metadata and bodies are stored together in the normalized SQLite
   // report tables; the composition root intentionally does not install the
   // optional filesystem content adapter.
+  //
+  // Durable-output counts for weekly/monthly "沉淀与产出": skills come from
+  // the skill snapshot (installations.installedAt), memory/knowledge and
+  // distillation-approved assets from the knowledge repository. The reports
+  // module only sees this port — no concrete implementation import.
+  const reportOutputPort: ReportOutputPort = {
+    async collect({ from, to }) {
+      const localDayOf = (iso: string | null | undefined): string | null => {
+        if (!iso) return null;
+        const date = new Date(iso);
+        if (Number.isNaN(date.getTime())) return null;
+        return [
+          date.getFullYear(),
+          String(date.getMonth() + 1).padStart(2, "0"),
+          String(date.getDate()).padStart(2, "0"),
+        ].join("-");
+      };
+      const inPeriod = (iso: string | null | undefined): boolean => {
+        const day = localDayOf(iso);
+        return day !== null && day >= from && day <= to;
+      };
+      let skills = 0;
+      try {
+        await skillSnapshot.ensureHydrated();
+        const data = skillSnapshot.readLatest().data;
+        if (data?.skills) {
+          const ids = new Set<string>();
+          for (const skill of data.skills) {
+            for (const installation of skill.installations ?? []) {
+              if (inPeriod(installation.installedAt)) ids.add(skill.id);
+            }
+          }
+          skills = ids.size;
+        }
+      } catch {
+        // Skill snapshot unavailable: degrade the count to 0, never fail the report.
+      }
+      let knowledge = 0;
+      let distillations = 0;
+      try {
+        const result = await databaseRuntime.features.knowledge.listVersions();
+        if (result.ok) {
+          for (const entry of result.value) {
+            const status = entry.asset.status;
+            if (status !== "approved" && status !== "published") continue;
+            if (!inPeriod(entry.asset.createdAt)) continue;
+            if (entry.asset.kind === "memory") knowledge += 1;
+            if (
+              entry.version.provenance?.some(
+                (p) => p.sourceType === "distillation",
+              )
+            ) {
+              distillations += 1;
+            }
+          }
+        }
+      } catch {
+        // Knowledge repository unavailable: degrade counts, never fail the report.
+      }
+      return { skills, knowledge, distillations };
+    },
+  };
   const reports = createReportsApplication({
     store: databaseRuntime.features.reports,
     inlineContent: true,
@@ -769,6 +835,21 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       usage: usageSnapshot,
       projectIdentity: (projectRef) =>
         classificationService.identities([projectRef]).get(projectRef) ?? "",
+      // Opt-in content-based reporting. The switch is read per generation so
+      // toggling it takes effect on the next report without a restart, and a
+      // preference read failure degrades to statistics-only.
+      sessionContent: {
+        enabled: () =>
+          databaseRuntime.features.appPreferences.get(
+            REPORT_CONTENT_INSIGHT_KEY,
+          )?.value === true,
+        read: async (ref) => {
+          const { readSessionContent } =
+            await import("../modules/sessions/infrastructure/session-content-reader.server.ts");
+          return await readSessionContent(ref);
+        },
+      },
+      output: reportOutputPort,
       usdToCny: async () => {
         const { buildPricingSnapshot } =
           await import("../lib/pricing/dynamic.server.ts");

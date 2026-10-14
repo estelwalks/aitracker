@@ -96,6 +96,11 @@ export function createUsageSnapshotRuntime(
 
   const coordinator = createSnapshotCoordinator<UsageSnapshotDto>({
     repository: options.repository,
+    // Project display labels are resolved by the repository while writing
+    // (classification store + HMAC refs). Without this the in-memory snapshot
+    // keeps raw project references, so report project rows fall back to
+    // whole-session totals and can exceed 100% of the period.
+    reloadAfterCommit: async () => (await options.repository.load()).envelope,
     requestRefresh: options.requestRefresh,
     now: options.now,
     freshForMs:

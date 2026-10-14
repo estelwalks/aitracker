@@ -6,6 +6,11 @@ import type {
   ReportStats,
 } from "../contracts.ts";
 import type { Locale } from "../../../lib/i18n/locale";
+import {
+  WORK_PROFILE_BEHAVIOR_LABELS,
+  workProfileSection,
+  type WorkProfileCopy,
+} from "./work-profile-section.ts";
 
 const BAR_SIZE = 20;
 
@@ -35,6 +40,16 @@ interface PeriodicCopy {
   readonly normal: string;
   readonly distill: string;
   readonly attention: string;
+  readonly workAgent: string;
+  readonly workEmpty: string;
+  readonly workProfile: string;
+  readonly crossPeriodNote: string;
+  readonly workBehaviors: string;
+  readonly workTools: string;
+  readonly workTopics: string;
+  readonly workCalls: string;
+  readonly itemSeparator: string;
+  readonly labelColon: string;
   readonly stable: string;
   readonly reusable: string;
   readonly reusableText: string;
@@ -45,6 +60,11 @@ interface PeriodicCopy {
   readonly model: string;
   readonly calls: string;
   readonly noData: string;
+  readonly outputsTitle: string;
+  readonly outputsEmpty: string;
+  readonly outputsSkills: string;
+  readonly outputsKnowledge: string;
+  readonly outputsDistillations: string;
   readonly footer: string;
 }
 
@@ -73,6 +93,16 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       status: "状态",
       normal: "正常",
       distill: "建议蒸馏",
+      workEmpty: "本时段未采集到工具行为，无法推断具体工作内容。",
+      workAgent: "Agent",
+      crossPeriodNote: "\\* 跨周期会话，数值为整段会话累计。",
+      workProfile: "工作画像",
+      workBehaviors: "行为构成",
+      workTools: "主要工具行为",
+      workTopics: "会话主题",
+      workCalls: "工具调用",
+      itemSeparator: "、",
+      labelColon: "：",
       attention: "本周关注",
       stable: "本周 AI 使用整体平稳，暂无需要特别关注的事项。",
       reusable: "值得沉淀",
@@ -86,6 +116,11 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       model: "模型",
       calls: "调用",
       noData: "本周暂无 AI 使用记录。",
+      outputsTitle: "沉淀与产出",
+      outputsEmpty: "本时段暂无明确的新增沉淀。",
+      outputsSkills: "新增 Skill：{n} 个",
+      outputsKnowledge: "记忆/知识：{n} 个",
+      outputsDistillations: "蒸馏成果：{n} 个",
       footer:
         "Token 可能包含内部 Agent 调用；报告仅根据 AITracker 当前可采集的数据生成。",
     },
@@ -112,6 +147,16 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       status: "状态",
       normal: "正常",
       distill: "建议蒸馏",
+      workEmpty: "本时段未采集到工具行为，无法推断具体工作内容。",
+      workAgent: "Agent",
+      crossPeriodNote: "\\* 跨周期会话，数值为整段会话累计。",
+      workProfile: "工作画像",
+      workBehaviors: "行为构成",
+      workTools: "主要工具行为",
+      workTopics: "会话主题",
+      workCalls: "工具调用",
+      itemSeparator: "、",
+      labelColon: "：",
       attention: "本月关注",
       stable: "本月 AI 使用整体平稳，暂无需要特别关注的事项。",
       reusable: "值得沉淀",
@@ -125,6 +170,11 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       model: "模型",
       calls: "调用",
       noData: "本月暂无 AI 使用记录。",
+      outputsTitle: "沉淀与产出",
+      outputsEmpty: "本时段暂无明确的新增沉淀。",
+      outputsSkills: "新增 Skill：{n} 个",
+      outputsKnowledge: "记忆/知识：{n} 个",
+      outputsDistillations: "蒸馏成果：{n} 个",
       footer:
         "Token 可能包含内部 Agent 调用；报告仅根据 AITracker 当前可采集的数据生成。",
     },
@@ -153,6 +203,18 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       status: "Status",
       normal: "Normal",
       distill: "Distill candidate",
+      workEmpty:
+        "No tool activity was captured for this period, so the work cannot be inferred.",
+      workAgent: "Agent",
+      crossPeriodNote:
+        "\\* Cross-period session: the figure is the whole-session cumulative total.",
+      workProfile: "Work profile",
+      workBehaviors: "Work mix",
+      workTools: "Top tool activity",
+      workTopics: "Session topics",
+      workCalls: "Tool calls",
+      itemSeparator: ", ",
+      labelColon: ": ",
       attention: "This week's highlights",
       stable:
         "AI usage was broadly steady this week; there are no items requiring special attention.",
@@ -167,6 +229,11 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       model: "Model",
       calls: "Calls",
       noData: "No AI usage was recorded this week.",
+      outputsTitle: "Accumulated outputs",
+      outputsEmpty: "No clear new outputs were recorded in this period.",
+      outputsSkills: "New skills: {n}",
+      outputsKnowledge: "Memory/knowledge: {n}",
+      outputsDistillations: "Distillations: {n}",
       footer:
         "Tokens may include internal Agent calls; this report is generated from data currently collected by AITracker.",
     },
@@ -193,6 +260,18 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       status: "Status",
       normal: "Normal",
       distill: "Distill candidate",
+      workEmpty:
+        "No tool activity was captured for this period, so the work cannot be inferred.",
+      workAgent: "Agent",
+      crossPeriodNote:
+        "\\* Cross-period session: the figure is the whole-session cumulative total.",
+      workProfile: "Work profile",
+      workBehaviors: "Work mix",
+      workTools: "Top tool activity",
+      workTopics: "Session topics",
+      workCalls: "Tool calls",
+      itemSeparator: ", ",
+      labelColon: ": ",
       attention: "This month's highlights",
       stable:
         "AI usage was broadly steady this month; there are no items requiring special attention.",
@@ -207,6 +286,11 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       model: "Model",
       calls: "Calls",
       noData: "No AI usage was recorded this month.",
+      outputsTitle: "Accumulated outputs",
+      outputsEmpty: "No clear new outputs were recorded in this period.",
+      outputsSkills: "New skills: {n}",
+      outputsKnowledge: "Memory/knowledge: {n}",
+      outputsDistillations: "Distillations: {n}",
       footer:
         "Tokens may include internal Agent calls; this report is generated from data currently collected by AITracker.",
     },
@@ -235,6 +319,18 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       status: "状態",
       normal: "通常",
       distill: "蒸留候補",
+      workEmpty:
+        "この期間のツール利用は記録されておらず、作業内容は推定できません。",
+      workAgent: "Agent",
+      crossPeriodNote:
+        "\\* 期間をまたぐセッションのため、セッション全体の累計値です。",
+      workProfile: "作業プロファイル",
+      workBehaviors: "作業の内訳",
+      workTools: "主なツール利用",
+      workTopics: "セッションのテーマ",
+      workCalls: "ツール呼び出し",
+      itemSeparator: "、",
+      labelColon: "：",
       attention: "今週のポイント",
       stable:
         "今週の AI 利用は概ね安定しており、特に注目すべき項目はありません。",
@@ -249,6 +345,11 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       model: "モデル",
       calls: "呼び出し",
       noData: "今週の AI 利用記録はありません。",
+      outputsTitle: "蓄積と産出",
+      outputsEmpty: "この期間に明確な新規の蓄積はありません。",
+      outputsSkills: "新規 Skill：{n} 件",
+      outputsKnowledge: "メモリ/ナレッジ：{n} 件",
+      outputsDistillations: "蒸留成果：{n} 件",
       footer:
         "Token には内部 Agent の呼び出しが含まれる場合があります。レポートは AITracker が現在収集できるデータに基づきます。",
     },
@@ -275,6 +376,18 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       status: "状態",
       normal: "通常",
       distill: "蒸留候補",
+      workEmpty:
+        "この期間のツール利用は記録されておらず、作業内容は推定できません。",
+      workAgent: "Agent",
+      crossPeriodNote:
+        "\\* 期間をまたぐセッションのため、セッション全体の累計値です。",
+      workProfile: "作業プロファイル",
+      workBehaviors: "作業の内訳",
+      workTools: "主なツール利用",
+      workTopics: "セッションのテーマ",
+      workCalls: "ツール呼び出し",
+      itemSeparator: "、",
+      labelColon: "：",
       attention: "今月のポイント",
       stable:
         "今月の AI 利用は概ね安定しており、特に注目すべき項目はありません。",
@@ -289,6 +402,11 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       model: "モデル",
       calls: "呼び出し",
       noData: "今月の AI 利用記録はありません。",
+      outputsTitle: "蓄積と産出",
+      outputsEmpty: "この期間に明確な新規の蓄積はありません。",
+      outputsSkills: "新規 Skill：{n} 件",
+      outputsKnowledge: "メモリ/ナレッジ：{n} 件",
+      outputsDistillations: "蒸留成果：{n} 件",
       footer:
         "Token には内部 Agent の呼び出しが含まれる場合があります。レポートは AITracker が現在収集できるデータに基づきます。",
     },
@@ -317,6 +435,17 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       status: "상태",
       normal: "정상",
       distill: "증류 후보",
+      workEmpty:
+        "이 기간의 도구 활동이 기록되지 않아 작업 내용을 추정할 수 없습니다.",
+      workAgent: "Agent",
+      crossPeriodNote: "\\* 기간을 넘는 세션이므로 세션 전체 누적값입니다.",
+      workProfile: "작업 프로필",
+      workBehaviors: "작업 구성",
+      workTools: "주요 도구 활동",
+      workTopics: "세션 주제",
+      workCalls: "도구 호출",
+      itemSeparator: ", ",
+      labelColon: ": ",
       attention: "이번 주 주요 내용",
       stable:
         "이번 주 AI 사용은 전반적으로 안정적이며, 특별히 주의할 항목이 없습니다.",
@@ -331,6 +460,11 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       model: "모델",
       calls: "호출",
       noData: "이번 주 AI 사용 기록이 없습니다.",
+      outputsTitle: "축적 및 산출",
+      outputsEmpty: "이 기간에 명확한 신규 산출물이 없습니다.",
+      outputsSkills: "새 Skill: {n}개",
+      outputsKnowledge: "메모리/지식: {n}개",
+      outputsDistillations: "증류 성과: {n}개",
       footer:
         "Token에는 내부 Agent 호출이 포함될 수 있으며, 이 보고서는 AITracker가 현재 수집할 수 있는 데이터를 기반으로 생성되었습니다.",
     },
@@ -357,6 +491,17 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       status: "상태",
       normal: "정상",
       distill: "증류 후보",
+      workEmpty:
+        "이 기간의 도구 활동이 기록되지 않아 작업 내용을 추정할 수 없습니다.",
+      workAgent: "Agent",
+      crossPeriodNote: "\\* 기간을 넘는 세션이므로 세션 전체 누적값입니다.",
+      workProfile: "작업 프로필",
+      workBehaviors: "작업 구성",
+      workTools: "주요 도구 활동",
+      workTopics: "세션 주제",
+      workCalls: "도구 호출",
+      itemSeparator: ", ",
+      labelColon: ": ",
       attention: "이번 달 주요 내용",
       stable:
         "이번 달 AI 사용은 전반적으로 안정적이며, 특별히 주의할 항목이 없습니다.",
@@ -371,6 +516,11 @@ const COPY: Record<Locale, Record<PeriodicKind, PeriodicCopy>> = {
       model: "모델",
       calls: "호출",
       noData: "이번 달 AI 사용 기록이 없습니다.",
+      outputsTitle: "축적 및 산출",
+      outputsEmpty: "이 기간에 명확한 신규 산출물이 없습니다.",
+      outputsSkills: "새 Skill: {n}개",
+      outputsKnowledge: "메모리/지식: {n}개",
+      outputsDistillations: "증류 성과: {n}개",
       footer:
         "Token에는 내부 Agent 호출이 포함될 수 있으며, 이 보고서는 AITracker가 현재 수집할 수 있는 데이터를 기반으로 생성되었습니다.",
     },
@@ -640,14 +790,16 @@ function projectsSection(stats: ReportStats, copy: PeriodicCopy): string[] {
 function sessionsSection(stats: ReportStats, copy: PeriodicCopy): string[] {
   const rows = top(stats.sessionsDetail ?? [], 5);
   if (!rows.length) return [];
-  return [
+  const lines = [
     `| ${copy.sessions} | ${copy.project} | ${copy.agents} | ${copy.turns} | ${copy.tokens} | ${copy.duration} | ${copy.status} |`,
     "| --- | --- | --- | ---: | ---: | ---: | --- |",
     ...rows.map(
       (row: ReportSessionStats) =>
-        `| **${cell(row.title)}** | ${cell(row.project ?? "—")} | ${cell(row.source)} | **${row.turns}** | **${tokens(row.tokens)}** | ${duration(row.durationMin)} | ${row.repeated ? copy.distill : copy.normal} |`,
+        `| **${cell(row.title)}** | ${cell(row.project ?? "—")} | ${cell(row.source)} | **${row.turns}** | **${tokens(row.tokens)}**${row.crossPeriod ? "\\*" : ""} | ${duration(row.durationMin)} | ${row.repeated ? copy.distill : copy.normal} |`,
     ),
   ];
+  if (rows.some((row) => row.crossPeriod)) lines.push("", copy.crossPeriodNote);
+  return lines;
 }
 
 function modelsSection(stats: ReportStats, copy: PeriodicCopy): string[] {
@@ -710,6 +862,40 @@ function cacheSection(
   return rows;
 }
 
+function outputsSection(stats: ReportStats, copy: PeriodicCopy): string[] {
+  const outputs = stats.outputs;
+  if (!outputs) return [];
+  const lines: string[] = [];
+  if (outputs.skills > 0)
+    lines.push(
+      `- ${copy.outputsSkills.replace("{n}", String(outputs.skills))}`,
+    );
+  if (outputs.knowledge > 0)
+    lines.push(
+      `- ${copy.outputsKnowledge.replace("{n}", String(outputs.knowledge))}`,
+    );
+  if (outputs.distillations > 0)
+    lines.push(
+      `- ${copy.outputsDistillations.replace("{n}", String(outputs.distillations))}`,
+    );
+  if (!lines.length) lines.push(`> ${copy.outputsEmpty}`);
+  return lines;
+}
+
+function workProfileCopy(copy: PeriodicCopy, locale: Locale): WorkProfileCopy {
+  return {
+    behaviors: copy.workBehaviors,
+    tools: copy.workTools,
+    agent: copy.workAgent,
+    calls: copy.workCalls,
+    topics: copy.workTopics,
+    empty: copy.workEmpty,
+    separator: copy.itemSeparator,
+    colon: copy.labelColon,
+    behaviorLabels: WORK_PROFILE_BEHAVIOR_LABELS[locale]!,
+  };
+}
+
 export function buildPeriodicReportDocument(
   context: ReportContext,
   kind: PeriodicKind,
@@ -765,6 +951,10 @@ export function buildPeriodicReportDocument(
     `## ${copy.overview}`,
     "",
     ...overview(stats, copy, locale),
+    "",
+    `## ${copy.workProfile}`,
+    "",
+    ...workProfileSection(stats, workProfileCopy(copy, locale)),
   ];
 
   const append = (title: string, body: string[]) => {
@@ -781,6 +971,7 @@ export function buildPeriodicReportDocument(
     copy.attention,
     attention.length ? attention.slice(0, 4) : [`> ${copy.stable}`],
   );
+  append(copy.outputsTitle, outputsSection(stats, copy));
   if (repeated.length) {
     append(copy.reusable, [`- ${repeated.length} ${copy.reusableText}`]);
     append(copy.actions, [`1. ${copy.actionText}`]);

@@ -113,7 +113,7 @@ test("retention executor delegates to the injected application port", async () =
   assert.equal(calls, 1);
 });
 
-test("report tasks independently invoke daily, weekly and monthly-period generation", async () => {
+test("report tasks invoke generation anchored to their covered period", async () => {
   const calls: Array<{
     definitionId: string;
     trigger: string;
@@ -145,10 +145,21 @@ test("report tasks independently invoke daily, weekly and monthly-period generat
   await registry.executors["generate-report-v1"](
     context("reports.generate.monthly"),
   );
-  assert.deepEqual(calls.slice(0, 2), [
-    { definitionId: "reports.daily", trigger: "schedule" },
-    { definitionId: "reports.weekly", trigger: "schedule" },
-  ]);
+  // Every cadence must persist against the period it covers. Without a period
+  // the row is anchored to the wall-clock run time, which duplicates the manual
+  // report for the same day and hides the regenerated one in the archive.
+  assert.equal(calls[0]?.definitionId, "reports.daily");
+  assert.equal(calls[0]?.trigger, "schedule");
+  assert.match(
+    JSON.stringify(calls[0]?.period),
+    /"granularity":"day","key":"\d{4}-\d{2}-\d{2}"/,
+  );
+  assert.equal(calls[1]?.definitionId, "reports.weekly");
+  assert.equal(calls[1]?.trigger, "schedule");
+  assert.match(
+    JSON.stringify(calls[1]?.period),
+    /"granularity":"week","key":"\d{4}-\d{2}-\d{2}"/,
+  );
   assert.equal(calls[2]?.definitionId, "reports.weekly");
   assert.equal(calls[2]?.trigger, "schedule");
   assert.match(

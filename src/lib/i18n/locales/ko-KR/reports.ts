@@ -1,5 +1,13 @@
 /** /reports (Briefings & Memory) reference design copy. */
 export const reports = {
+  contentInsight: {
+    title: "세션 내용 심층 인사이트",
+    hintOff:
+      "꺼져 있으면 통계 분석만 수행하며 세션 내용을 전혀 읽지 않습니다. 켜면 해당 기간의 세션을 로컬에서 읽고, 마스킹된 요약만 사용자가 설정한 모델로 보내 일일/주간/월간 보고서 요약을 생성합니다.",
+    hintOn:
+      "켜짐: 해당 기간의 세션을 로컬에서 읽고, 마스킹된 요약(경로·키·이메일 제거)만 설정된 모델로 전송합니다. 원문은 보고서에 기록되거나 저장되지 않습니다.",
+    saveFailed: "저장하지 못했습니다. 다시 시도하세요",
+  },
   insight: {
     title: "오늘의 인사이트",
     reports: "브리핑 {count}개 생성됨",

@@ -65,6 +65,16 @@ export interface SnapshotRefreshPort {
 
 export interface SnapshotRuntimeOptions<T> {
   readonly repository: SnapshotRepository<T>;
+  /**
+   * Optional post-commit canonicalisation. Some repositories normalise the
+   * payload while writing it — the usage snapshot resolves project display
+   * labels against the classification store, which the collector cannot do —
+   * so the value the collector returned is NOT what every other reader sees.
+   * Returning the persisted envelope here keeps the in-memory snapshot
+   * identical to the stored one instead of serving raw, unlabelled project
+   * references until the next process hydrate.
+   */
+  readonly reloadAfterCommit?: () => Promise<SnapshotEnvelope<T> | null>;
   /** Called when the domain snapshot must be rebuilt (collector adapter). */
   readonly collect: (request: {
     readonly signal: AbortSignal;

@@ -202,3 +202,117 @@ test("candidate, quota, assessment, distribution and rollout adapters round-trip
   });
   assert.equal((await rollout.read()).stage, "new-default");
 });
+
+function reportRun(
+  runId: string,
+  definitionId: "reports.daily" | "reports.weekly",
+) {
+  return {
+    runId,
+    definitionId,
+    trigger: "manual" as const,
+    status: "succeeded" as const,
+    startedAt: "2026-09-17T00:00:00.000Z",
+    finishedAt: "2026-09-17T00:00:01.000Z",
+    evidence: [],
+  };
+}
+
+test("replaceForPeriod replaces every report covering the same period", async (t) => {
+  const store = createSqliteReportStore(database(t));
+  let seq = 0;
+  const persist = async (
+    reportId: string,
+    generatedAt: string,
+    body: string,
+  ) => {
+    const runId = `run-${++seq}`;
+    await store.createRun(reportRun(runId, "reports.daily"));
+    return {
+      reportId,
+      runId,
+      definitionId: "reports.daily" as const,
+      status: "draft" as const,
+      title: "Daily brief",
+      body,
+      generatedAt,
+      templateVersion: 12,
+      evidence: [],
+      assets: [],
+    };
+  };
+
+  // Local-time construction keeps the day window identical in any CI zone.
+  const anchor = new Date(2026, 8, 17, 12, 0, 0).toISOString();
+  const legacySameDay = new Date(2026, 8, 17, 21, 12, 58).toISOString();
+  const previousDay = new Date(2026, 8, 16, 21, 0, 0).toISOString();
+
+  // A pre-fix row stamped with the wall-clock run time inside the same day.
+  await store.saveDocument(
+    await persist("report:legacy", legacySameDay, "stale"),
+  );
+  await store.saveDocument(
+    await persist("report:previous", previousDay, "previous"),
+  );
+
+  await store.replaceForPeriod(await persist("report:anchor", anchor, "fresh"));
+
+  const listed = (await store.listDocuments())
+    .map((item) => item.reportId)
+    .sort();
+  assert.deepEqual(listed, ["report:anchor", "report:previous"]);
+  assert.equal((await store.getDocument("report:anchor"))?.body, "fresh");
+});
+
+test("replaceForPeriod keeps monthly archives from deleting weekly ones", async (t) => {
+  const store = createSqliteReportStore(database(t));
+  let seq = 0;
+  const persist = async (
+    reportId: string,
+    title: string,
+    generatedAt: string,
+  ) => {
+    const runId = `run-${++seq}`;
+    await store.createRun(reportRun(runId, "reports.weekly"));
+    return {
+      reportId,
+      runId,
+      definitionId: "reports.weekly" as const,
+      status: "draft" as const,
+      title,
+      body: `body of ${reportId}`,
+      generatedAt,
+      templateVersion: 6,
+      evidence: [],
+      assets: [],
+    };
+  };
+
+  const weekly = await persist(
+    "report:weekly",
+    "Weekly review",
+    new Date(2026, 8, 14, 12, 0, 0).toISOString(),
+  );
+  const monthly = await persist(
+    "report:monthly",
+    "Monthly review",
+    new Date(2026, 8, 1, 12, 0, 0).toISOString(),
+  );
+  await store.saveDocument(weekly);
+  await store.saveDocument(monthly);
+
+  // Regenerating September must replace the monthly row, and only that row,
+  // even though both archives share the reports.weekly definition id.
+  await store.replaceForPeriod(
+    await persist(
+      "report:monthly-2",
+      "Monthly review",
+      new Date(2026, 8, 1, 12, 0, 0).toISOString(),
+    ),
+  );
+
+  const listed = (await store.listDocuments())
+    .map((item) => item.reportId)
+    .sort();
+  assert.deepEqual(listed, ["report:monthly-2", "report:weekly"]);
+});

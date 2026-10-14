@@ -13,13 +13,48 @@ import type {
   ReportRun,
   ReportStore,
 } from "../contracts.ts";
-import { safeReportText } from "../domain.ts";
+import { MONTHLY_REPORT_TITLE, safeReportText } from "../domain.ts";
+import {
+  periodEndDate,
+  periodKeyOf,
+  periodStartDate,
+  type PeriodGranularity,
+} from "../period.ts";
 import { ReportDocumentSchema, ReportRunSchema } from "./report-schemas.ts";
 
 const RUN_COLUMNS = `run_id, definition_id, trigger, status, started_at_ms,
   finished_at_ms, error_code, retryable`;
 const DOCUMENT_COLUMNS = `report_id, run_id, definition_id, status, title, body,
   generated_at_ms, template_version, approved_by, approved_at_ms`;
+
+/**
+ * Granularity a persisted report is archived under. Monthly reports reuse the
+ * weekly definition for storage compatibility, so the title marker decides.
+ */
+function archiveGranularity(document: ReportDocument): PeriodGranularity {
+  if (document.title === MONTHLY_REPORT_TITLE) return "month";
+  return document.definitionId === "reports.daily" ? "day" : "week";
+}
+
+/**
+ * Half-open millisecond window of the period a report belongs to. Regenerating
+ * a period must replace the previous row for that period — including legacy
+ * rows written before scheduled runs were period-anchored, whose timestamp
+ * sits inside the same window but is not the anchor itself.
+ */
+function archiveWindow(
+  document: ReportDocument,
+): { readonly from: number; readonly to: number } | null {
+  const generated = epoch(document.generatedAt);
+  if (generated === null) return null;
+  const granularity = archiveGranularity(document);
+  const at = new Date(generated);
+  const key = periodKeyOf(granularity, at);
+  const start = periodStartDate(granularity, key);
+  const end = periodEndDate(granularity, key);
+  if (!start || !end) return null;
+  return { from: start.getTime(), to: end.getTime() };
+}
 
 function transaction<T>(database: SqliteDatabasePort, work: () => T): T {
   const tx = database.transaction();
@@ -254,12 +289,25 @@ export function createSqliteReportStore(
     },
     async replaceForPeriod(document) {
       transaction(database, () => {
-        const generatedAt = epoch(document.generatedAt)!;
-        database
-          .prepare(
-            "DELETE FROM reports WHERE definition_id = ? AND generated_at_ms = ? AND report_id <> ?",
-          )
-          .run(document.definitionId, generatedAt, document.reportId);
+        const window = archiveWindow(document);
+        if (window) {
+          // Monthly reports share the weekly definition id, so the archive kind
+          // has to be part of the match: regenerating a month must never delete
+          // the weekly reports that fall inside it.
+          database
+            .prepare(
+              document.title === MONTHLY_REPORT_TITLE
+                ? "DELETE FROM reports WHERE definition_id = ? AND title = ? AND generated_at_ms >= ? AND generated_at_ms < ? AND report_id <> ?"
+                : "DELETE FROM reports WHERE definition_id = ? AND title <> ? AND generated_at_ms >= ? AND generated_at_ms < ? AND report_id <> ?",
+            )
+            .run(
+              document.definitionId,
+              MONTHLY_REPORT_TITLE,
+              window.from,
+              window.to,
+              document.reportId,
+            );
+        }
         putDocument(document);
       });
     },

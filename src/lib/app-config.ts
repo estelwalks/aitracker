@@ -74,9 +74,13 @@ export const ENV = {
   HOME: `${APP_ID.toUpperCase()}_HOME`,
   RELEASE_OWNER: `${APP_ID.toUpperCase()}_RELEASE_OWNER`,
   RELEASE_REPO: `${APP_ID.toUpperCase()}_RELEASE_REPO`,
-  REQUIRE_SIGNING: `${APP_ID.toUpperCase()}_REQUIRE_SIGNING`,
   /** Overrides the default daily ceiling for real-model distillation calls. */
   DISTILL_DAILY_QUOTA: `${APP_ID.toUpperCase()}_DISTILL_DAILY_QUOTA`,
+  /**
+   * Release-workflow guard read by the packaging hook (plain CJS, so it
+   * cannot import this module). Declared here as the canonical name.
+   */
+  REQUIRE_SIGNING: `${APP_ID.toUpperCase()}_REQUIRE_SIGNING`,
 } as const;
 
 /** Params to pass to every `t()`/`getMessage()` call whose key contains `{appName}`. */

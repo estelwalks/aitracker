@@ -95,6 +95,39 @@ function aggregateBucket(
   };
 }
 
+type TestBucket = NonNullable<UsageSnapshotDto["aggregateBuckets"]>[number];
+
+/** Compact aggregate-bucket factory for behavior/repeated signal tests. */
+function bucket(date: string, extra: Partial<TestBucket> = {}): TestBucket {
+  return {
+    date,
+    latestTimestamp: `${date}T02:00:00.000Z`,
+    source: "codex",
+    model: "test-model",
+    project: "test-project",
+    projectLabel: "test-project",
+    ...tokenCounts(1000),
+    measurement: "observed",
+    events: 1,
+    context: {
+      textResponses: 0,
+      toolCalls: 0,
+      tools: [],
+      skillCalls: 0,
+      toolOutputCalls: 0,
+    },
+    evidence: {
+      textResponses: false,
+      toolCalls: false,
+      skillCalls: false,
+      toolOutputCalls: false,
+      reasoningTokens: false,
+      systemPromptTokens: false,
+    },
+    ...extra,
+  };
+}
+
 const AUG_SAMPLE = [
   session(localIso(2026, 8, 15, 10)), // local 08-15
   session(localIso(2026, 8, 14, 10)), // local 08-14
@@ -152,6 +185,31 @@ test("reports exclude internal review sessions and hide prompt-derived long titl
     ctx.stats?.sessionsDetail?.[0]?.title ?? "",
     /后面用这个/,
   );
+});
+
+test("R5 privacy: over-72-char session titles degrade to project · source", async () => {
+  const longTitle =
+    "这是一个远超七十二个字符的会话标题，用于验证报告侧不会把超长标题写入固定正文或模型输入，而是降级为项目与来源的组合标签，避免泄漏完整会话标题内容，并且始终保持隐私边界。";
+  assert.ok(Array.from(longTitle).length > 72);
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 15), {
+        source: "codex",
+        title: longTitle,
+        projectKey: "aitracker",
+      }),
+    ]),
+  });
+
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  const title = ctx.stats?.sessionsDetail?.[0]?.title ?? "";
+  assert.equal(title, "aitracker · codex");
+  assert.ok(Array.from(title).length <= 72);
+  assert.doesNotMatch(title, /远超七十二/);
 });
 
 test("week period covers its Monday–Sunday range", async () => {
@@ -604,4 +662,548 @@ test("keeps session cost when usage totals cannot be priced", async () => {
   assert.equal(ctx.stats?.costCny, 86.4);
   assert.equal(ctx.stats?.bySource[0]?.costCny, 86.4);
   assert.match(ctx.summary, /¥86\.40/);
+});
+
+test("derives approximate behavior distribution from aggregate tool categories", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([]),
+    usage: usageSnapshotWith({
+      daily: [],
+      aggregateBuckets: [
+        bucket("2026-08-15", {
+          ...tokenCounts(4000),
+          events: 1,
+          context: {
+            textResponses: 0,
+            toolCalls: 1,
+            tools: [{ name: "ApplyPatch", category: "execution", calls: 1 }],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+        }),
+        bucket("2026-08-15", {
+          ...tokenCounts(2000),
+          events: 1,
+          context: {
+            textResponses: 0,
+            toolCalls: 1,
+            tools: [{ name: "fetch", category: "browser", calls: 1 }],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+        }),
+        bucket("2026-08-15", {
+          ...tokenCounts(1000),
+          events: 1,
+          context: {
+            textResponses: 1,
+            toolCalls: 0,
+            tools: [],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+        }),
+      ],
+    }),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.equal(ctx.stats?.behaviors?.length, 3);
+  assert.equal(ctx.stats?.behaviors?.[0]?.label, "代码生成/重构");
+  assert.equal(ctx.stats?.behaviors?.[0]?.tokenShare, 4000 / 7000);
+  assert.equal(ctx.stats?.behaviors?.[0]?.eventShare, 1 / 3);
+  assert.match(
+    ctx.summary,
+    /行为分布（基于工具使用的近似估算）：代码生成\/重构 57%/,
+  );
+  assert.match(ctx.summary, /对话\/问答 14%/);
+});
+
+test("classifies debug-style tools into the debug behavior", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([]),
+    usage: usageSnapshotWith({
+      daily: [],
+      aggregateBuckets: [
+        bucket("2026-08-15", {
+          ...tokenCounts(2000),
+          context: {
+            textResponses: 0,
+            toolCalls: 1,
+            tools: [{ name: "runTests", category: "execution", calls: 1 }],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+        }),
+        bucket("2026-08-15", {
+          ...tokenCounts(1000),
+          context: {
+            textResponses: 0,
+            toolCalls: 1,
+            tools: [{ name: "ApplyPatch", category: "execution", calls: 1 }],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+        }),
+      ],
+    }),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.equal(ctx.stats?.behaviors?.[0]?.label, "调试");
+  assert.equal(ctx.stats?.behaviors?.[1]?.label, "代码生成/重构");
+});
+
+test("omits behavior distribution when the period has no tool signal", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([]),
+    usage: usageSnapshotWith({
+      daily: [],
+      aggregateBuckets: [
+        bucket("2026-08-15", {
+          context: {
+            textResponses: 1,
+            toolCalls: 0,
+            tools: [],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+        }),
+      ],
+    }),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.equal(ctx.stats?.behaviors, undefined);
+  assert.doesNotMatch(ctx.summary, /行为分布/);
+});
+
+test("summary includes per-agent tool usage from aggregate tool details", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([]),
+    usage: usageSnapshotWith({
+      daily: [],
+      aggregateBuckets: [
+        bucket("2026-08-15", {
+          source: "codex",
+          ...tokenCounts(4000),
+          events: 1,
+          context: {
+            textResponses: 0,
+            toolCalls: 2,
+            tools: [
+              { name: "exec_command", category: "execution", calls: 22 },
+              { name: "apply_patch", category: "execution", calls: 3 },
+            ],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+        }),
+        bucket("2026-08-15", {
+          source: "claude-code",
+          ...tokenCounts(2000),
+          events: 1,
+          context: {
+            textResponses: 0,
+            toolCalls: 1,
+            tools: [{ name: "Bash", category: "execution", calls: 5 }],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+        }),
+      ],
+    }),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.equal(ctx.stats?.toolUsageBySource?.length, 2);
+  const codex = ctx.stats?.toolUsageBySource?.find((r) => r.source === "codex");
+  assert.equal(codex?.tools[0]?.name, "exec_command");
+  assert.equal(codex?.tools[0]?.calls, 22);
+  assert.equal(codex?.tools[1]?.name, "apply_patch");
+  assert.equal(codex?.tools[1]?.calls, 3);
+  assert.match(ctx.summary, /主要工具行为（脱敏汇总，按 Agent）：/);
+  assert.match(ctx.summary, /codex：exec_command ×22、apply_patch ×3/);
+  assert.match(ctx.summary, /claude-code：Bash ×5/);
+});
+
+test("summary omits tool-usage section when no aggregate tools exist", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([]),
+    usage: usageSnapshotWith({
+      daily: [],
+      aggregateBuckets: [
+        bucket("2026-08-15", {
+          context: {
+            textResponses: 1,
+            toolCalls: 0,
+            tools: [],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+        }),
+      ],
+    }),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.equal(ctx.stats?.toolUsageBySource?.length, 0);
+  assert.doesNotMatch(ctx.summary, /主要工具行为/);
+});
+
+test("summary includes main sessions with sanitized titles and projects", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 15, 9), {
+        source: "codex",
+        title: "修复登录态丢失",
+        projectKey: "aitracker",
+        turns: 8,
+        totals: { totalTokens: 3000 },
+      }),
+      session(localIso(2026, 8, 15, 11), {
+        source: "codex",
+        title: "补全文档",
+        projectKey: "aitracker",
+        turns: 3,
+        totals: { totalTokens: 1000 },
+      }),
+    ]),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.match(ctx.summary, /主要会话：/);
+  assert.match(ctx.summary, /「修复登录态丢失」（aitracker）：8 轮、3\.0K/);
+  assert.match(ctx.summary, /「补全文档」（aitracker）：3 轮、1\.0K/);
+});
+
+test("flags repeated sessions with similar titles in the same project", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 15, 9), {
+        source: "codex",
+        title: "修复登录态丢失的问题",
+        projectKey: "aitracker",
+        turns: 8,
+        totals: { totalTokens: 3000 },
+      }),
+      session(localIso(2026, 8, 15, 14), {
+        source: "codex",
+        title: "继续修复登录态丢失的问题",
+        projectKey: "aitracker",
+        turns: 5,
+        totals: { totalTokens: 2000 },
+      }),
+      session(localIso(2026, 8, 15, 16), {
+        source: "codex",
+        title: "补全文档",
+        projectKey: "aitracker",
+        turns: 3,
+        totals: { totalTokens: 1000 },
+      }),
+    ]),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  const repeatedTitles = (ctx.stats?.sessionsDetail ?? [])
+    .filter((row) => row.repeated)
+    .map((row) => row.title);
+  assert.deepEqual(repeatedTitles, [
+    "修复登录态丢失的问题",
+    "继续修复登录态丢失的问题",
+  ]);
+  assert.equal(
+    (ctx.stats?.sessionsDetail ?? []).find((row) => row.title === "补全文档")
+      ?.repeated,
+    false,
+  );
+});
+
+test("short or distinct titles are not flagged as repeated", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 15, 9), { title: "T", projectKey: "p1" }),
+      session(localIso(2026, 8, 15, 14), { title: "T", projectKey: "p1" }),
+      session(localIso(2026, 8, 15, 16), {
+        title: "完全不同的主题A",
+        projectKey: "p1",
+      }),
+      session(localIso(2026, 8, 15, 18), {
+        title: "完全不同的主题B",
+        projectKey: "p1",
+      }),
+    ]),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.ok(
+    (ctx.stats?.sessionsDetail ?? []).every((row) => row.repeated === false),
+  );
+});
+
+test("repeated signal also looks at the previous comparison period", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 14, 10), {
+        source: "codex",
+        title: "排查数据库锁竞争",
+        projectKey: "aitracker",
+        turns: 4,
+        totals: { totalTokens: 1200 },
+      }),
+      session(localIso(2026, 8, 15, 10), {
+        source: "codex",
+        title: "继续排查数据库锁竞争",
+        projectKey: "aitracker",
+        turns: 6,
+        totals: { totalTokens: 2500 },
+      }),
+    ]),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.equal(ctx.stats?.sessionsDetail?.[0]?.repeated, true);
+});
+
+test("weekly summary includes repeated-work and durable-output signals", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 10, 9), {
+        source: "codex",
+        title: "修复登录态丢失的问题",
+        projectKey: "aitracker",
+        turns: 8,
+        totals: { totalTokens: 3000 },
+      }),
+      session(localIso(2026, 8, 12, 14), {
+        source: "codex",
+        title: "继续修复登录态丢失的问题",
+        projectKey: "aitracker",
+        turns: 5,
+        totals: { totalTokens: 2000 },
+      }),
+    ]),
+    output: {
+      collect: async ({ from, to }) => ({
+        skills: 1,
+        knowledge: 2,
+        distillations: 0,
+      }),
+    },
+  });
+  const ctx = await port.collect({
+    definition: weekly,
+    period: { granularity: "week", key: "2026-08-10" },
+  });
+
+  assert.match(ctx.summary, /重复工作：2 个会话存在重复任务迹象/);
+  assert.match(
+    ctx.summary,
+    /沉淀与产出：本时段新增 Skill 1 个、记忆\/知识 2 个、蒸馏成果 0 个/,
+  );
+  assert.equal(ctx.stats?.outputs?.skills, 1);
+  assert.equal(ctx.stats?.outputs?.knowledge, 2);
+  assert.equal(ctx.stats?.outputs?.distillations, 0);
+});
+
+test("summary omits output signal when no output port is provided", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 15, 9), {
+        projectKey: "p1",
+        title: "工作A",
+      }),
+    ]),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+  assert.doesNotMatch(ctx.summary, /沉淀与产出/);
+  assert.equal(ctx.stats?.outputs, undefined);
+});
+
+test("summary omits output signal for zero counts or a throwing port", async () => {
+  const base = snapshotWith([
+    session(localIso(2026, 8, 15, 9), { projectKey: "p1", title: "工作A" }),
+  ]);
+  const zero = createReportContextPort({
+    snapshot: base,
+    output: {
+      collect: async () => ({ skills: 0, knowledge: 0, distillations: 0 }),
+    },
+  });
+  const zeroCtx = await zero.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+  assert.doesNotMatch(zeroCtx.summary, /沉淀与产出/);
+  assert.equal(zeroCtx.stats?.outputs, undefined);
+
+  const throwing = createReportContextPort({
+    snapshot: base,
+    output: {
+      collect: async () => {
+        throw new Error("output port unavailable");
+      },
+    },
+  });
+  const throwCtx = await throwing.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+  assert.doesNotMatch(throwCtx.summary, /沉淀与产出/);
+  assert.equal(throwCtx.stats?.outputs, undefined);
+});
+
+test("a session running past the covered day is flagged cross-period", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 20, 10), {
+        title: "same-day",
+        endedAt: localIso(2026, 8, 20, 11),
+        durationMs: 60 * 60 * 1000,
+      }),
+      // Active duration stays inside the day, but the session resumed later —
+      // only endedAt reveals that it ran past the covered day.
+      session(localIso(2026, 8, 20, 23), {
+        title: "spills-over",
+        endedAt: localIso(2026, 8, 21, 3),
+        durationMs: 60 * 60 * 1000,
+      }),
+    ]),
+  });
+
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-20" },
+  });
+
+  const rows = ctx.stats?.sessionsDetail ?? [];
+  const byTitle = new Map(rows.map((row) => [row.title, row]));
+  assert.equal(byTitle.get("same-day")?.crossPeriod, false);
+  assert.equal(byTitle.get("spills-over")?.crossPeriod, true);
+});
+
+test("content insight stays off by default and never opens a transcript", async () => {
+  let reads = 0;
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 20, 10), {
+        sessionId: "s-1",
+        title: "拉取这个项目",
+      }),
+    ]),
+    sessionContent: {
+      enabled: () => false,
+      read: async () => {
+        reads += 1;
+        return { messages: [{ role: "user", text: "拉取这个项目" }] };
+      },
+    },
+  });
+
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-20" },
+  });
+
+  assert.equal(reads, 0);
+  assert.equal(ctx.sessionDigests, undefined);
+});
+
+test("enabling content insight digests the covered sessions", async () => {
+  const read: string[] = [];
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 20, 10), {
+        sessionId: "s-1",
+        title: "拉取这个项目",
+        totals: { totalTokens: 5000 },
+      }),
+      session(localIso(2026, 8, 20, 11), {
+        sessionId: "s-2",
+        title: "小会话",
+        totals: { totalTokens: 10 },
+      }),
+    ]),
+    sessionContent: {
+      enabled: () => true,
+      read: async (ref) => {
+        read.push(ref.sessionId);
+        return {
+          messages: [
+            { role: "user", text: "<system>noise" },
+            { role: "user", text: "拉取这个项目，路径 /Users/x/app" },
+            {
+              role: "assistant",
+              text: "已经克隆仓库，分析完结构，补齐文档并成功打包桌面应用，随后启动应用做了真实端到端验证。",
+            },
+          ],
+        };
+      },
+    },
+  });
+
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-20" },
+  });
+
+  // Highest-token session first, both digested.
+  assert.deepEqual(read, ["s-1", "s-2"]);
+  const digests = ctx.sessionDigests ?? [];
+  assert.equal(digests.length, 2);
+  assert.equal(digests[0]?.title, "拉取这个项目");
+  assert.deepEqual(digests[0]?.goals, ["拉取这个项目，路径 <path>"]);
+  assert.equal(digests[0]?.redacted, true);
+});
+
+test("a failing content reader degrades to a statistics-only context", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 20, 10), { sessionId: "s-1", title: "T" }),
+    ]),
+    sessionContent: {
+      enabled: () => true,
+      read: async () => {
+        throw new Error("transcript unavailable");
+      },
+    },
+  });
+
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-20" },
+  });
+
+  assert.equal(ctx.sessionDigests, undefined);
+  assert.ok(ctx.stats);
 });
