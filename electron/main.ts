@@ -166,6 +166,12 @@ let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 /**
+ * The non-macOS tray menu, kept so the dismissal probe can open the real menu
+ * rather than a copy of it. Null on macOS, which pops its own menu on
+ * right-click. See scripts/linux-tray-menu-probe.sh.
+ */
+let trayMenu: Menu | null = null;
+/**
  * Whether a status-area icon actually exists. On Linux the tray is provided by
  * libappindicator over StatusNotifierItem and can fail outright on a desktop
  * without it; the flag then decides whether closing the window may hide the app
@@ -1359,6 +1365,59 @@ function loadNativeTrayIcon(): Electron.NativeImage | string {
   return trayIcon;
 }
 
+/**
+ * Opt-in hook that opens the tray menu so its dismissal can be tested.
+ *
+ * A synthetic right-click does not work here: the menu is bound to the tray's own
+ * window, and `xdotool` events sent to that window do not reach the handler, so
+ * the menu never opens and the probe reports a false failure. Opening it from
+ * inside the app is the only way to exercise the real menu.
+ *
+ * Gated on an environment variable that nothing sets in normal use, so this is
+ * inert in production.
+ */
+const TRAY_MENU_PROBE_ENV = "AITRACKER_TRAY_MENU_PROBE";
+
+function trayMenuProbeRequested(): boolean {
+  const value = process.env[TRAY_MENU_PROBE_ENV]?.trim().toLowerCase();
+  return process.platform === "linux" && (value === "1" || value === "true");
+}
+
+function scheduleTrayMenuProbe(): void {
+  // The tray window exists before the shell adopts it, and the shell is what
+  // positions it. Popping the menu before then asks GTK to open a menu with no
+  // place to attach it, and no menu appears at all — measured while building
+  // this probe. So wait for the reported bounds to leave the origin.
+  const deadline = Date.now() + 30_000;
+  const waitForTray = (): void => {
+    const bounds = tray?.getBounds();
+    const placed = bounds != null && (bounds.x !== 0 || bounds.y !== 0);
+    if (!placed && Date.now() < deadline) {
+      setTimeout(waitForTray, 500);
+      return;
+    }
+    openProbeMenu(bounds);
+  };
+  setTimeout(waitForTray, 1_000);
+}
+
+function openProbeMenu(bounds: Electron.Rectangle | undefined): void {
+  setTimeout(() => {
+    if (!trayMenu || !tray) return;
+    console.info("AITracker tray menu probe: opening the tray menu");
+    tray.popUpContextMenu(trayMenu, {
+      x: Math.round(bounds?.x ?? 0),
+      y: Math.round(bounds?.y ?? 0),
+    });
+    // A second run closes it again, which is how the probe distinguishes a menu
+    // that ignores outside clicks from one that never opened.
+    setTimeout(() => {
+      console.info("AITracker tray menu probe: closing the tray menu");
+      tray?.closeContextMenu();
+    }, 12_000);
+  }, 4_000);
+}
+
 /** Rebuild the tray and localized menu after language or preference changes. */
 function rebuildTray(): void {
   const trayIcon = loadNativeTrayIcon();
@@ -1413,9 +1472,11 @@ function rebuildTray(): void {
     );
     tray.on("right-click", () => tray?.popUpContextMenu(macMenu));
   } else {
-    tray.setContextMenu(
-      Menu.buildFromTemplate(template as Electron.MenuItemConstructorOptions[]),
+    trayMenu = Menu.buildFromTemplate(
+      template as Electron.MenuItemConstructorOptions[],
     );
+    tray.setContextMenu(trayMenu);
+    if (trayMenuProbeRequested()) scheduleTrayMenuProbe();
   }
   tray.on("click", (_event, bounds) => {
     if (process.platform === "darwin") {
