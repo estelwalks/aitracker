@@ -118,67 +118,86 @@ test("status icons carry more ink than the app-icon mark at panel size", async (
 });
 
 /**
- * The hicolor app icon must be the macOS app tile, not a second design.
+ * The hicolor app icon must be the macOS app tile, only cropped.
  *
- * The two platforms used to differ on purpose and the difference was visible
- * side by side: the Linux variant drew its plate edge-to-edge with a heavier
- * mark, which reads as crowded next to the macOS tile's margin. Delegating to
- * macAppArtwork is what keeps them identical, so this asserts the delegation
- * rather than any particular geometry — if the app tile changes, both platforms
- * change together and this still passes, while a re-introduced Linux-only design
- * fails.
+ * Two regressions are possible here and they pull in opposite directions, so
+ * both are asserted.
  *
- * The status-area artwork is deliberately not covered here: it is a separate
- * 22px panel glyph with its own weights, and macOS uses a template mask there.
+ * The first is a second design. Linux once drew its own tile: plate edge-to-edge
+ * with a heavier mark, which read as a different product next to macOS. That is
+ * caught by requiring the two to agree on the tile itself - the plate, its
+ * radius, its fill and the mark's placement.
+ *
+ * The second is the icon reading as too small. The macOS artboard carries a
+ * margin for the Dock, so the tile fills only 824/1024 = 80.5% of it, and in a
+ * GNOME app grid that looks undersized next to neighbours measuring 81-100%
+ * (chromium and syncthing fill the whole canvas). The Linux icon therefore crops
+ * the canvas to 88% and must stay strictly larger than the macOS one, which is
+ * what fails if someone reverts the crop.
+ *
+ * Only the canvas differs: the artboard is 1024 units on both sides and the
+ * geometry inside is untouched, so this is a crop and not a redraw. That is why
+ * the shared inner markup is asserted verbatim instead of the whole document.
+ *
+ * The status-area artwork is deliberately not covered: it is a separate 22px
+ * panel glyph with its own weights, and macOS uses a template mask there.
  */
-test("the hicolor app icon is the macOS app tile", async () => {
+test("the hicolor app icon is the macOS app tile, cropped larger", async () => {
   const { macAppArtwork, linuxAppArtwork } =
     await import("../scripts/generate-native-icons.mjs");
   const source = readFileSync(
     join(projectRoot, "public", "favicon.svg"),
     "utf8",
   );
+  const mac = macAppArtwork(source);
+  const linux = linuxAppArtwork(source);
+  const viewBox = (svg) => svg.match(/viewBox="([^"]+)"/u)?.[1];
+  const inner = (svg) => svg.match(/<svg[^>]*>([\s\S]*)<\/svg>/u)?.[1];
+
+  assert.notEqual(linux, mac, "the Linux icon must crop the canvas");
+  assert.ok(viewBox(linux), "the Linux icon must declare a viewBox");
   assert.equal(
-    linuxAppArtwork(source),
-    macAppArtwork(source),
-    "the Linux application icon must reuse the macOS tile",
+    inner(linux),
+    inner(mac),
+    "the tile and mark must be the macOS ones, unchanged",
   );
 
-  // And the files on disk must agree, so a stale tree cannot pass.
   const { Resvg } = await import("@resvg/resvg-js");
   const size = 512;
   const render = (svg) =>
     Buffer.from(
       new Resvg(svg, { fitTo: { mode: "width", value: size } }).render().pixels,
     );
-  assert.ok(
-    render(linuxAppArtwork(source)).equals(render(macAppArtwork(source))),
-    "rendered Linux and macOS tiles must be identical at 512px",
-  );
-
-  // The tile is a white rounded plate, so most of the canvas is opaque.
-  const px = render(linuxAppArtwork(source));
-  let opaque = 0;
-  for (let i = 3; i < px.length; i += 4) if (px[i] === 255) opaque += 1;
-  assert.ok(
-    opaque > size * size * 0.5,
-    `the app tile must be mostly opaque, got ${opaque} of ${size * size}`,
-  );
-  // Its outer margin stays transparent so it sits like a Dock tile.
-  for (let i = 0; i < size; i++) {
-    for (const idx of [
-      i,
-      (size - 1) * size + i,
-      i * size,
-      i * size + size - 1,
-    ]) {
-      assert.equal(
-        px[idx * 4 + 3],
-        0,
-        "the tile must not fill the canvas edge",
-      );
+  /** Where the painted tile sits, in pixels of a `size` canvas. */
+  const coverage = (px) => {
+    let minX = size;
+    let maxX = -1;
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        if (px[(y * size + x) * 4 + 3] < 16) continue;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+      }
     }
-  }
+    assert.ok(maxX >= 0, "the tile must be painted");
+    return { width: maxX - minX + 1, left: minX };
+  };
+
+  const macBox = coverage(render(mac));
+  const linuxBox = coverage(render(linux));
+  assert.ok(
+    linuxBox.width > macBox.width * 1.05,
+    `the Linux tile must be visibly larger than the macOS one (linux ${linuxBox.width}px vs mac ${macBox.width}px at ${size}px)`,
+  );
+  assert.ok(
+    linuxBox.width / size > 0.85 && linuxBox.width / size < 0.95,
+    `the Linux tile must sit near 88% of the canvas, got ${((100 * linuxBox.width) / size).toFixed(1)}%`,
+  );
+  // A crop still leaves a margin, so the tile never bleeds off the edge.
+  assert.ok(
+    linuxBox.left > 0,
+    "the cropped tile must still keep a transparent margin",
+  );
 });
 
 /**

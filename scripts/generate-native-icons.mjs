@@ -185,17 +185,34 @@ export function linuxTrayArtwork(source) {
  * multi-size ICO, and neither is touched.
  */
 export function linuxAppArtwork(source) {
-  // Linux reuses the macOS app tile verbatim so the two platforms show the same
-  // icon. They were deliberately different before, and the difference was
-  // visible side by side: the Linux variant drew its plate edge-to-edge with a
-  // heavier mark, which reads as crowded next to the macOS tile's margin. Rather
-  // than hand-tune a second design that would drift, this delegates, so any
-  // future change to the app tile applies to both platforms at once.
+  // Linux reuses the macOS app tile so the two platforms show the same icon, and
+  // crops only the canvas.
   //
-  // Only the application icon is shared. The Linux status-area artwork stays
-  // separate on purpose: it is a 22px panel glyph that needs its own stroke
-  // weights (see linuxTrayArtwork), and macOS uses a template mask there.
-  return macAppArtwork(source);
+  // The crop exists because the two desktops frame icons differently. The macOS
+  // artboard carries a deliberate outer margin for the Dock: the tile occupies
+  // 824/1024 = 80.5% of it. That reads as noticeably smaller than its neighbours
+  // in a GNOME app grid, where installed icons measure 81-100% (chromium and
+  // syncthing fill the whole canvas). Bringing the tile to 88% puts it in the
+  // range the surrounding icons occupy without crowding it against the edge.
+  //
+  // Cropping the viewBox rather than redrawing keeps a single source of truth:
+  // the plate, its radius and the mark keep the exact proportions macOS uses, so
+  // nothing here needs revisiting when macAppArtwork changes. Rewinding to the
+  // tile's own bounds would be 1.0; the value below deliberately stops short so
+  // the icon keeps the breathing room its neighbours have.
+  const MACOS_TILE_COVERAGE = 824 / 1024;
+  const LINUX_TILE_COVERAGE = 0.88;
+  const artboard = 1024;
+  const span = (MACOS_TILE_COVERAGE * artboard) / LINUX_TILE_COVERAGE;
+  const offset = (artboard - span) / 2;
+  const artwork = macAppArtwork(source);
+  const inner = artwork.match(/<svg[^>]*>([\s\S]*)<\/svg>/u)?.[1];
+  if (!inner) throw new Error("macAppArtwork must render a single svg element");
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" ' +
+    `viewBox="${offset.toFixed(2)} ${offset.toFixed(2)} ${span.toFixed(2)} ${span.toFixed(2)}">` +
+    `${inner}</svg>`
+  );
 }
 
 /** Retain physical density as well as Electron's @2x filename convention. */
