@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
@@ -1409,13 +1410,50 @@ function openProbeMenu(bounds: Electron.Rectangle | undefined): void {
       x: Math.round(bounds?.x ?? 0),
       y: Math.round(bounds?.y ?? 0),
     });
-    // A second run closes it again, which is how the probe distinguishes a menu
-    // that ignores outside clicks from one that never opened.
+    // Report the popup's window id, if X11 can see it. The probe needs a concrete
+    // target to watch: identifying the menu by size or by name from outside is
+    // guesswork, and guessing is how an earlier version of the probe reported a
+    // false failure.
     setTimeout(() => {
-      console.info("AITracker tray menu probe: closing the tray menu");
-      tray?.closeContextMenu();
-    }, 12_000);
+      const id = probeMenuWindowId();
+      console.info(
+        id === null
+          ? "AITracker tray menu probe: no mapped menu window found"
+          : `AITracker tray menu probe: menu window ${id}`,
+      );
+    }, 1_500);
   }, 4_000);
+}
+
+/**
+ * Find the mapped popup the tray menu just opened, so the probe can watch that
+ * exact window instead of guessing which window is the menu.
+ *
+ * Read from `xwininfo` rather than from Electron: the menu is a native GTK popup
+ * owned by the tray, and Electron exposes no handle for it. A missing `xwininfo`,
+ * or a Wayland session with no X11 windows at all, simply yields null and the
+ * probe falls back to reporting that it could not observe the menu.
+ */
+function probeMenuWindowId(): string | null {
+  try {
+    const tree = execFileSync("xwininfo", ["-root", "-tree"], {
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    // Menu windows are named after the app but are neither the tray glyph nor the
+    // main window, and they are mapped while open.
+    const line = tree
+      .split("\n")
+      .find(
+        (entry: string) =>
+          entry.includes('"aitracker"') &&
+          !/\b(10|16|22)x(10|16|22)\b/u.test(entry) &&
+          !entry.includes("Dashboard"),
+      );
+    return line?.trim().match(/^(0x[0-9a-f]+)/u)?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Rebuild the tray and localized menu after language or preference changes. */
