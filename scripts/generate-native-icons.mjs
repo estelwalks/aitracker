@@ -330,9 +330,12 @@ async function removeGeneratedDirectory(directory) {
  * a white square behind the mark on a Linux dock or taskbar.
  */
 async function generateLinuxIcons(stagingDirectory, svg, artworks) {
-  // The hicolor set is one file per size and cannot follow the theme, so it uses
-  // the contrast-outlined light mark; see linuxAppArtwork.
-  const glyph = linuxAppArtwork(artworks.dark);
+  // Pass `svg` — the light-theme source, whose ink is dark — and not the
+  // dark-theme one. The app tile has a white plate, so the dark-theme source
+  // (light ink) painted white on white and the icon came out as an empty white
+  // square. The inks are not interchangeable: they exist so that a mark stays
+  // legible on a given background.
+  const glyph = linuxAppArtwork(svg);
   const directory = join(stagingDirectory, "linux");
   await mkdir(directory, { recursive: true });
   await Promise.all([

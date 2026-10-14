@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { inflateSync } from "node:zlib";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -177,5 +178,141 @@ test("the hicolor app icon is the macOS app tile", async () => {
         "the tile must not fill the canvas edge",
       );
     }
+  }
+});
+
+/**
+ * The mark must actually be visible against the plate.
+ *
+ * This is the assertion that was missing. The app tile has a WHITE plate and the
+ * generator is fed two artwork sources - a light-theme one with dark ink and a
+ * dark-theme one with light ink - so passing the wrong source painted light ink
+ * onto the white plate and shipped an empty white square. Every other assertion
+ * in this file passed while the icon was blank, because "the plate is opaque"
+ * and "the margins are transparent" are both still true of a blank tile. The
+ * check has to be about contrast between the ink and the plate.
+ */
+test("the app tile's mark contrasts with its plate", async () => {
+  const { Resvg } = await import("@resvg/resvg-js");
+  const { linuxAppArtwork } =
+    await import("../scripts/generate-native-icons.mjs");
+  const size = 256;
+  const source = readFileSync(
+    join(projectRoot, "public", "favicon.svg"),
+    "utf8",
+  );
+  const px = new Resvg(linuxAppArtwork(source), {
+    fitTo: { mode: "width", value: size },
+  }).render().pixels;
+
+  let darkest = 255;
+  let lightest = 0;
+  for (let i = 0; i < size * size; i += 1) {
+    // Only fully painted pixels: the transparent margin is not part of the tile.
+    if (px[i * 4 + 3] < 250) continue;
+    const lum =
+      0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2];
+    darkest = Math.min(darkest, lum);
+    lightest = Math.max(lightest, lum);
+  }
+  const contrast = (lightest + 5) / (darkest + 5);
+  assert.ok(
+    contrast > 5,
+    `the mark must contrast with its plate: darkest ink ${darkest.toFixed(0)}, plate ${lightest.toFixed(0)}, ratio ${contrast.toFixed(2)}:1`,
+  );
+});
+
+/**
+ * The generated files on disk must show a mark on their plate.
+ *
+ * This reads the emitted PNG rather than calling the generator, because the bug
+ * this guards against lived in the caller: `generateLinuxIcons` was handed the
+ * dark-theme artwork source (light ink) while the app tile's plate is white, so
+ * the icon shipped as an empty white square. A test that calls
+ * `linuxAppArtwork(lightSource)` itself cannot see that mistake — it exercises
+ * the function with the argument the caller should have passed, so it stays
+ * green while the shipped file is blank.
+ *
+ * Decoding is deliberately minimal: the generator writes 8-bit RGBA,
+ * non-interlaced PNGs, which is all this handles.
+ */
+function decodeRgbaPng(file) {
+  const raw = readFileSync(file);
+  if (raw.readUInt32BE(16) !== raw.readUInt32BE(20)) {
+    throw new Error(`${file}: expected a square icon`);
+  }
+  const width = raw.readUInt32BE(16);
+  const depth = raw[24];
+  const colorType = raw[25];
+  const interlace = raw[28];
+  if (depth !== 8 || colorType !== 6 || interlace !== 0) {
+    throw new Error(
+      `${file}: expected 8-bit RGBA non-interlaced, got depth=${depth} colorType=${colorType} interlace=${interlace}`,
+    );
+  }
+  const chunks = [];
+  let offset = 8;
+  while (offset < raw.length) {
+    const length = raw.readUInt32BE(offset);
+    if (raw.subarray(offset + 4, offset + 8).toString() === "IDAT") {
+      chunks.push(raw.subarray(offset + 8, offset + 8 + length));
+    }
+    offset += length + 12;
+  }
+  const inflated = inflateSync(Buffer.concat(chunks));
+  const stride = width * 4;
+  const pixels = Buffer.alloc(width * width * 4);
+  let previous = Buffer.alloc(stride);
+  for (let y = 0; y < width; y += 1) {
+    const filter = inflated[y * (stride + 1)];
+    const line = Buffer.from(
+      inflated.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)),
+    );
+    for (let i = 0; i < stride; i += 1) {
+      const a = i >= 4 ? line[i - 4] : 0;
+      const b = previous[i];
+      const c = i >= 4 ? previous[i - 4] : 0;
+      if (filter === 1) line[i] = (line[i] + a) & 255;
+      else if (filter === 2) line[i] = (line[i] + b) & 255;
+      else if (filter === 3) line[i] = (line[i] + ((a + b) >> 1)) & 255;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a);
+        const pb = Math.abs(p - b);
+        const pc = Math.abs(p - c);
+        line[i] =
+          (line[i] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
+      }
+    }
+    line.copy(pixels, y * stride);
+    previous = line;
+  }
+  return { width, pixels };
+}
+
+test("every generated application icon has ink visible on its plate", () => {
+  for (const size of [32, 48, 256]) {
+    const { width, pixels } = decodeRgbaPng(
+      join(iconRoot, linuxIconName(size)),
+    );
+    let darkest = 255;
+    let lightest = 0;
+    let painted = 0;
+    for (let i = 0; i < width * width; i += 1) {
+      if (pixels[i * 4 + 3] < 250) continue;
+      painted += 1;
+      const lum =
+        0.2126 * pixels[i * 4] +
+        0.7152 * pixels[i * 4 + 1] +
+        0.0722 * pixels[i * 4 + 2];
+      darkest = Math.min(darkest, lum);
+      lightest = Math.max(lightest, lum);
+    }
+    assert.ok(painted > 0, `${size}px: the tile must be painted`);
+    const contrast = (lightest + 5) / (darkest + 5);
+    assert.ok(
+      contrast > 4,
+      `${size}px: the mark must contrast with its plate (ink ${darkest.toFixed(0)} on plate ${lightest.toFixed(0)}, ${contrast.toFixed(2)}:1) — a blank tile means the wrong artwork source reached the generator`,
+    );
   }
 });
