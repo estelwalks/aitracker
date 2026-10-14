@@ -2,6 +2,13 @@
 @import "@fontsource-variable/inter/wght.css";
 @import "@fontsource-variable/jetbrains-mono/wght.css";
 @import "@fontsource-variable/noto-sans-sc/wght.css";
+/* Korean is a shipped locale, so its glyphs must not depend on whatever fonts the
+   host happens to have. A system with no Korean font at all (measured: Kali with
+   only DroidSansFallbackFull, which has no Hangul) rendered every Korean string as
+   tofu - including the language name in Settings, which is why the problem was
+   visible before the locale was even switched. Japanese has the same exposure but
+   far fewer users of that locale, so it is left to the system fallback for now. */
+@import "@fontsource-variable/noto-sans-kr/wght.css";
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -141,7 +148,7 @@ body.aitracker-widget-float-document {
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* Keep the primary UI font independent of the host OS and its installed fonts. */
-  --font-sans: "Inter Variable", "Noto Sans SC Variable", sans-serif;
+  --font-sans: "Inter Variable", "Noto Sans SC Variable", "Noto Sans KR Variable", sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 }
 
