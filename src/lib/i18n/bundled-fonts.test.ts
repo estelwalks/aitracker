@@ -16,6 +16,12 @@ const projectRoot = process.cwd();
  * see the problem before switching locale, which is what made it look like an
  * encoding bug rather than a missing font.
  *
+ * Japanese was equally exposed but looked fine on the machine that reported the
+ * bug, because that host's only CJK fallback (DroidSansFallbackFull) happens to
+ * contain Kana and Kanji while containing no Hangul. The locale list is therefore
+ * derived from the shipped locales rather than from whichever one was seen
+ * failing.
+ *
  * The second half of this test exists because the first fix silently did
  * nothing: the `@import` was preceded by a `//` comment. That is not CSS
  * syntax, so the CSS optimiser swallowed the import together with the following
@@ -40,6 +46,11 @@ test("each shipped CJK locale is backed by a bundled font", () => {
       locale: "ko-KR",
       family: "Noto Sans KR Variable",
       pkg: "@fontsource-variable/noto-sans-kr",
+    },
+    {
+      locale: "ja-JP",
+      family: "Noto Sans JP Variable",
+      pkg: "@fontsource-variable/noto-sans-jp",
     },
   ];
 
