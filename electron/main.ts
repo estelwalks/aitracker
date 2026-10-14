@@ -1408,46 +1408,95 @@ function probeReport(message: string): void {
 }
 
 function scheduleTrayMenuProbe(): void {
-  // The tray window exists before the shell adopts it, and the shell is what
-  // positions it. Popping the menu before then asks GTK to open a menu with no
-  // place to attach it, and no menu appears at all — measured while building
-  // this probe. So wait for the reported bounds to leave the origin.
-  const deadline = Date.now() + 10_000;
+  // Wait for the tray's window to be adopted by the desktop shell, and read that
+  // from X11 rather than from `tray.getBounds()`.
+  //
+  // `getBounds()` reports 0,0,0,0 on this Electron build even when the icon is
+  // visible in the panel and the shell has positioned its window — measured on a
+  // session where the icon was on screen and its window sat at 1327,6 while
+  // `getBounds()` still returned the origin. Gating on it therefore skipped the
+  // menu on every run, including runs where there was a menu to open.
+  const deadline = Date.now() + 20_000;
   let attempts = 0;
   const waitForTray = (): void => {
     attempts += 1;
-    const bounds = tray?.getBounds();
-    // `getBounds()` reports the real position only once the desktop shell has
-    // adopted the icon; before that it stays at the origin, and opening a menu
-    // then shows nothing at all.
-    const placed = bounds != null && (bounds.x !== 0 || bounds.y !== 0);
-    if (!placed && Date.now() < deadline) {
+    const placed = trayWindowPosition();
+    if (placed === null && Date.now() < deadline) {
       setTimeout(waitForTray, 500);
       return;
     }
-    if (!placed) {
-      // Report and stop rather than opening a menu with nowhere to attach it: a
-      // menu popped before the shell adopts the icon does not appear at all.
+    if (placed === null) {
+      // Opening a menu with nowhere to attach it shows nothing at all, so report
+      // and stop instead of waiting out the clock.
       probeReport(
-        `tray never placed after ${attempts} checks (bounds=${JSON.stringify(bounds ?? null)}); skipping the menu`,
+        `tray window was never placed after ${attempts} checks; skipping the menu`,
       );
       return;
     }
     probeReport(
-      `tray placed at ${bounds.x},${bounds.y} after ${attempts} checks`,
+      `tray window at ${placed.x},${placed.y} after ${attempts} checks`,
     );
-    openProbeMenu(bounds);
+    openProbeMenu(placed);
   };
   setTimeout(waitForTray, 1_000);
 }
 
-function openProbeMenu(bounds: Electron.Rectangle | undefined): void {
+/**
+ * Where the desktop shell put the tray icon, or null when it has not adopted it.
+ *
+ * The position is the one thing that distinguishes "the icon is in the panel" from
+ * "the window exists but nothing has claimed it": the window is created at the
+ * origin and only moves once a tray host takes it. Read through `xwininfo` because
+ * the tray window belongs to GTK.
+ */
+function trayWindowPosition(): { x: number; y: number } | null {
+  const id = probeTrayWindowId();
+  if (id === null) return null;
+  try {
+    const info = execFileSync("xwininfo", ["-id", id], {
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    const x = Number(info.match(/Absolute upper-left X:\s*(-?\d+)/u)?.[1]);
+    const y = Number(info.match(/Absolute upper-left Y:\s*(-?\d+)/u)?.[1]);
+    const mapped = /Map State:\s*IsViewable/u.test(info);
+    if (!mapped || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (x === 0 && y === 0) return null;
+    return { x, y };
+  } catch {
+    return null;
+  }
+}
+
+/** The tray glyph's own window id, which is the small mapped one. */
+function probeTrayWindowId(): string | null {
+  try {
+    const tree = execFileSync("xwininfo", ["-root", "-tree"], {
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    return (
+      tree
+        .split("\n")
+        .find(
+          (entry: string) =>
+            entry.includes('"aitracker"') && /\b(16|22)x(16|22)\b/u.test(entry),
+        )
+        ?.trim()
+        .match(/^(0x[0-9a-f]+)/u)?.[1] ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+function openProbeMenu(position: { x: number; y: number }): void {
   setTimeout(() => {
     if (!trayMenu || !tray) return;
     probeReport("opening the tray menu");
     tray.popUpContextMenu(trayMenu, {
-      x: Math.round(bounds?.x ?? 0),
-      y: Math.round(bounds?.y ?? 0),
+      x: Math.round(position.x),
+      y: Math.round(position.y),
     });
     // Report the popup's window id, if X11 can see it. The probe needs a concrete
     // target to watch: identifying the menu by size or by name from outside is
@@ -1457,7 +1506,13 @@ function openProbeMenu(bounds: Electron.Rectangle | undefined): void {
       const id = probeMenuWindowId();
       probeReport(
         id === null
-          ? "menu opened but no mapped menu window was found"
+          ? // Not a failure: under a StatusNotifierItem host the menu is rendered
+            // by the desktop shell from `com.canonical.dbusmenu` over D-Bus, so
+            // there is no window of ours to find. Measured on GNOME 50 with the
+            // menu visibly open: the only app windows are the tray glyph, the
+            // tooltip and the main window. Dismissal therefore belongs to the
+            // shell, and an outside click cannot be tested from inside the app.
+            "menu requested; it is rendered by the desktop shell, so no window of ours exists to observe"
           : `menu window ${id}`,
       );
     }, 1_500);

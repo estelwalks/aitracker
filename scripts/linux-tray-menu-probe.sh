@@ -60,6 +60,11 @@ if [ -z "$menu_window" ]; then
   echo "        app report:"
   report
   if [ ! -s "$REPORT" ]; then echo "          (nothing written)"; fi
+  if grep -q 'rendered by the desktop shell' "$REPORT" 2>/dev/null; then
+    echo "  INFO  the menu is drawn by the desktop shell from com.canonical.dbusmenu,"
+    echo "        not as a window of this app: there is nothing here to click on."
+    echo "        Dismissal is the shell's, so this probe cannot decide the bug."
+  fi
   echo "== tray menu summary: $pass passed, $fail failed =="
   echo "   log: $LOG"
   pkill -x aitracker 2>/dev/null
