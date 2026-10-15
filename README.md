@@ -91,6 +91,10 @@ names carry no version, so the release tag is the only thing that changes.
 - Linux (x64, Fedora/RHEL package):
   [AITracker-Linux-x64.rpm](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.rpm)
 
+Linux is x86_64 only: `.deb` for Debian 12+/Ubuntu 22.04+, `.rpm` for
+Fedora/RHEL 9+, and the AppImage for other x86_64 desktops with FUSE 2
+(`--appimage-extract-and-run` works without it).
+
 Each release lists its own `release-metadata.json` and `checksums.txt`, which
 record the exact version and SHA-256 of the files in that release. For a
 byte-exact build, take the file from the release whose tag you need instead of
@@ -147,37 +151,6 @@ Install and upgrade the stable package from the Microsoft Community Repository:
 winget install --id estelwalks.AITracker -e
 winget upgrade --id estelwalks.AITracker -e
 ```
-
-#### Linux (x86_64)
-
-Linux builds are x86_64 only and come in three flavours:
-
-- **AppImage** — runs on any x86_64 desktop with FUSE 2 (`libfuse2`; on Ubuntu
-  24.04 and newer, `libfuse2t64`), or with `--appimage-extract-and-run` when
-  FUSE is unavailable. This is the artifact the in-app updater and the `npx`
-  launcher hand over, and the one `release-metadata-linux.json` records.
-- **`.deb`** — Debian and Ubuntu:
-  `sudo apt install ./AITracker-Linux-x64.deb`.
-- **`.rpm`** — Fedora and the Red Hat family:
-  `sudo dnf install ./AITracker-Linux-x64.rpm`.
-
-Every release is gated by a container matrix that installs and starts the
-package it just built on **Debian 13**, **Ubuntu 24.04**, **Rocky Linux 9**,
-**Rocky Linux 10** and **Fedora** — the declared dependencies are resolved
-against those distributions' real repositories rather than assumed. The
-packages are built on an Ubuntu 22.04 baseline, so Debian 12+/Ubuntu 22.04+ is
-the intended floor, and other x86_64 distributions with a GTK 3 desktop should
-work through the AppImage. Immutable distributions such as Fedora Silverblue or
-Bazzite cannot layer the `.rpm`; use the AppImage there.
-
-Updates differ by flavour: an AppImage replaces itself in place from inside the
-app, while a `.deb` or `.rpm` is handed to `apt`/`dnf` with the exact command
-printed for you. AITracker never elevates privileges on your behalf.
-
-The tray icon needs a StatusNotifierItem host. The `.deb` depends on
-`libayatana-appindicator3-1` (or `libappindicator3-1`); on the Red Hat family
-that package lives in EPEL, so install `libayatana-appindicator-gtk3` yourself
-if you want the tray — the app runs without it.
 
 ### Build and Test
 

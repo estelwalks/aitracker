@@ -87,6 +87,10 @@ Release：安装包文件名不带版本号，每次发布变化的只有 tag。
 - Linux（x64，Fedora/RHEL 软件包）：
   [AITracker-Linux-x64.rpm](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.rpm)
 
+Linux 仅提供 x86_64：`.deb` 支持 Debian 12+/Ubuntu 22.04+，`.rpm` 支持
+Fedora/RHEL 9+，其它 x86_64 桌面发行版可用 AppImage（需要 FUSE 2；没有 FUSE 时可用
+`--appimage-extract-and-run`）。
+
 每个 Release 都带有该版本的 `release-metadata.json` 和 `checksums.txt`，其中记录了
 该 Release 的准确版本号与 SHA-256。需要精确复现某个构建时，请到对应 tag 的 Release
 下载，而不要使用 `latest`。
@@ -136,33 +140,6 @@ brew upgrade --cask estelwalks/aitracker/aitracker
 winget install --id estelwalks.AITracker -e
 winget upgrade --id estelwalks.AITracker -e
 ```
-
-#### Linux（x86_64）
-
-Linux 版仅提供 x86_64 架构，共三种安装形式：
-
-- **AppImage** —— 任何具备 FUSE 2 的 x86_64 桌面环境都能运行（`libfuse2`；
-  Ubuntu 24.04 及更新版本为 `libfuse2t64`），没有 FUSE 时可用
-  `--appimage-extract-and-run` 运行。应用内更新与 `npx` 启动器交给用户的就是它，
-  `release-metadata-linux.json` 记录的也是它。
-- **`.deb`** —— Debian / Ubuntu：
-  `sudo apt install ./AITracker-Linux-x64.deb`。
-- **`.rpm`** —— Fedora / Red Hat 系：
-  `sudo dnf install ./AITracker-Linux-x64.rpm`。
-
-每个版本都会经过一套容器矩阵门禁：在 **Debian 13**、**Ubuntu 24.04**、
-**Rocky Linux 9**、**Rocky Linux 10** 与 **Fedora** 上实际安装并启动刚构建出来的安装包，
-因此声明的依赖是拿这些发行版的真实仓库解析出来的，而不是假设的。安装包基于
-Ubuntu 22.04 基线构建，预期的下限是 Debian 12+ / Ubuntu 22.04+；其它带 GTK 3 桌面的
-x86_64 发行版可以通过 AppImage 使用。Fedora Silverblue、Bazzite 等不可变发行版无法
-叠加 `.rpm`，请使用 AppImage。
-
-更新方式按安装形式不同：AppImage 由应用自身就地替换；`.deb` / `.rpm` 会交给
-`apt` / `dnf`，并打印出应当执行的完整命令。AITracker 不会替你提权。
-
-托盘图标需要 StatusNotifierItem 宿主。`.deb` 依赖 `libayatana-appindicator3-1`
-（或 `libappindicator3-1`）；Red Hat 系中该包位于 EPEL，需要托盘时请自行安装
-`libayatana-appindicator-gtk3`，没有它应用照常运行。
 
 ### 构建与测试
 

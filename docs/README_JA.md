@@ -88,6 +88,10 @@ npm run dev:desktop
 - Linux（x64、Fedora/RHEL パッケージ）:
   [AITracker-Linux-x64.rpm](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.rpm)
 
+Linuxはx86_64のみです。`.deb`はDebian 12+/Ubuntu 22.04+、`.rpm`はFedora/RHEL 9+、
+その他のx86_64デスクトップはAppImage（FUSE 2が必要。ない場合は
+`--appimage-extract-and-run`）に対応します。
+
 各リリースにはそのバージョンの `release-metadata.json` と `checksums.txt` が添付され、
 正確なバージョンと SHA-256 が記録されています。特定のビルドを再現したい場合は、
 `latest` ではなく該当タグのリリースからダウンロードしてください。
@@ -139,37 +143,6 @@ Microsoft Community Repositoryから正式版をインストールまたはア�
 winget install --id estelwalks.AITracker -e
 winget upgrade --id estelwalks.AITracker -e
 ```
-
-#### Linux（x86_64）
-
-Linuxビルドはx86_64のみで、3つの形式があります。
-
-- **AppImage** — FUSE 2（`libfuse2`。Ubuntu 24.04以降は`libfuse2t64`）がある
-  x86_64デスクトップで動作します。FUSEがない場合は`--appimage-extract-and-run`で
-  実行できます。アプリ内アップデーターと`npx`ランチャーが渡すのはこの形式で、
-  `release-metadata-linux.json`が記録するのもこれです。
-- **`.deb`** — Debian / Ubuntu：
-  `sudo apt install ./AITracker-Linux-x64.deb`
-- **`.rpm`** — Fedora / Red Hat系：
-  `sudo dnf install ./AITracker-Linux-x64.rpm`
-
-各リリースは、ビルド直後のパッケージを**Debian 13**、**Ubuntu 24.04**、
-**Rocky Linux 9**、**Rocky Linux 10**、**Fedora**のコンテナで実際にインストールして
-起動するマトリックスで検証されます。宣言された依存関係はこれらのディストリビューションの
-実リポジトリで解決されます。パッケージはUbuntu 22.04ベースでビルドしているため、
-Debian 12+ / Ubuntu 22.04+が想定される下限です。GTK 3デスクトップを持つ他のx86_64
-ディストリビューションはAppImageで動作する見込みです。Fedora SilverblueやBazziteのような
-イミュータブルなディストリビューションでは`.rpm`を重ねられないため、AppImageを使って
-ください。
-
-更新方法は形式によって異なります。AppImageはアプリ自身がその場で置き換え、`.deb`／
-`.rpm`は`apt`／`dnf`に引き渡して実行すべきコマンドを表示します。AITrackerが権限昇格を
-代行することはありません。
-
-トレイアイコンにはStatusNotifierItemホストが必要です。`.deb`は
-`libayatana-appindicator3-1`（または`libappindicator3-1`）に依存します。Red Hat系では
-このパッケージがEPELにあるため、トレイを使いたい場合は
-`libayatana-appindicator-gtk3`を別途インストールしてください（なくてもアプリは動作します）。
 
 ### ビルドとテスト
 

@@ -88,6 +88,10 @@ npm run dev:desktop
 - Linux (x64, Fedora/RHEL 패키지):
   [AITracker-Linux-x64.rpm](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.rpm)
 
+Linux는 x86_64만 제공합니다. `.deb`는 Debian 12+/Ubuntu 22.04+, `.rpm`은
+Fedora/RHEL 9+, 그 외 x86_64 데스크톱은 AppImage(FUSE 2 필요, 없으면
+`--appimage-extract-and-run`)를 지원합니다.
+
 각 릴리스에는 해당 버전의 `release-metadata.json`과 `checksums.txt`가 첨부되어 정확한
 버전과 SHA-256을 기록합니다. 특정 빌드를 재현해야 할 때는 `latest`가 아니라 해당 태그의
 릴리스에서 내려받으세요.
@@ -138,35 +142,6 @@ Microsoft Community Repository에서 정식 버전을 설치하거나 업그레�
 winget install --id estelwalks.AITracker -e
 winget upgrade --id estelwalks.AITracker -e
 ```
-
-#### Linux(x86_64)
-
-Linux 빌드는 x86_64만 제공하며 세 가지 형식이 있습니다.
-
-- **AppImage** — FUSE 2(`libfuse2`, Ubuntu 24.04 이상은 `libfuse2t64`)가 있는
-  x86_64 데스크톱에서 실행됩니다. FUSE를 사용할 수 없으면
-  `--appimage-extract-and-run`으로 실행할 수 있습니다. 앱 내 업데이터와 `npx` 런처가
-  넘겨주는 형식이며, `release-metadata-linux.json`이 기록하는 대상이기도 합니다.
-- **`.deb`** — Debian / Ubuntu:
-  `sudo apt install ./AITracker-Linux-x64.deb`
-- **`.rpm`** — Fedora / Red Hat 계열:
-  `sudo dnf install ./AITracker-Linux-x64.rpm`
-
-각 릴리스는 방금 빌드한 패키지를 **Debian 13**, **Ubuntu 24.04**, **Rocky Linux 9**,
-**Rocky Linux 10**, **Fedora** 컨테이너에 실제로 설치하고 실행하는 매트릭스로 검증됩니다.
-선언된 의존성은 해당 배포판의 실제 저장소에서 해석됩니다. 패키지는 Ubuntu 22.04 기준으로
-빌드하므로 Debian 12+ / Ubuntu 22.04+가 의도된 하한입니다. GTK 3 데스크톱을 갖춘 다른
-x86_64 배포판은 AppImage로 동작할 것으로 예상됩니다. Fedora Silverblue, Bazzite 같은
-불변(immutable) 배포판에서는 `.rpm`을 레이어링할 수 없으므로 AppImage를 사용하세요.
-
-업데이트 방식은 형식에 따라 다릅니다. AppImage는 앱이 직접 제자리에서 교체하고,
-`.deb`/`.rpm`은 `apt`/`dnf`에 넘기면서 실행할 명령을 그대로 표시합니다. AITracker가 대신
-권한을 상승시키는 일은 없습니다.
-
-트레이 아이콘에는 StatusNotifierItem 호스트가 필요합니다. `.deb`는
-`libayatana-appindicator3-1`(또는 `libappindicator3-1`)에 의존합니다. Red Hat 계열에서는
-이 패키지가 EPEL에 있으므로 트레이를 사용하려면 `libayatana-appindicator-gtk3`를 직접
-설치하세요. 없어도 앱은 정상 동작합니다.
 
 ### 빌드 및 테스트
 
