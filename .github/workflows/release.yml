@@ -78,6 +78,35 @@ jobs:
             command: npm run dist:win:arm64
             artifact_glob: release/*.exe
             artifact_name: release-windows-arm64
+          # Electron cannot be cross-built: the app's native build dependencies
+          # (@resvg/resvg-js, @tailwindcss/oxide, lightningcss) install only the
+          # host platform's bindings, and `npm ci` on macOS or Windows would
+          # produce a Linux payload without them. This leg therefore runs on a
+          # real Linux runner.
+          #
+          # ubuntu-22.04 rather than -latest: the packaged glibc floor comes from
+          # the Electron payload that gets downloaded (npmRebuild is false), but
+          # the runner also supplies the fpm and AppImage toolchains, and 22.04
+          # is the conservative choice for the widest user compatibility.
+          #
+          # The .deb and the .rpm are attached for people who prefer a system
+          # package, but the AppImage is what the release metadata records and
+          # what the in-app updater and the npx CLI hand over. The metadata
+          # contract allows one artifact per platform key, and the CLI's
+          # validator rejects an artifact carrying an unknown field, so the two
+          # system packages are release assets the READMEs link rather than
+          # metadata entries — a deb/rpm install updates through its own package
+          # manager. `scripts/verify-release-contract.mjs` requires all three to
+          # be present in the release directory.
+          - name: Linux x64
+            os: ubuntu-22.04
+            platform: linux-x64
+            command: npm run dist:linux:x64
+            artifact_glob: |
+              release/*.AppImage
+              release/*.deb
+              release/*.rpm
+            artifact_name: release-linux-x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
@@ -135,8 +164,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify tag before packaging (macOS)
-        if: runner.os == 'macOS'
+      - name: Verify tag before packaging (macOS and Linux)
+        if: runner.os != 'Windows'
         shell: bash
         run: npm run verify:release-contract -- --tag "$GITHUB_REF_NAME" --channel "$RELEASE_CHANNEL"
 
@@ -148,8 +177,8 @@ jobs:
       - name: Build installer
         run: ${{ matrix.command }}
 
-      - name: Verify expected installer name (macOS)
-        if: runner.os == 'macOS'
+      - name: Verify expected installer name (macOS and Linux)
+        if: runner.os != 'Windows'
         shell: bash
         env:
           RELEASE_PLATFORM: ${{ matrix.platform }}
@@ -170,10 +199,104 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-  draft-release:
-    name: Assemble GitHub draft release
+  # Installs the built packages on the distributions they target and starts the
+  # app. Two things can only be proven here:
+  #
+  #   * `dnf install` resolves the RPM's Requires against real repositories, so a
+  #     mistyped package name fails the release instead of shipping a package
+  #     nobody can install;
+  #   * the installed .desktop basename and StartupWMClass match what
+  #     app.setDesktopName announces, which is the check that caught the original
+  #     filename mismatch.
+  #
+  # A container has no StatusNotifierItem host, so the tray is expected to be
+  # absent here; that path is covered by window-all-closed instead.
+  install-smoke:
+    name: Install smoke test (${{ matrix.image }})
     needs: [release-contract, build]
     if: ${{ needs.release-contract.result == 'success' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # RHEL 9 and 10 are the two supported Red Hat majors, and Fedora carries
+        # the newest sonames and package renames. Debian/Ubuntu are covered by
+        # the deb leg below.
+        image:
+          - rockylinux:9
+          - rockylinux:10
+          - fedora:latest
+          - debian:13
+          - ubuntu:24.04
+    container:
+      image: ${{ matrix.image }}
+      # Electron needs a writable /dev/shm; the container default is too small.
+      options: --shm-size=1g
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download the Linux installers
+        uses: actions/download-artifact@v4
+        with:
+          name: release-linux-x64
+          path: packages
+
+      - name: Install the distribution package
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f packages/AITracker-Linux-x64.rpm ]; then
+            dnf install -y ./packages/AITracker-Linux-x64.rpm
+          else
+            apt-get update
+            apt-get install -y ./packages/AITracker-Linux-x64.deb
+          fi
+
+      - name: Assert the packaging put the expected files in place
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /usr/share/applications/aitracker.desktop
+          grep -qx 'StartupWMClass=aitracker' /usr/share/applications/aitracker.desktop
+          for size in 16 24 32 48 64 128 256 512; do
+            test -f "/usr/share/icons/hicolor/${size}x${size}/apps/aitracker.png"
+          done
+          test -x /opt/AITracker/aitracker
+
+      - name: Install the probe tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v dnf >/dev/null 2>&1; then
+            dnf install -y xorg-x11-server-Xvfb xdotool x11-utils sqlite
+          else
+            apt-get update
+            apt-get install -y xvfb xdotool x11-utils sqlite3
+          fi
+
+      - name: Start a virtual display
+        shell: bash
+        run: |
+          set -euo pipefail
+          Xvfb :99 -screen 0 1366x768x24 -nolisten tcp &
+          for _ in $(seq 1 40); do
+            xdpyinfo -display :99 >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          xdpyinfo -display :99 >/dev/null
+
+      - name: Run the installed-package runtime probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768
+
+  draft-release:
+    name: Assemble GitHub draft release
+    needs: [release-contract, build, install-smoke]
+    if: ${{ needs.release-contract.result == 'success' && needs.build.result == 'success' && needs.install-smoke.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -191,7 +314,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Download the four installers
+      - name: Download every installer
         uses: actions/download-artifact@v4
         with:
           pattern: release-*
@@ -272,7 +395,9 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" \
             release/AITracker-macOS-*.dmg \
             release/AITracker-Windows-*.exe \
+            release/AITracker-Linux-* \
             release/release-metadata.json \
+            release/release-metadata-linux.json \
             release/checksums.txt
 
       # An install selects its installer by extension and architecture, then

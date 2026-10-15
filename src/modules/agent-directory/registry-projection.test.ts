@@ -69,7 +69,7 @@ test("Agent Directory facts retain only public support status across platforms",
     macos: "supported",
     windows10: "supported",
     windows11: "supported",
-    linux: "planned",
+    linux: "supported",
   });
   assert.equal("pricingObservationRef" in (codex ?? {}), false);
 });

@@ -20,6 +20,6 @@
   "defaultStatus": {
     "macos": "supported",
     "windows": "supported",
-    "linux": "planned"
+    "linux": "supported"
   }
 }

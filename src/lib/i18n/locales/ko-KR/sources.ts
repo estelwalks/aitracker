@@ -97,7 +97,7 @@ export const sources = {
     manual: "경로 직접 입력",
     placeholder: "예: ~/.hermes 또는 절대 경로",
     manualHint:
-      "앞의 ~ 는 홈 디렉터리로 확장됩니다. macOS 대화상자에서 ⌘⇧. 을 누르면 숨김 폴더가 표시됩니다.",
+      "앞의 ~ 는 홈 디렉터리로 확장됩니다. 디렉터리 대화상자에서 {mod}+{reveal} 을 누르면 숨김 폴더가 표시됩니다.",
     apply: "경로 적용",
     choose: "디렉터리 선택…",
     unavailable: "이 환경에서는 디렉터리 선택을 사용할 수 없습니다",

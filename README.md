@@ -59,7 +59,7 @@ root project dependencies.
 
 - Node.js 24 or later
 - npm 10 or later
-- macOS or Windows for the complete desktop experience
+- macOS, Windows, or Linux for the complete desktop experience
 
 ```bash
 git clone https://github.com/estelwalks/aitracker.git
@@ -84,6 +84,12 @@ names carry no version, so the release tag is the only thing that changes.
   [AITracker-Windows-x64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-x64.exe)
 - Windows (ARM64):
   [AITracker-Windows-arm64.exe](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Windows-arm64.exe)
+- Linux (x64, AppImage):
+  [AITracker-Linux-x64.AppImage](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.AppImage)
+- Linux (x64, Debian/Ubuntu package):
+  [AITracker-Linux-x64.deb](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.deb)
+- Linux (x64, Fedora/RHEL package):
+  [AITracker-Linux-x64.rpm](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.rpm)
 
 Each release lists its own `release-metadata.json` and `checksums.txt`, which
 record the exact version and SHA-256 of the files in that release. For a
@@ -93,11 +99,11 @@ from `latest`.
 All releases are listed on the
 [Releases page](https://github.com/estelwalks/aitracker/releases/latest).
 
-The following commands install the official stable release on macOS or
-Windows. The package-manager entries become available after the stable release
+The following commands install the official stable release on macOS, Windows,
+or Linux. The package-manager entries become available after the stable release
 and their corresponding distribution metadata have been published.
 
-#### npx (macOS and Windows)
+#### npx (macOS, Windows, and Linux)
 
 With Node.js and npm installed, run:
 
@@ -109,6 +115,12 @@ This command downloads and opens the desktop installer. `@latest` follows the
 newest stable release, so it never needs editing; pin a version
 (`@estelwalks/aitracker@1.0.3`) when you need to reproduce an exact build. Beta
 builds are published under `@beta`.
+
+On Linux it downloads the AppImage, marks it executable, and starts it. If you
+prefer a system package, use the `.deb` from the
+[Releases page](https://github.com/estelwalks/aitracker/releases/latest) and
+install it with `sudo apt install ./AITracker-Linux-x64.deb` — the launcher
+never elevates privileges on your behalf.
 
 If your npm configuration uses a mirror that does not contain the package, use
 the official npm registry explicitly:
@@ -147,12 +159,17 @@ npm run check:opensource-hygiene
 ```
 
 Platform installers can be produced with `npm run dist:mac`,
-`npm run dist:win:x64`, or `npm run dist:win:arm64`. Signing and notarization
-credentials are not stored in this repository.
+`npm run dist:win:x64`, `npm run dist:win:arm64`, or `npm run dist:linux:x64`.
+Signing and notarization credentials are not stored in this repository.
 
-The standalone installer launcher is packaged as `aitracker` and supports
-macOS arm64/x64 and Windows x64/arm64 (including Windows on ARM). Linux is not
-supported by the launcher.
+Linux builds must run on Linux: Electron is not cross-compiled here, and the
+native build dependencies (Tailwind's Oxide engine, lightningcss, and the icon
+renderer) install only the host platform's bindings.
+
+The standalone installer launcher is packaged as `aitracker` and supports macOS
+arm64/x64, Windows x64/arm64 (including Windows on ARM), and Linux x64
+(AppImage and `.deb`). On Ubuntu 24.04 and newer the AppImage needs `libfuse2t64`,
+or it can be run with `--appimage-extract-and-run`.
 
 See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
 generated-file policy, and repository layout.

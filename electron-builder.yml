@@ -109,3 +109,163 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+    # Red Hat family. fpm builds the payload, so this needs no rpmbuild and no
+    # Fedora runner: the existing ubuntu-22.04 leg produces it.
+    - target: rpm
+      arch:
+        - x64
+  # `${arch}` does NOT render "x64" on Linux: builder-util switches it to
+  # x86_64 for AppImage/rpm and amd64 for deb. That would give one platform two
+  # different suffixes, breaking the "one stable name per platform" contract the
+  # release metadata, the README links and the CLI all resolve against. The arch
+  # is therefore spelled literally, and an arm64 build must override this name
+  # on the command line rather than reintroducing ${arch}.
+  artifactName: "${productName}-Linux-x64.${ext}"
+  # deb/rpm/pacman cannot be built without a maintainer: fpm fails with
+  # authorEmailIsMissed when neither `linux.maintainer` nor a package.json
+  # `author` with an email is present.
+  maintainer: AITracker Maintainers <maintainers@aitracker.dev>
+  vendor: AITracker
+  # Freedesktop main category (see the desktop entry below).
+  category: Development
+  synopsis: AI development asset dashboard
+  description: Local-first dashboard for AI token usage, cost, skills and memory.
+  # Keep executableName under linux:. A ROOT-level executableName also renames
+  # the macOS payload through appInfo.productFilename.
+  executableName: aitracker
+  # Window association, end to end. Without syncDesktopName the entry is named
+  # from `executableName`; with it, from package.json `desktopName`. Both are
+  # "aitracker" here, matching APP_DESKTOP_NAME, so the installed basename and
+  # Electron's app_id / WM_CLASS agree:
+  #   /usr/share/applications/aitracker.desktop  (deb)
+  #   <AppDir>/aitracker.desktop                 (AppImage)
+  # They did NOT agree before this was pinned: a real build wrote
+  # aitracker.desktop while the app announced AITracker.desktop, which breaks
+  # portal app-id lookup on every desktop. See
+  # dev-docs/linux/07-测试与验收.md §3.
+  syncDesktopName: true
+  # Linux needs a directory of sized PNGs — .icns and .ico are not usable here.
+  # Without an explicit linux.icon the resolver falls back to mac.icon and would
+  # ship the white-plate Dock artwork, converting it through a downloaded
+  # toolset. A directory of `NxN.png` files is used verbatim, with no download.
+  # scripts/generate-native-icons.mjs produces this set (16..512; a 1024 entry
+  # would create a non-standard hicolor/1024x1024 directory).
+  icon: build/native-icons/linux
+  desktop:
+    entry:
+      Name: AITracker
+      Comment: AI development asset dashboard
+      # An override is written verbatim, so the trailing ";" is required.
+      Categories: Development;
+      # StartupWMClass is the X11 window class, which Electron derives from
+      # `app.setDesktopName(...)` (APP_DESKTOP_NAME, i.e. "aitracker") and not
+      # from the product name. It must match or the taskbar icon and window
+      # grouping break.
+      StartupWMClass: aitracker
+deb:
+  priority: optional
+  # electron-builder's default list omits libgbm1 (a hard Electron dependency
+  # that libgtk-3-0 does not pull in) and predates Ubuntu 24.04's t64 rename of
+  # libasound2, hence the alternative dependency below.
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - libgbm1
+    - libasound2 | libasound2t64
+    - libxkbcommon0
+    - libxdamage1
+    - libxcomposite1
+    - libxrandr2
+    - libcups2
+    - libdrm2
+    - libpango-1.0-0
+    - libcairo2
+    # Status-area icon. Without a StatusNotifierItem host Electron falls back to
+    # the deprecated GtkStatusIcon, which native GNOME Shell does not display at
+    # all: the app would keep running with no visible way back to its window.
+    # One of the two sonames, because distributions ship either the ayatana or
+    # the legacy package.
+    - libayatana-appindicator3-1 | libappindicator3-1
+rpm:
+  # Same artifact template as the other Linux targets, so the RPM is named
+  # AITracker-Linux-x64.rpm rather than fpm's default
+  # `AITracker-<version>-1.x86_64.rpm`. The versionless name is what
+  # releases/latest/download resolves and what the READMEs and the CLI link, and
+  # scripts/verify-release-artifact-names.mjs fails a template containing a
+  # version placeholder.
+  artifactName: "${productName}-Linux-x64.${ext}"
+  # RPM package names are NOT the Debian ones — `libgtk-3-0` does not exist in
+  # the Red Hat family. Each entry below is the soname the packaged binary
+  # actually needs (`objdump -p release/linux-unpacked/aitracker | grep NEEDED`
+  # in a packaged build) mapped to its Fedora/RHEL 9+ provider.
+  depends:
+    - gtk3 # libgtk-3.so.0, libgdk-3.so.0, libatk-1.0.so.0
+    - nss # libnss3.so, libnssutil3.so, libsmime3.so, libnspr4.so
+    - alsa-lib # libasound.so.2
+    - mesa-libgbm # libgbm.so.1 — Electron needs this and gtk3 does not pull it
+    - cups-libs # libcups.so.2
+    - libsecret # libsecret-1.so.0, through safeStorage
+    - at-spi2-core # libatspi.so.0
+    - libdrm
+    - pango
+    - cairo
+    - libxkbcommon
+    - libXcomposite
+    - libXdamage
+    - libXext
+    - libXfixes
+    - libXrandr
+    - libXtst # libXtst.so.6
+    - libXScrnSaver # libXss.so.1, the Debian libxss1
+    - libuuid
+    - xdg-utils # shell.openExternal / openPath hand offs
+
+  # Deliberately NOT depended on, and NOT expressible as weak dependencies:
+  #
+  #   libnotify                  — notifications, already optional in code
+  #   libayatana-appindicator-gtk3 — the status-area icon
+  #
+  # electron-builder's RPM target has no `recommends` (RpmOptions sets
+  # additionalProperties: false and offers only depends/afterInstall/...), so an
+  # optional dependency can only be a hard one here. A hard dependency on
+  # libayatana-appindicator-gtk3 would make the package uninstallable on RHEL,
+  # where that build lives in EPEL rather than the base repositories — a worse
+  # outcome than a missing tray icon.
+  #
+  # Both are safe to omit because the code degrades instead of failing:
+  # notifications are gated on Notification.isSupported(), and with no
+  # StatusNotifierItem host the tray is unavailable, which the window-all-closed
+  # fallback already handles by quitting rather than stranding a hidden window.
+  # A user who wants the tray installs the package from EPEL; the deb keeps
+  # listing it as a real Recommends, so Debian/Ubuntu loses nothing.
+appImage:
+  # Versionless for the same reason as the DMG and NSIS names above.
+  artifactName: "${productName}-Linux-x64.${ext}"
+  # The default FUSE2 runtime is used. Verified on a libfuse3-only host (Kali
+  # rolling): plain execution fails with `dlopen(): error loading libfuse.so.2`
+  # and the documented `--appimage-extract-and-run` fallback starts the app
+  # normally. Ubuntu 22.04 ships libfuse2; 24.04+ and Debian 12+ need
+  # libfuse2t64 / libfuse2, which cannot be expressed as a deb dependency
+  # because an AppImage carries no package metadata.
+  #
+  # AppImageTarget.js:26 injects `--no-sandbox` into the generated Exec= unless
+  # `toolsets.appimage` is configured, so an AppImage started from the desktop
+  # menu runs without the Chromium sandbox. Setting `executableArgs: []` lets
+  # AppRun probe unprivileged user namespaces instead — at the cost of failing
+  # to start on hosts that disable them. See
+  # dev-docs/linux/07-测试与验收.md §4.

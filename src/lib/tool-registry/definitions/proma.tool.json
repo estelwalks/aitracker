@@ -4,7 +4,7 @@
   "id": "proma",
   "catalogVisible": false,
   "display": { "name": "Proma", "nameZh": "Proma", "icon": "other", "color": "#f97316" },
-  "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
+  "platforms": { "macos": "supported", "windows": "supported", "linux": "supported" },
   "detection": {
     "locations": [{ "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".proma/agent-sessions" }]
   },

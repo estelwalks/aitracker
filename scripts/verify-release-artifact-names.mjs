@@ -19,22 +19,81 @@ const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  */
 export const PACKAGING_CONFIG = "electron-builder.yml";
 
-export const EXPECTED_ARTIFACT_NAMES = Object.freeze([
-  "AITracker-macOS-arm64.dmg",
-  "AITracker-macOS-x64.dmg",
-  "AITracker-Windows-arm64.exe",
-  "AITracker-Windows-x64.exe",
-]);
+/**
+ * One entry per electron-builder target section that can produce an installer,
+ * with the extensions that section renders and the architectures it builds.
+ *
+ * `${arch}` stays for macOS and Windows, because it selects the architecture;
+ * `${version}` (or any other version reference) may not appear in an artifact
+ * name. Linux deliberately spells the architecture out (`-x64`) instead of
+ * using `${arch}`: electron-builder renders `${arch}` as `x86_64` for AppImage
+ * and rpm and `amd64` for deb, which would give one platform three different
+ * suffixes and break the single stable name the metadata, README links and CLI
+ * resolve against.
+ *
+ * The deb and rpm sections repeat the `linux:` template on purpose — a shared
+ * template is declared once under `linux:` and inherited by both — but they are
+ * listed separately because each renders its own extension, and the guard below
+ * requires every name here to exist in a real release.
+ */
+export const EXPECTED_TEMPLATE_SECTIONS = Object.freeze({
+  dmg: {
+    template: "${productName}-macOS-${arch}.${ext}",
+    extensions: ["dmg"],
+    archs: ["arm64", "x64"],
+  },
+  nsis: {
+    template: "${productName}-Windows-${arch}.${ext}",
+    extensions: ["exe"],
+    archs: ["arm64", "x64"],
+  },
+  linux: {
+    template: "${productName}-Linux-x64.${ext}",
+    extensions: ["AppImage", "deb", "rpm"],
+    archs: ["x64"],
+  },
+});
 
 /**
- * electron-builder templates that render exactly those four names. `${arch}`
- * stays, because it selects the architecture; `${version}` (or any other
- * version reference) may not appear in an artifact name.
+ * The distinct templates the packaging config must declare. Only the `linux:`
+ * template is asserted, because it is the one actually written in
+ * electron-builder.yml: deb and rpm inherit it rather than repeating it.
  */
 export const EXPECTED_TEMPLATES = Object.freeze([
-  "${productName}-macOS-${arch}.${ext}",
-  "${productName}-Windows-${arch}.${ext}",
+  ...new Set(
+    Object.values(EXPECTED_TEMPLATE_SECTIONS).map((entry) => entry.template),
+  ),
 ]);
+
+/** Expand every section to the installer names a release publishes. */
+function renderArtifactNames() {
+  const names = new Set();
+  for (const { template, extensions, archs } of Object.values(
+    EXPECTED_TEMPLATE_SECTIONS,
+  )) {
+    for (const extension of extensions) {
+      for (const arch of archs) {
+        names.add(
+          template
+            .replace("${productName}", "AITracker")
+            .replace("${arch}", arch)
+            .replace("${ext}", extension),
+        );
+      }
+    }
+  }
+  return [...names];
+}
+
+/**
+ * Every installer name a release publishes. The AppImage, deb and rpm all
+ * appear here even though only the AppImage is recorded in
+ * `release-metadata-linux.json`: the metadata contract permits one artifact per
+ * platform key (the CLI's validator rejects an extra field outright, which is
+ * why widening it would strand every shipped client), while the release still
+ * has to publish all three because the READMEs link them.
+ */
+export const EXPECTED_ARTIFACT_NAMES = Object.freeze(renderArtifactNames());
 
 /** `${version}`, `${ buildVersion }`, `${env.VERSION}` … */
 const VERSION_PLACEHOLDER = /\$\{[^}]*\bversion\b[^}]*\}/iu;
@@ -52,32 +111,80 @@ const ARTIFACT_NAME_LINE = /^\s+artifactName:\s*(.+?)\s*$/gmu;
  * then re-checks the assembled release, so the pairing is verified twice: once
  * here against the sources, once against the actual asset list.
  */
+const MACOS_NAMES = ["AITracker-macOS-arm64.dmg", "AITracker-macOS-x64.dmg"];
+const WINDOWS_NAMES = [
+  "AITracker-Windows-arm64.exe",
+  "AITracker-Windows-x64.exe",
+];
+
+/**
+ * Every published Linux installer. All three are built and attached to the
+ * release; only the AppImage is recorded in `release-metadata-linux.json`,
+ * because the metadata contract allows exactly one artifact per platform key.
+ * Both modules below still have to name all three, so a release that forgets to
+ * build one fails here rather than shipping a README link to a missing asset.
+ */
+const LINUX_NAMES = [
+  "AITracker-Linux-x64.AppImage",
+  "AITracker-Linux-x64.deb",
+  "AITracker-Linux-x64.rpm",
+];
+
 const ARTIFACT_NAME_SOURCES = Object.freeze([
   {
     path: "scripts/verify-release-contract.mjs",
-    names: [
-      "AITracker-macOS-arm64.dmg",
-      "AITracker-macOS-x64.dmg",
-      "AITracker-Windows-arm64.exe",
-      "AITracker-Windows-x64.exe",
-    ],
+    names: [...MACOS_NAMES, ...WINDOWS_NAMES, ...LINUX_NAMES],
   },
   {
+    // The metadata module names the deb and the rpm only in prose (it records
+    // the AppImage alone), so its list is checked against the same three plus
+    // the four it hashes. `installerNamesIn` below is what proves it.
     path: "scripts/release-metadata.mjs",
-    names: [
-      "AITracker-macOS-arm64.dmg",
-      "AITracker-macOS-x64.dmg",
-      "AITracker-Windows-arm64.exe",
-      "AITracker-Windows-x64.exe",
-    ],
+    names: [...MACOS_NAMES, ...WINDOWS_NAMES, ...LINUX_NAMES],
   },
 ]);
 
 /** The installer file names a module records, in the order it records them. */
 function installerNamesIn(text) {
-  return [...text.matchAll(/"([^"\\/]+\.(?:dmg|exe))"/gu)].map(
-    (match) => match[1],
+  return [
+    ...text.matchAll(/"([^"\\/]+\.(?:dmg|exe|AppImage|deb|rpm|tar\.gz))"/gu),
+  ].map((match) => match[1]);
+}
+
+/**
+ * The `dist:linux:*` scripts pass the target list on the command line, which
+ * OVERRIDES `linux.target` in electron-builder.yml. A target added to the config
+ * but not to the script is therefore built by nobody, and the release ships
+ * without it — exactly how `rpm` was silently skipped on the first attempt.
+ * Unpinned scripts (`electron-builder --linux`, no target arguments) inherit the
+ * config and are left alone.
+ */
+export function inspectLinuxDistScripts({ scripts }) {
+  const problems = [];
+  const expected = EXPECTED_TEMPLATE_SECTIONS.linux.extensions.map(
+    (extension) => (extension === "AppImage" ? "AppImage" : extension),
   );
+  for (const [name, command] of Object.entries(scripts ?? {})) {
+    if (!/^dist:linux/u.test(name) || typeof command !== "string") continue;
+    const match = command.match(/electron-builder\s+--linux\s+([^&|;]+)/u);
+    if (!match) continue;
+    // Targets run up to the first flag; everything after it is an option and
+    // its value (`--x64`, `--publish never`), not a target.
+    const declared = [];
+    for (const token of match[1].trim().split(/\s+/u)) {
+      if (token.startsWith("-")) break;
+      declared.push(token);
+    }
+    if (declared.length === 0) continue; // inherited from the config
+    for (const target of expected) {
+      if (!declared.includes(target)) {
+        problems.push(
+          `package.json ${name} passes "${declared.join(" ")}" to --linux, which overrides linux.target and omits ${target}; the release would publish no ${target}`,
+        );
+      }
+    }
+  }
+  return problems;
 }
 
 export function inspectPackagingConfig({ config }) {
@@ -120,6 +227,17 @@ export async function verifyReleaseArtifactNames({
   }
   problems.push(...inspectPackagingConfig({ config }).problems);
 
+  try {
+    const packageJson = JSON.parse(
+      await readFile(join(rootDir, "package.json"), "utf8"),
+    );
+    problems.push(...inspectLinuxDistScripts({ scripts: packageJson.scripts }));
+  } catch (error) {
+    problems.push(
+      `unable to read package.json: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
   for (const { path, names } of ARTIFACT_NAME_SOURCES) {
     let text;
     try {
@@ -135,14 +253,14 @@ export async function verifyReleaseArtifactNames({
         problems.push(`${path} does not name ${name}`);
       }
     }
-    // The four names must also be the same set, in the same order: a module
-    // that records fewer names, or the same names against the wrong platforms,
-    // is exactly the half-rename the release breaks on.
+    // The names must also be the same set, in the same order: a module that
+    // records fewer names, or the same names against the wrong platforms, is
+    // exactly the half-rename the release breaks on.
     const recorded = installerNamesIn(text);
     if (recorded.join(",") !== names.join(",")) {
       problems.push(
         `${path} records ${recorded.join(", ") || "no installer names"}; ` +
-          `each module must name all four in the same order (${names.join(", ")})`,
+          `each module must name all of them in the same order (${names.join(", ")})`,
       );
     }
   }

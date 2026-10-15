@@ -72,11 +72,17 @@ test("test runtime is controllable without process or a real user directory", ()
   assert.equal(enabled.backgroundTasksReason, "explicitly-enabled");
 });
 
-test("linux and unknown platforms remain disabled even with an opt-in", () => {
+test("linux follows the supported-desktop default; unknown stays disabled", () => {
+  // Linux ships as a supported desktop platform, so an opt-in enables the
+  // scheduler there exactly as it does on macOS and Windows.
   const linux = resolveRuntimeIdentity({
     kind: "desktop",
     platform: "linux",
     enableBackgroundTasks: true,
+  });
+  const linuxDefault = resolveRuntimeIdentity({
+    kind: "desktop",
+    platform: "linux",
   });
   const unknown = resolveRuntimeIdentity({
     kind: "desktop",
@@ -84,8 +90,10 @@ test("linux and unknown platforms remain disabled even with an opt-in", () => {
     enableBackgroundTasks: true,
   });
 
-  assert.equal(linux.backgroundTasksEnabled, false);
-  assert.equal(linux.backgroundTasksReason, "linux-planned");
+  assert.equal(linux.backgroundTasksEnabled, true);
+  assert.equal(linux.backgroundTasksReason, "explicitly-enabled");
+  assert.equal(linuxDefault.backgroundTasksEnabled, true);
+  assert.equal(linuxDefault.backgroundTasksReason, "desktop-default-enabled");
   assert.equal(unknown.backgroundTasksEnabled, false);
   assert.equal(unknown.backgroundTasksReason, "unsupported-platform");
 });

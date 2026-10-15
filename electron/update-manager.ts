@@ -308,7 +308,11 @@ async function streamResponseToFile(
 ): Promise<StreamDownloadResult> {
   if (!response.body) throw new Error("download-body");
 
-  const output = createWriteStream(path, { flags: "wx" });
+  // 0o755 rather than the umask default (0644): a Linux AppImage has to be
+  // executable, and the hand-off asserts `X_OK` before it reports success. The
+  // `.dmg`/`.exe` flows are unaffected by the extra execute bits. The hand-off
+  // still chmods and re-checks, so this is a convenience, not the guarantee.
+  const output = createWriteStream(path, { flags: "wx", mode: 0o755 });
   const hash = createHash("sha256");
   const reader = response.body.getReader();
   let outputError: Error | null = null;
@@ -427,20 +431,32 @@ function metadataArtifactOf(
   )
     return null;
   const artifactMap = artifacts as Record<string, unknown>;
-  // Exactly the platforms every release publishes, and no others. The
+  // The platforms every release publishes. These four must be present: the
   // compatibility window that let this be a subset closed at 1.0.3 (the last
   // release 1.0.0 and 1.0.1 could update themselves from), so this is the
-  // 1.0.3-and-later contract and 1.0.3 itself accepts the same four keys.
-  // An unknown key still means the document is not ours; adding a fifth would
-  // strand every install older than the release that introduced it.
+  // 1.0.3-and-later contract.
   const requiredKeys = [
     "darwin-arm64",
     "darwin-x64",
     "win32-arm64",
     "win32-x64",
   ];
+  // A release may later also publish Linux installers. Clients older than the
+  // Linux launch reject any fifth key outright, which would strand their own
+  // updates for every subsequent release — so the Linux artifacts are published
+  // in a SEPARATE `release-metadata-linux.json` document instead of here, and
+  // this document keeps its four keys. (See dev-docs/linux/01-架构决策.md §3.1.)
+  //
+  // This reader is nevertheless forward-tolerant: a key shaped like a platform
+  // artifact entry is accepted and ignored rather than treated as a foreign
+  // document. That keeps a future `release-metadata.json` from being unusable
+  // by the clients that already shipped tolerance, without weakening the
+  // "is this document ours" check — four required keys must still validate.
+  const platformKeyShape = /^(?:darwin|win32|linux)-(?:arm64|x64|ia32)$/u;
   if (
-    Object.keys(artifactMap).some((key) => !requiredKeys.includes(key)) ||
+    Object.keys(artifactMap).some(
+      (key) => !requiredKeys.includes(key) && !platformKeyShape.test(key),
+    ) ||
     requiredKeys.some(
       (key) => !Object.prototype.hasOwnProperty.call(artifactMap, key),
     )
@@ -522,7 +538,10 @@ function metadataArtifactOf(
 function extensionsFor(platform: NodeJS.Platform): readonly string[] {
   if (platform === "darwin") return [".dmg", ".zip"];
   if (platform === "win32") return [".exe", ".msi", ".zip"];
-  if (platform === "linux") return [".appimage", ".deb", ".rpm", ".tar.gz"];
+  // `.tar.gz` is deliberately absent. It used to be listed, which made it
+  // selectable, and nothing downstream can install a tarball — the update would
+  // be "downloaded" and then handed to a hand-off that has no path for it.
+  if (platform === "linux") return [".appimage", ".deb", ".rpm"];
   return [];
 }
 

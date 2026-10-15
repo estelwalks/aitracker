@@ -428,7 +428,7 @@ function FindingCard({
         )}
         {f.excerpt && (
           <DefRow label={t("security.center.reportModal.code")}>
-            <dd className="mt-1 overflow-x-auto rounded-sm border border-border bg-surface-2/50 px-3 py-2">
+            <dd className="aitracker-xscroll mt-1 overflow-x-auto rounded-sm border border-border bg-surface-2/50 px-3 py-2">
               <code className="font-mono text-[11.5px] whitespace-pre text-foreground/90">
                 {f.excerpt}
               </code>

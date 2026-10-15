@@ -19,6 +19,25 @@ export const MAC_TRAY_ICON_FILENAMES = {
   retina: "trayTemplate@2x.png",
 } as const;
 
+/**
+ * Linux status-area artwork.
+ *
+ * The final fallback (`favicon-*.png`) is a 16px bitmap, which a panel drawing
+ * the icon at 22–24px would upscale. These are rasterized at the panel size,
+ * with the 44/48 variants supplied as the 2× representation for HiDPI panels.
+ * Unlike macOS there is no template mask: the theme picks the ink color, and
+ * the panel background does not always match the GTK theme.
+ */
+export const LINUX_TRAY_ICON_FILENAMES = {
+  light: "linux/tray-light-22.png",
+  dark: "linux/tray-dark-22.png",
+} as const;
+
+export const LINUX_TRAY_RETINA_ICON_FILENAMES = {
+  light: "linux/tray-light-44.png",
+  dark: "linux/tray-dark-44.png",
+} as const;
+
 export const APP_ICON_FILENAMES = {
   light: "favicon-light-1024.png",
   dark: "favicon-dark-1024.png",
@@ -67,11 +86,39 @@ export function findTrayIconPath(
       fileExists,
     );
   }
+  if (input.platform === "linux") {
+    return findNativeIconPath(
+      input,
+      LINUX_TRAY_ICON_FILENAMES[appearance],
+      fileExists,
+    );
+  }
   const filenames =
     input.platform === "win32"
       ? WINDOWS_TRAY_ICON_FILENAMES
       : TRAY_ICON_FILENAMES;
   return findNativeIconPath(input, filenames[appearance], fileExists);
+}
+
+/**
+ * Resolve the 2× Linux status icon, so a HiDPI panel gets real pixels instead
+ * of an upscaled 22px bitmap. Returns null on every other platform.
+ */
+export function findLinuxTrayRetinaIconPath(
+  input: {
+    readonly isPackaged: boolean;
+    readonly resourcesPath: string;
+    readonly appPath: string;
+    readonly platform?: NodeJS.Platform;
+  },
+  appearance: NativeIconAppearance,
+  fileExists: (path: string) => boolean = existsSync,
+): string | null {
+  return findNativeIconPath(
+    input,
+    LINUX_TRAY_RETINA_ICON_FILENAMES[appearance],
+    fileExists,
+  );
 }
 
 /** Resolve the Retina (@2x) menu-bar icon next to the 16px one on macOS. */

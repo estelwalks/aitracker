@@ -7,17 +7,24 @@ import { fileURLToPath } from "node:url";
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
- * The four versionless installer names every release publishes. The READMEs
- * link them through `/releases/latest/download/<name>`, which GitHub resolves
+ * The versionless installer names every release publishes. The READMEs link
+ * them through `/releases/latest/download/<name>`, which GitHub resolves
  * against the newest release. `scripts/verify-release-artifact-names.mjs` pins
  * these same names to electron-builder.yml, so a README can never document an
  * installer the packaging step does not produce.
+ *
+ * Linux contributes three: the AppImage the updater and the npx CLI hand over,
+ * plus the deb and rpm for people who prefer a system package. All three have
+ * to be linked, because a name nobody links is a documentation gap.
  */
 export const README_DOWNLOAD_NAMES = Object.freeze([
   "AITracker-macOS-arm64.dmg",
   "AITracker-macOS-x64.dmg",
   "AITracker-Windows-x64.exe",
   "AITracker-Windows-arm64.exe",
+  "AITracker-Linux-x64.AppImage",
+  "AITracker-Linux-x64.deb",
+  "AITracker-Linux-x64.rpm",
 ]);
 
 /** Paths whose links must stay on the versionless installer contract. */

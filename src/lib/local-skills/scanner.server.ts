@@ -37,6 +37,7 @@ import {
   osFromProcess,
   type ToolInstallationFact,
 } from "../tools/detection.server.ts";
+import { resolvePlatformPaths } from "../tool-registry/registry.ts";
 import {
   DEFAULT_MARKERS,
   DEFAULT_MAX_DEPTH,
@@ -80,6 +81,7 @@ export function resolveAgentRoots(
   home: string,
   env: Record<string, string | undefined>,
   dataRootOverrides: ReadonlyMap<string, string> = new Map(),
+  os: PlatformOs = osFromProcess(process.platform),
 ): Record<string, string[]> {
   const roots: Record<string, string[]> = {};
   // SKILL_AGENTS mirrors SKILL_AGENT_RULES order, so index alignment holds.
@@ -98,6 +100,29 @@ export function resolveAgentRoots(
           overridden ? join(overridden, basename(suffix)) : join(home, suffix),
         ),
       ),
+    ];
+  }
+  // Skills are resolved through the flat `storage.skills.roots` projection,
+  // which pins the XDG bases to the `xdgFallback` defaults (~/.config,
+  // ~/.local/share). That is right only while XDG_CONFIG_HOME / XDG_DATA_HOME
+  // are unset; a custom value would send discovery — and, because roots[0] is
+  // the write path, installation — to the wrong directory. The env-aware
+  // resolver already exists for usage/detection/sessions, so consult it and
+  // prefer its answer wherever it produces an absolute path.
+  for (const [i, rule] of SKILL_AGENT_RULES.entries()) {
+    if (dataRootOverrides.get(rule.toolId)?.trim()) continue;
+    const resolved = resolvePlatformPaths(
+      rule.toolId,
+      "skills",
+      os,
+      env,
+    )?.paths.filter((entry) => !entry.homeRelative);
+    if (!resolved?.length) continue;
+    roots[SKILL_AGENTS[i]] = [
+      ...new Set([
+        ...resolved.map((entry) => entry.path),
+        ...roots[SKILL_AGENTS[i]],
+      ]),
     ];
   }
   return roots;

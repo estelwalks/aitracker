@@ -13,12 +13,66 @@ const RELEASE_REDIRECT_HOSTS = new Set([
   "release-assets.githubusercontent.com",
   "objects.githubusercontent.com",
 ]);
+/**
+ * Every platform key this validator recognises. `darwin-*` and `win32-*` are
+ * mirrored into the desktop updater's document; `linux-*` is published in a
+ * SEPARATE `release-metadata-linux.json` asset so that clients older than the
+ * Linux launch — which reject any fifth key in the main document outright —
+ * keep updating themselves (see dev-docs/linux/01-架构决策.md §3.1).
+ */
 export const SUPPORTED_PLATFORMS = Object.freeze([
   "darwin-arm64",
   "darwin-x64",
   "win32-arm64",
   "win32-x64",
+  "linux-x64",
+  "linux-arm64",
 ]);
+
+/**
+ * Platforms every release publishes in the main document. `win32-arm64` is
+ * listed here because it is published again, but it is exempted from the
+ * required check below for backwards compatibility: releases before 1.0.2 did
+ * not list it, and requiring it would make those documents invalid.
+ */
+export const REQUIRED_MAIN_PLATFORMS = Object.freeze([
+  "darwin-arm64",
+  "darwin-x64",
+  "win32-arm64",
+  "win32-x64",
+]);
+
+/** Linux platforms, published in the companion document and always optional. */
+export const OPTIONAL_LINUX_PLATFORMS = Object.freeze([
+  "linux-x64",
+  "linux-arm64",
+]);
+
+/**
+ * The archive extension each platform key must use. Linux ships an AppImage as
+ * the installable artifact, so a Linux key carrying `.dmg` (or a Windows key
+ * carrying `.AppImage`) is rejected rather than silently accepted.
+ */
+const PLATFORM_EXTENSIONS = Object.freeze({
+  "darwin-arm64": [".dmg"],
+  "darwin-x64": [".dmg"],
+  "win32-arm64": [".exe"],
+  "win32-x64": [".exe"],
+  "linux-x64": [".AppImage", ".appimage"],
+  "linux-arm64": [".AppImage", ".appimage"],
+});
+
+export function expectedExtensionsFor(key) {
+  const extensions = PLATFORM_EXTENSIONS[key];
+  if (!extensions) {
+    throw new Error(`no expected artifact extension for platform: ${key}`);
+  }
+  return extensions;
+}
+
+export function isOptionalPlatformKey(key) {
+  return OPTIONAL_LINUX_PLATFORMS.includes(key) || key === "win32-arm64";
+}
 
 const VERSION_PATTERN =
   /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$/;
@@ -54,7 +108,7 @@ export function platformKey(platform, arch) {
   if (!SUPPORTED_PLATFORMS.includes(key)) {
     throw new Error(
       `Unsupported platform/architecture: ${platform}/${arch}. ` +
-        "Supported targets are macOS arm64, macOS x64, Windows x64, and Windows arm64.",
+        "Supported targets are macOS arm64/x64, Windows x64/arm64, and Linux x64/arm64.",
     );
   }
   return key;
@@ -152,7 +206,7 @@ function assertArtifact(artifact, key, appVersion) {
       throw new Error(`${prefix} has unknown field: ${field}`);
     }
   }
-  const expectedExtension = key.startsWith("win32-") ? ".exe" : ".dmg";
+  const extensions = expectedExtensionsFor(key);
   if (
     typeof artifact.name !== "string" ||
     artifact.name.length === 0 ||
@@ -163,9 +217,9 @@ function assertArtifact(artifact, key, appVersion) {
       `${prefix}.name must be a safe file name using only ASCII letters, numbers, ., _, +, and -`,
     );
   }
-  if (!artifact.name.endsWith(expectedExtension)) {
+  if (!extensions.some((extension) => artifact.name.endsWith(extension))) {
     throw new Error(
-      `${prefix}.name must use the ${expectedExtension} extension for ${key}`,
+      `${prefix}.name must use the ${extensions.join(" or ")} extension for ${key}`,
     );
   }
   // Installer names carry no version, so the URL cannot be rebuilt from
@@ -270,10 +324,12 @@ export function validateReleaseMetadata(metadata) {
   // darwin-arm64, darwin-x64 and win32-x64 are always published. win32-arm64 is
   // optional: releases before 1.0.2 did not list it, and listing it again would
   // make a pre-1.0.2 desktop client reject the whole document, which stops those
-  // installs from updating themselves. When present it is validated like any
-  // other platform (see the artifact loop above).
-  for (const key of SUPPORTED_PLATFORMS) {
-    if (key === "win32-arm64") continue;
+  // installs from updating themselves. Linux keys are optional too — they are
+  // only ever present in the companion `release-metadata-linux.json`. When a key
+  // is present it is validated like any other platform (see the artifact loop
+  // above).
+  for (const key of REQUIRED_MAIN_PLATFORMS) {
+    if (isOptionalPlatformKey(key)) continue;
     if (!Object.prototype.hasOwnProperty.call(metadata.artifacts, key)) {
       throw new Error(`missing artifact platform: ${key}`);
     }

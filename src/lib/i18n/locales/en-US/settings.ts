@@ -256,6 +256,8 @@ export const settings = {
     "Version v{version} is ready. Restarting now quits the app; the system then asks for permission — choose Yes/Continue to finish the install, and the app reopens automatically.",
   updateRestartBodyMac:
     "Version v{version} is ready. Restarting now quits the app, installs the new version and starts it again. macOS asks you to confirm opening the downloaded app the first time.",
+  updateRestartBodyLinux:
+    "Version v{version} has been downloaded. Choose “Restart and update” and the app will quit, replace itself in place, and reopen. (If a .deb or .rpm package was downloaded instead, the app opens the folder containing it — run the install command shown there to finish.)",
   updateRestartNow: "Restart & update now",
   updateInstallingShort: "Installing…",
   updateLater: "Later",

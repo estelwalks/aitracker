@@ -119,7 +119,9 @@ test("MarkdownView renders fenced code blocks preserving newlines", () => {
   const markup = render("```\nline one\nline two\n```");
   assert.match(
     markup,
-    /<pre class="my-3 overflow-x-auto rounded-lg border border-border bg-surface-2 px-3 py-2\.5"><code class="block font-mono text-\[12px\] leading-relaxed">line one\nline two<\/code><\/pre>/,
+    // `aitracker-xscroll` reserves the classic scrollbar gutter so a long line
+    // is not pushed under the track on Linux.
+    /<pre class="aitracker-xscroll my-3 overflow-x-auto rounded-lg border border-border bg-surface-2 px-3 py-2\.5"><code class="block font-mono text-\[12px\] leading-relaxed">line one\nline two<\/code><\/pre>/,
   );
 });
 

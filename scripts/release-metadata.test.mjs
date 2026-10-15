@@ -19,8 +19,10 @@ const SCRIPT = join(
 );
 
 // Installer names carry no version since the compatibility window closed at
-// 1.0.3, so a release publishes exactly these four files and the metadata
-// names them as they are.
+// 1.0.3, so a release publishes exactly these files and the metadata names them
+// as they are. The four macOS/Windows installers go into the main
+// release-metadata.json; the Linux AppImage goes into the companion
+// release-metadata-linux.json (dev-docs/linux/01-架构决策.md §3.1).
 const files = [
   "AITracker-macOS-arm64.dmg",
   "AITracker-macOS-x64.dmg",
@@ -28,9 +30,16 @@ const files = [
   "AITracker-Windows-x64.exe",
 ];
 
-async function fixtureDirectory() {
+/** The four main-document installers. */
+const mainFiles = files;
+
+/** Linux artifacts, recorded in the companion document only. */
+const linuxFiles = ["AITracker-Linux-x64.AppImage"];
+
+async function fixtureDirectory({ linux = true } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "aitracker-release-test-"));
-  for (const [index, file] of files.entries()) {
+  const all = linux ? [...files, ...linuxFiles] : files;
+  for (const [index, file] of all.entries()) {
     await writeFile(join(directory, file), Buffer.from(`artifact-${index}`));
   }
   return directory;
@@ -103,11 +112,35 @@ test("writes independently selectable metadata and checksum outputs", async () =
       version: "1.0.0-beta.1",
       channel: "beta",
       output: join(outputDirectory, "nested", "metadata.json"),
+      linuxOutput: join(outputDirectory, "nested", "metadata-linux.json"),
       checksums: join(outputDirectory, "nested", "checksums.txt"),
     });
+    const linuxMetadata = JSON.parse(
+      await readFile(
+        join(outputDirectory, "nested", "metadata-linux.json"),
+        "utf8",
+      ),
+    );
+    // The companion document repeats the four main keys and adds linux-x64.
+    assert.deepEqual(Object.keys(linuxMetadata.artifacts).sort(), [
+      "darwin-arm64",
+      "darwin-x64",
+      "linux-x64",
+      "win32-arm64",
+      "win32-x64",
+    ]);
     const metadata = JSON.parse(
       await readFile(join(outputDirectory, "nested", "metadata.json"), "utf8"),
     );
+    // The main document must NOT gain a fifth key: a shipped pre-Linux client
+    // rejects any extra key outright and would stop updating itself for every
+    // later release.
+    assert.deepEqual(Object.keys(metadata.artifacts).sort(), [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-arm64",
+      "win32-x64",
+    ]);
     assert.equal(metadata.schemaVersion, 1);
     assert.equal(metadata.appVersion, "1.0.0-beta.1");
     assert.equal(metadata.gitTag, "v1.0.0-beta.1");

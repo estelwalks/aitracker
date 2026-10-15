@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useI18n } from "../../../lib/i18n/context";
+import { usePlatform } from "../../../lib/platform";
 import { getWidgetReadModel, getWidgetStatusReadModel } from "../read-model";
 import {
   readCachedWidgetReadModel,
@@ -19,14 +20,20 @@ const TRAY_SUMMARY_INTERVAL_MS = 60_000;
 /**
  * Headless main-window owner for the native macOS Tray title.
  * It deliberately reads only the usage projection needed by the title.
+ *
+ * macOS only: `Tray.setTitle` is `@platform darwin`, so on Windows and Linux
+ * this component used to run two queries every 60 seconds and push a title the
+ * main process discarded. The platform comes from the root loader, so the
+ * gating is decided during the first render rather than after a client probe.
  */
 export function NativeTrayTitleSync() {
   const { locale, t, format } = useI18n();
+  const { isMac } = usePlatform();
   const { prefs, hydrated } = useWidgetPrefs();
   const [insightIndex, setInsightIndex] = useState(0);
   const queryClient = useQueryClient();
   const desktopAvailable =
-    typeof window !== "undefined" && window.desktopApi != null;
+    isMac && typeof window !== "undefined" && window.desktopApi != null;
   const statusQuery = useQuery({
     queryKey: ["widget-status", locale],
     queryFn: () => getWidgetStatusReadModel({ data: locale }),

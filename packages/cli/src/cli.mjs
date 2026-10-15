@@ -2,7 +2,15 @@ import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { createWriteStream } from "node:fs";
 import { readFileSync } from "node:fs";
-import { lstat, mkdir, mkdtemp, rm as rmAsync } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  constants as fsConstants,
+  lstat,
+  mkdir,
+  mkdtemp,
+  rm as rmAsync,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { finished } from "node:stream/promises";
@@ -39,7 +47,8 @@ export const DOWNLOAD_IDLE_TIMEOUT_MS = timeoutFromEnv(
   DEFAULT_DOWNLOAD_IDLE_TIMEOUT_MS,
 );
 const MAX_METADATA_BYTES = 8 * 1024 * 1024;
-const SAFE_INSTALLER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:dmg|exe)$/u;
+const SAFE_INSTALLER_NAME =
+  /^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:dmg|exe|AppImage|appimage|deb|rpm)$/u;
 
 /**
  * Installer names carry the operating system and no version
@@ -242,7 +251,7 @@ Real downloads show percentage, transferred size, and current speed.
 Options:
   --channel stable|beta  Release channel (defaults from this CLI version)
   --version x.y.z        Exact release version
-  --platform NAME        Override platform for testing (darwin or win32)
+  --platform NAME        Override platform for testing (darwin, win32, or linux)
   --arch NAME            Override architecture (arm64 or x64)
   --dry-run              Resolve and print the artifact without downloading it
   --download-only        Download and verify without opening the installer
@@ -632,10 +641,25 @@ export function formatArtifactSummary({ metadata, artifact, platform }) {
   ].join("\n");
 }
 
+/** Extensions the Linux installer hand-off knows how to act on. */
+const LINUX_APPIMAGE_EXTENSION = ".appimage";
+const LINUX_PACKAGE_EXTENSIONS = [".deb", ".rpm"];
+
+/** The distro-native command that installs a downloaded Linux package. */
+function linuxInstallCommand(installerPath) {
+  const lower = installerPath.toLowerCase();
+  if (lower.endsWith(".deb")) return `sudo apt install ${installerPath}`;
+  if (lower.endsWith(".rpm")) {
+    return `sudo dnf install ${installerPath}   # or: sudo zypper install ${installerPath}`;
+  }
+  return null;
+}
+
 export async function openInstaller(
   platform,
   installerPath,
   spawnImpl = spawn,
+  { chmodImpl = chmod, stdout = process.stdout, accessImpl = access } = {},
 ) {
   if (platform === "darwin") {
     const child = spawnImpl("open", [installerPath], {
@@ -654,6 +678,40 @@ export async function openInstaller(
     });
     child.unref?.();
     return;
+  }
+  if (platform === "linux") {
+    const lower = installerPath.toLowerCase();
+    if (lower.endsWith(LINUX_APPIMAGE_EXTENSION)) {
+      // The download is written 0644, so an AppImage is not executable yet.
+      // `X_OK` is asserted afterwards rather than assumed: a silently ignored
+      // chmod failure would otherwise surface as a launch that does nothing.
+      await chmodImpl(installerPath, 0o755);
+      await accessImpl(installerPath, fsConstants.X_OK);
+      const child = spawnImpl(installerPath, [], {
+        shell: false,
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref?.();
+      return;
+    }
+    if (
+      LINUX_PACKAGE_EXTENSIONS.some((extension) => lower.endsWith(extension))
+    ) {
+      // Never elevate on the user's behalf. Installing a distro package needs
+      // root, so the CLI prints the exact command and exits successfully — the
+      // file is already verified and on disk.
+      const command = linuxInstallCommand(installerPath);
+      stdout.write(
+        `\nDownloaded to ${installerPath}\n` +
+          `Install it with:\n\n  ${command}\n\n` +
+          "AITracker cannot install system packages itself because that requires administrator rights.\n",
+      );
+      return;
+    }
+    throw new Error(
+      `Unsupported Linux installer: ${installerPath}. Expected an .AppImage, .deb, or .rpm.`,
+    );
   }
   throw new Error(`Unsupported platform: ${platform}`);
 }

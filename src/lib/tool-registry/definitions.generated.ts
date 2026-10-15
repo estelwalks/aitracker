@@ -15,7 +15,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -119,7 +119,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -508,7 +508,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -688,7 +688,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -846,7 +846,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -1134,7 +1134,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -1228,7 +1228,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -1425,7 +1425,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -1508,7 +1508,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -1986,7 +1986,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -2221,7 +2221,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -2588,7 +2588,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -3012,7 +3012,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -3114,7 +3114,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "unsupported"
     },
     "detection": {
       "locations": [
@@ -3361,7 +3361,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -3421,7 +3421,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -3482,7 +3482,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -3696,7 +3696,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -3926,7 +3926,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "unsupported"
     },
     "detection": {
       "locations": [
@@ -4012,7 +4012,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "unsupported"
     },
     "detection": {
       "locations": [
@@ -4153,7 +4153,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -4288,7 +4288,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "planned",
-      "linux": "planned"
+      "linux": "unsupported"
     },
     "detection": {
       "locations": [
@@ -4397,7 +4397,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "planned",
-      "linux": "planned"
+      "linux": "unsupported"
     },
     "detection": {
       "locations": [
@@ -4492,7 +4492,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -5150,7 +5150,7 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
     "defaultStatus": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     }
   },
   "genericReaderDefaults": {
@@ -5519,4 +5519,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "9a1509e0592ab1de";
+export const TOOL_REGISTRY_VERSION: string = "030f30e115b7a07f";

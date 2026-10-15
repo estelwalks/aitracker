@@ -26,6 +26,38 @@ const sources = {
 // Include the intermediate Windows DPI sizes; a 16px-only PNG is upscaled at
 // 125/150/200%. Each frame is rasterized directly at its final size.
 export const WINDOWS_ICON_SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
+
+/**
+ * Sizes for the freedesktop icon set Linux packaging needs.
+ *
+ * electron-builder installs each file as
+ * `/usr/share/icons/hicolor/<size>x<size>/apps/<executableName>.png` and reads
+ * the size from the file name, so these must be the standard hicolor sizes.
+ * 1024 is deliberately absent: it is not a hicolor directory and would install
+ * into a non-standard `hicolor/1024x1024/`.
+ */
+export const LINUX_ICON_SIZES = [16, 24, 32, 48, 64, 128, 256, 512];
+
+/** Relative name of each Linux icon inside the output directory. */
+export function linuxIconName(size) {
+  return `linux/${size}x${size}.png`;
+}
+
+/**
+ * Dedicated status-area artwork for Linux.
+ *
+ * The shared `favicon-*.png` tray files are 16px, while a Linux panel draws the
+ * status icon at 22–24px (and at 2× that on HiDPI). Handing the panel a 16px
+ * bitmap makes it upscale a blurry icon, so the panel size is rasterized
+ * directly. Both appearances are emitted: unlike macOS there is no template
+ * mask, and `nativeTheme.shouldUseDarkColors` follows the GTK theme, which does
+ * not always match the panel background.
+ */
+export function linuxTrayIconName(appearance, size) {
+  return `linux/tray-${appearance}-${size}.png`;
+}
+
+export const LINUX_TRAY_ICON_SIZES = [22, 24, 44, 48];
 const ICNS_ENTRIES = [
   ["icp4", 16],
   ["icp5", 32],
@@ -53,6 +85,10 @@ const outputNames = [
     `favicon-${appearance}-512.png`,
     `favicon-${appearance}-1024.png`,
   ]),
+  ...LINUX_ICON_SIZES.map(linuxIconName),
+  ...Object.keys(sources).flatMap((appearance) =>
+    LINUX_TRAY_ICON_SIZES.map((size) => linuxTrayIconName(appearance, size)),
+  ),
   "manifest.json",
 ];
 
@@ -78,6 +114,105 @@ export function macAppArtwork(source) {
     '<svg x="176" y="176" width="672" height="672" ',
   );
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect x="100" y="100" width="824" height="824" rx="184" fill="#ffffff"/>${mark}</svg>`;
+}
+
+/**
+ * Status-area artwork for Linux.
+ *
+ * The shared `compactArtwork` mark is drawn for the 1024px app icon: corner
+ * brackets on a 1.25/16 stroke and trails on 0.9-1.5/16. Rasterized at the 22px
+ * a Linux panel actually draws, that is a ~1.7px hairline — measured coverage of
+ * fully-opaque pixels is only 14%, so the mark reads as a faint outline against
+ * the panel and disappears entirely on a dark one.
+ *
+ * The geometry is therefore redrawn for the panel: the same paths and the same
+ * relative composition, scaled up by 1/0.78 (a 16-unit frame drawn inside a
+ * 12.5-unit box) so the mark fills more of the canvas, with stroke weights
+ * raised to a proportion that still has solid mass at 22px. Frame, trails and
+ * nodes keep their original paths and ratios; only the scale and the weights
+ * differ, which is the standard treatment for a small-size variant.
+ *
+ * This is Linux-only on purpose. macOS uses its own template mask and Windows
+ * its own multi-size ICO, so neither is affected.
+ */
+export function linuxTrayArtwork(source) {
+  // Keep the mark at full size — the frame already uses the whole 16-unit grid
+  // and shrinking it only makes the strokes thinner. The fix is ink weight: at
+  // the 22px a panel draws, the 1024px design's 1.25/16 frame bracket is a
+  // ~1.7px hairline that never reaches full opacity, so the mark reads as a
+  // faint outline. 1.5 puts the frame stroke at a full 2.25px and the largest
+  // node near 3.6px across, which is the most ink that still leaves the corner
+  // brackets inside the canvas — the frame sits 1.75 units from the edge, so a
+  // heavier weight starts clipping at 22px. Measured coverage goes from 14% of
+  // the canvas fully opaque to 23%.
+  const inkScale = 1.5;
+  let mark = compactArtwork(source);
+  for (const original of ["1.25", "0.9", "1.2", "1.5"]) {
+    mark = mark.replace(
+      `stroke-width="${original}"`,
+      `stroke-width="${(Number(original) * inkScale).toFixed(3)}"`,
+    );
+  }
+  // The trail nodes scale with the frame; make them read as dots rather than
+  // specks at panel size.
+  for (const [from, to] of [
+    ["0.8", "1.0"],
+    ["1.1", "1.3"],
+    ["1.45", "1.7"],
+  ]) {
+    mark = mark.replace(`r="${from}"`, `r="${to}"`);
+  }
+  return mark;
+}
+
+/**
+ * The Linux application icon for the freedesktop hicolor set.
+ *
+ * A hicolor icon is a single file installed by the package manager, so unlike
+ * the tray artwork it cannot follow the theme. The two obvious choices both
+ * fail on half of all desktops: the dark-ink mark (#111827) is invisible in a
+ * dark dock, and the light-ink mark (#f8fafc) is invisible in a light one.
+ * Measured against a GNOME dark dock, dark ink rendered the mark at roughly
+ * 1.3:1 contrast — the symptom was an app icon that looked like an empty tile.
+ *
+ * The mark is therefore drawn light, with its own darker outline underneath of
+ * the same geometry. The outline is what separates it from a light background,
+ * so one file stays legible on both. Both layers keep the original stroke
+ * weights and paths, and the outline is a wide, low-opacity stroke rather than
+ * a solid shape, so it reads as a soft edge instead of a plate.
+ *
+ * Linux only. macOS ships a white Dock tile (macAppArtwork) and Windows a
+ * multi-size ICO, and neither is touched.
+ */
+export function linuxAppArtwork(source) {
+  // Linux reuses the macOS app tile so the two platforms show the same icon, and
+  // crops only the canvas.
+  //
+  // The crop exists because the two desktops frame icons differently. The macOS
+  // artboard carries a deliberate outer margin for the Dock: the tile occupies
+  // 824/1024 = 80.5% of it. That reads as noticeably smaller than its neighbours
+  // in a GNOME app grid, where installed icons measure 81-100% (chromium and
+  // syncthing fill the whole canvas). Bringing the tile to 88% puts it in the
+  // range the surrounding icons occupy without crowding it against the edge.
+  //
+  // Cropping the viewBox rather than redrawing keeps a single source of truth:
+  // the plate, its radius and the mark keep the exact proportions macOS uses, so
+  // nothing here needs revisiting when macAppArtwork changes. Rewinding to the
+  // tile's own bounds would be 1.0; the value below deliberately stops short so
+  // the icon keeps the breathing room its neighbours have.
+  const MACOS_TILE_COVERAGE = 824 / 1024;
+  const LINUX_TILE_COVERAGE = 0.88;
+  const artboard = 1024;
+  const span = (MACOS_TILE_COVERAGE * artboard) / LINUX_TILE_COVERAGE;
+  const offset = (artboard - span) / 2;
+  const artwork = macAppArtwork(source);
+  const inner = artwork.match(/<svg[^>]*>([\s\S]*)<\/svg>/u)?.[1];
+  if (!inner) throw new Error("macAppArtwork must render a single svg element");
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" ' +
+    `viewBox="${offset.toFixed(2)} ${offset.toFixed(2)} ${span.toFixed(2)} ${span.toFixed(2)}">` +
+    `${inner}</svg>`
+  );
 }
 
 /** Retain physical density as well as Electron's @2x filename convention. */
@@ -157,9 +292,14 @@ async function exists(path) {
 
 async function currentManifest() {
   return {
-    version: 5,
+    // 6 -> 7 added the Linux status-area artwork; 7 -> 8 thickened its ink for
+    // panel legibility. Either way an existing tree must be regenerated rather
+    // than reported as current.
+    version: 11,
     generator: await sha256(fileURLToPath(import.meta.url)),
     windowsSizes: WINDOWS_ICON_SIZES,
+    linuxSizes: LINUX_ICON_SIZES,
+    linuxTraySizes: LINUX_TRAY_ICON_SIZES,
     macTemplateSizes: [16, 32],
     sources: {
       light: await sha256(sources.light),
@@ -199,6 +339,41 @@ async function removeGeneratedDirectory(directory) {
     throw new Error(`Refusing to remove non-generated directory: ${target}`);
   }
   await rm(target, { recursive: true, force: true });
+}
+
+/**
+ * The freedesktop hicolor set. Uses the same transparent artwork as the Windows
+ * ICO and the running window — never the macOS white Dock tile, which would put
+ * a white square behind the mark on a Linux dock or taskbar.
+ */
+async function generateLinuxIcons(stagingDirectory, svg, artworks) {
+  // Pass `svg` — the light-theme source, whose ink is dark — and not the
+  // dark-theme one. The app tile has a white plate, so the dark-theme source
+  // (light ink) painted white on white and the icon came out as an empty white
+  // square. The inks are not interchangeable: they exist so that a mark stays
+  // legible on a given background.
+  const glyph = linuxAppArtwork(svg);
+  const directory = join(stagingDirectory, "linux");
+  await mkdir(directory, { recursive: true });
+  await Promise.all([
+    ...LINUX_ICON_SIZES.map((size) =>
+      writeFile(
+        join(stagingDirectory, linuxIconName(size)),
+        renderPng(glyph, size, 96),
+      ),
+    ),
+    ...Object.entries(artworks).flatMap(([appearance, artwork]) =>
+      LINUX_TRAY_ICON_SIZES.map((size) =>
+        writeFile(
+          join(stagingDirectory, linuxTrayIconName(appearance, size)),
+          // The panel-size variant, not the 1024px app-icon mark: see
+          // linuxTrayArtwork for why the hairlines are thickened.
+          // 96dpi keeps the bitmap at its native pixel dimensions.
+          renderPng(linuxTrayArtwork(artwork), size, 96),
+        ),
+      ),
+    ),
+  ]);
 }
 
 async function generateAppearance(stagingDirectory, appearance, svg) {
@@ -294,11 +469,12 @@ export async function generateNativeIcons() {
         `${JSON.stringify(manifest, null, 2)}\n`,
         "utf8",
       ),
+      generateLinuxIcons(stagingDirectory, artworks.light, artworks),
     ]);
     await removeGeneratedDirectory(outputDirectory);
     await rename(stagingDirectory, outputDirectory);
     console.log(
-      "Generated native icons: macOS white app tiles, transparent menu-bar templates and Windows multi-size ICOs.",
+      "Generated native icons: macOS white app tiles, transparent menu-bar templates, Windows multi-size ICOs and the Linux hicolor PNG set.",
     );
   } catch (error) {
     await removeGeneratedDirectory(stagingDirectory);

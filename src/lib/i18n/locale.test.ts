@@ -54,6 +54,16 @@ test("mapSystemLocale: 未知语言永远回退 zh-CN", () => {
   assert.equal(mapSystemLocale(undefined), "zh-CN");
 });
 
+test("mapSystemLocale: 未配置 locale 的 C/POSIX 标记回退 en-US", () => {
+  // Linux 上 LANG=C / LANG=POSIX（以及不带 -E 的 sudo）很常见。它们表示
+  // “没有配置语言”，而不是“无法识别的语言”，因此不能落到 zh-CN。
+  assert.equal(mapSystemLocale("C"), "en-US");
+  assert.equal(mapSystemLocale("c"), "en-US");
+  assert.equal(mapSystemLocale("POSIX"), "en-US");
+  assert.equal(mapSystemLocale("C.UTF-8"), "en-US");
+  assert.equal(mapSystemLocale("posix"), "en-US");
+});
+
 test("resolveLocale: 用户显式选择优先于系统语言", () => {
   assert.equal(resolveLocale("en-US", "zh-CN"), "en-US");
   assert.equal(resolveLocale("ja-JP", "ko-KR"), "ja-JP");

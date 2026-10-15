@@ -16,7 +16,6 @@ export type BackgroundTasksDecisionReason =
   | "explicitly-enabled"
   | "explicitly-disabled"
   | "test-default-disabled"
-  | "linux-planned"
   | "unsupported-platform";
 
 export interface RuntimeIdentity {
@@ -46,21 +45,19 @@ export interface RuntimeIdentityInput {
 const SUPPORTED_DESKTOP_PLATFORMS: ReadonlySet<RuntimePlatform> = new Set([
   "macos",
   "windows",
+  "linux",
 ]);
 
 /**
- * Pure policy for scheduler startup. Linux is planned, so an opt-in cannot
- * accidentally turn scanning on there before its platform acceptance work.
+ * Pure policy for scheduler startup. Linux ships as a supported desktop
+ * platform, so it follows the same default as macOS and Windows: the scheduler
+ * runs in desktop and web mode and only an explicit opt-out turns it off.
  */
 export function resolveRuntimeIdentity(
   input: RuntimeIdentityInput,
 ): RuntimeIdentity {
   const mode = input.mode ?? (input.kind === "test" ? "test" : "production");
   const platform = input.platform ?? "unknown";
-
-  if (platform === "linux") {
-    return identity(input.kind, mode, platform, false, "linux-planned");
-  }
 
   if (!SUPPORTED_DESKTOP_PLATFORMS.has(platform)) {
     return identity(input.kind, mode, platform, false, "unsupported-platform");

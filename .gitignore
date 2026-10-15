@@ -28,3 +28,6 @@ docs/*/project-sparkle-hub-*
 
 # Local development documentation
 dev-docs/
+
+# Left behind by `asar extract-file`, which writes to the repo root.
+/main.js

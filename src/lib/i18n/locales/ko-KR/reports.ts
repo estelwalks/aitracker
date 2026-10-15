@@ -104,7 +104,7 @@ export const reports = {
     schedulerOff:
       "백그라운드 스케줄러가 실행 중이 아니어서 정기 생성이 실행되지 않습니다.",
     schedulerOffHint:
-      "이 플랫폼에서는 백그라운드 작업이 활성화되지 않았거나 스케줄러 시작에 실패했습니다. macOS/Windows 버전을 사용하고 앱 로그를 확인하세요.",
+      "백그라운드 작업이 꺼져 있거나 스케줄러 시작에 실패했습니다. 앱 설정과 앱 로그를 확인하세요.",
     runSummary: "{time} · {result}",
     loadFailed: "보고서 일정을 불러오지 못했습니다",
     runStatus: {

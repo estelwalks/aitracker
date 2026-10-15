@@ -326,8 +326,9 @@ test("rejects draft releases, unsupported platforms and bad release metadata", a
       }),
     /no non-draft/,
   );
+  // Linux is a supported target now; a genuinely unknown platform still fails.
   assert.throws(
-    () => parseArgs([], { platform: "linux", arch: "x64" }),
+    () => parseArgs([], { platform: "freebsd", arch: "x64" }),
     /Unsupported platform/,
   );
   const badMetadata = fakeFetch();
@@ -690,8 +691,54 @@ test("opens only supported platform installers with the native launcher", async 
   await openInstaller("win32", "C:\\safe.exe & whoami", spawnImpl);
   assert.equal(commands[2][0], "C:\\safe.exe & whoami");
   assert.equal(commands[2][2].shell, false);
-  await assert.rejects(
-    () => openInstaller("linux", "/tmp/a", spawnImpl),
-    /Unsupported platform/,
-  );
+});
+
+test("opens Linux installers without ever elevating privileges", async () => {
+  const commands = [];
+  const spawnImpl = (command, args, options) => {
+    commands.push([command, args, options]);
+    return { unref() {}, on() {}, once() {}, off() {}, kill() {} };
+  };
+
+  // An AppImage must be made executable first, then started detached.
+  const chmods = [];
+  const accessed = [];
+  await openInstaller("linux", "/tmp/AITracker-Linux-x64.AppImage", spawnImpl, {
+    chmodImpl: async (path, mode) => chmods.push([path, mode]),
+    accessImpl: async (path, mode) => accessed.push([path, mode]),
+    stdout: { write() {} },
+  });
+  assert.deepEqual(accessed, [["/tmp/AITracker-Linux-x64.AppImage", 1]]);
+  assert.deepEqual(chmods, [["/tmp/AITracker-Linux-x64.AppImage", 0o755]]);
+  assert.equal(commands[0][0], "/tmp/AITracker-Linux-x64.AppImage");
+  assert.equal(commands[0][2].detached, true);
+
+  // A deb/rpm must NOT be spawned and must NOT be installed with sudo: the CLI
+  // only tells the user which command to run.
+  const output = [];
+  const before = commands.length;
+  await openInstaller("linux", "/tmp/AITracker-Linux-x64.deb", spawnImpl, {
+    chmodImpl: async () => {},
+    accessImpl: async () => {},
+    stdout: { write: (chunk) => output.push(String(chunk)) },
+  });
+  assert.equal(commands.length, before, "deb must not spawn anything");
+  const printed = output.join("");
+  assert.match(printed, /sudo apt install \/tmp\/AITracker-Linux-x64\.deb/);
+  assert.doesNotMatch(printed, /sudo (?!apt|dnf|zypper)/);
+
+  // The Red Hat family goes through the same hand-off: the rpm is not spawned
+  // either, and the printed command names dnf (with zypper as the alternative
+  // for the SUSE family) rather than apt.
+  const rpmOutput = [];
+  await openInstaller("linux", "/tmp/AITracker-Linux-x64.rpm", spawnImpl, {
+    chmodImpl: async () => {},
+    accessImpl: async () => {},
+    stdout: { write: (chunk) => rpmOutput.push(String(chunk)) },
+  });
+  assert.equal(commands.length, before, "rpm must not spawn anything");
+  const printedRpm = rpmOutput.join("");
+  assert.match(printedRpm, /sudo dnf install \/tmp\/AITracker-Linux-x64\.rpm/);
+  assert.match(printedRpm, /zypper install/);
+  assert.doesNotMatch(printedRpm, /apt install/);
 });

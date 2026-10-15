@@ -18,6 +18,7 @@ import {
   type Currency,
   type Locale,
 } from "../lib/i18n/locale";
+import { hostPlatformFromNode, type HostPlatform } from "../lib/platform";
 import {
   getRatesSnapshot,
   type RatesSnapshot,
@@ -29,6 +30,14 @@ export interface RootLoaderData {
   readonly catalog: Translations;
   readonly displayCurrency: Currency;
   readonly rates: RatesSnapshot | null;
+  /**
+   * The operating system this server runs on. In the desktop build the local
+   * web server runs inside the Electron main process, so this is the same
+   * machine as the window and `process.platform` is known synchronously — which
+   * is what makes it hydration-stable. A browser talking to a remote host gets
+   * that host's value, hence the name.
+   */
+  readonly hostPlatform: HostPlatform;
 }
 
 export async function rootLoader({
@@ -49,6 +58,7 @@ export async function rootLoader({
       mapSystemCurrency(locale),
     ),
     rates,
+    hostPlatform: hostPlatformFromNode(process.platform),
   };
 }
 

@@ -18,6 +18,10 @@ const SCRIPT = join(
 
 const METADATA_NAME = "release-metadata.json";
 
+// A deliberately self-contained pre-rename release: the four macOS/Windows
+// installers under their old names. It does not mirror
+// EXPECTED_ARTIFACT_NAMES — the point is that this stale release is missing
+// whatever the config now renders, including the Linux AppImage.
 const PLATFORM_KEYS = Object.freeze([
   "darwin-arm64",
   "darwin-x64",
@@ -75,6 +79,36 @@ test("a release whose assets and metadata carry the same names passes", () => {
   );
 });
 
+test("Linux attaches three packages but records only the AppImage", () => {
+  // The metadata contract allows exactly one artifact per platform key — the
+  // CLI's validator rejects an artifact with an unknown field, which is why
+  // widening the record to carry deb/rpm would make every shipped client reject
+  // the whole document. The deb and rpm are therefore release assets the
+  // READMEs link, not metadata entries, and this pairing has to pass: every
+  // recorded name is published, and every published name is either recorded or
+  // is one of the Linux packages.
+  const assets = assetsOf(EXPECTED_ARTIFACT_NAMES);
+  assert.deepEqual(
+    inspectRelease({ assets, metadata: metadataOf(EXPECTED_ARTIFACT_NAMES) }),
+    [],
+  );
+
+  // Dropping a Linux package from the release is still caught, because
+  // EXPECTED_ARTIFACT_NAMES is what the release must publish.
+  const withoutRpm = assets.filter(
+    (asset) => asset.name !== "AITracker-Linux-x64.rpm",
+  );
+  assert.deepEqual(
+    inspectRelease({
+      assets: withoutRpm,
+      metadata: metadataOf(EXPECTED_ARTIFACT_NAMES),
+    }),
+    [
+      "the release does not publish AITracker-Linux-x64.rpm; the packaging config and the release scripts name it",
+    ],
+  );
+});
+
 test("the previous version's names pass as long as both sides agree", () => {
   // The guard is about agreement, not about one particular name: a release that
   // publishes and records the older names is internally consistent. It is only
@@ -123,10 +157,16 @@ test("assets still carrying the old names while the config renders new ones fail
     assets: assetsOf(PREVIOUS_NAMES),
     metadata: metadataOf(PREVIOUS_NAMES),
   });
+  // One problem per name the config renders that this stale release lacks: the
+  // four old macOS/Windows names no longer match, and the Linux AppImage this
+  // pre-Linux build never produced is missing entirely — so the stale release
+  // is reported against every name in EXPECTED_ARTIFACT_NAMES.
   assert.equal(problems.length, EXPECTED_ARTIFACT_NAMES.length);
   assert.ok(
     problems.every((problem) =>
-      /the release does not publish AITracker-(macOS|Windows)/u.test(problem),
+      /the release does not publish AITracker-(macOS|Windows|Linux)/u.test(
+        problem,
+      ),
     ),
     problems.join("\n"),
   );

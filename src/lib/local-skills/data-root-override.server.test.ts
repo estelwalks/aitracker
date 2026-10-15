@@ -5,6 +5,7 @@ import { join, sep } from "node:path";
 import test from "node:test";
 
 import { APP_DATA_DIR } from "../app-config.ts";
+import { getDefaultRegistry } from "../tool-registry/registry.ts";
 import { SKILL_AGENT_RULES } from "./skill-rules.server.ts";
 import {
   chooseSkillWriteRoot,
@@ -46,6 +47,71 @@ test("resolveAgentRoots rebases Hermes skills under its override directory", () 
     new Map([["hermes", "/data/hermes"]]),
   );
   assert.deepEqual(roots[labelOf("hermes")], [join("/data/hermes", "skills")]);
+});
+
+test("resolveAgentRoots keeps home-based skill roots independent of XDG", () => {
+  // Every shipped skill rootSpec uses `base: "home"` — the XDG bases are not
+  // used for skills yet. That matters for the env-aware branch added below:
+  // it is a guard for a future `configHome`/`dataHome` skill root, not a
+  // change in today's behaviour, so a custom XDG_CONFIG_HOME must leave the
+  // current roots exactly where they were.
+  const home = "/home/alice";
+  const env = {
+    XDG_CONFIG_HOME: "/custom/config",
+    XDG_DATA_HOME: "/custom/data",
+  };
+
+  const custom = resolveAgentRoots(home, env, new Map(), "linux");
+  const fallback = resolveAgentRoots(home, {}, new Map(), "linux");
+  assert.deepEqual(custom, fallback);
+
+  // And every resolved root is still anchored at the supplied home.
+  for (const [agent, agentRoots] of Object.entries(custom)) {
+    for (const root of agentRoots) {
+      assert.ok(
+        root.startsWith(home),
+        `${agent} root ${root} must stay under ${home}`,
+      );
+    }
+  }
+});
+
+test("the registry declares no XDG-based skill root yet", () => {
+  // Guards the reasoning above. When a tool does declare a `configHome` or
+  // `dataHome` skill root, this fails so the env-aware branch in
+  // `resolveAgentRoots` gets the test it needs, and this note is removed.
+  const xdgBased = getDefaultRegistry()
+    .definitions.filter((def) =>
+      (def.storage?.skills?.rootSpecs ?? []).some(
+        (spec) => spec.base === "configHome" || spec.base === "dataHome",
+      ),
+    )
+    .map((def) => def.id);
+  assert.deepEqual(
+    xdgBased,
+    [],
+    "a tool now declares an XDG skill root: assert it honours XDG_CONFIG_HOME/XDG_DATA_HOME in resolveAgentRoots",
+  );
+});
+
+test("resolveAgentRoots does not resolve skill roots for Linux-unsupported tools", () => {
+  // Tools with no Linux build are marked unsupported; their rules must not
+  // produce a root on Linux. Only rules that exist in the shared order are
+  // checked — a tool absent from that order has no rule to resolve.
+  const roots = resolveAgentRoots("/home/alice", {}, new Map(), "linux");
+  const present = new Set(Object.keys(roots));
+  for (const id of [
+    "kimi-work",
+    "doubao-work",
+    "marvis",
+    "aipy",
+    "trae-work",
+  ]) {
+    const name = getDefaultRegistry().byId.get(id)?.display.name;
+    if (name === undefined || !present.has(name)) continue;
+    assert.fail(`${id} (${name}) resolved skill roots on linux`);
+  }
+  assert.ok(present.size > 0, "linux still resolves the supported agents");
 });
 
 test("resolveAgentRoots honours envHome only when no override exists", () => {

@@ -14,7 +14,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -35,7 +35,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -98,7 +98,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -140,7 +140,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -182,7 +182,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "adapter",
@@ -224,7 +224,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "adapter",
@@ -245,7 +245,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -287,7 +287,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -308,7 +308,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -371,7 +371,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -413,7 +413,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "adapter",
@@ -497,7 +497,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -581,7 +581,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",
@@ -624,7 +624,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "adapter",
@@ -666,7 +666,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "adapter",
@@ -687,7 +687,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "native",

@@ -36,6 +36,8 @@ export const RELEASE_PLATFORMS = Object.freeze([
   "darwin-x64",
   "win32-arm64",
   "win32-x64",
+  "linux-x64",
+  "linux-arm64",
 ]);
 
 const VALUE_OPTIONS = new Set([
@@ -142,6 +144,29 @@ export function expectedReleaseArtifacts(platform) {
     Object.freeze({
       platform: "win32-x64",
       name: "AITracker-Windows-x64.exe",
+    }),
+    // Linux ships three installers under one platform key. All three are built
+    // and attached to the release, and the deb/rpm are what the READMEs link;
+    // `release-metadata-linux.json` records the AppImage alone, because the
+    // metadata contract allows one artifact per key.
+    //
+    // Only x64 is built at launch: the linux artifactName spells the
+    // architecture out instead of using `${arch}` (electron-builder renders
+    // that as x86_64 for AppImage and rpm and amd64 for deb), so there is no
+    // arm64 template yet and no arm64 name to verify. `RELEASE_PLATFORMS` still
+    // accepts linux-arm64 so an arm64 release can be verified once its template
+    // exists.
+    Object.freeze({
+      platform: "linux-x64",
+      name: "AITracker-Linux-x64.AppImage",
+    }),
+    Object.freeze({
+      platform: "linux-x64",
+      name: "AITracker-Linux-x64.deb",
+    }),
+    Object.freeze({
+      platform: "linux-x64",
+      name: "AITracker-Linux-x64.rpm",
     }),
   ];
   return Object.freeze(

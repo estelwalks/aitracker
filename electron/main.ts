@@ -1,5 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,7 +65,18 @@ import {
   LOCALE_MODE_PREF_KEY,
   LOCALE_PREF_KEY,
 } from "./prefs.js";
-import { APP_NAME, ENV } from "./app-config.js";
+import {
+  APP_DESKTOP_NAME,
+  APP_NAME,
+  ENV,
+  STORAGE_KEY_PREFIX,
+} from "./app-config.js";
+import {
+  canUseLinuxChromiumSandbox,
+  executableDirectoryOf,
+  NO_SANDBOX_SWITCH,
+  sandboxDisabledByEnvironment,
+} from "./linux-sandbox.js";
 
 const TCC_PROJECT_PROBE_MARKER = "aitracker-tcc-project-probe-enabled";
 import { SecurityScannerService } from "./security-scanner-service.js";
@@ -73,7 +85,26 @@ import { isTrustedIpcSender } from "./ipc-security.js";
 import { DesktopStateBroker } from "./desktop-state-broker.js";
 import { createStartupDocument } from "./startup-screen.js";
 import { startupFailureDialogMessage } from "./startup-failure.js";
-import { resolveMainWindowSize } from "./main-window-size.js";
+import {
+  parseStoredWindowBounds,
+  resolveMainWindowGeometry,
+  type WindowRectangle,
+} from "./main-window-size.js";
+import {
+  ENV_PREFIX,
+  NATIVE_WAYLAND_ENV,
+  X11_RELAUNCH_ENV,
+  consumeRelaunchEnvironment,
+  inheritedAppEnvironment,
+  planX11Relaunch,
+  shouldPreferX11Backend,
+  xwaylandLooksAvailable,
+} from "./display-backend.js";
+import {
+  probeLinuxAutostartSupported,
+  readLinuxAutostartEnabled,
+  writeLinuxAutostartEnabled,
+} from "./linux-autostart.js";
 import {
   normalizeTrayTitle,
   persistTrayTitleBestEffort,
@@ -84,6 +115,7 @@ import {
 } from "./tray-title.js";
 import {
   findAppIconPath,
+  findLinuxTrayRetinaIconPath,
   findTrayIconPath,
   findTrayRetinaIconPath,
   type NativeIconAppearance,
@@ -106,6 +138,16 @@ import { UpdateManager } from "./update-manager.js";
 import { handOffInstaller } from "./update-relaunch.js";
 import { normalizeUpdateProxy, updateProxyConfig } from "./update-proxy.js";
 
+/**
+ * Main-window rectangle, in the same SQLite preference namespace as the tray
+ * title and the locale. Stored as `{x,y,width,height}` and validated on read:
+ * a truncated or hand-edited value must fall back to the default rectangle
+ * instead of producing an invisible window.
+ */
+const WINDOW_BOUNDS_PREF_KEY = `${STORAGE_KEY_PREFIX}windowBounds`;
+/** Debounce for `resize`/`move`, which fire continuously while dragging. */
+const WINDOW_BOUNDS_PERSIST_DELAY_MS = 400;
+
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
 const isDevelopment = Boolean(developmentUrl);
@@ -127,6 +169,20 @@ function reportStartupMilestone(name: string): void {
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+/**
+ * The non-macOS tray menu, kept so the dismissal probe can open the real menu
+ * rather than a copy of it. Null on macOS, which pops its own menu on
+ * right-click. See scripts/linux-tray-menu-probe.sh.
+ */
+let trayMenu: Menu | null = null;
+/**
+ * Whether a status-area icon actually exists. On Linux the tray is provided by
+ * libappindicator over StatusNotifierItem and can fail outright on a desktop
+ * without it; the flag then decides whether closing the window may hide the app
+ * or must quit it, because a hidden window with no tray has no way back.
+ */
+let trayActive = false;
+let windowBoundsTimer: NodeJS.Timeout | null = null;
 let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
 let isQuitting = false;
@@ -219,6 +275,20 @@ function startPeriodicUpdateChecks(): void {
 }
 
 /**
+ * Where the downloaded installer and its hand-off script are written.
+ *
+ * macOS and Windows keep using the OS temp directory. Linux does not: `/tmp` is
+ * frequently a `tmpfs` (so a 100-200 MB AppImage is held in RAM) and is
+ * sometimes mounted `noexec`, which would make the hand-off script impossible
+ * to run at all. `userData` is on disk, is already per-user (0700), and is where
+ * the update is going to be needed anyway.
+ */
+function updateHandoffDirectory(): string {
+  if (process.platform !== "linux") return app.getPath("temp");
+  return join(app.getPath("userData"), "updates");
+}
+
+/**
  * Hand the verified downloaded installer over to the platform. On Windows a
  * generated `.cmd` hand-off script is opened through ShellExecute
  * (`shell.openPath`), which starts the silent installer with its UAC prompt;
@@ -243,8 +313,12 @@ async function restartToInstallNow(): Promise<{ started: boolean }> {
     processId: process.pid,
     // The macOS script refuses to install a build older than this one.
     currentVersion: manager.state.latestVersion ?? app.getVersion(),
-    tempDirectory: app.getPath("temp"),
+    tempDirectory: updateHandoffDirectory(),
+    // Inside an AppImage `execPath` is the ephemeral mount point, so the file
+    // to replace is the one the user actually launched.
+    ...(process.env.APPIMAGE ? { appImagePath: process.env.APPIMAGE } : {}),
     openPathFn: (path) => shell.openPath(path),
+    showItemInFolderFn: (path) => shell.showItemInFolder(path),
   });
   if (!result.launched) {
     console.error(
@@ -262,6 +336,15 @@ async function restartToInstallNow(): Promise<{ started: boolean }> {
     // bundle, and the manual flow shows the mounted volume.
     isQuitting = true;
     app.quit();
+  } else if (
+    process.platform === "linux" &&
+    result.method === "linux-appimage-swap"
+  ) {
+    // An AppImage cannot overwrite itself while it is running, so the swap
+    // script waits for this pid — which means the app has to actually exit.
+    // Only for the swap method: the package and manual flows keep running.
+    isQuitting = true;
+    app.quit();
   }
   return { started: true };
 }
@@ -273,17 +356,38 @@ let currentPreferences: LocalePreferences = {
   currencySource: "fallback",
 };
 
+/**
+ * Force the artwork variant, e.g. when a panel's background disagrees with the
+ * reported theme. Written as `light` or `dark`.
+ *
+ * Linux panels are the reason this exists: a panel can be light while the GTK
+ * theme reports dark, or the reverse, and no heuristic can see the panel. The
+ * value is ignored outside Linux, so macOS and Windows keep their behaviour.
+ */
+const ICON_APPEARANCE_OVERRIDE_ENV = "AITRACKER_ICON_APPEARANCE";
+
+function forcedIconAppearance(): NativeIconAppearance | null {
+  if (process.platform !== "linux") return null;
+  const override =
+    process.env[ICON_APPEARANCE_OVERRIDE_ENV]?.trim().toLowerCase();
+  return override === "light" || override === "dark" ? override : null;
+}
+
 function nativeIconAppearance(): NativeIconAppearance {
-  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+  return (
+    forcedIconAppearance() ??
+    (nativeTheme.shouldUseDarkColors ? "dark" : "light")
+  );
 }
 
 function nativeSystemIconAppearance(): NativeIconAppearance {
   // Windows lets the taskbar stay dark while application windows are light.
-  const useDarkColors =
-    process.platform === "win32"
-      ? nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
-      : nativeTheme.shouldUseDarkColors;
-  return useDarkColors ? "dark" : "light";
+  if (process.platform === "win32") {
+    return nativeTheme.shouldUseDarkColorsForSystemIntegratedUI
+      ? "dark"
+      : "light";
+  }
+  return nativeIconAppearance();
 }
 
 function nativeIconLocationInput() {
@@ -390,7 +494,44 @@ function assertTrustedSender(event: IpcMainInvokeEvent): void {
   }
 }
 
+/**
+ * Linux autostart lives in `$XDG_CONFIG_HOME/autostart`, not in the login-item
+ * API. `app.getPath("home")` is safe to call before `whenReady()`, but the
+ * environment's `HOME` is what the session actually launched us with, so it
+ * wins when present.
+ */
+function linuxAutostartOptions() {
+  return {
+    env: process.env,
+    homeDirectory: process.env.HOME || app.getPath("home"),
+    execPath: process.execPath,
+    devArguments: isDevelopment ? [app.getAppPath()] : [],
+  } as const;
+}
+
+/**
+ * Whether the autostart directory is writable. Probed once before the tray is
+ * built; an unwritable `~/.config` means the switch is hidden rather than shown
+ * as a control that cannot work.
+ */
+let linuxAutostartSupported: boolean | null = null;
+
+async function probeLinuxAutostart(): Promise<void> {
+  if (process.platform !== "linux" || linuxAutostartSupported != null) return;
+  linuxAutostartSupported = await probeLinuxAutostartSupported(
+    linuxAutostartOptions(),
+  );
+}
+
 function getAutoLaunchState(): AutoLaunchState {
+  if (process.platform === "linux") {
+    return {
+      enabled:
+        linuxAutostartSupported === true &&
+        readLinuxAutostartEnabled(linuxAutostartOptions()),
+      supported: linuxAutostartSupported === true,
+    };
+  }
   const supported =
     process.platform === "darwin" || process.platform === "win32";
   return {
@@ -405,6 +546,21 @@ function setAutoLaunch(enabled: boolean): AutoLaunchState {
   const currentState = getAutoLaunchState();
   if (!currentState.supported) {
     return currentState;
+  }
+
+  if (process.platform === "linux") {
+    // Synchronous API surface, asynchronous implementation: rebuild the menu
+    // once the entry is on disk so the checkbox reflects the real state.
+    void writeLinuxAutostartEnabled(enabled, linuxAutostartOptions()).then(
+      () => {
+        try {
+          rebuildTray();
+        } catch (error) {
+          console.warn("AITracker tray was not rebuilt", error);
+        }
+      },
+    );
+    return { enabled, supported: true };
   }
 
   app.setLoginItemSettings({
@@ -1153,7 +1309,14 @@ async function applyPreferences(prefs: Record<string, unknown>): Promise<void> {
   const resolved = resolveDesktopPreferences(prefs, app.getLocale());
   const localeChanged = resolved.locale !== currentPreferences.locale;
   currentPreferences = resolved;
-  if (localeChanged) rebuildTray();
+  if (localeChanged) {
+    // A language switch must never fail the preference write it arrived with.
+    try {
+      rebuildTray();
+    } catch (error) {
+      console.warn("AITracker tray was not rebuilt", error);
+    }
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(desktopIpc.localeChanged, resolved.locale);
     mainWindow.webContents.send(desktopIpc.preferencesChanged, resolved);
@@ -1166,10 +1329,8 @@ async function applyPreferences(prefs: Record<string, unknown>): Promise<void> {
 
 /** Load the native Windows ICO or the transparent macOS template with Retina pixels. */
 function loadNativeTrayIcon(): Electron.NativeImage | string {
-  const trayIconPath = findTrayIconPath(
-    nativeIconLocationInput(),
-    nativeSystemIconAppearance(),
-  );
+  const appearance = nativeSystemIconAppearance();
+  const trayIconPath = findTrayIconPath(nativeIconLocationInput(), appearance);
   if (!trayIconPath) {
     throw new Error(
       "Native tray icons are missing; run npm run generate:native-icons",
@@ -1191,7 +1352,202 @@ function loadNativeTrayIcon(): Electron.NativeImage | string {
     }
     trayIcon.setTemplateImage(true);
   }
+  if (process.platform === "linux") {
+    // StatusNotifierItem panels draw at 22–24px and at 2× on HiDPI. The 22px
+    // bitmap is the icon itself; the 44px one is its 2× representation.
+    const retinaIconPath = findLinuxTrayRetinaIconPath(
+      nativeIconLocationInput(),
+      appearance,
+    );
+    if (retinaIconPath) {
+      trayIcon.addRepresentation({
+        scaleFactor: 2,
+        buffer: readFileSync(retinaIconPath),
+      });
+    }
+  }
   return trayIcon;
+}
+
+/**
+ * Opt-in hook that opens the tray menu so its dismissal can be tested.
+ *
+ * A synthetic right-click does not work here: the menu is bound to the tray's own
+ * window, and `xdotool` events sent to that window do not reach the handler, so
+ * the menu never opens and the probe reports a false failure. Opening it from
+ * inside the app is the only way to exercise the real menu.
+ *
+ * Gated on an environment variable that nothing sets in normal use, so this is
+ * inert in production.
+ */
+const TRAY_MENU_PROBE_ENV = "AITRACKER_TRAY_MENU_PROBE";
+
+function trayMenuProbeRequested(): boolean {
+  const value = process.env[TRAY_MENU_PROBE_ENV]?.trim().toLowerCase();
+  return process.platform === "linux" && (value === "1" || value === "true");
+}
+
+/**
+ * Write a probe observation to the file named by AITRACKER_TRAY_MENU_PROBE_REPORT.
+ *
+ * A file rather than stdout because the relaunched process is not connected to the
+ * caller's log: when the X11 relaunch happens — the normal case for a tray icon —
+ * everything this hook printed went nowhere, which is what made an earlier probe
+ * look like the hook had never run.
+ */
+function probeReport(message: string): void {
+  const target = process.env.AITRACKER_TRAY_MENU_PROBE_REPORT;
+  const line = `${new Date().toISOString()} ${message}\n`;
+  process.stdout.write(`AITracker tray menu probe: ${message}\n`);
+  if (!target) return;
+  try {
+    appendFileSync(target, line);
+  } catch {
+    // The probe is a diagnostic; a failed write must not affect the app.
+  }
+}
+
+function scheduleTrayMenuProbe(): void {
+  // Wait for the tray's window to be adopted by the desktop shell, and read that
+  // from X11 rather than from `tray.getBounds()`.
+  //
+  // `getBounds()` reports 0,0,0,0 on this Electron build even when the icon is
+  // visible in the panel and the shell has positioned its window — measured on a
+  // session where the icon was on screen and its window sat at 1327,6 while
+  // `getBounds()` still returned the origin. Gating on it therefore skipped the
+  // menu on every run, including runs where there was a menu to open.
+  const deadline = Date.now() + 20_000;
+  let attempts = 0;
+  const waitForTray = (): void => {
+    attempts += 1;
+    const placed = trayWindowPosition();
+    if (placed === null && Date.now() < deadline) {
+      setTimeout(waitForTray, 500);
+      return;
+    }
+    if (placed === null) {
+      // Opening a menu with nowhere to attach it shows nothing at all, so report
+      // and stop instead of waiting out the clock.
+      probeReport(
+        `tray window was never placed after ${attempts} checks; skipping the menu`,
+      );
+      return;
+    }
+    probeReport(
+      `tray window at ${placed.x},${placed.y} after ${attempts} checks`,
+    );
+    openProbeMenu(placed);
+  };
+  setTimeout(waitForTray, 1_000);
+}
+
+/**
+ * Where the desktop shell put the tray icon, or null when it has not adopted it.
+ *
+ * The position is the one thing that distinguishes "the icon is in the panel" from
+ * "the window exists but nothing has claimed it": the window is created at the
+ * origin and only moves once a tray host takes it. Read through `xwininfo` because
+ * the tray window belongs to GTK.
+ */
+function trayWindowPosition(): { x: number; y: number } | null {
+  const id = probeTrayWindowId();
+  if (id === null) return null;
+  try {
+    const info = execFileSync("xwininfo", ["-id", id], {
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    const x = Number(info.match(/Absolute upper-left X:\s*(-?\d+)/u)?.[1]);
+    const y = Number(info.match(/Absolute upper-left Y:\s*(-?\d+)/u)?.[1]);
+    const mapped = /Map State:\s*IsViewable/u.test(info);
+    if (!mapped || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (x === 0 && y === 0) return null;
+    return { x, y };
+  } catch {
+    return null;
+  }
+}
+
+/** The tray glyph's own window id, which is the small mapped one. */
+function probeTrayWindowId(): string | null {
+  try {
+    const tree = execFileSync("xwininfo", ["-root", "-tree"], {
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    return (
+      tree
+        .split("\n")
+        .find(
+          (entry: string) =>
+            entry.includes('"aitracker"') && /\b(16|22)x(16|22)\b/u.test(entry),
+        )
+        ?.trim()
+        .match(/^(0x[0-9a-f]+)/u)?.[1] ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+function openProbeMenu(position: { x: number; y: number }): void {
+  setTimeout(() => {
+    if (!trayMenu || !tray) return;
+    probeReport("opening the tray menu");
+    tray.popUpContextMenu(trayMenu, {
+      x: Math.round(position.x),
+      y: Math.round(position.y),
+    });
+    // Report the popup's window id, if X11 can see it. The probe needs a concrete
+    // target to watch: identifying the menu by size or by name from outside is
+    // guesswork, and guessing is how an earlier version of the probe reported a
+    // false failure.
+    setTimeout(() => {
+      const id = probeMenuWindowId();
+      probeReport(
+        id === null
+          ? // Not a failure: under a StatusNotifierItem host the menu is rendered
+            // by the desktop shell from `com.canonical.dbusmenu` over D-Bus, so
+            // there is no window of ours to find. Measured on GNOME 50 with the
+            // menu visibly open: the only app windows are the tray glyph, the
+            // tooltip and the main window. Dismissal therefore belongs to the
+            // shell, and an outside click cannot be tested from inside the app.
+            "menu requested; it is rendered by the desktop shell, so no window of ours exists to observe"
+          : `menu window ${id}`,
+      );
+    }, 1_500);
+  }, 4_000);
+}
+
+/**
+ * Find the mapped popup the tray menu just opened, so the probe can watch that
+ * exact window instead of guessing which window is the menu.
+ *
+ * Read from `xwininfo` rather than from Electron: the menu is a native GTK popup
+ * owned by the tray, and Electron exposes no handle for it. A missing `xwininfo`,
+ * or a Wayland session with no X11 windows at all, simply yields null and the
+ * probe falls back to reporting that it could not observe the menu.
+ */
+function probeMenuWindowId(): string | null {
+  try {
+    const tree = execFileSync("xwininfo", ["-root", "-tree"], {
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    // Menu windows are named after the app but are neither the tray glyph nor the
+    // main window, and they are mapped while open.
+    const line = tree
+      .split("\n")
+      .find(
+        (entry: string) =>
+          entry.includes('"aitracker"') &&
+          !/\b(10|16|22)x(10|16|22)\b/u.test(entry) &&
+          !entry.includes("Dashboard"),
+      );
+    return line?.trim().match(/^(0x[0-9a-f]+)/u)?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Rebuild the tray and localized menu after language or preference changes. */
@@ -1205,6 +1561,11 @@ function rebuildTray(): void {
       autoLaunchSupported: autoLaunch.supported,
     },
     {
+      // Window entries matter most where the tray click is unreliable: under
+      // libappindicator the activation event is usually consumed by the menu,
+      // so without these a GNOME user has no way back to the window.
+      onOpenDashboard: () => openMainWindowRoute("/"),
+      onOpenSettings: () => openMainWindowRoute("/settings", "menu-bar-app"),
       onToggleAutoLaunch: (checked) => {
         setAutoLaunch(checked);
       },
@@ -1216,7 +1577,16 @@ function rebuildTray(): void {
   );
 
   if (tray) tray.destroy();
-  tray = new Tray(trayIcon);
+  try {
+    tray = new Tray(trayIcon);
+  } catch (error) {
+    // `new Tray` throws outright when no StatusNotifier watcher is running.
+    tray = null;
+    trayActive = false;
+    console.warn("AITracker tray unavailable", error);
+    return;
+  }
+  trayActive = true;
   tray.setToolTip(electronMessages[currentPreferences.locale].tray.tooltip);
   if (process.platform === "darwin") {
     // Use the persisted last-known compact summary immediately. A new install
@@ -1234,9 +1604,11 @@ function rebuildTray(): void {
     );
     tray.on("right-click", () => tray?.popUpContextMenu(macMenu));
   } else {
-    tray.setContextMenu(
-      Menu.buildFromTemplate(template as Electron.MenuItemConstructorOptions[]),
+    trayMenu = Menu.buildFromTemplate(
+      template as Electron.MenuItemConstructorOptions[],
     );
+    tray.setContextMenu(trayMenu);
+    if (trayMenuProbeRequested()) scheduleTrayMenuProbe();
   }
   tray.on("click", (_event, bounds) => {
     if (process.platform === "darwin") {
@@ -1247,14 +1619,83 @@ function rebuildTray(): void {
   });
 }
 
+/**
+ * Read the last persisted main-window rectangle.
+ *
+ * Best effort by design: a preference read failure or a malformed value must
+ * fall back to the default rectangle, never block startup.
+ */
+async function readStoredWindowBounds(): Promise<WindowRectangle | null> {
+  if (!desktopStateBroker) return null;
+  try {
+    const stored = await desktopStateBroker.preferences();
+    return parseStoredWindowBounds(stored[WINDOW_BOUNDS_PREF_KEY]);
+  } catch (error) {
+    console.warn("AITracker window bounds unavailable", error);
+    return null;
+  }
+}
+
+/**
+ * Persist the window rectangle, debounced.
+ *
+ * `resize`/`move` fire continuously while dragging; writing each event would
+ * queue a preference request per frame.
+ */
+function scheduleWindowBoundsPersist(window: BrowserWindow): void {
+  if (windowBoundsTimer) clearTimeout(windowBoundsTimer);
+  windowBoundsTimer = setTimeout(() => {
+    windowBoundsTimer = null;
+    persistWindowBounds(window);
+  }, WINDOW_BOUNDS_PERSIST_DELAY_MS);
+}
+
+/**
+ * Write the current rectangle now, unless the window is in a transient state
+ * whose geometry is not the user's chosen one.
+ */
+function persistWindowBounds(window: BrowserWindow): void {
+  if (window.isDestroyed() || window.isMinimized()) return;
+  // Maximized/full-screen geometry is the screen, not the size the user picked;
+  // storing it would make "restore" a no-op on the next launch.
+  if (window.isMaximized() || window.isFullScreen()) return;
+  const bounds = window.getBounds();
+  void desktopStateBroker
+    ?.setPreference(WINDOW_BOUNDS_PREF_KEY, bounds)
+    .catch((error: unknown) =>
+      console.warn("AITracker window bounds were not persisted", error),
+    );
+}
+
+/** Flush a debounced rectangle before the app exits. */
+function flushWindowBoundsPersist(): void {
+  if (windowBoundsTimer) {
+    clearTimeout(windowBoundsTimer);
+    windowBoundsTimer = null;
+  }
+  if (mainWindow) persistWindowBounds(mainWindow);
+}
+
 async function createMainWindow(): Promise<void> {
-  const mainWindowSize = resolveMainWindowSize();
+  const display = screen.getPrimaryDisplay();
+  const geometry = resolveMainWindowGeometry({
+    stored: await readStoredWindowBounds(),
+    workArea: display.workArea,
+  });
   mainWindow = new BrowserWindow({
-    ...mainWindowSize,
+    ...geometry,
     icon: currentAppIconPath() ?? undefined,
-    // Borderless + self-drawn title bar: Hide the system's native title bar and window buttons, and the rendering process
-    // Provides a theme-consistent dark title bar (macOS retains native traffic light buttons).
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    // Borderless + self-drawn title bar: hide the system's native title bar and
+    // window buttons; the renderer draws a theme-consistent bar instead (macOS
+    // keeps its native traffic lights through `hiddenInset`).
+    //
+    // `titleBarStyle` is a macOS/Windows option and is IGNORED on Linux, where
+    // only `frame: false` removes the decorations. Relying on `titleBarStyle`
+    // alone left Linux with the GTK header bar AND this app's own 36px bar —
+    // two title bars and two sets of minimize/maximize/close buttons.
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hiddenInset" as const }
+      : { frame: false }),
     autoHideMenuBar: true,
     // Show window immediately (dark background to avoid white screen flickering): the first complete scan may take a long time,
     // Waiting for ready-to-show will make the user think that the application has not started.
@@ -1288,6 +1729,14 @@ async function createMainWindow(): Promise<void> {
   };
   mainWindow.on("maximize", () => broadcastMaximized(true));
   mainWindow.on("unmaximize", () => broadcastMaximized(false));
+  // Remember the user's rectangle. Only a settled, non-maximized window is
+  // stored, so reopening restores the size the user actually chose.
+  mainWindow.on("resize", () => {
+    if (mainWindow) scheduleWindowBoundsPersist(mainWindow);
+  });
+  mainWindow.on("move", () => {
+    if (mainWindow) scheduleWindowBoundsPersist(mainWindow);
+  });
   mainWindow.on("close", (event) => {
     if (!shouldHideWindowOnClose(isQuitting)) return;
     event.preventDefault();
@@ -1395,6 +1844,101 @@ async function confirmReleaseDataReset(): Promise<boolean> {
   return response === 0;
 }
 
+// Decide the Chromium sandbox before anything else. With the sandbox unusable,
+// Electron does not warn and continue: the browser process aborts before a
+// window exists, so the user gets no window, no dialog and a stale
+// single-instance lock. Selecting the fallback here — and saying so on stderr,
+// because there is no UI yet — is the only place this can be handled.
+if (process.platform === "linux") {
+  if (sandboxDisabledByEnvironment(process.env)) {
+    console.warn(
+      "AITracker: ELECTRON_DISABLE_SANDBOX=1 is set; the Chromium sandbox is off by explicit request.",
+    );
+  } else if (
+    !canUseLinuxChromiumSandbox({
+      platform: process.platform,
+      executableDirectory: executableDirectoryOf(process.execPath),
+      isPackaged: app.isPackaged,
+    })
+  ) {
+    // Chromium reads this switch from the command line. Disabling it is worse
+    // than keeping it, so it only happens when the probe could prove both the
+    // SUID helper and unprivileged user namespaces are unusable — otherwise the
+    // app would not start at all.
+    app.commandLine.appendSwitch(NO_SANDBOX_SWITCH);
+    console.warn(
+      "AITracker: the Chromium sandbox is unavailable on this system " +
+        "(no usable chrome-sandbox helper and unprivileged user namespaces are disabled), " +
+        "so it has been disabled to let the app start. Install the .deb package, or run the " +
+        "AppImage with --appimage-extract-and-run, to restore it.",
+    );
+  }
+}
+
+// Make sure the tray icon can exist. Electron's Linux tray creates a
+// GtkStatusIcon, which only ever gets an XEmbed window under X11, and XWayland
+// provides the `_NET_SYSTEM_TRAY_S<n>` selection owner it docks against. Under
+// native Wayland Electron registers nothing usable, so the tray simply does not
+// exist. Measured with scripts/linux-tray-probe.sh: with the X11 argument the
+// 16x16 icon appears in the panel strip within 2s; without it, never.
+//
+// This has to happen before Chromium starts, and `appendSwitch` from here is too
+// late, so the process replaces itself with one that has the argument. The
+// single-instance lock is deliberately taken afterwards: an early `app.quit()`
+// would otherwise release it while the replacement is still starting.
+if (
+  process.platform === "linux" &&
+  shouldPreferX11Backend({
+    platform: process.platform,
+    env: process.env,
+    trayEnabled: true,
+    xwaylandAvailable: () => xwaylandLooksAvailable(),
+  }) &&
+  !process.argv.some((arg) => arg.startsWith("--ozone-platform"))
+) {
+  // RelaunchOptions has no `env` field, and `app.relaunch()` does not carry the
+  // environment across; the argument-plan builder explains why the Ozone choice
+  // and the environment both have to travel this way.
+  const args = planX11Relaunch({
+    platform: process.platform,
+    env: process.env,
+    trayEnabled: true,
+    xwaylandAvailable: () => xwaylandLooksAvailable(),
+    argv: process.argv,
+    inheritedEnvironment: inheritedAppEnvironment({ env: process.env }),
+  });
+  if (args) {
+    process.env[X11_RELAUNCH_ENV] = "1";
+    app.relaunch({
+      args: [...args],
+    });
+    console.info(
+      "AITracker: restarting on the X11 (XWayland) backend so the tray icon works. " +
+        `${NATIVE_WAYLAND_ENV}=1 prefers native Wayland instead, without a tray icon.`,
+    );
+    app.exit(0);
+  }
+  app.exit(0);
+}
+
+// Must run before the single-instance lock and before any window exists.
+// `setDesktopName` is what makes the Wayland `app_id` / X11 `WM_CLASS` match the
+// `.desktop` file electron-builder installs (linux.desktop.entry in
+// electron-builder.yml). Without it Electron uses a hyphenated slug of the app
+// name, so the taskbar shows a generic icon, windows do not group, and
+// xdg-desktop-portal can refuse to open a directory picker for an app id it
+// cannot resolve. Harmless on macOS and Windows, where the call is ignored.
+app.setDesktopName(APP_DESKTOP_NAME);
+
+// Variables the relaunch had to pass through the command line, applied before
+// anything reads them. See planX11Relaunch for why they cannot simply be
+// inherited.
+for (const [key, value] of Object.entries(
+  consumeRelaunchEnvironment(process.argv),
+)) {
+  process.env[key] = value;
+}
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -1404,9 +1948,16 @@ if (!hasSingleInstanceLock) {
     isQuitting = true;
   });
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-      mainWindow = null;
+    if (process.platform === "darwin") return;
+    // A status-area icon is the only way back to a hidden window. With no tray
+    // the app would keep running invisibly and holding the single-instance
+    // lock, so a later launch would appear to do nothing. Quit instead.
+    if (process.platform === "linux" && !trayActive) {
+      isQuitting = true;
+      app.quit();
+      return;
     }
+    mainWindow = null;
   });
   app.on("activate", () => {
     if (mainWindow) {
@@ -1416,6 +1967,9 @@ if (!hasSingleInstanceLock) {
     }
   });
   app.on("will-quit", () => {
+    // A rectangle the user moved moments before quitting is still inside the
+    // debounce window; write it out before the preference store goes away.
+    flushWindowBoundsPersist();
     if (automaticUpdateTimer) {
       clearInterval(automaticUpdateTimer);
       automaticUpdateTimer = null;
@@ -1472,13 +2026,22 @@ if (!hasSingleInstanceLock) {
       nativeTheme.on("updated", () => {
         applyNativeAppIcon();
         // Updating in place preserves tray position and any open context menu.
-        if (tray) tray.setImage(loadNativeTrayIcon());
+        if (!tray) return;
+        try {
+          tray.setImage(loadNativeTrayIcon());
+        } catch (error) {
+          console.warn("AITracker tray icon was not updated", error);
+        }
       });
       app.on("activate", () => {
         if (mainWindow && !mainWindow.isDestroyed()) showMainWindow();
         else void createMainWindow();
       });
       reportStartupMilestone("electron-ready");
+      // Linux "Launch at Login" is an XDG autostart entry, not a login item.
+      // Probing the config directory first keeps the tray and Settings from
+      // offering a switch that cannot write.
+      await probeLinuxAutostart();
       powerMonitor.on("suspend", suspendAutomaticSecurityScan);
       powerMonitor.on("resume", resumeAutomaticSecurityScan);
       // Resolve the same interactive user's home in packaged builds. The explicit
@@ -1626,7 +2189,15 @@ if (!hasSingleInstanceLock) {
       currentTrayTitle = persistedTrayState.title;
       await securityScanner.recoverInterruptedRuns();
       registerIpcHandlers();
-      rebuildTray();
+      try {
+        rebuildTray();
+      } catch (error) {
+        // A missing or unreadable icon set must not abort startup: the window
+        // is already usable, and the user can still reach it. `trayActive`
+        // stays false, so closing the window quits on Linux instead of leaving
+        // a process with no way back.
+        console.warn("AITracker tray was not created", error);
+      }
       // Let the renderer own the first document request. A second hidden SSR
       // request duplicates route-loader, hydration, and SQLite work precisely
       // when the visible page needs those resources most.

@@ -14,6 +14,7 @@ import {
 } from "../../../../components/ui/dialog";
 import { toUiError } from "../../../../lib/errors";
 import { useI18n } from "../../../../lib/i18n/context";
+import { usePlatform } from "../../../../lib/platform";
 import { getToolDataDirectory, setToolDataDirectory } from "../server-fns";
 import type { SourcesQueryEntry } from "./model";
 
@@ -51,6 +52,12 @@ export function DataDirectoryModal({
   onSaved: () => void | Promise<void>;
 }) {
   const { t } = useI18n();
+  const { platform } = usePlatform();
+  // GTK's file chooser reveals hidden folders with Ctrl+H; macOS uses ⌘⇧.
+  const revealHint =
+    platform === "macos"
+      ? { mod: "⌘", reveal: "⇧." }
+      : { mod: "Ctrl", reveal: "H" };
   const picker = desktopDirectoryPicker();
   const [current, setCurrent] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -149,7 +156,7 @@ export function DataDirectoryModal({
               />
             </div>
             <p className="text-[11px] text-muted-foreground/70">
-              {t("sources.dataDir.manualHint")}
+              {t("sources.dataDir.manualHint", revealHint)}
             </p>
           </div>
         </div>

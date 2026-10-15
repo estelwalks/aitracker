@@ -332,13 +332,157 @@ test("macOS hand-off opens the image when the app is not inside a bundle", async
   assert.equal(calls[0]!.command, "/usr/bin/open");
 });
 
+const linuxInstallerPath =
+  "/home/me/.cache/aitracker/updates/AITracker-Linux-x64.AppImage";
+const linuxAppImagePath = "/home/me/Applications/AITracker.AppImage";
+
+/** Injected fs seams: the test never touches the real filesystem. */
+function linuxSeams(overrides: Record<string, unknown> = {}) {
+  return {
+    chmodFn: async () => undefined,
+    accessFn: async () => undefined,
+    writeFileFn: async () => undefined,
+    ...overrides,
+  };
+}
+
 test("a spawning failure reports the reason without throwing", async () => {
+  // A non-Linux platform with no hand-off of its own still uses the generic
+  // tail, which is where an async spawn failure has to be reported.
   const result = await handOffInstaller({
-    platform: "linux",
-    installerPath: "/tmp/aitracker.AppImage",
+    platform: "freebsd" as NodeJS.Platform,
+    installerPath: "/tmp/aitracker.pkg",
     spawnFn: () => {
       throw new Error("ENOENT");
     },
   });
   assert.deepEqual(result, { launched: false, reason: "ENOENT" });
+});
+
+test("Linux AppImage hand-off arms an in-place swap and reports it", async () => {
+  const { calls, spawnFn } = recordingSpawn();
+  const written: { path: string; body: string; mode?: number }[] = [];
+  const result = await handOffInstaller({
+    platform: "linux",
+    installerPath: linuxInstallerPath,
+    appImagePath: linuxAppImagePath,
+    processId: 4242,
+    spawnFn,
+    ...linuxSeams({
+      writeFileFn: async (
+        path: string,
+        body: string,
+        options?: { mode?: number },
+      ) => {
+        written.push({ path, body, mode: options?.mode });
+      },
+    }),
+  });
+
+  assert.deepEqual(result, { launched: true, method: "linux-appimage-swap" });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.command, "/bin/sh");
+  // The script must be executable, or the hand-off cannot run at all.
+  assert.equal(written.length, 1);
+  assert.equal(written[0]!.mode, 0o755);
+  // It swaps THIS file, not the ephemeral mount point `process.execPath` names.
+  assert.match(written[0]!.body, /Applications\/AITracker\.AppImage/u);
+  assert.match(written[0]!.body, /kill -0 4242/u);
+});
+
+test("Linux AppImage hand-off still checks the file is runnable first", async () => {
+  // The download is written 0644, so an ignored chmod would surface later as a
+  // silent no-op. Every failure must be reported BEFORE `launched: true`.
+  let spawned = false;
+  const result = await handOffInstaller({
+    platform: "linux",
+    installerPath: linuxInstallerPath,
+    appImagePath: linuxAppImagePath,
+    spawnFn: () => {
+      spawned = true;
+      return {
+        unref() {},
+        on() {
+          return this;
+        },
+      };
+    },
+    ...linuxSeams({
+      accessFn: async () => {
+        throw new Error("EACCES");
+      },
+    }),
+  });
+  assert.equal(result.launched, false);
+  assert.match(result.reason ?? "", /not runnable/u);
+  assert.equal(spawned, false, "must not start a hand-off it cannot run");
+});
+
+test("Linux without an AppImage path falls back to revealing the file", async () => {
+  // Running from an unpacked directory: there is no file to swap, so starting
+  // the script would overwrite something the user did not launch.
+  const { calls, spawnFn } = recordingSpawn();
+  const revealed: string[] = [];
+  const result = await handOffInstaller({
+    platform: "linux",
+    installerPath: linuxInstallerPath,
+    spawnFn,
+    showItemInFolderFn: (path) => revealed.push(path),
+    ...linuxSeams(),
+  });
+  assert.deepEqual(result, { launched: true, method: "linux-manual" });
+  assert.equal(calls.length, 0);
+  assert.deepEqual(revealed, [linuxInstallerPath]);
+});
+
+test("Linux deb hand-off opens the system installer and never spawns", async () => {
+  const { calls, spawnFn } = recordingSpawn();
+  const opened: string[] = [];
+  const result = await handOffInstaller({
+    platform: "linux",
+    installerPath: "/home/me/Downloads/AITracker-Linux-x64.deb",
+    spawnFn,
+    openPathFn: async (path) => {
+      opened.push(path);
+      return "";
+    },
+    ...linuxSeams(),
+  });
+  assert.deepEqual(result, { launched: true, method: "linux-package-open" });
+  assert.deepEqual(opened, ["/home/me/Downloads/AITracker-Linux-x64.deb"]);
+  // Installing a distro package needs root; the app must not invoke anything
+  // that could escalate on the user's behalf.
+  assert.equal(calls.length, 0);
+});
+
+test("Linux deb hand-off falls back to revealing when the opener fails", async () => {
+  // `xdg-open` has no handler for a bare .deb on minimal distributions, and
+  // Electron reports that as a non-empty string rather than a rejection.
+  const revealed: string[] = [];
+  const result = await handOffInstaller({
+    platform: "linux",
+    installerPath: "/home/me/Downloads/AITracker-Linux-x64.deb",
+    openPathFn: async () => "no application to open this file",
+    showItemInFolderFn: (path) => revealed.push(path),
+    ...linuxSeams(),
+  });
+  assert.deepEqual(result, { launched: true, method: "linux-manual" });
+  assert.deepEqual(revealed, ["/home/me/Downloads/AITracker-Linux-x64.deb"]);
+});
+
+test("a Linux artifact with no install path is revealed, never spawned", async () => {
+  // `.tar.gz` is selectable by the updater's extension preference but has no
+  // install path, so it must not be handed to a script that would fail.
+  const { calls, spawnFn } = recordingSpawn();
+  const revealed: string[] = [];
+  const result = await handOffInstaller({
+    platform: "linux",
+    installerPath: "/home/me/Downloads/AITracker-Linux-x64.tar.gz",
+    spawnFn,
+    showItemInFolderFn: (path) => revealed.push(path),
+    ...linuxSeams(),
+  });
+  assert.deepEqual(result, { launched: true, method: "linux-manual" });
+  assert.equal(calls.length, 0);
+  assert.deepEqual(revealed, ["/home/me/Downloads/AITracker-Linux-x64.tar.gz"]);
 });

@@ -14,6 +14,7 @@ import { Link } from "@tanstack/react-router";
 
 import { BrandIcon } from "../../../../components/BrandIcon";
 import { useI18n } from "../../../../lib/i18n/context";
+import { modifierGlyph, usePlatform } from "../../../../lib/platform";
 import type { SegmentRef } from "../../contracts";
 import type { DistillationSessionItem } from "../index.ts";
 import { MaterialPicker } from "./MaterialDrawer.tsx";
@@ -369,6 +370,10 @@ export function DistillConfig({
   busy: boolean;
 }) {
   const { t, format } = useI18n();
+  // The run binding accepts meta or control on every platform; only the
+  // rendered hint used to hardcode "⌘", which is wrong off macOS.
+  const { platform } = usePlatform();
+  const mod = modifierGlyph(platform);
   const pickPreset = (id: string) => {
     const key = PROMPT_BY_PRESET[id as keyof typeof PROMPT_BY_PRESET];
     if (!key) return;
@@ -761,7 +766,7 @@ export function DistillConfig({
                   <textarea
                     value={promptText}
                     onChange={(event) => onPromptText(event.target.value)}
-                    placeholder={t("distill.proPromptPlaceholder")}
+                    placeholder={t("distill.proPromptPlaceholder", { mod })}
                     onKeyDown={(event) => {
                       if (
                         (event.metaKey || event.ctrlKey) &&
@@ -776,7 +781,10 @@ export function DistillConfig({
                     className="min-h-[76px] w-full resize-y rounded-lg bg-surface-2 px-3 py-2 pb-6 text-[12px] leading-6 outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-[var(--chart-1)]"
                   />
                   <span className="pointer-events-none absolute right-3 bottom-2 font-mono text-[9.5px] text-muted-foreground">
-                    {t("distill.promptCount", { count: promptText.length })}
+                    {t("distill.promptCount", {
+                      count: promptText.length,
+                      mod,
+                    })}
                   </span>
                 </div>
               </div>

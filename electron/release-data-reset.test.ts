@@ -170,9 +170,11 @@ test("development and unsupported-platform launches never clear data", async () 
       isPackaged: false,
       homeDirectory: "not-an-absolute-path",
     });
+    // Linux is a supported desktop platform now, so an unsupported one is
+    // needed to exercise the same guard.
     const unsupportedPlatform = await prepareReleaseDataReset({
       ...options,
-      platform: "linux",
+      platform: "freebsd" as NodeJS.Platform,
       homeDirectory: "also-not-absolute",
     });
     assert.equal(development.status, "not-applicable");
@@ -269,7 +271,36 @@ test("a declined reset writes the completion marker without deleting data", asyn
   }
 });
 
-test("declined-reset completion marker is a no-op off darwin/win32 or unpackaged", async () => {
+test("Linux is a supported reset platform, behind the same confirmation", async () => {
+  // A Linux user can already have ~/.aitracker from an earlier CLI install, and
+  // a pre-initial-schema-v1 database makes the forward-only migration check
+  // reject startup. Without Linux here that state has no recovery path — but the
+  // reset still has to be an explicit, user-confirmed action.
+  const { root, options } = await fixture();
+  try {
+    const target = join(options.homeDirectory, ".aitracker");
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, "retained.txt"), "safe");
+
+    const prepared = await prepareReleaseDataReset({
+      ...options,
+      platform: "linux",
+    });
+    // Linux is accepted, so the reset actually runs. The confirmation prompt
+    // lives in the caller (electron/main.ts) and already happened by this point;
+    // the platform gate here is only about whether the reset is applicable.
+    assert.notEqual(prepared.status, "not-applicable");
+
+    // The completion marker is honoured on Linux too, so a second launch does
+    // not offer the reset again.
+    await markReleaseDataResetComplete({ ...options, platform: "linux" });
+    assert.notEqual(await readReleaseDataResetMarker(options), null);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("declined-reset completion marker is a no-op on an unsupported platform or when unpackaged", async () => {
   const { root, options } = await fixture();
   try {
     const target = join(options.homeDirectory, ".aitracker");
@@ -277,7 +308,10 @@ test("declined-reset completion marker is a no-op off darwin/win32 or unpackaged
     await writeFile(join(target, "retained.txt"), "safe");
 
     await markReleaseDataResetComplete({ ...options, isPackaged: false });
-    await markReleaseDataResetComplete({ ...options, platform: "linux" });
+    await markReleaseDataResetComplete({
+      ...options,
+      platform: "freebsd" as NodeJS.Platform,
+    });
     assert.equal(await readReleaseDataResetMarker(options), null);
     assert.equal(await readFile(join(target, "retained.txt"), "utf8"), "safe");
   } finally {

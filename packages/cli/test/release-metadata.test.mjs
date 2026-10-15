@@ -54,7 +54,34 @@ test("validates the shared metadata contract and selects a platform", () => {
 test("rejects duplicate/missing platforms, invalid versions, hashes, sizes and channels", () => {
   const duplicate = validMetadata();
   duplicate.artifacts["linux-x64"] = duplicate.artifacts["darwin-arm64"];
-  assert.throws(() => validateReleaseMetadata(duplicate), /unknown platform/);
+  // linux-x64 is a recognised key, but a .dmg under it is a platform/extension
+  // mismatch — the key must not be a dumping ground for another platform's file.
+  assert.throws(
+    () => validateReleaseMetadata(duplicate),
+    /must use the \.AppImage or \.appimage extension/,
+  );
+
+  const unknownPlatform = validMetadata();
+  unknownPlatform.artifacts["freebsd-x64"] =
+    unknownPlatform.artifacts["darwin-x64"];
+  assert.throws(
+    () => validateReleaseMetadata(unknownPlatform),
+    /unknown platform/,
+  );
+
+  // A Linux-only companion document is valid: its four macOS/Windows keys are
+  // still required, and linux-x64 is additive.
+  const linuxCompanion = validMetadata();
+  linuxCompanion.artifacts["linux-x64"] = {
+    name: "AITracker-Linux-x64.AppImage",
+    url: goodUrl.replace("file.dmg", "AITracker-Linux-x64.AppImage"),
+    sha256: "a".repeat(64),
+    size: 1024,
+  };
+  assert.equal(
+    findArtifact(linuxCompanion, "linux", "x64").name,
+    "AITracker-Linux-x64.AppImage",
+  );
 
   const missing = validMetadata();
   delete missing.artifacts["win32-x64"];
@@ -99,7 +126,9 @@ test("accepts only the canonical GitHub Releases download host and path", () => 
   ]) {
     assert.throws(() => assertAllowedDownloadUrl(url));
   }
-  assert.throws(() => platformKey("linux", "x64"), /Unsupported platform/);
+  assert.equal(platformKey("linux", "x64"), "linux-x64");
+  assert.equal(platformKey("linux", "arm64"), "linux-arm64");
+  assert.throws(() => platformKey("freebsd", "x64"), /Unsupported platform/);
 });
 
 test("rejects unsafe artifact names and platform-mismatched extensions", () => {
