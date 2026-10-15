@@ -316,22 +316,30 @@ jobs:
           done
           xdpyinfo -display :99 >/dev/null
 
-      # Every step of this job runs as root, and Electron refuses to start as
-      # root without `--no-sandbox`:
-      #   FATAL:electron_main_delegate.cc: Running as root without --no-sandbox
-      #   is not supported.
-      # That is what failed all four X legs of the v1.0.6 assembly — no window
-      # ever appeared, so nothing downstream was asserted. Run the probe as an
-      # ordinary user instead of weakening the launch: that is the account a
-      # desktop user has, and it leaves the app's own Chromium sandbox probe to
-      # decide rather than pre-empting it with `--no-sandbox`.
+      # A container cannot satisfy Chromium's sandbox, and this job has to launch
+      # the app anyway. Two failures got here, one after the other:
+      #
+      #   * as root: `FATAL: Running as root without --no-sandbox is not
+      #     supported`;
+      #   * as an ordinary user: `FATAL:zygote_host_impl_linux.cc:207 Check
+      #     failed: . : Invalid argument (22)`, because the container's seccomp
+      #     profile denies the unprivileged user namespaces the zygote needs and
+      #     the installed `chrome-sandbox` is 0755 rather than SUID.
+      #
+      # So the probe drops privileges — a desktop user is not root, and the
+      # app's own state files are then exercised as that user — and takes the
+      # documented escape hatch for a sandbox-less environment,
+      # `ELECTRON_DISABLE_SANDBOX=1` (dev-docs/linux/01-架构决策.md §"SUID 无法
+      # 穿过 FUSE/squashfs 挂载"), since nothing else can start Chromium here.
+      # The sandbox decision itself is covered by the unit tests and by the
+      # real-machine probe, not by this container.
       - name: Run the installed-package runtime probe
         if: ${{ matrix.runtime_probe }}
         shell: bash
         run: |
           set -euo pipefail
           useradd --create-home --shell /bin/bash probe
-          su probe -c "bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768"
+          su probe -c "ELECTRON_DISABLE_SANDBOX=1 bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768"
 
       # A skipped launch is stated rather than implied: the packaging assertions
       # above still ran, but nothing in this leg proves the app starts.

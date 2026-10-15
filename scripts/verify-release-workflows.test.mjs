@@ -64,7 +64,7 @@ const RELEASE_WORKFLOW_BODY = [
   "        shell: bash",
   "        run: |",
   "          useradd --create-home --shell /bin/bash probe",
-  '          su probe -c "bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768"',
+  '          su probe -c "ELECTRON_DISABLE_SANDBOX=1 bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768"',
   "",
 ].join("\n");
 
@@ -103,12 +103,18 @@ const RELEASE_WORKFLOW_WITHOUT_EPEL = RELEASE_WORKFLOW_BODY.replace(
   "",
 );
 
-// The v1.0.6 launch failure: every step of the job runs as root, and Electron
-// refuses to start as root without `--no-sandbox`, so no window ever appeared.
+// The v1.0.6 launch failures, one after the other: as root Electron refuses
+// outright, and as an ordinary user in a container the zygote still cannot get
+// unprivileged user namespaces, so the sandbox has to be given up explicitly.
 const RELEASE_WORKFLOW_PROBE_AS_ROOT = RELEASE_WORKFLOW_BODY.replace(
   "          useradd --create-home --shell /bin/bash probe\n" +
-    '          su probe -c "bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768"\n',
+    '          su probe -c "ELECTRON_DISABLE_SANDBOX=1 bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768"\n',
   "          bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768\n",
+);
+
+const RELEASE_WORKFLOW_PROBE_SANDBOXED = RELEASE_WORKFLOW_BODY.replace(
+  "ELECTRON_DISABLE_SANDBOX=1 bash scripts/linux-runtime-probe.sh",
+  "bash scripts/linux-runtime-probe.sh",
 );
 
 const PUBLISH_WORKFLOW_BODY = [
@@ -249,9 +255,19 @@ test("launching the probe as root is reported", () => {
   const problems = inspectInstallSmokeSteps({
     workflow: RELEASE_WORKFLOW_PROBE_AS_ROOT,
   });
-  assert.equal(problems.length, 1);
+  // Both rules fire on this mutation: the app would run as root, and nothing
+  // gives up a sandbox that a container cannot provide.
+  assert.equal(problems.length, 2);
   assert.match(problems[0], /Running as root without --no-sandbox/u);
-  assert.match(problems[0], /su probe/u);
+  assert.match(problems[1], /ELECTRON_DISABLE_SANDBOX/u);
+});
+
+test("a privileged launch with the sandbox left on is reported", () => {
+  const problems = inspectInstallSmokeSteps({
+    workflow: RELEASE_WORKFLOW_PROBE_SANDBOXED,
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /zygote/u);
 });
 
 test("a dist-tag read with no retry is reported", () => {

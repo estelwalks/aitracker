@@ -124,11 +124,15 @@ npm run test:e2e:offline
   `dnf`/`apt` resolve the package's declared dependencies against those
   distributions' real repositories, the installed `.desktop` entry, its
   `StartupWMClass`, the hicolor icon set and the launcher are asserted, and the
-  app is launched under Xvfb — as an unprivileged user, because Electron refuses
-  to start as root without `--no-sandbox` and every step of the job runs as root.
-  The AlmaLinux 10 leg stops after the layout assertions and says so, because
-  RHEL 10 ships no `xorg-x11-server-Xvfb` (EPEL does not carry it either) and
-  therefore has no X server to launch under.
+  app is launched under Xvfb. The launch is the one place a container differs
+  from a desktop: it runs as an unprivileged user, because Electron refuses to
+  start as root, and it sets `ELECTRON_DISABLE_SANDBOX=1`, the documented escape
+  hatch, because the container denies the unprivileged user namespaces Chromium's
+  zygote needs while the installed `chrome-sandbox` is not SUID. The app's own
+  sandbox probe is therefore covered by the unit tests and the real-machine
+  probe, not by this matrix. The AlmaLinux 10 leg stops after the layout
+  assertions and says so, because RHEL 10 ships no `xorg-x11-server-Xvfb` (EPEL
+  does not carry it either) and therefore has no X server to launch under.
 - The RPM deliberately does not require `libXScrnSaver`: no repository in the
   RHEL 10 family ships it, and no binary in the payload has a `NEEDED` entry for
   `libXss.so.1`. Declaring it anyway makes the package uninstallable on that
