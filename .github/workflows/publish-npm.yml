@@ -86,11 +86,23 @@ jobs:
       # moved, which is the property every README and the generated release
       # notes depend on: `npx --yes @estelwalks/aitracker@latest` has to resolve
       # to this release.
+      #
+      # It runs whether or not this run published, so re-running the workflow
+      # for a tag npm already serves still verifies the tag. The registry can
+      # answer with the previous dist-tag for a few seconds after a successful
+      # `npm publish` (v1.0.6's run read `latest = 1.0.5` immediately after the
+      # publish exited 0), so the read is retried before it is treated as a
+      # failure.
       - name: Confirm the dist-tag follows this release
-        if: steps.existing.outputs.published == 'false'
         shell: bash
         run: |
-          resolved="$(npm view "@estelwalks/aitracker@${dist_tag}" version)"
+          resolved=""
+          for attempt in $(seq 1 8); do
+            resolved="$(npm view "@estelwalks/aitracker@${dist_tag}" version)"
+            if [[ "$resolved" == "$version" ]]; then break; fi
+            echo "attempt ${attempt}: ${dist_tag} still resolves to ${resolved}"
+            sleep 15
+          done
           if [[ "$resolved" != "$version" ]]; then
             echo "::error::dist-tag $dist_tag resolves to $resolved, not $version"
             exit 1
