@@ -9,6 +9,7 @@ import type {
   DesktopUpdateLifecycle,
 } from "./contracts.js";
 import { APP_REPO_URL } from "./app-config.js";
+import type { LinuxPackageFormat } from "./linux-package-format.js";
 
 const githubRepository = new URL(APP_REPO_URL);
 const githubPath = githubRepository.pathname.replace(/\/$/u, "");
@@ -50,6 +51,10 @@ const ARCH_ALIASES: Record<string, readonly string[]> = {
 interface GitHubAsset {
   name?: unknown;
   browser_download_url?: unknown;
+  /** Size in bytes, which the API reports for every uploaded asset. */
+  size?: unknown;
+  /** `sha256:<hex>` of the uploaded bytes, computed by GitHub. */
+  digest?: unknown;
 }
 
 interface GitHubRelease {
@@ -66,6 +71,13 @@ interface GitHubRelease {
 interface SelectedAsset {
   name: string;
   url: string;
+  /**
+   * GitHub's own size and sha256 for this asset, when the feed carries a usable
+   * pair. They are what makes an installer the release metadata does not record
+   * — the `.deb`/`.rpm` a distro install updates through — verifiable anyway.
+   */
+  size?: number;
+  sha256?: string;
 }
 
 export type UpdateChannel = "stable" | "beta";
@@ -95,6 +107,12 @@ export interface UpdateManagerOptions {
    * keeps flowing.
    */
   readonly downloadIdleTimeoutMs?: number;
+  /**
+   * Which distro package a `.deb`/`.rpm` install updates through, when the host
+   * is one. `null`/absent keeps the AppImage first, which is what every Linux
+   * host could always install by running it.
+   */
+  readonly preferredLinuxPackageFormat?: LinuxPackageFormat | null;
   readonly fetchFn?: typeof fetch;
   readonly writeFileFn?: (path: string, data: Uint8Array) => Promise<void>;
   readonly mkdirFn?: (path: string) => Promise<void>;
@@ -558,14 +576,51 @@ function metadataDocumentNames(platform: NodeJS.Platform): readonly string[] {
     : [RELEASE_METADATA_NAME];
 }
 
-function extensionsFor(platform: NodeJS.Platform): readonly string[] {
+/**
+ * Installer extensions this platform accepts, most preferred first.
+ *
+ * A build installed from a distro package updates through its own software
+ * centre, which can only open the format its package manager understands — so
+ * for those installs the matching package is preferred and the AppImage stays
+ * as the fallback for a release that does not publish it.
+ */
+function extensionsFor(
+  platform: NodeJS.Platform,
+  preferredPackageFormat?: LinuxPackageFormat | null,
+): readonly string[] {
   if (platform === "darwin") return [".dmg", ".zip"];
   if (platform === "win32") return [".exe", ".msi", ".zip"];
   // `.tar.gz` is deliberately absent. It used to be listed, which made it
   // selectable, and nothing downstream can install a tarball — the update would
   // be "downloaded" and then handed to a hand-off that has no path for it.
-  if (platform === "linux") return [".appimage", ".deb", ".rpm"];
+  if (platform === "linux") {
+    if (preferredPackageFormat === "deb") return [".deb", ".appimage", ".rpm"];
+    if (preferredPackageFormat === "rpm") return [".rpm", ".appimage", ".deb"];
+    return [".appimage", ".deb", ".rpm"];
+  }
   return [];
+}
+
+/**
+ * GitHub's own integrity data for an asset, when the feed carries a usable pair:
+ * `size` plus a `sha256:` digest computed by GitHub from the uploaded bytes.
+ */
+function assetIntegrity(asset: GitHubAsset): {
+  size?: number;
+  sha256?: string;
+} {
+  const digest = typeof asset.digest === "string" ? asset.digest.trim() : "";
+  const match = /^sha256:([a-fA-F0-9]{64})$/u.exec(digest);
+  const size =
+    typeof asset.size === "number" &&
+    Number.isSafeInteger(asset.size) &&
+    asset.size > 0
+      ? asset.size
+      : undefined;
+  return {
+    ...(size === undefined ? {} : { size }),
+    ...(match ? { sha256: match[1]!.toLowerCase() } : {}),
+  };
 }
 
 /** Selects only a trusted, user-installable asset for this platform/arch. */
@@ -573,8 +628,11 @@ export function selectUpdateAsset(
   assets: readonly GitHubAsset[],
   platform: NodeJS.Platform,
   arch: string,
+  options: {
+    readonly preferredPackageFormat?: LinuxPackageFormat | null;
+  } = {},
 ): SelectedAsset | null {
-  const extensions = extensionsFor(platform);
+  const extensions = extensionsFor(platform, options.preferredPackageFormat);
   const archNames = ARCH_ALIASES[arch] ?? [arch];
   const candidates = assets.flatMap((asset) => {
     if (
@@ -587,7 +645,14 @@ export function selectUpdateAsset(
     if (!extensions.some((extension) => lowerName.endsWith(extension))) {
       return [];
     }
-    return [{ name: asset.name, url: asset.browser_download_url, lowerName }];
+    return [
+      {
+        name: asset.name,
+        url: asset.browser_download_url,
+        lowerName,
+        ...assetIntegrity(asset),
+      },
+    ];
   });
   if (candidates.length === 0) return null;
 
@@ -608,7 +673,30 @@ export function selectUpdateAsset(
           right.lowerName.endsWith(extension),
         ) || left.name.localeCompare(right.name),
   )[0];
-  return selected ? { name: selected.name, url: selected.url } : null;
+  if (!selected) return null;
+  const { name, url, size, sha256 } = selected;
+  return {
+    name,
+    url,
+    ...(size === undefined ? {} : { size }),
+    ...(sha256 === undefined ? {} : { sha256 }),
+  };
+}
+
+/**
+ * The artifact exactly as GitHub describes it. Used for an installer the
+ * release metadata does not record, which is the case for the `.deb`/`.rpm` a
+ * distro install updates through: the metadata contract allows one artifact per
+ * platform key, and that key is the AppImage.
+ */
+function artifactFromAsset(asset: SelectedAsset): ExpectedArtifact | null {
+  if (asset.sha256 === undefined || asset.size === undefined) return null;
+  return {
+    name: asset.name,
+    url: asset.url,
+    sha256: asset.sha256,
+    size: asset.size,
+  };
 }
 
 export class UpdateManager {
@@ -619,6 +707,7 @@ export class UpdateManager {
   readonly #unlink: (path: string) => Promise<void>;
   readonly #channel: UpdateChannel;
   readonly #maxDownloadBytes: number;
+  readonly #packageFormat: LinuxPackageFormat | null;
   readonly #listeners = new Set<UpdateStateListener>();
   #enabled = true;
   #state: DesktopUpdateState;
@@ -638,6 +727,7 @@ export class UpdateManager {
       });
     this.#unlink = options.unlinkFn ?? unlink;
     this.#channel = options.channel ?? defaultChannel(options.currentVersion);
+    this.#packageFormat = options.preferredLinuxPackageFormat ?? null;
     this.#maxDownloadBytes = options.maxDownloadBytes ?? MAX_DOWNLOAD_BYTES;
     if (
       !Number.isSafeInteger(this.#maxDownloadBytes) ||
@@ -772,6 +862,7 @@ export class UpdateManager {
         assets,
         this.#options.platform,
         this.#options.arch,
+        { preferredPackageFormat: this.#packageFormat },
       );
       const isNewer =
         compareVersions(latestVersion, this.#options.currentVersion) > 0;
@@ -828,14 +919,17 @@ export class UpdateManager {
 
   /**
    * Resolve the verified artifact (name/url/sha256/size) for the selected
-   * installer from the release's metadata document(s).
+   * installer.
    *
-   * The candidate list comes from {@link metadataDocumentNames}. A document
+   * The first candidates come from {@link metadataDocumentNames}. A document
    * that is not published is skipped silently; one that exists but does not
    * validate is skipped too, so a future release that merges Linux into the
-   * main document keeps working for this client. Only when no document produced
-   * an artifact does the caller fail, and it distinguishes "nothing was
-   * published for this platform" from "what was published did not validate".
+   * main document keeps working for this client. Anything the documents do not
+   * describe — today the `.deb`/`.rpm` a distro install updates through — is
+   * then taken from GitHub's own digest for that asset. Only when no source
+   * produced an artifact does the caller fail, and it distinguishes "nothing
+   * was published for this platform" from "what was published did not
+   * validate".
    */
   private async resolveExpectedArtifact(
     release: GitHubRelease,
@@ -892,6 +986,12 @@ export class UpdateManager {
         // Try the next document; the caller reports one failure for the set.
       }
     }
+    // Nothing in the documents described this installer, which is the case for
+    // the `.deb`/`.rpm` a distro install updates through. GitHub's own digest
+    // for the asset we selected still makes it verifiable, and it comes from the
+    // same API response that chose the release.
+    const fromAsset = artifactFromAsset(asset);
+    if (fromAsset) return { kind: "ok", artifact: fromAsset };
     return sawDocument ? { kind: "invalid" } : { kind: "missing" };
   }
 

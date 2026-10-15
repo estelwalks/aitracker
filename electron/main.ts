@@ -136,6 +136,7 @@ import {
   parseAutoUpdateEnabled,
 } from "./update-preferences.js";
 import { UpdateManager } from "./update-manager.js";
+import { detectLinuxPackageFormat } from "./linux-package-format.js";
 import {
   handOffInstaller,
   linuxManualInstallCommand,
@@ -958,8 +959,10 @@ function registerIpcHandlers(): void {
       platform: process.platform,
       version: app.getVersion(),
       packaged: app.isPackaged,
-      // Decides whether the restart prompt may promise a silent swap: a
-      // deb/rpm or unpacked install has no AppImage to replace in place.
+      // What the restart prompt may promise: only an AppImage install can
+      // replace itself in place. A deb/rpm install updates through its own
+      // package (handed to the software centre), and an unpacked directory
+      // through the command the toast shows.
       linuxInstallForm: resolveLinuxInstallForm({
         platform: process.platform,
         isPackaged: app.isPackaged,
@@ -2208,6 +2211,11 @@ if (!hasSingleInstanceLock) {
         // `/tmp`, so a 150 MB AppImage is not parked in RAM and the manual
         // flows can hand the user a path they can actually execute.
         tempDirectory: updateStagingDirectory(),
+        // A distro install updates through the package its software centre can
+        // open, so it downloads that package instead of the AppImage. Off Linux,
+        // and on an unrecognised distro, this stays null and the AppImage — which
+        // every host can run — keeps its place at the front of the queue.
+        preferredLinuxPackageFormat: detectLinuxPackageFormat(),
         fetchFn: updateSessionFetch,
       });
       updateManager.setEnabled(

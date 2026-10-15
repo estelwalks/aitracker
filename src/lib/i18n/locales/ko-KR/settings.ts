@@ -257,7 +257,9 @@ export const settings = {
   updateRestartBodyLinux:
     "새 버전 v{version}을(를) 내려받았습니다. “지금 다시 시작하여 업데이트”를 선택하면 앱이 종료되고 제자리에서 교체된 뒤 다시 열립니다.",
   updateRestartBodyLinuxManual:
-    "새 버전 v{version}을(를) 내려받았습니다. 현재는 AppImage 설치가 아니므로(deb / rpm 또는 압축 해제 디렉터리) 앱이 스스로 교체할 수 없습니다. “지금 다시 시작하여 업데이트”를 선택하면 파일이 있는 폴더가 열리고 수동 설치 명령이 표시됩니다. AppImage로 설치하면 자동 업데이트를 사용할 수 있습니다.",
+    "새 버전 v{version}을(를) 내려받았습니다. 현재는 AppImage 설치가 아니므로(압축 해제 디렉터리 또는 해당 배포판 패키지가 없는 릴리스) 앱이 스스로 교체할 수 없습니다. “지금 다시 시작하여 업데이트”를 선택하면 파일이 있는 폴더가 열리고 수동 설치 명령이 표시됩니다. AppImage로 설치하면 자동 업데이트를 사용할 수 있습니다.",
+  updateRestartBodyLinuxPackage:
+    "새 버전 v{version}을(를) 내려받았습니다. “지금 다시 시작하여 업데이트”를 선택하면 소프트웨어 센터에서 설치 프로그램이 열립니다. 거기서 확인하고 암호를 입력하면 설치가 완료됩니다. (이 패키지 형식을 처리할 소프트웨어 센터가 없으면 파일이 있는 폴더와 설치 명령을 표시합니다.)",
   updateRestartNow: "지금 다시 시작하여 업데이트",
   updateInstallingShort: "설치 중…",
   updateLater: "나중에",
@@ -402,7 +404,7 @@ export const settings = {
     updateManualInstall:
       "업데이트 패키지를 내려받았습니다. 다음 명령을 실행하세요: {command}",
     updatePackageOpened:
-      "소프트웨어 센터에서 설치 프로그램을 열었습니다. 설치가 끝나면 AITracker를 다시 시작하세요",
+      "소프트웨어 센터에서 설치 프로그램을 열었습니다. 확인하고 암호를 입력한 뒤 AITracker를 다시 시작하세요",
     updateProxySaved: "업데이트 프록시가 저장되었습니다",
     updateProxyFormatInvalid:
       "프록시 형식이 올바르지 않습니다. 예: http://127.0.0.1:7890",

@@ -13,6 +13,48 @@ the tag, so a numbered section means "this version shipped" and is never
 opened early. Individual fixes do not have to touch this file.
 -->
 
+### Highlights
+
+> Published as this release's GitHub notes; keep these short and user-facing.
+> `### 更新摘要` below carries the same list in Chinese and is published as
+> `## 本次更新` right after the English one, so the release page is bilingual.
+
+- A `.deb` or `.rpm` install now updates with its own package instead of an AppImage: the software centre opens where the desktop has one registered, otherwise the exact install command is shown
+
+### 更新摘要
+
+> 与上面的 `### Highlights` 一一对应，发布时作为 `## 本次更新` 出现在英文摘要之后。
+
+- `.deb` / `.rpm` 安装现在改用本机包管理器能装的系统包来更新，不再下载 AppImage：桌面注册了软件中心就直接打开，否则给出确切的安装命令
+
+### Details
+
+- The updater reads `/etc/os-release` to learn which package family the host
+  installs, and downloads that artifact for a distro install: `AITracker-Linux-x64.deb`
+  on Debian/Ubuntu/Kali and `AITracker-Linux-x64.rpm` on Fedora/RHEL/openSUSE.
+  "Restart and update" then opens it in the software centre (`xdg-open`), where
+  the user confirms and authenticates — installing a distro package needs root,
+  and the app still never escalates on its own.
+- The package is only handed to an application that _installs_ it. Plenty of
+  desktops associate `.deb` with an archive manager (Kali/XFCE does), and opening
+  the file there would show its contents and install nothing. When the desktop's
+  handler for the package type is not a recognised installer, the update falls
+  back to the folder plus the command that finishes the install — `sudo apt
+install <file>`, or `sudo rpm -U <file>` for an rpm — which asks for the
+  password in a terminal instead of a software centre.
+- Those packages are not recorded in the release metadata: the contract allows
+  one artifact per platform key, and that key is the AppImage. They are instead
+  verified against the `size` and `sha256` digest GitHub computes for every
+  uploaded asset and returns in the same release feed that selects the version,
+  so the download is checked exactly as strictly as before. An asset without a
+  digest is refused rather than installed unverified.
+- The restart prompt follows the downloaded artifact rather than the platform: a
+  package says the software centre will ask for confirmation, an AppImage on an
+  AppImage install promises the in-place swap, and anything else is handed over
+  with the command that finishes it.
+- An unrecognised distro, and every non-Linux platform, keeps the previous
+  order: the AppImage first, which any Linux host can run.
+
 ## [1.0.7] - 2026-10-15
 
 ### Highlights
