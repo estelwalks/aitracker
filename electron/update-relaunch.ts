@@ -596,8 +596,11 @@ async function handOffLinuxInstaller(options: {
   const spawnFn = options.spawnFn ?? nodeSpawn;
   const kind = linuxArtifactKind(installerPath);
 
-  // Pre-flight: the download is created 0644, so nothing here is executable
-  // yet. Doing this before the branch keeps every failure synchronous.
+  // Pre-flight: the download normally arrives 0755 (the updater creates it that
+  // way), but a file left by an older build, or by a copy that lost its mode, is
+  // not executable — and an AppImage is executed as-is. Doing this before the
+  // branch keeps every failure synchronous, so the caller never reports success
+  // for a hand-off that cannot run.
   try {
     await chmodFn(installerPath, 0o755);
     await accessFn(installerPath, fsConstants.X_OK);
