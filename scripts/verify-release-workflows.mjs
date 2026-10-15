@@ -197,13 +197,20 @@ export function inspectInstallSmokeSteps({ workflow }) {
     problems.push(
       `${RELEASE_WORKFLOW}: "${RUNTIME_PROBE_STEP}" step is missing; nothing launches the installed package`,
     );
-  } else if (
-    !/(^|\s)(su|runuser)\s/u.test(probe) &&
-    !probe.includes("--no-sandbox")
-  ) {
-    problems.push(
-      `${RELEASE_WORKFLOW}: "${RUNTIME_PROBE_STEP}" launches the app without dropping privileges; the job runs as root and Electron exits with \`FATAL: Running as root without --no-sandbox is not supported\`. Run the probe as an unprivileged user (\`su probe -c …\`) or pass \`--no-sandbox\``,
-    );
+  } else {
+    // Two separate lessons, each of which on its own left the app without a
+    // window: root is refused outright, and a container cannot give Chromium a
+    // usable sandbox at all.
+    if (!/(^|\s)(su|runuser)\s/u.test(probe)) {
+      problems.push(
+        `${RELEASE_WORKFLOW}: "${RUNTIME_PROBE_STEP}" launches the app as root, which Electron refuses (\`FATAL: Running as root without --no-sandbox is not supported\`); run the probe as an unprivileged user (\`su probe -c …\`)`,
+      );
+    }
+    if (!/--no-sandbox|ELECTRON_DISABLE_SANDBOX/u.test(probe)) {
+      problems.push(
+        `${RELEASE_WORKFLOW}: "${RUNTIME_PROBE_STEP}" must disable the Chromium sandbox for the launch (\`ELECTRON_DISABLE_SANDBOX=1\` or \`--no-sandbox\`); a container denies the unprivileged user namespaces the zygote needs and the packaged \`chrome-sandbox\` is not SUID, so Chromium dies with \`zygote_host_impl_linux.cc: Check failed: Invalid argument (22)\``,
+      );
+    }
   }
   return problems;
 }
