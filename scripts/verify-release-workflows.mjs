@@ -141,11 +141,13 @@ export function inspectNpmPublishSteps({ workflow }) {
 const INSTALL_SMOKE_STEP = "Install the distribution package";
 /** Step that installs the X tooling the runtime probe needs. */
 const PROBE_TOOLING_STEP = "Install the probe tooling";
+/** Step that launches the installed package under the virtual display. */
+const RUNTIME_PROBE_STEP = "Run the installed-package runtime probe";
 
 /**
  * The install-smoke matrix installs the package it just built on each target
- * distribution. Its first real run (the v1.0.6 tag) failed on two assumptions
- * that only a container can disprove:
+ * distribution. Its first two real runs (both from the v1.0.6 tag) failed on
+ * assumptions that only a container can disprove:
  *
  *  - the package was chosen by testing for the RPM file, but the artifact
  *    carries all three Linux formats, so every image ran `dnf` — including
@@ -154,6 +156,10 @@ const PROBE_TOOLING_STEP = "Install the probe tooling";
  *  - the probe tooling was installed with Debian's package names. On the Red Hat
  *    family `x11-utils` does not exist (`xorg-x11-utils` on RHEL 9, separate
  *    packages on RHEL 10/Fedora), and `xdotool` is EPEL-only there.
+ *  - the probe launched the app as root, which Electron refuses:
+ *    `FATAL: Running as root without --no-sandbox is not supported`. Every step
+ *    of the job runs as root, so the launch has to drop privileges — or say
+ *    explicitly that it is giving the sandbox up.
  */
 export function inspectInstallSmokeSteps({ workflow }) {
   const problems = [];
@@ -183,6 +189,20 @@ export function inspectInstallSmokeSteps({ workflow }) {
   } else if (!/epel-release/u.test(tooling)) {
     problems.push(
       `${RELEASE_WORKFLOW}: "${PROBE_TOOLING_STEP}" must enable EPEL (\`dnf install -y epel-release\`) before \`xdotool\`, which the RHEL family does not ship in its base repositories`,
+    );
+  }
+
+  const probe = stepRunBlock({ workflow, step: RUNTIME_PROBE_STEP });
+  if (probe === undefined) {
+    problems.push(
+      `${RELEASE_WORKFLOW}: "${RUNTIME_PROBE_STEP}" step is missing; nothing launches the installed package`,
+    );
+  } else if (
+    !/(^|\s)(su|runuser)\s/u.test(probe) &&
+    !probe.includes("--no-sandbox")
+  ) {
+    problems.push(
+      `${RELEASE_WORKFLOW}: "${RUNTIME_PROBE_STEP}" launches the app without dropping privileges; the job runs as root and Electron exits with \`FATAL: Running as root without --no-sandbox is not supported\`. Run the probe as an unprivileged user (\`su probe -c …\`) or pass \`--no-sandbox\``,
     );
   }
   return problems;
