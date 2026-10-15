@@ -223,12 +223,24 @@ jobs:
         # RHEL 9 and 10 are the two supported Red Hat majors, and Fedora carries
         # the newest sonames and package renames. Debian/Ubuntu are covered by
         # the deb leg below.
-        image:
-          - rockylinux:9
-          - rockylinux:10
-          - fedora:latest
-          - debian:13
-          - ubuntu:24.04
+        #
+        # `almalinux:10`, not `rockylinux:10`: the Docker library namespace has
+        # no Rocky 10 tag (`manifest for rockylinux:10 not found`, which failed
+        # the v1.0.6 assembly). `runtime_probe: false` there because RHEL 10
+        # dropped `xorg-x11-server-Xvfb` from its repositories and EPEL does not
+        # carry it either — the RPM can be installed and inspected on that
+        # major, but the app cannot be launched headless.
+        include:
+          - image: rockylinux:9
+            runtime_probe: true
+          - image: almalinux:10
+            runtime_probe: false
+          - image: fedora:latest
+            runtime_probe: true
+          - image: debian:13
+            runtime_probe: true
+          - image: ubuntu:24.04
+            runtime_probe: true
     container:
       image: ${{ matrix.image }}
       # Electron needs a writable /dev/shm; the container default is too small.
@@ -243,11 +255,15 @@ jobs:
           name: release-linux-x64
           path: packages
 
+      # The downloaded artifact carries all three Linux formats, so the image's
+      # package manager decides which one to install. Testing for the file
+      # instead picked the RPM everywhere and failed the deb leg with
+      # `dnf: command not found` on the v1.0.6 assembly.
       - name: Install the distribution package
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f packages/AITracker-Linux-x64.rpm ]; then
+          if command -v dnf >/dev/null 2>&1; then
             dnf install -y ./packages/AITracker-Linux-x64.rpm
           else
             apt-get update
@@ -265,18 +281,31 @@ jobs:
           done
           test -x /opt/AITracker/aitracker
 
+      # Package names differ across the Red Hat family, which the first run of
+      # this matrix found the hard way:
+      #   * `xorg-x11-utils` (xprop/xwininfo/xdpyinfo) stops at RHEL 9; on
+      #     Fedora and RHEL 10 the tools are separate packages;
+      #   * `xdotool` is in Fedora's base repos but only in EPEL on the RHEL
+      #     family, where `x11-utils` does not exist at all.
       - name: Install the probe tooling
+        if: ${{ matrix.runtime_probe }}
         shell: bash
         run: |
           set -euo pipefail
           if command -v dnf >/dev/null 2>&1; then
-            dnf install -y xorg-x11-server-Xvfb xdotool x11-utils sqlite
+            if [ "$(rpm -E %rhel 2>/dev/null)" = "9" ]; then
+              dnf install -y epel-release
+              dnf install -y xorg-x11-server-Xvfb sqlite xdotool xorg-x11-utils
+            else
+              dnf install -y xorg-x11-server-Xvfb sqlite xdotool xprop xwininfo xdpyinfo
+            fi
           else
             apt-get update
             apt-get install -y xvfb xdotool x11-utils sqlite3
           fi
 
       - name: Start a virtual display
+        if: ${{ matrix.runtime_probe }}
         shell: bash
         run: |
           set -euo pipefail
@@ -288,10 +317,24 @@ jobs:
           xdpyinfo -display :99 >/dev/null
 
       - name: Run the installed-package runtime probe
+        if: ${{ matrix.runtime_probe }}
         shell: bash
         run: |
           set -euo pipefail
           bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768
+
+      # A skipped launch is stated rather than implied: the packaging assertions
+      # above still ran, but nothing in this leg proves the app starts.
+      - name: Note the skipped runtime probe
+        if: ${{ !matrix.runtime_probe }}
+        shell: bash
+        run: |
+          echo "::notice::${{ matrix.image }} ships no Xvfb, so the package was installed and its layout asserted but the app was not launched"
+          {
+            echo "### ${{ matrix.image }}"
+            echo
+            echo "Runtime probe skipped: no X server is available in this image's repositories."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   draft-release:
     name: Assemble GitHub draft release

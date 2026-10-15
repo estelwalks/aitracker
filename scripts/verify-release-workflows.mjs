@@ -123,6 +123,67 @@ export function inspectNpmPublishSteps({ workflow }) {
         `${PUBLISH_NPM_WORKFLOW}: "${DIST_TAG_STEP}" must assert that the dist-tag resolves to this version with \`npm view "@estelwalks/aitracker@$dist_tag" version\``,
       );
     }
+    // Two properties the v1.0.6 run needed and did not have. The assertion has
+    // to run even when this run published nothing, or re-running the workflow
+    // for a version npm already serves proves nothing; and it has to retry,
+    // because the registry can answer with the previous dist-tag for a few
+    // seconds after `npm publish` exits 0.
+    if (!(distTag.includes("for attempt") && distTag.includes("sleep"))) {
+      problems.push(
+        `${PUBLISH_NPM_WORKFLOW}: "${DIST_TAG_STEP}" must retry the \`npm view\` read (a loop with a sleep); the registry can still answer with the previous dist-tag right after a successful publish`,
+      );
+    }
+  }
+  return problems;
+}
+
+/** Step that installs the built package inside a distribution container. */
+const INSTALL_SMOKE_STEP = "Install the distribution package";
+/** Step that installs the X tooling the runtime probe needs. */
+const PROBE_TOOLING_STEP = "Install the probe tooling";
+
+/**
+ * The install-smoke matrix installs the package it just built on each target
+ * distribution. Its first real run (the v1.0.6 tag) failed on two assumptions
+ * that only a container can disprove:
+ *
+ *  - the package was chosen by testing for the RPM file, but the artifact
+ *    carries all three Linux formats, so every image ran `dnf` — including
+ *    Debian and Ubuntu, where it does not exist. The image's package manager
+ *    has to decide.
+ *  - the probe tooling was installed with Debian's package names. On the Red Hat
+ *    family `x11-utils` does not exist (`xorg-x11-utils` on RHEL 9, separate
+ *    packages on RHEL 10/Fedora), and `xdotool` is EPEL-only there.
+ */
+export function inspectInstallSmokeSteps({ workflow }) {
+  const problems = [];
+  const install = stepRunBlock({ workflow, step: INSTALL_SMOKE_STEP });
+  if (install === undefined) {
+    problems.push(
+      `${RELEASE_WORKFLOW}: "${INSTALL_SMOKE_STEP}" step is missing; the built package is no longer installed on its target distributions`,
+    );
+  } else {
+    if (!/command -v dnf/u.test(install)) {
+      problems.push(
+        `${RELEASE_WORKFLOW}: "${INSTALL_SMOKE_STEP}" must choose the package with \`command -v dnf\`; the downloaded artifact carries every Linux format, so a file test picks the RPM on a Debian image and fails with \`dnf: command not found\``,
+      );
+    }
+    if (/\[\s*-f\s+packages\/[^\]]*\.rpm/u.test(install)) {
+      problems.push(
+        `${RELEASE_WORKFLOW}: "${INSTALL_SMOKE_STEP}" selects the RPM by file presence, which is true on every image`,
+      );
+    }
+  }
+
+  const tooling = stepRunBlock({ workflow, step: PROBE_TOOLING_STEP });
+  if (tooling === undefined) {
+    problems.push(
+      `${RELEASE_WORKFLOW}: "${PROBE_TOOLING_STEP}" step is missing; the runtime probe would have no X server or window tooling`,
+    );
+  } else if (!/epel-release/u.test(tooling)) {
+    problems.push(
+      `${RELEASE_WORKFLOW}: "${PROBE_TOOLING_STEP}" must enable EPEL (\`dnf install -y epel-release\`) before \`xdotool\`, which the RHEL family does not ship in its base repositories`,
+    );
   }
   return problems;
 }
@@ -188,6 +249,7 @@ export async function verifyReleaseWorkflows({ rootDir = PROJECT_ROOT } = {}) {
   return [
     ...inspectDraftAssetStep({ workflow: releaseWorkflow }),
     ...inspectReleaseNotesStep({ workflow: releaseWorkflow }),
+    ...inspectInstallSmokeSteps({ workflow: releaseWorkflow }),
     ...inspectNpmPublishSteps({ workflow: publishWorkflow }),
   ];
 }
@@ -211,7 +273,7 @@ if (
       process.exitCode = 1;
     } else {
       console.log(
-        "verify-release-workflows: PASS (draft lookup, bilingual release notes, npm dist-tag)",
+        "verify-release-workflows: PASS (draft lookup, bilingual release notes, install smoke, npm dist-tag)",
       );
     }
   } catch (error) {

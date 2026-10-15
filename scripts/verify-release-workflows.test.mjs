@@ -9,6 +9,7 @@ import {
   PUBLISH_NPM_WORKFLOW,
   RELEASE_WORKFLOW,
   inspectDraftAssetStep,
+  inspectInstallSmokeSteps,
   inspectNpmPublishSteps,
   inspectReleaseNotesStep,
   verifyReleaseWorkflows,
@@ -46,6 +47,19 @@ const RELEASE_WORKFLOW_BODY = [
   "",
   "          安装包见下方附件。",
   "          EOF",
+  "      - name: Install the distribution package",
+  "        shell: bash",
+  "        run: |",
+  "          if command -v dnf >/dev/null 2>&1; then",
+  "            dnf install -y ./packages/AITracker-Linux-x64.rpm",
+  "          else",
+  "            apt-get install -y ./packages/AITracker-Linux-x64.deb",
+  "          fi",
+  "      - name: Install the probe tooling",
+  "        shell: bash",
+  "        run: |",
+  "          dnf install -y epel-release",
+  "          dnf install -y xorg-x11-server-Xvfb sqlite xdotool xorg-x11-utils",
   "",
 ].join("\n");
 
@@ -70,6 +84,20 @@ const RELEASE_WORKFLOW_ENGLISH_ONLY_NOTES = RELEASE_WORKFLOW_BODY.replace(
   "          Installers are attached below.",
 );
 
+// The v1.0.6 mistake: the downloaded artifact carries every Linux format, so a
+// file test picks the RPM on a Debian image and `dnf` does not exist there.
+const RELEASE_WORKFLOW_PICKS_PACKAGE_BY_FILE = RELEASE_WORKFLOW_BODY.replace(
+  "          if command -v dnf >/dev/null 2>&1; then",
+  "          if [ -f packages/AITracker-Linux-x64.rpm ]; then",
+);
+
+// `xdotool` is EPEL-only on the Red Hat family; without EPEL the probe tooling
+// step fails on Rocky and Alma before the app is ever launched.
+const RELEASE_WORKFLOW_WITHOUT_EPEL = RELEASE_WORKFLOW_BODY.replace(
+  "          dnf install -y epel-release\n",
+  "",
+);
+
 const PUBLISH_WORKFLOW_BODY = [
   "name: Publish CLI to npm",
   "jobs:",
@@ -81,10 +109,29 @@ const PUBLISH_WORKFLOW_BODY = [
   "      - name: Confirm the dist-tag follows this release",
   "        shell: bash",
   "        run: |",
-  '          resolved="$(npm view "@estelwalks/aitracker@${dist_tag}" version)"',
+  '          resolved=""',
+  "          for attempt in $(seq 1 8); do",
+  '            resolved="$(npm view "@estelwalks/aitracker@${dist_tag}" version)"',
+  '            if [[ "$resolved" == "$version" ]]; then break; fi',
+  "            sleep 15",
+  "          done",
   '          echo "$dist_tag resolves to $resolved" >> "$GITHUB_STEP_SUMMARY"',
   "",
 ].join("\n");
+
+// The registry can answer with the previous dist-tag for a few seconds after a
+// successful publish, which is what failed the v1.0.6 run: the single read saw
+// `latest = 1.0.5` and the job exited non-zero with the release already out.
+const PUBLISH_WORKFLOW_WITHOUT_RETRY = PUBLISH_WORKFLOW_BODY.replace(
+  "          for attempt in $(seq 1 8); do\n",
+  "",
+)
+  .replace(
+    '            if [[ "$resolved" == "$version" ]]; then break; fi\n',
+    "",
+  )
+  .replace("            sleep 15\n", "")
+  .replace("          done\n", "");
 
 const PUBLISH_WORKFLOW_WITHOUT_TAG = PUBLISH_WORKFLOW_BODY.replace(
   ' --tag "$dist_tag"',
@@ -156,6 +203,40 @@ test("a dropped notes step is reported instead of silently skipping", () => {
   const problems = inspectReleaseNotesStep({ workflow: "name: Release\n" });
   assert.equal(problems.length, 1);
   assert.match(problems[0], /step is missing/u);
+});
+
+test("choosing the package by file presence is reported", () => {
+  const problems = inspectInstallSmokeSteps({
+    workflow: RELEASE_WORKFLOW_PICKS_PACKAGE_BY_FILE,
+  });
+  // Two rules fire on this mutation: the package manager no longer decides, and
+  // the file test is true on every image.
+  assert.equal(problems.length, 2);
+  assert.match(problems[0], /command -v dnf/u);
+  assert.match(problems[1], /file presence/u);
+});
+
+test("probe tooling that skips EPEL is reported", () => {
+  const problems = inspectInstallSmokeSteps({
+    workflow: RELEASE_WORKFLOW_WITHOUT_EPEL,
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /epel-release/u);
+});
+
+test("dropped install-smoke steps are reported instead of silently skipping", () => {
+  const problems = inspectInstallSmokeSteps({ workflow: "name: Release\n" });
+  assert.equal(problems.length, 2);
+  assert.match(problems[0], /step is missing/u);
+  assert.match(problems[1], /step is missing/u);
+});
+
+test("a dist-tag read with no retry is reported", () => {
+  const problems = inspectNpmPublishSteps({
+    workflow: PUBLISH_WORKFLOW_WITHOUT_RETRY,
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /must retry/u);
 });
 
 test("publishing without --tag is reported", () => {
