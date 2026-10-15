@@ -210,9 +210,10 @@ rpm:
   # version placeholder.
   artifactName: "${productName}-Linux-x64.${ext}"
   # RPM package names are NOT the Debian ones — `libgtk-3-0` does not exist in
-  # the Red Hat family. Each entry below is the soname the packaged binary
+  # the Red Hat family. Each entry below is a soname the packaged binary
   # actually needs (`objdump -p release/linux-unpacked/aitracker | grep NEEDED`
-  # in a packaged build) mapped to its Fedora/RHEL 9+ provider.
+  # in a packaged build) mapped to its provider across the Fedora/RHEL 9/10
+  # families; every one of them was checked against the AlmaLinux 10 metadata.
   depends:
     - gtk3 # libgtk-3.so.0, libgdk-3.so.0, libatk-1.0.so.0
     - nss # libnss3.so, libnssutil3.so, libsmime3.so, libnspr4.so
@@ -231,7 +232,13 @@ rpm:
     - libXfixes
     - libXrandr
     - libXtst # libXtst.so.6
-    - libXScrnSaver # libXss.so.1, the Debian libxss1
+    # NOT libXScrnSaver, the Debian libxss1. The v1.0.6 install smoke test
+    # proved that no repository in the RHEL 10 family ships it (BaseOS,
+    # AppStream, CRB, extras, plus and devel were all checked), so a hard
+    # requirement made the whole RPM uninstallable there — `nothing provides
+    # libXScrnSaver needed by aitracker-desktop`. Nothing in the payload
+    # references it either: no binary carries a NEEDED entry for libXss.so.1,
+    # and no string mentions the name.
     - libuuid
     - xdg-utils # shell.openExternal / openPath hand offs
 

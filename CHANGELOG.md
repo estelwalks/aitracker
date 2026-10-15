@@ -134,18 +134,25 @@ opened early. Individual fixes do not have to touch this file.
   `npm publish` and nothing else, so `npm dist-tag add` failed with E401 and a
   prerelease published without `--tag beta` would have landed on `latest` too.
   `scripts/verify-release-workflows.mjs` now pins both invariants.
-- The first run of this release's own tag exposed three more pipeline defects,
-  all fixed here: the install-smoke matrix picked the RPM by file presence (true
-  on every image, so the Debian and Ubuntu legs ran `dnf` and failed), it asked
-  for Debian package names on the Red Hat family (`x11-utils` does not exist
-  there, and `xdotool` is EPEL-only), and it named a `rockylinux:10` image that
-  does not exist. The RHEL 10 leg now runs `almalinux:10`, installs the RPM and
-  asserts its layout, and states that it skips the launch because RHEL 10 ships
-  no Xvfb. The npm dist-tag confirmation retries the registry read — a single
-  read still saw `latest = 1.0.5` seconds after `npm publish` exited 0 — and now
-  runs even when the run published nothing, so re-running a tag npm already
-  serves still verifies where `latest` points. All four rules are pinned by
-  `scripts/verify-release-workflows.mjs`.
+- Two runs of this release's own tag exposed six pipeline defects, all fixed
+  here. The first picked the RPM by file presence (true on every image, so the
+  Debian and Ubuntu legs ran `dnf` and failed), asked for Debian package names
+  on the Red Hat family (`x11-utils` does not exist there, and `xdotool` is
+  EPEL-only) and named a `rockylinux:10` image that does not exist. The second
+  launched the probe as root, which Electron refuses
+  (`FATAL: Running as root without --no-sandbox is not supported`), so no leg
+  ever saw a window; it now runs the probe as an unprivileged user, which also
+  leaves the app's own sandbox probe to decide. It also proved that the RPM's
+  `libXScrnSaver` requirement cannot be satisfied anywhere in the RHEL 10 family
+  — BaseOS, AppStream, CRB, extras, plus and devel all lack it — while nothing
+  in the payload references `libXss.so.1` at all, so that requirement is gone
+  and the RPM installs on RHEL 10 again. The RHEL 10 leg runs `almalinux:10`,
+  installs and inspects the RPM, and states that it skips the launch because
+  RHEL 10 ships no Xvfb. The npm dist-tag confirmation retries the registry read
+  — a single read still saw `latest = 1.0.5` seconds after `npm publish` exited
+  0 — and runs even when the run published nothing, so re-running a tag npm
+  already serves still verifies where `latest` points. All five rules are pinned
+  by `scripts/verify-release-workflows.mjs`.
 - All four READMEs (English, 简体中文, 日本語, 한국어) carry the same document
   set again: the Linux entries sit beside the macOS and Windows ones with a
   one-line statement of what they support (`.deb` on Debian 12+/Ubuntu 22.04+,

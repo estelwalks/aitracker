@@ -60,6 +60,11 @@ const RELEASE_WORKFLOW_BODY = [
   "        run: |",
   "          dnf install -y epel-release",
   "          dnf install -y xorg-x11-server-Xvfb sqlite xdotool xorg-x11-utils",
+  "      - name: Run the installed-package runtime probe",
+  "        shell: bash",
+  "        run: |",
+  "          useradd --create-home --shell /bin/bash probe",
+  '          su probe -c "bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768"',
   "",
 ].join("\n");
 
@@ -96,6 +101,14 @@ const RELEASE_WORKFLOW_PICKS_PACKAGE_BY_FILE = RELEASE_WORKFLOW_BODY.replace(
 const RELEASE_WORKFLOW_WITHOUT_EPEL = RELEASE_WORKFLOW_BODY.replace(
   "          dnf install -y epel-release\n",
   "",
+);
+
+// The v1.0.6 launch failure: every step of the job runs as root, and Electron
+// refuses to start as root without `--no-sandbox`, so no window ever appeared.
+const RELEASE_WORKFLOW_PROBE_AS_ROOT = RELEASE_WORKFLOW_BODY.replace(
+  "          useradd --create-home --shell /bin/bash probe\n" +
+    '          su probe -c "bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768"\n',
+  "          bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768\n",
 );
 
 const PUBLISH_WORKFLOW_BODY = [
@@ -226,9 +239,19 @@ test("probe tooling that skips EPEL is reported", () => {
 
 test("dropped install-smoke steps are reported instead of silently skipping", () => {
   const problems = inspectInstallSmokeSteps({ workflow: "name: Release\n" });
-  assert.equal(problems.length, 2);
+  assert.equal(problems.length, 3);
   assert.match(problems[0], /step is missing/u);
   assert.match(problems[1], /step is missing/u);
+  assert.match(problems[2], /step is missing/u);
+});
+
+test("launching the probe as root is reported", () => {
+  const problems = inspectInstallSmokeSteps({
+    workflow: RELEASE_WORKFLOW_PROBE_AS_ROOT,
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /Running as root without --no-sandbox/u);
+  assert.match(problems[0], /su probe/u);
 });
 
 test("a dist-tag read with no retry is reported", () => {

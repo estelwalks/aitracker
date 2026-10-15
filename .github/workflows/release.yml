@@ -316,12 +316,22 @@ jobs:
           done
           xdpyinfo -display :99 >/dev/null
 
+      # Every step of this job runs as root, and Electron refuses to start as
+      # root without `--no-sandbox`:
+      #   FATAL:electron_main_delegate.cc: Running as root without --no-sandbox
+      #   is not supported.
+      # That is what failed all four X legs of the v1.0.6 assembly — no window
+      # ever appeared, so nothing downstream was asserted. Run the probe as an
+      # ordinary user instead of weakening the launch: that is the account a
+      # desktop user has, and it leaves the app's own Chromium sandbox probe to
+      # decide rather than pre-empting it with `--no-sandbox`.
       - name: Run the installed-package runtime probe
         if: ${{ matrix.runtime_probe }}
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768
+          useradd --create-home --shell /bin/bash probe
+          su probe -c "bash scripts/linux-runtime-probe.sh --installed /opt/AITracker/aitracker :99 1366x768"
 
       # A skipped launch is stated rather than implied: the packaging assertions
       # above still ran, but nothing in this leg proves the app starts.
