@@ -22,7 +22,7 @@ Claude Code、Codex、CursorなどのAIツールにおけるトークン、コ�
 
 **オープンソース · ローカルファースト · アカウント不要**
 
-> 注：元READMEで参照されていた画像のうち、現在アクセスできる4枚を `assets/aitracker-ja/` に収録しました。画像内の中国語を含む3枚は元ファイルが見つからなかったため、該当箇所に補足を付けています。元画像をご提供いただければ、画像内の文言も日本語に置き換えた完成版に更新できます。
+> 注：本文中の図は元の図版をそのまま使用しています。画像内に含まれる中国語テキストは原文のままで、本文のMarkdownはすべて日本語に翻訳しています。
 
 ---
 
@@ -56,7 +56,7 @@ AITrackerはElectron、TanStack Start、React、TypeScriptで構築されたデ�
 
 - Node.js 24 以降
 - npm 10 以降
-- macOS または Windows（完全なデスクトップ体験）
+- macOS、Windows、Linux（完全なデスクトップ体験）
 
 ```bash
 git clone https://github.com/estelwalks/aitracker.git
@@ -94,10 +94,10 @@ npm run dev:desktop
 
 すべてのリリースは [Releases ページ](https://github.com/estelwalks/aitracker/releases/latest) で確認できます。
 
-以下のコマンドはmacOSまたはWindowsの正式版をインストールするためのものです。
+以下のコマンドはmacOS、Windows、Linuxの正式版をインストールするためのものです。
 正式版と各パッケージマネージャーのメタデータが公開された後に利用できます。
 
-#### npx（macOS / Windows）
+#### npx（macOS / Windows / Linux）
 
 Node.jsとnpmをインストール済みの場合は、次のコマンドを実行します。
 
@@ -109,6 +109,11 @@ npx --yes @estelwalks/aitracker@latest
 最新の正式版に追従するため、書き換える必要はありません。特定のビルドを再現したい場合は
 バージョンを固定してください（`@estelwalks/aitracker@1.0.3`）。beta 版は `@beta` で
 公開されます。
+
+LinuxではAppImageをダウンロードし、実行権限を付与して起動します。システムパッケージを
+使いたい場合は、[Releasesページ](https://github.com/estelwalks/aitracker/releases/latest)
+から `.deb` をダウンロードし、`sudo apt install ./AITracker-Linux-x64.deb` でインストール
+してください。ランチャーが権限昇格を代行することはありません。
 
 使用中のnpmミラーにこのパッケージがない場合は、公式npmレジストリを明示します。
 
@@ -135,6 +140,37 @@ winget install --id estelwalks.AITracker -e
 winget upgrade --id estelwalks.AITracker -e
 ```
 
+#### Linux（x86_64）
+
+Linuxビルドはx86_64のみで、3つの形式があります。
+
+- **AppImage** — FUSE 2（`libfuse2`。Ubuntu 24.04以降は`libfuse2t64`）がある
+  x86_64デスクトップで動作します。FUSEがない場合は`--appimage-extract-and-run`で
+  実行できます。アプリ内アップデーターと`npx`ランチャーが渡すのはこの形式で、
+  `release-metadata-linux.json`が記録するのもこれです。
+- **`.deb`** — Debian / Ubuntu：
+  `sudo apt install ./AITracker-Linux-x64.deb`
+- **`.rpm`** — Fedora / Red Hat系：
+  `sudo dnf install ./AITracker-Linux-x64.rpm`
+
+各リリースは、ビルド直後のパッケージを**Debian 13**、**Ubuntu 24.04**、
+**Rocky Linux 9**、**Rocky Linux 10**、**Fedora**のコンテナで実際にインストールして
+起動するマトリックスで検証されます。宣言された依存関係はこれらのディストリビューションの
+実リポジトリで解決されます。パッケージはUbuntu 22.04ベースでビルドしているため、
+Debian 12+ / Ubuntu 22.04+が想定される下限です。GTK 3デスクトップを持つ他のx86_64
+ディストリビューションはAppImageで動作する見込みです。Fedora SilverblueやBazziteのような
+イミュータブルなディストリビューションでは`.rpm`を重ねられないため、AppImageを使って
+ください。
+
+更新方法は形式によって異なります。AppImageはアプリ自身がその場で置き換え、`.deb`／
+`.rpm`は`apt`／`dnf`に引き渡して実行すべきコマンドを表示します。AITrackerが権限昇格を
+代行することはありません。
+
+トレイアイコンにはStatusNotifierItemホストが必要です。`.deb`は
+`libayatana-appindicator3-1`（または`libappindicator3-1`）に依存します。Red Hat系では
+このパッケージがEPELにあるため、トレイを使いたい場合は
+`libayatana-appindicator-gtk3`を別途インストールしてください（なくてもアプリは動作します）。
+
 ### ビルドとテスト
 
 ```bash
@@ -145,7 +181,33 @@ npm run test:all            # ユニット、ツール、データベース、sc
 npm run check:opensource-hygiene
 ```
 
-プラットフォーム用インストーラーは`npm run dist:mac`または`npm run dist:win:x64`で作成できます。コマンド一覧、生成ファイルの方針、リポジトリ構成については[開発ガイド](DEVELOPMENT.md)をご覧ください。
+プラットフォーム用インストーラーは`npm run dist:mac`、`npm run dist:win:x64`、
+`npm run dist:win:arm64`、`npm run dist:linux:x64`で作成できます。署名と公証の資格情報は
+このリポジトリには保存されません。
+
+Linux向けのビルドはLinux上で実行する必要があります。ここではElectronをクロスコンパイル
+せず、ネイティブビルド依存（TailwindのOxideエンジン、lightningcss、アイコン
+レンダラー）はホストプラットフォームのバインディングのみをインストールするためです。
+
+スタンドアロンのインストーラーランチャーは`aitracker`としてパッケージされ、macOS
+arm64/x64、Windows x64/arm64（Windows on ARMを含む）、Linux x64（AppImage、`.deb`、
+`.rpm`）に対応します。Ubuntu 24.04以降ではAppImageに`libfuse2t64`が必要です。
+`--appimage-extract-and-run`で実行することもできます。
+
+---
+
+## ドキュメント
+
+- [開発ガイド](DEVELOPMENT.md) — コマンド一覧、生成ファイルの方針、リポジトリ構成
+- [リリースチェックリスト](RELEASE_CHECKLIST.md) — タグを打ったリリースが公開前に検証する内容
+- [アーキテクチャとビジネス構造](architecture/README.zh-CN.md)（中国語）— モジュール、データフロー、プライバシー境界
+- [開発ワークフロー](DEVELOPMENT_WORKFLOW.zh-CN.md)（中国語）— 日常の開発・テスト・リリース手順
+- [ロードマップ](plan/aitracker-后续开发计划.md)（中国語）
+- [レポート分析設計](design/aitracker-报告分析设计.md)（中国語）
+
+アーキテクチャ、計画、設計の各ドキュメントは現在中国語のみです。開発ガイドとリリース
+チェックリストは英語です。データのローカル処理については
+[PRIVACY.md](../PRIVACY.md)をご覧ください。
 
 ---
 
@@ -218,8 +280,6 @@ AITrackerは、異なるAIツールの上に共通の能力レイヤーを構築
 
 一つの場所で管理し、異なるAIツールで使い続ける。
 
-図中の主なメッセージ：一度蓄積して複数ツールで再利用／切り替え自在でシームレスに移行／一貫した体験を標準化／継続的に最適化し、絶えず進化。
-
 ---
 
 ## ナレッジベースと長期記憶
@@ -266,6 +326,10 @@ AIの利用履歴、統計データ、Skills、Rules、知識、記憶は、優�
 
 あなたのデータは、あなた自身のものです。
 
+Skillsマーケットの一覧と為替レートのデータは、プロジェクトが運営するサービス
+`ai.trusttools.cn`から取得します。このサービスに接続できない場合は、キャッシュまたは
+組み込みデータにフォールバックします。
+
 ---
 
 ## AITrackerが解決したいこと
@@ -273,8 +337,6 @@ AIの利用履歴、統計データ、Skills、Rules、知識、記憶は、優�
 これまで、私たちは通常このように使っていました：
 
 ![](./assets/ja/06-past-scattered-tools.png)
-
-> 配図（従来の使い方）：元READMEの参照先にある画像ファイルが現在見つからないため、原図をこの版には埋め込めていません。
 
 これからは、ますますこのような形になります：
 
@@ -288,13 +350,18 @@ AIツールは、ますます強力になり、ますます増えています。
 
 > **AIを把握する → 能力を管理する → 経験を蒸留する → 継続的に蓄積する。**
 
+---
+
 ## コントリビューション
 
-AITrackerはオープンソースです。
-
-Issueや、新しいAIツールへの対応に関する提案を歓迎します。
+AITrackerはオープンソースです。Issue、機能提案、ドキュメントの改善、Pull Requestを
+歓迎します。変更を提出する前に[CONTRIBUTING.md](../CONTRIBUTING.md)をお読みください。
+脆弱性については、公開Issueではなく[SECURITY.md](../SECURITY.md)の手順で報告して
+ください。
 
 利用中のAIコーディングツールがAITrackerにまだ対応していない場合も、ぜひお知らせください。
+
+データのローカル処理については[PRIVACY.md](../PRIVACY.md)をご覧ください。
 
 ---
 
@@ -302,6 +369,9 @@ Issueや、新しいAIツールへの対応に関する提案を歓迎します�
 
 AITrackerは、追加制限付きのGPL-3.0ベースのプロジェクトライセンスで
 配布されています。詳しくは[LICENSE](../LICENSE)をご覧ください。
+
+セキュリティスキャナーのパッケージ`@estelwalks/agent-threat-scanner`は、MITライセンスで
+別途配布されています。
 
 ---
 

@@ -134,6 +134,15 @@ opened early. Individual fixes do not have to touch this file.
   `npm publish` and nothing else, so `npm dist-tag add` failed with E401 and a
   prerelease published without `--tag beta` would have landed on `latest` too.
   `scripts/verify-release-workflows.mjs` now pins both invariants.
+- All four READMEs (English, 简体中文, 日本語, 한국어) carry the same document
+  set again. The Linux install path sits beside the macOS and Windows ones — the
+  AppImage, the `.deb` and the `.rpm`, how each of them updates, and the tray's
+  StatusNotifierItem host — and every README states which distributions each
+  release installs and starts in CI: Debian 13, Ubuntu 24.04, Rocky Linux 9,
+  Rocky Linux 10 and Fedora, against the Debian 12+/Ubuntu 22.04+ build
+  baseline. The contributing, license, local-first and documentation sections
+  were aligned across the four languages, and the Japanese-only image caption
+  that no other translation carried is gone.
 
 ## [1.0.5] - 2026-10-12
 

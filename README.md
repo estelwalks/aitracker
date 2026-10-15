@@ -148,6 +148,37 @@ winget install --id estelwalks.AITracker -e
 winget upgrade --id estelwalks.AITracker -e
 ```
 
+#### Linux (x86_64)
+
+Linux builds are x86_64 only and come in three flavours:
+
+- **AppImage** — runs on any x86_64 desktop with FUSE 2 (`libfuse2`; on Ubuntu
+  24.04 and newer, `libfuse2t64`), or with `--appimage-extract-and-run` when
+  FUSE is unavailable. This is the artifact the in-app updater and the `npx`
+  launcher hand over, and the one `release-metadata-linux.json` records.
+- **`.deb`** — Debian and Ubuntu:
+  `sudo apt install ./AITracker-Linux-x64.deb`.
+- **`.rpm`** — Fedora and the Red Hat family:
+  `sudo dnf install ./AITracker-Linux-x64.rpm`.
+
+Every release is gated by a container matrix that installs and starts the
+package it just built on **Debian 13**, **Ubuntu 24.04**, **Rocky Linux 9**,
+**Rocky Linux 10** and **Fedora** — the declared dependencies are resolved
+against those distributions' real repositories rather than assumed. The
+packages are built on an Ubuntu 22.04 baseline, so Debian 12+/Ubuntu 22.04+ is
+the intended floor, and other x86_64 distributions with a GTK 3 desktop should
+work through the AppImage. Immutable distributions such as Fedora Silverblue or
+Bazzite cannot layer the `.rpm`; use the AppImage there.
+
+Updates differ by flavour: an AppImage replaces itself in place from inside the
+app, while a `.deb` or `.rpm` is handed to `apt`/`dnf` with the exact command
+printed for you. AITracker never elevates privileges on your behalf.
+
+The tray icon needs a StatusNotifierItem host. The `.deb` depends on
+`libayatana-appindicator3-1` (or `libappindicator3-1`); on the Red Hat family
+that package lives in EPEL, so install `libayatana-appindicator-gtk3` yourself
+if you want the tray — the app runs without it.
+
 ### Build and Test
 
 ```bash
@@ -168,13 +199,27 @@ renderer) install only the host platform's bindings.
 
 The standalone installer launcher is packaged as `aitracker` and supports macOS
 arm64/x64, Windows x64/arm64 (including Windows on ARM), and Linux x64
-(AppImage and `.deb`). On Ubuntu 24.04 and newer the AppImage needs `libfuse2t64`,
-or it can be run with `--appimage-extract-and-run`.
+(AppImage, `.deb` and `.rpm`).
 
-See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
-generated-file policy, and repository layout.
+---
 
-See [Privacy](PRIVACY.md) for data-handling details.
+## Documentation
+
+- [Development Guide](docs/DEVELOPMENT.md) — command matrix, generated-file
+  policy, and repository layout
+- [Release Checklist](docs/RELEASE_CHECKLIST.md) — what a tagged release
+  verifies before it is published
+- [Architecture and business structure](docs/architecture/README.zh-CN.md)
+  (Chinese) — modules, data flow, and the privacy boundaries
+- [Development workflow](docs/DEVELOPMENT_WORKFLOW.zh-CN.md) (Chinese) — the
+  day-to-day develop, test, and release loop
+- [Roadmap](docs/plan/aitracker-后续开发计划.md) (Chinese)
+- [Report analytics design](docs/design/aitracker-报告分析设计.md) (Chinese)
+
+The architecture, plan, and design documents are currently written in Chinese;
+the development guide and the release checklist are in English.
+
+See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
 
 ---
 
@@ -326,10 +371,14 @@ welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a
 change. For vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of
 opening a public issue.
 
+See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
+
+---
+
+## License
+
 AITracker is distributed under a GPL-3.0-based project license with additional
 restrictions. See [LICENSE](LICENSE) for the full project terms.
-
-See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
 
 The scanner package is distributed separately under the MIT license:
 `@estelwalks/agent-threat-scanner`.

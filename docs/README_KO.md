@@ -56,7 +56,7 @@ AITracker는 Electron, TanStack Start, React와 TypeScript로 만든 데스크�
 
 - Node.js 24 이상
 - npm 10 이상
-- macOS 또는 Windows (완전한 데스크톱 환경)
+- macOS, Windows, Linux (완전한 데스크톱 환경)
 
 ```bash
 git clone https://github.com/estelwalks/aitracker.git
@@ -94,10 +94,10 @@ npm run dev:desktop
 
 모든 버전은 [Releases 페이지](https://github.com/estelwalks/aitracker/releases/latest)에서 확인할 수 있습니다.
 
-다음 명령은 macOS 또는 Windows 정식 버전을 설치합니다. 정식 버전과 각 패키지
+다음 명령은 macOS, Windows, Linux 정식 버전을 설치합니다. 정식 버전과 각 패키지
 관리자의 메타데이터가 공개된 후 사용할 수 있습니다.
 
-#### npx (macOS 및 Windows)
+#### npx (macOS, Windows, Linux)
 
 Node.js와 npm이 설치되어 있다면 다음 명령을 실행하세요.
 
@@ -108,6 +108,11 @@ npx --yes @estelwalks/aitracker@latest
 이 명령은 데스크톱 설치 파일을 다운로드하여 엽니다. `@latest`는 항상 최신 정식 버전을
 따르므로 수정할 필요가 없습니다. 특정 빌드를 재현하려면 버전을 고정하세요
 (`@estelwalks/aitracker@1.0.3`). 베타 버전은 `@beta`로 배포됩니다.
+
+Linux에서는 AppImage를 내려받아 실행 권한을 부여하고 실행합니다. 시스템 패키지를
+사용하려면 [Releases 페이지](https://github.com/estelwalks/aitracker/releases/latest)에서
+`.deb`를 내려받아 `sudo apt install ./AITracker-Linux-x64.deb`로 설치하세요. 런처가 대신
+권한을 상승시키는 일은 없습니다.
 
 사용 중인 npm 미러에 이 패키지가 없다면 공식 npm registry를 명시하세요.
 
@@ -134,6 +139,35 @@ winget install --id estelwalks.AITracker -e
 winget upgrade --id estelwalks.AITracker -e
 ```
 
+#### Linux(x86_64)
+
+Linux 빌드는 x86_64만 제공하며 세 가지 형식이 있습니다.
+
+- **AppImage** — FUSE 2(`libfuse2`, Ubuntu 24.04 이상은 `libfuse2t64`)가 있는
+  x86_64 데스크톱에서 실행됩니다. FUSE를 사용할 수 없으면
+  `--appimage-extract-and-run`으로 실행할 수 있습니다. 앱 내 업데이터와 `npx` 런처가
+  넘겨주는 형식이며, `release-metadata-linux.json`이 기록하는 대상이기도 합니다.
+- **`.deb`** — Debian / Ubuntu:
+  `sudo apt install ./AITracker-Linux-x64.deb`
+- **`.rpm`** — Fedora / Red Hat 계열:
+  `sudo dnf install ./AITracker-Linux-x64.rpm`
+
+각 릴리스는 방금 빌드한 패키지를 **Debian 13**, **Ubuntu 24.04**, **Rocky Linux 9**,
+**Rocky Linux 10**, **Fedora** 컨테이너에 실제로 설치하고 실행하는 매트릭스로 검증됩니다.
+선언된 의존성은 해당 배포판의 실제 저장소에서 해석됩니다. 패키지는 Ubuntu 22.04 기준으로
+빌드하므로 Debian 12+ / Ubuntu 22.04+가 의도된 하한입니다. GTK 3 데스크톱을 갖춘 다른
+x86_64 배포판은 AppImage로 동작할 것으로 예상됩니다. Fedora Silverblue, Bazzite 같은
+불변(immutable) 배포판에서는 `.rpm`을 레이어링할 수 없으므로 AppImage를 사용하세요.
+
+업데이트 방식은 형식에 따라 다릅니다. AppImage는 앱이 직접 제자리에서 교체하고,
+`.deb`/`.rpm`은 `apt`/`dnf`에 넘기면서 실행할 명령을 그대로 표시합니다. AITracker가 대신
+권한을 상승시키는 일은 없습니다.
+
+트레이 아이콘에는 StatusNotifierItem 호스트가 필요합니다. `.deb`는
+`libayatana-appindicator3-1`(또는 `libappindicator3-1`)에 의존합니다. Red Hat 계열에서는
+이 패키지가 EPEL에 있으므로 트레이를 사용하려면 `libayatana-appindicator-gtk3`를 직접
+설치하세요. 없어도 앱은 정상 동작합니다.
+
 ### 빌드 및 테스트
 
 ```bash
@@ -144,7 +178,32 @@ npm run test:all            # 단위, 도구, 데이터베이스 및 scanner 테
 npm run check:opensource-hygiene
 ```
 
-플랫폼 설치 파일은 `npm run dist:mac` 또는 `npm run dist:win:x64`로 만들 수 있습니다. 전체 명령어, 생성 파일 정책과 저장소 구조는 [개발 가이드](DEVELOPMENT.md)를 참고하세요.
+플랫폼 설치 파일은 `npm run dist:mac`, `npm run dist:win:x64`,
+`npm run dist:win:arm64`, `npm run dist:linux:x64`로 만들 수 있습니다. 서명과 공증
+자격 증명은 이 저장소에 보관하지 않습니다.
+
+Linux 빌드는 Linux에서 실행해야 합니다. 여기서는 Electron을 크로스 컴파일하지 않으며,
+네이티브 빌드 의존성(Tailwind의 Oxide 엔진, lightningcss, 아이콘 렌더러)은 호스트
+플랫폼의 바인딩만 설치하기 때문입니다.
+
+독립 실행형 설치 런처는 `aitracker`로 패키징되며 macOS arm64/x64, Windows x64/arm64
+(Windows on ARM 포함), Linux x64(AppImage, `.deb`, `.rpm`)를 지원합니다. Ubuntu 24.04
+이상에서는 AppImage에 `libfuse2t64`가 필요하며, `--appimage-extract-and-run`으로 실행할
+수도 있습니다.
+
+---
+
+## 문서
+
+- [개발 가이드](DEVELOPMENT.md) — 전체 명령어, 생성 파일 정책과 저장소 구조
+- [릴리스 체크리스트](RELEASE_CHECKLIST.md) — 태그된 릴리스가 공개 전에 검증하는 항목
+- [아키텍처와 비즈니스 구조](architecture/README.zh-CN.md)(중국어) — 모듈, 데이터 흐름과 프라이버시 경계
+- [개발 워크플로](DEVELOPMENT_WORKFLOW.zh-CN.md)(중국어) — 일상적인 개발·테스트·릴리스 절차
+- [로드맵](plan/aitracker-后续开发计划.md)(중국어)
+- [리포트 분석 설계](design/aitracker-报告分析设计.md)(중국어)
+
+아키텍처, 계획, 설계 문서는 현재 중국어로만 제공됩니다. 개발 가이드와 릴리스 체크리스트는
+영어입니다. 데이터의 로컬 처리 방식은 [PRIVACY.md](../PRIVACY.md)를 참고하세요.
 
 ---
 
@@ -262,6 +321,9 @@ AI 사용 기록, 통계 데이터, Skills, Rules, 지식과 기억은 우선 �
 
 데이터는 여러분의 것입니다.
 
+Skills 마켓 목록과 환율 데이터는 프로젝트가 운영하는 서비스 `ai.trusttools.cn`에서
+가져옵니다. 이 서비스에 연결할 수 없으면 캐시 또는 내장 데이터로 대체합니다.
+
 ---
 
 ## AITracker가 해결하려는 문제
@@ -282,13 +344,17 @@ AITracker가 만들고자 하는 것이 바로 그것입니다.
 
 > **AI 파악 → 역량 관리 → 경험 추출 → 지속적인 축적**
 
+---
+
 ## 기여하기
 
-AITracker는 오픈 소스 프로젝트입니다.
-
-Issue 제출과 새로운 AI 도구 지원 제안을 환영합니다.
+AITracker는 오픈 소스 프로젝트입니다. Issue, 기능 제안, 문서 개선과 Pull Request를
+환영합니다. 변경 사항을 제출하기 전에 [CONTRIBUTING.md](../CONTRIBUTING.md)를 읽어 주세요.
+보안 취약점은 공개 Issue 대신 [SECURITY.md](../SECURITY.md)의 절차에 따라 보고해 주세요.
 
 사용 중인 AI Coding Tool이 아직 AITracker에서 지원되지 않는다면, 언제든 알려주세요.
+
+데이터의 로컬 처리 방식은 [PRIVACY.md](../PRIVACY.md)를 참고하세요.
 
 ---
 
@@ -296,6 +362,8 @@ Issue 제출과 새로운 AI 도구 지원 제안을 환영합니다.
 
 AITracker는 추가 제한이 적용된 GPL-3.0 기반 프로젝트 라이선스로
 배포됩니다. 자세한 내용은 [LICENSE](../LICENSE)를 참고하세요.
+
+보안 스캐너 패키지 `@estelwalks/agent-threat-scanner`는 MIT 라이선스로 별도 배포됩니다.
 
 ---
 
