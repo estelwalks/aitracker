@@ -139,6 +139,12 @@ npm run test:e2e:offline
   whole major (`nothing provides libXScrnSaver`), which is what the v1.0.6
   install smoke test caught. The `.deb` still lists the Debian `libxss1`, which
   every supported Debian/Ubuntu release provides.
+- Alternative dependencies are ordered deliberately, and the matrix is what
+  enforces it: `libasound2t64 | libasound2` names the t64 package first, because
+  Ubuntu 24.04 has no real `libasound2` and apt would otherwise satisfy the old
+  name with `liboss4-salsa-asound2` — a shim that `Provides: libasound2` while
+  its library does not export the ALSA API, leaving the installed app unable to
+  start. Check both a package and its `Provides` before adding an alternative.
 - The workflow creates a draft release and uploads assets without the clobber
   option. If the tag, link or build gate fails, the draft-release job is not
   run and no release is published. An existing release name is refused rather
