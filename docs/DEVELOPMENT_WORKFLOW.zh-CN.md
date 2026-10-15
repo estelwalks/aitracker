@@ -274,7 +274,7 @@ npm run diagnose:model     # 诊断当前活跃模型相关状态
 
 ## 6. 发布流程
 
-发布完全由 **Git tag 驱动**：打 `v<version>` 标签并推送后，GitHub Actions 自动构建四个平台的安装包并生成 **draft release**；**任何发布都需要维护者人工验收后再点发布**。
+发布完全由 **Git tag 驱动**：打 `v<version>` 标签并推送后，GitHub Actions 自动构建 macOS/Windows/Linux 安装包并生成 **draft release**；**任何发布都需要维护者人工验收后再点发布**。
 
 ### 6.1 版本与 Changelog 约定（先做）
 
@@ -282,7 +282,8 @@ npm run diagnose:model     # 诊断当前活跃模型相关状态
 2. **Changelog**（`CHANGELOG.md`）：
    - 平时改动一律写进 `## [Unreleased]`；
    - 发布时把 `[Unreleased]` 整个内容移到新编号节 `## [X.Y.Z] - YYYY-MM-DD`，并重建空的 `[Unreleased]`；
-   - 新节顶部放 `### Highlights`（用户应读的简短摘要），下面 `### Details` 放明细；
+   - 新节顶部放 `### Highlights`（英文的简短用户摘要），紧跟 `### 更新摘要`（同一份摘要的中文版，可省略；两者一一对应）；下面 `### Details` 放明细；
+   - GitHub Release 页面由工作流从该节生成，**英文在前、中文在后**：`### Highlights` → `## What's changed`，`### 更新摘要` → `## 本次更新`；缺少中文摘要时该版本只发英文，中文摘要缺少英文列表则直接失败；
    - 版本号节和 bump **属于 release 分支**，不属于 feature 分支/PR；feature 分支只往 `[Unreleased]` 加条目。
    - 预览 release notes：`npm run release:notes -- --version <version> --output -`。
 3. **跑发布门禁**：
@@ -309,7 +310,7 @@ git push origin v<version>
 
 | Workflow | 做什么 |
 |---|---|
-| `.github/workflows/release.yml` | ① release-contract 门禁（校验 tag 与版本一致、制品名、README 链接）→ ② 矩阵构建 4 个安装包（macOS arm64/x64、Windows x64/arm64，Windows arm64 在 x64 runner 上交叉构建）→ ③ 汇编 **draft** release：下载制品 → 再校验 → 生成 `release-metadata.json` 与 `checksums.txt` → 生成 release notes → `gh release create --draft`（beta 加 `--prerelease`） |
+| `.github/workflows/release.yml` | ① release-contract 门禁（校验 tag 与版本一致、制品名、README 链接）→ ② 矩阵构建安装包（macOS arm64/x64、Windows x64/arm64，Windows arm64 在 x64 runner 上交叉构建；Linux x64 在 ubuntu-22.04 上产出 AppImage/deb/rpm）→ ③ 汇编 **draft** release：下载制品 → 再校验 → 生成 `release-metadata.json`、`release-metadata-linux.json` 与 `checksums.txt` → 生成中英双语 release notes → `gh release create --draft`（beta 加 `--prerelease`） |
 | `.github/workflows/publish-npm.yml` | 用 OIDC 可信发布 `@estelwalks/aitracker` CLI 到 npm（无需 NPM_TOKEN），并移动 `latest`/`beta` dist-tag；已存在的版本自动跳过 |
 
 > 稳定 vs beta：tag 名含 `-`（如 `v1.1.0-beta.1`）→ beta 频道（draft prerelease）；否则 → stable。
@@ -337,12 +338,12 @@ gh variable set MAC_CSC_NAME --body "AITracker Self-Signed"
 
 ### 6.4 人工验收并发布 draft（唯一入口）
 
-1. 打开 Actions 的 Release workflow，确认 `release-contract`、四个 build、`draft-release` 全绿。
+1. 打开 Actions 的 Release workflow，确认 `release-contract`、各平台 build、`draft-release` 全绿。
 2. 到 Releases 页面打开那个 **draft**，核对：
    - tag 与版本号；
-   - 恰好四个安装包：`AITracker-arm64.dmg`、`AITracker-x64.dmg`、`AITracker-Setup-x64.exe`、`AITracker-Setup-arm64.exe`（**不含版本号**，这是刻意设计：`releases/latest/download/<name>` 跨版本保持稳定）；
-   - `release-metadata.json` 与 `checksums.txt` 齐全；
-   - release notes 与 changelog 的 `Highlights` 一致。
+   - 安装包齐全：`AITracker-macOS-arm64.dmg`、`AITracker-macOS-x64.dmg`、`AITracker-Windows-x64.exe`、`AITracker-Windows-arm64.exe`，以及 Linux 的 `AITracker-Linux-x64.AppImage` / `.deb` / `.rpm`（**文件名不含版本号**，这是刻意设计：`releases/latest/download/<name>` 跨版本保持稳定）；
+   - `release-metadata.json`、`release-metadata-linux.json` 与 `checksums.txt` 齐全；
+   - release notes 与 changelog 的 `Highlights` / `更新摘要` 一致（英文在前、中文在后）。
 3. 建议做冒烟：在干净用户环境装一个包，走通首启、更新、导出、数据库恢复、已配置 provider 流程。
 4. 确认无误后点 **Publish release**。
 
@@ -351,7 +352,7 @@ gh variable set MAC_CSC_NAME --body "AITracker Self-Signed"
 ```bash
 # README 下载链接应解析到新 tag 的资产（而不是旧 release）
 curl -sIL -o /dev/null -w '%{http_code} %{url_effective}\n' \
-  https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-arm64.dmg
+  https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-macOS-arm64.dmg
 # CLI 应能解析到最新频道
 npx --no-install @estelwalks/aitracker@latest --dry-run
 ```

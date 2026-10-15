@@ -5,20 +5,55 @@ uses semantic versioning for published releases.
 
 ## [Unreleased]
 
+<!--
+Unreleased work is summarised here. The release branch turns this whole
+section into `## [X.Y.Z] - YYYY-MM-DD` when the version is actually
+published, in the same commit that bumps the package versions and receives
+the tag, so a numbered section means "this version shipped" and is never
+opened early. Individual fixes do not have to touch this file.
+-->
+
+## [1.0.6] - 2026-10-15
+
+### Highlights
+
+> Published as this release's GitHub notes; keep these short and user-facing.
+> `### 更新摘要` below carries the same list in Chinese and is published as
+> `## 本次更新` right after the English one, so the release page is bilingual.
+
+- Linux joins macOS and Windows as a supported platform: every release ships an AppImage, a `.deb` and an `.rpm`, and in-app updates work there
+- Reports can now describe what the AI actually did instead of only counting usage: a new switch (off by default) reads the covered sessions locally and sends only a redacted digest to your own configured model
+- Fixed daily/weekly/monthly reports gained a work profile: behaviour mix, per-agent tool activity and session topics
+- Twenty more agents are tracked on Linux, and the five with no Linux build read as unsupported instead of "not installed"
+- An `http://` update proxy address saves again: every address but `socks5://` used to be rejected as an invalid format
+
+### 更新摘要
+
+> 与上面的 `### Highlights` 一一对应，发布时作为 `## 本次更新` 出现在英文摘要之后。
+
+- Linux 与 macOS/Windows 并列成为正式支持的平台：每个版本都提供 AppImage、`.deb` 和 `.rpm`，应用内更新在 Linux 上同样可用
+- 报告可以说明 AI 实际做了什么，而不只是统计用量：新增开关（默认关闭）在本机读取所覆盖的会话，只把脱敏摘要交给您自己配置的模型
+- 固定的日报/周报/月报新增工作画像：行为构成、各 Agent 的工具活动与会话主题
+- Linux 上新增追踪 20 个 Agent 工具，5 个没有 Linux 版本的工具从「未安装」改判为「不支持」
+- `http://` 更新代理地址可以保存了：以前除 `socks5://` 之外的地址一律报格式无效
+
 ### Details
 
 - Linux is a supported desktop platform. Every release now also ships
-  `AITracker-Linux-x64.AppImage` and `AITracker-Linux-x64.deb`; the download
-  links, the `npx @estelwalks/aitracker` launcher and the in-app updater all
-  resolve them, and `npm run dist:linux:x64` builds them (on Linux — Electron is
-  not cross-compiled here).
+  `AITracker-Linux-x64.AppImage`, `AITracker-Linux-x64.deb` and
+  `AITracker-Linux-x64.rpm`; the download links, the
+  `npx @estelwalks/aitracker` launcher and the in-app updater all resolve them,
+  and `npm run dist:linux:x64` builds them (on Linux — Electron is not
+  cross-compiled here). The AppImage is the file the updater and the CLI hand
+  over and the one `release-metadata-linux.json` records; the `.deb` and the
+  `.rpm` update through the system package manager.
 - Linux artifacts are recorded in a **separate** `release-metadata-linux.json`
   asset, not in `release-metadata.json`. That document keeps exactly its four
   macOS/Windows keys: a client shipped before Linux support rejects any fifth
   key outright, so adding `linux-x64` there would have stopped every existing
-  install from updating itself for every later release. Release a version
-  carrying this change _before_ publishing a release whose assets include the
-  Linux installers.
+  install from updating itself for every later release. Older installs never
+  read the new file, and a Linux client falls back to the versionless asset
+  names when it is missing.
 - The in-app update flow works on Linux. Previously it fell through to a
   best-effort `spawn` of the downloaded file, which is written 0644 — the
   resulting `EACCES` arrived after success had already been reported, so
@@ -32,6 +67,15 @@ uses semantic versioning for published releases.
   own title bar), the window is registered with `app.setDesktopName` so the
   taskbar icon and grouping match the installed `.desktop` file, and the
   self-drawn title bar now handles double-click-to-maximize.
+- Tray and autostart on Linux: a desktop with no StatusNotifier watcher no
+  longer leaves a half-started app (`new Tray()` throwing is caught, and the
+  window is reachable from the menu instead of only by relaunching), toggling
+  auto-launch rebuilds the menu rather than keeping a stale checkmark, and
+  autostart is written as a freedesktop entry under `$XDG_CONFIG_HOME/autostart`
+  because `app.setLoginItemSettings` does not exist on Linux. The window
+  remembers its rectangle in the same SQLite preference namespace as the locale,
+  clamped to the current work area so an unplugged monitor cannot strand it
+  off-screen.
 - The Chromium sandbox is probed before startup on Linux. With the SUID helper
   unusable and unprivileged user namespaces disabled, Electron aborts before any
   window exists — no window, no dialog, a stale single-instance lock. The app
@@ -42,23 +86,54 @@ uses semantic versioning for published releases.
   implementation). Five tools with no Linux build — AiPy, Doubao Work, Kimi
   Work, Marvis and Trae Work — are now reported as unsupported rather than
   "planned", because a planned status rendered them as "not installed".
-- Linux locale handling: an unset or `C`/`POSIX` locale used to resolve to
-  Chinese, which is the normal state in containers and some minimal sessions.
-  It now resolves to English.
-- `reports` no longer tells Linux users to "use the macOS/Windows app"; the
-  scheduler runs there now.
+- Linux locales, background tasks and data reset: an unset or `C`/`POSIX`
+  locale used to resolve to Chinese, which is the normal state in containers
+  and some minimal sessions, and now resolves to English; the background
+  scheduler and the report job run there instead of telling the user to "use
+  the macOS/Windows app"; and the data reset applies, so a `~/.aitracker`
+  directory left behind by the CLI no longer fails the forward-only migration
+  check at startup.
 - Fixed a latent skill-root bug: skill roots are resolved through a projection
   that pins the XDG bases to their fallback defaults, so a custom
   `XDG_CONFIG_HOME`/`XDG_DATA_HOME` would have sent discovery — and, since the
   first root is the write path, installation — to the wrong directory.
-
-<!--
-Unreleased work is summarised here. The release branch turns this whole
-section into `## [X.Y.Z] - YYYY-MM-DD` when the version is actually
-published, in the same commit that bumps the package versions and receives
-the tag, so a numbered section means "this version shipped" and is never
-opened early. Individual fixes do not have to touch this file.
--->
+- Reports can describe the work, not only the usage. A new "deep
+  session-content insight" switch (off by default) reads the covered sessions
+  locally on demand and sends only a bounded, redacted digest to the model the
+  user configured; paths, secrets and e-mail addresses are stripped before
+  anything leaves the machine, raw content is never written into a report or
+  persisted, and a preference that cannot be read degrades to the
+  statistics-only report rather than silently enabling transcript reads.
+- Fixed daily/weekly/monthly reports gained work-profile sections — behaviour
+  mix, per-agent tool activity and session topics — plus durable-output counts
+  (skills, knowledge, distillations) collected through a report output port, so
+  the report adapter never imports those modules. Prompt and template versions
+  are bumped and all four locales carry the new copy.
+- Report scheduling and aggregation are anchored to the period they cover: a
+  scheduled run reports the period it was due for instead of "now", monthly
+  archives no longer collide with weekly rows, a repeated-work signal and
+  cross-period session markers keep whole-session cumulative totals honest, and
+  the usage snapshot reloads the persisted envelope after a commit
+  (`reloadAfterCommit`) so the project labels inside a report are the ones every
+  reader sees.
+- Saving an `http://` update proxy works again. Every address used to be
+  rejected as "invalid proxy format": the value was written to
+  `app_preferences`, whose forbidden-zone check reads the `p:/` of `http://` as
+  a Windows path and whose runtime guard rejects URL-shaped values outright, so
+  only `socks5://` survived — and only because a digit precedes its colon. The
+  proxy now lives in its own `update_channel_settings` table (migration 0005)
+  that accepts exactly one bare endpoint per row, a pre-0005 SOCKS value is
+  adopted on first read so it is not lost, and the Settings dialog reports an
+  unusable address and a failed save differently instead of blaming the format.
+- Two release-pipeline defects from the v1.0.5 tag are fixed. The draft-asset
+  guard read the release through `GET /releases/tags/<tag>`, which serves
+  published releases only and answers 404 for a draft, so it reported a failure
+  after all four installers had already been built, uploaded and verified; it
+  now uses the draft-visible `gh release view --json assets`. The npm CLI
+  publishes with an explicit `--tag` because trusted publishing authorizes
+  `npm publish` and nothing else, so `npm dist-tag add` failed with E401 and a
+  prerelease published without `--tag beta` would have landed on `latest` too.
+  `scripts/verify-release-workflows.mjs` now pins both invariants.
 
 ## [1.0.5] - 2026-10-12
 

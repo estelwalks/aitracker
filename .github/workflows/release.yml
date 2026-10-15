@@ -344,27 +344,28 @@ jobs:
       # summary plus a pointer, not a second README. The changelog section is
       # the single source for "what changed"; installation methods, checksums
       # guidance and the signing caveat live in the README and RELEASE_CHECKLIST.
-      # The script fails the job when the `## [<version>]` section is missing
-      # or empty, so a tag can no longer ship generic or stale notes.
+      # The page is bilingual — English first, Chinese second — and both lists
+      # come from the same `## [<version>]` section: `### Highlights` plus the
+      # optional `### 更新摘要`. The script fails the job when the section is
+      # missing or blank, so a tag can no longer ship generic or stale notes.
       - name: Prepare release notes
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
           if [[ "$RELEASE_CHANNEL" == "stable" ]]; then
-            {
-              echo "## What's changed"
-              echo
-            } > release-notes.md
+            : > release-notes.md
             echo "RELEASE_TITLE=AITracker $GITHUB_REF_NAME" >> "$GITHUB_ENV"
           else
             cat > release-notes.md <<'EOF'
           Unsigned beta release for manual verification. Review the assets and checksums before using this prerelease.
 
-          ## What's changed
+          未签名的 beta 版本，仅供手动验证；使用前请先核对附件与校验值。
 
           EOF
             echo "RELEASE_TITLE=AITracker $GITHUB_REF_NAME (unsigned beta)" >> "$GITHUB_ENV"
           fi
+          # Writes `## What's changed`, the English highlights, and — when the
+          # version carries a `### 更新摘要` — `## 本次更新` with the Chinese ones.
           node scripts/changelog-release-notes.mjs --version "$version" --output - >> release-notes.md
           # Quoted heredoc: the inline code below must survive without backticks
           # being read as command substitution.
@@ -372,9 +373,13 @@ jobs:
 
           ## Download
 
-          Installers are attached below: `AITracker-macOS-*.dmg` for macOS and `AITracker-Windows-*.exe` for Windows, with SHA-256 checksums in `checksums.txt`. The builds are unsigned, so macOS Gatekeeper or Windows SmartScreen may ask for a per-file confirmation on first launch.
+          Installers are attached below: `AITracker-macOS-*.dmg` for macOS, `AITracker-Windows-*.exe` for Windows and `AITracker-Linux-*.AppImage` / `.deb` / `.rpm` for Linux, with SHA-256 checksums in `checksums.txt`. The builds are unsigned, so macOS Gatekeeper or Windows SmartScreen may ask for a per-file confirmation on first launch.
 
           Install commands and platform notes: see the [README](https://github.com/estelwalks/aitracker#install), or run `npx --yes @estelwalks/aitracker@latest`.
+
+          安装包见下方附件：macOS 用 `AITracker-macOS-*.dmg`，Windows 用 `AITracker-Windows-*.exe`，Linux 用 `AITracker-Linux-*.AppImage` / `.deb` / `.rpm`；SHA-256 校验值在 `checksums.txt`。构建未签名，macOS 的 Gatekeeper 或 Windows 的 SmartScreen 首次启动时可能要求确认。
+
+          安装命令与平台说明见 [README](https://github.com/estelwalks/aitracker#install)，或直接运行 `npx --yes @estelwalks/aitracker@latest`。
           EOF
 
       - name: Create draft release
