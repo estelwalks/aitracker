@@ -35,15 +35,19 @@ evidence without adding another CI workflow or slowing ordinary pull requests.
 - Update `CHANGELOG.md` with user-facing changes and known limitations, and put
   the short summary users should read in a `### Highlights` sub-section at the
   top of the entry; everything below it (`### Details`) stays in the changelog.
-  The release workflow publishes the Highlights list as the GitHub release
-  notes, falling back to the whole section when a version has none, and fails
-  the tag when the section or an empty Highlights heading would ship blank
+  A sibling `### 更新摘要` sub-section carries the same list in Chinese and is
+  published as `## 本次更新` right after the English one, so the release page is
+  bilingual; a version without it publishes English only. The release workflow
+  publishes those lists as the GitHub release notes, falling back to the whole
+  section when a version has no `### Highlights`, and fails the tag when the
+  section, an empty `### Highlights` heading, an empty `### 更新摘要` heading or a
+  Chinese sub-section with no English list would ship blank or half-translated
   notes — preview it locally with
   `npm run release:notes -- --version <version> --output -`.
 - Keep the release page short: it is an update summary plus a pointer to the
   README for install commands, not a second copy of the documentation. The
-  workflow appends only a short `## Download` section, so anything longer
-  differs per release and belongs in the changelog.
+  workflow appends only a short, bilingual `## Download` section, so anything
+  longer differs per release and belongs in the changelog.
 - Check the `publish-npm` workflow finished for the tag. It publishes
   `packages/cli` to npm and moves the `latest`/`beta` dist-tag, which is what
   `npx --yes @estelwalks/aitracker@latest` documents; it needs the repository
@@ -58,13 +62,15 @@ evidence without adding another CI workflow or slowing ordinary pull requests.
   `npm run verify:release-artifact-names` pins `electron-builder.yml`, the
   release scripts and the READMEs to `AITracker-macOS-arm64.dmg`,
   `AITracker-macOS-x64.dmg`, `AITracker-Windows-x64.exe`,
-  `AITracker-Windows-arm64.exe` — every module must name all four, in the same
+  `AITracker-Windows-arm64.exe` and the Linux set
+  (`AITracker-Linux-x64.AppImage`, `AITracker-Linux-x64.deb`,
+  `AITracker-Linux-x64.rpm`) — every module must name all of them, in the same
   order; `npm run verify:readme-release-links` then confirms the install links
   in `README.md`, `docs/README_CN.md`, `docs/README_JA.md` and
   `docs/README_KO.md` use `/releases/latest/download/<name>` for exactly those
-  four. A `${version}` in an artifact name would silently break every one of
-  those URLs, so the guard fails on it. The `npx` examples in the READMEs still
-  carry the current version.
+  names. A `${version}` in an artifact name would silently break every one of
+  those URLs, so the guard fails on it, and the `npx` examples must stay on
+  `@latest`/`@beta`: a pinned CLI version silently stops following the release.
 - Renaming an installer is a one-release change, and `release-metadata.json` has
   to move with it: a desktop install selects its installer by file extension and
   architecture — never by name — and then requires the name recorded in that
@@ -103,12 +109,16 @@ npm run test:e2e:offline
 - Build the target installer with the appropriate `dist:*` command. Experimental
   beta releases may remain unsigned; stable releases must be signed and
   notarized/smoke-tested for the target platform.
-- For Phase 1, confirm the target set is macOS x64/arm64 and Windows
-  x64/arm64; Linux is out of scope. Keep the beta channel separate from stable.
+- Confirm the target set is macOS x64/arm64, Windows x64/arm64 and Linux x64.
+  Linux ships an AppImage, a `.deb` and an `.rpm`; the AppImage is the file the
+  updater and the CLI hand over, and the two system packages are installed and
+  updated through the distribution's own package manager. Keep the beta channel
+  separate from stable.
 - The tag-triggered [unsigned release workflow](../.github/workflows/release.yml)
-  runs the version and README-link gates first, builds the four installers on
+  runs the version and README-link gates first, builds the installers on
   platform runners, verifies their electron-builder names, and generates
-  `release/release-metadata.json` plus `release/checksums.txt`.
+  `release/release-metadata.json`, `release/release-metadata-linux.json` plus
+  `release/checksums.txt`.
 - The workflow creates a draft release and uploads assets without the clobber
   option. If the tag, link or build gate fails, the draft-release job is not
   run and no release is published. An existing release name is refused rather
@@ -117,14 +127,17 @@ npm run test:e2e:offline
   `/releases/latest/download/<name>` — the URL the READMEs, the desktop updater
   and the CLI resolve — keep working release after release. The compatibility
   window that required a second, versioned copy of every installer closed at
-  1.0.3 (see the changelog): a release now attaches exactly four installers.
-  The app version is unaffected: it lives in `package.json` → `app.asar`'s
-  Info.plist, and `release-metadata.json` records `appVersion`/`gitTag`.
+  1.0.3 (see the changelog): a release now attaches exactly four macOS/Windows
+  installers plus the three Linux ones. The app version is unaffected: it lives
+  in `package.json` → `app.asar`'s Info.plist, and `release-metadata.json`
+  records `appVersion`/`gitTag`.
 - `release-metadata.json` lists exactly four platforms (macOS arm64/x64,
   Windows x64/arm64) and each record must keep its `name`, `url`, `sha256` and
   `size`, with the bytes matching. Adding a platform key strands every install
   older than the release that introduces it, because those clients reject a
-  document carrying a key they do not know.
+  document carrying a key they do not know. Linux therefore lives in its own
+  `release-metadata-linux.json` asset (`linux-x64`, the AppImage), which clients
+  shipped before Linux support never read.
 - Because installers repeat across releases, each release keeps its own copies;
   GitHub resolves them per release and `releases/latest/download/<name>` always
   lands on the newest one.
@@ -179,9 +192,10 @@ release/release-metadata.json --channel <stable|beta> --token
 ## Publish
 
 - The workflow's draft Release is not a publication approval. An authorized
-  maintainer must manually inspect the exact tag, the four installers,
-  `release-metadata.json`, and `checksums.txt`, then publish the draft only
-  after the above evidence is recorded.
+  maintainer must manually inspect the exact tag, the installers,
+  `release-metadata.json`, `release-metadata-linux.json`, `checksums.txt` and
+  the bilingual release notes, then publish the draft only after the above
+  evidence is recorded.
 - After publishing, verify the README links resolve to the new release, for
   example
   `curl -sIL -o /dev/null -w '%{http_code} %{url_effective}\n'

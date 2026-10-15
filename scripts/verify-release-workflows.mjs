@@ -11,10 +11,47 @@ export const PUBLISH_NPM_WORKFLOW = ".github/workflows/publish-npm.yml";
 
 /** Step whose `run:` block reads the drafted release's asset list. */
 const DRAFT_ASSET_STEP = "Verify the draft's assets and metadata agree";
+/** Step that builds the GitHub release notes. */
+const RELEASE_NOTES_STEP = "Prepare release notes";
 /** Step that publishes the CLI package to npm. */
 const PUBLISH_STEP = "Publish package";
 /** Step that proves the dist-tag follows the release. */
 const DIST_TAG_STEP = "Confirm the dist-tag follows this release";
+
+/**
+ * The release page is a short update summary, and since v1.0.6 it is bilingual:
+ * the page carries `## What's changed` with the tag's English highlights and,
+ * when the version has a `### 更新摘要` sub-section, `## 本次更新` with the
+ * Chinese ones. Two regressions are worth failing on.
+ *
+ *  - Notes that no longer come from `scripts/changelog-release-notes.mjs`:
+ *    the page then describes whichever release the template was written for,
+ *    while the changelog section for the tag goes unread.
+ *  - A step rewritten in English only: the highlights survive (the script emits
+ *    them), but the beta warning and the download pointer — the copy the
+ *    workflow itself writes — silently lose their Chinese half.
+ */
+export function inspectReleaseNotesStep({ workflow }) {
+  const problems = [];
+  const run = stepRunBlock({ workflow, step: RELEASE_NOTES_STEP });
+  if (run === undefined) {
+    problems.push(
+      `${RELEASE_WORKFLOW}: "${RELEASE_NOTES_STEP}" step is missing; the release page would no longer carry the changelog summary`,
+    );
+    return problems;
+  }
+  if (!/scripts\/changelog-release-notes\.mjs/u.test(run)) {
+    problems.push(
+      `${RELEASE_WORKFLOW}: "${RELEASE_NOTES_STEP}" must build the notes with \`node scripts/changelog-release-notes.mjs --version "$version"\`; the release page is that version's CHANGELOG section, not a fixed template`,
+    );
+  }
+  if (!/[\u3400-\u9fff]/u.test(run)) {
+    problems.push(
+      `${RELEASE_WORKFLOW}: "${RELEASE_NOTES_STEP}" carries no Chinese copy; the release page is bilingual, so its beta warning and download pointer need a Chinese half`,
+    );
+  }
+  return problems;
+}
 
 /**
  * `GET /releases/tags/<tag>` serves published releases only and answers 404 for
@@ -150,6 +187,7 @@ export async function verifyReleaseWorkflows({ rootDir = PROJECT_ROOT } = {}) {
   const publishWorkflow = await readWorkflow(rootDir, PUBLISH_NPM_WORKFLOW);
   return [
     ...inspectDraftAssetStep({ workflow: releaseWorkflow }),
+    ...inspectReleaseNotesStep({ workflow: releaseWorkflow }),
     ...inspectNpmPublishSteps({ workflow: publishWorkflow }),
   ];
 }
@@ -173,7 +211,7 @@ if (
       process.exitCode = 1;
     } else {
       console.log(
-        "verify-release-workflows: PASS (draft lookup and npm dist-tag)",
+        "verify-release-workflows: PASS (draft lookup, bilingual release notes, npm dist-tag)",
       );
     }
   } catch (error) {

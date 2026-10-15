@@ -91,6 +91,10 @@ names carry no version, so the release tag is the only thing that changes.
 - Linux (x64, Fedora/RHEL package):
   [AITracker-Linux-x64.rpm](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.rpm)
 
+Linux is x86_64 only: `.deb` for Debian 12+/Ubuntu 22.04+, `.rpm` for
+Fedora/RHEL 9+, and the AppImage for other x86_64 desktops with FUSE 2
+(`--appimage-extract-and-run` works without it).
+
 Each release lists its own `release-metadata.json` and `checksums.txt`, which
 record the exact version and SHA-256 of the files in that release. For a
 byte-exact build, take the file from the release whose tag you need instead of
@@ -168,13 +172,27 @@ renderer) install only the host platform's bindings.
 
 The standalone installer launcher is packaged as `aitracker` and supports macOS
 arm64/x64, Windows x64/arm64 (including Windows on ARM), and Linux x64
-(AppImage and `.deb`). On Ubuntu 24.04 and newer the AppImage needs `libfuse2t64`,
-or it can be run with `--appimage-extract-and-run`.
+(AppImage, `.deb` and `.rpm`).
 
-See [Development Guide](docs/DEVELOPMENT.md) for the complete command matrix,
-generated-file policy, and repository layout.
+---
 
-See [Privacy](PRIVACY.md) for data-handling details.
+## Documentation
+
+- [Development Guide](docs/DEVELOPMENT.md) — command matrix, generated-file
+  policy, and repository layout
+- [Release Checklist](docs/RELEASE_CHECKLIST.md) — what a tagged release
+  verifies before it is published
+- [Architecture and business structure](docs/architecture/README.zh-CN.md)
+  (Chinese) — modules, data flow, and the privacy boundaries
+- [Development workflow](docs/DEVELOPMENT_WORKFLOW.zh-CN.md) (Chinese) — the
+  day-to-day develop, test, and release loop
+- [Roadmap](docs/plan/aitracker-后续开发计划.md) (Chinese)
+- [Report analytics design](docs/design/aitracker-报告分析设计.md) (Chinese)
+
+The architecture, plan, and design documents are currently written in Chinese;
+the development guide and the release checklist are in English.
+
+See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
 
 ---
 
@@ -326,10 +344,14 @@ welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a
 change. For vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of
 opening a public issue.
 
+See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
+
+---
+
+## License
+
 AITracker is distributed under a GPL-3.0-based project license with additional
 restrictions. See [LICENSE](LICENSE) for the full project terms.
-
-See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
 
 The scanner package is distributed separately under the MIT license:
 `@estelwalks/agent-threat-scanner`.

@@ -22,6 +22,8 @@ AITracker 是一个**开源、本地运行的 AI 工作台**。
 
 **开源 · 本地 · 无需注册**
 
+> 注：文中插图沿用原始图版，图片内的中文文字保持原样；本文档的 Markdown 文案均为中文。
+
 ---
 
 ## ✨ 为什么需要 AITracker？
@@ -54,7 +56,7 @@ AITracker 是基于 Electron、TanStack Start、React 和 TypeScript 构建的�
 
 - Node.js 24 或更高版本
 - npm 10 或更高版本
-- macOS 或 Windows（完整桌面体验）
+- macOS、Windows 或 Linux（完整桌面体验）
 
 ```bash
 git clone https://github.com/estelwalks/aitracker.git
@@ -85,16 +87,20 @@ Release：安装包文件名不带版本号，每次发布变化的只有 tag。
 - Linux（x64，Fedora/RHEL 软件包）：
   [AITracker-Linux-x64.rpm](https://github.com/estelwalks/aitracker/releases/latest/download/AITracker-Linux-x64.rpm)
 
+Linux 仅提供 x86_64：`.deb` 支持 Debian 12+/Ubuntu 22.04+，`.rpm` 支持
+Fedora/RHEL 9+，其它 x86_64 桌面发行版可用 AppImage（需要 FUSE 2；没有 FUSE 时可用
+`--appimage-extract-and-run`）。
+
 每个 Release 都带有该版本的 `release-metadata.json` 和 `checksums.txt`，其中记录了
 该 Release 的准确版本号与 SHA-256。需要精确复现某个构建时，请到对应 tag 的 Release
 下载，而不要使用 `latest`。
 
 所有版本可以在 [Releases 页面](https://github.com/estelwalks/aitracker/releases/latest) 查看。
 
-以下命令用于安装 macOS 或 Windows 正式版。正式版发布并完成对应的包管理器元数据
-发布后，这些安装入口即可使用。
+以下命令用于安装 macOS、Windows 或 Linux 正式版。正式版发布并完成对应的包管理器
+元数据发布后，这些安装入口即可使用。
 
-#### npx（macOS 和 Windows）
+#### npx（macOS、Windows 和 Linux）
 
 如果已安装 Node.js 和 npm，可以运行：
 
@@ -105,6 +111,10 @@ npx --yes @estelwalks/aitracker@latest
 此命令会下载并打开桌面安装程序。`@latest` 始终跟随最新的正式版，因此不需要随版本修改；
 需要精确复现某个构建时请固定版本号（`@estelwalks/aitracker@1.0.3`）。beta 版本发布在
 `@beta` 下。
+
+在 Linux 上，它会下载 AppImage、赋予可执行权限并启动。如果更想用系统包，可以从
+[Releases 页面](https://github.com/estelwalks/aitracker/releases/latest) 下载 `.deb`，
+用 `sudo apt install ./AITracker-Linux-x64.deb` 安装 —— 启动器不会替你提权。
 
 如果 npm 配置使用的镜像中没有这个包，可以显式使用官方 npm registry：
 
@@ -141,17 +151,31 @@ npm run test:all            # 单元、工具、数据库与 scanner 测试
 npm run check:opensource-hygiene
 ```
 
-可以使用 `npm run dist:mac` 或 `npm run dist:win:x64` 构建平台安装包。完整命令、生成文件约定和仓库结构请参阅[开发指南](DEVELOPMENT.md)。
+可以使用 `npm run dist:mac`、`npm run dist:win:x64`、`npm run dist:win:arm64` 或
+`npm run dist:linux:x64` 构建平台安装包。仓库中不保存签名与公证凭据。
 
-## 架构与业务文档
+Linux 构建必须在 Linux 上执行：这里不对 Electron 做交叉编译，而且原生构建依赖
+（Tailwind 的 Oxide 引擎、lightningcss、图标渲染器）只会安装宿主平台的二进制绑定。
 
+独立安装启动器以 `aitracker` 为包名，支持 macOS arm64/x64、Windows x64/arm64（含
+Windows on ARM）以及 Linux x64（AppImage、`.deb` 与 `.rpm`）。在 Ubuntu 24.04 及更新
+版本上，AppImage 需要 `libfuse2t64`，也可以用 `--appimage-extract-and-run` 运行。
+
+---
+
+## 文档
+
+- [开发指南](DEVELOPMENT.md) —— 完整命令矩阵、生成文件约定与仓库结构
+- [发布检查清单](RELEASE_CHECKLIST.md) —— 打 tag 后发布前会验证哪些内容
 - [架构与业务文档索引](architecture/README.zh-CN.md)
 - [系统架构（当前代码版）](architecture/system-architecture.zh-CN.md)
 - [业务结构（当前代码版）](architecture/business-structure.zh-CN.md)
-- [后续开发计划](plan/aitracker-后续开发计划.md)
 - [开发·测试·验证·发布实操手册](DEVELOPMENT_WORKFLOW.zh-CN.md)
+- [后续开发计划](plan/aitracker-后续开发计划.md)
 - [报告分析设计](design/aitracker-报告分析设计.md)
 
+英文文档见 [Development Guide](DEVELOPMENT.md) 与 [Release Checklist](RELEASE_CHECKLIST.md)；
+数据本地化处理方式见 [PRIVACY.md](../PRIVACY.md)。
 
 ---
 
@@ -270,6 +294,11 @@ AITracker 默认运行在本地。
 
 你的数据，属于你自己。
 
+Skills 市场列表与汇率数据来自项目自建服务 `ai.trusttools.cn`；该服务不可用时会回退到
+缓存或内置数据。
+
+---
+
 ## AITracker 想解决什么？
 
 过去，我们通常是：
@@ -292,11 +321,13 @@ AI 工具越来越强，也越来越多。
 
 ## 如何贡献
 
-AITracker is open source.
-
-欢迎提交 Issue，以及新的 AI 工具适配建议。
+AITracker 是开源项目，欢迎提交 Issue、功能建议、文档改进与 Pull Request。提交改动前请先
+阅读 [CONTRIBUTING.md](../CONTRIBUTING.md)；安全漏洞请按 [SECURITY.md](../SECURITY.md)
+私下报告，不要开公开 Issue。
 
 如果你正在使用某个 AI Coding Tool，而 AITracker 还没有支持，也欢迎告诉我们。
+
+数据本地化处理方式见 [PRIVACY.md](../PRIVACY.md)。
 
 ---
 
@@ -304,6 +335,8 @@ AITracker is open source.
 
 AITracker 采用基于 GPL-3.0 且附带额外限制的项目许可证。详见
 [LICENSE](../LICENSE)。
+
+安全扫描包 `@estelwalks/agent-threat-scanner` 单独以 MIT 许可证分发。
 
 ---
 

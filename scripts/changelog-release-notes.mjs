@@ -9,7 +9,17 @@ const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SECTION_PATTERN = /^## \[([^\]]+)\](?:[^\n]*)$/u;
 /** Sub-heading whose content is what users read on the GitHub release page. */
 const HIGHLIGHTS_PATTERN = /^### +Highlights *$/u;
+/**
+ * Chinese counterpart of `### Highlights`. The release page is bilingual, so a
+ * version that carries this sub-section publishes its list as `## 本次更新`
+ * right after the English one; a version without it stays English-only.
+ */
+const ZH_HIGHLIGHTS_PATTERN = /^### +更新摘要 *$/u;
 const SUB_HEADING_PATTERN = /^### /u;
+
+/** Headings the published notes carry, in page order. */
+const CHANGED_HEADING = "## What's changed";
+const ZH_CHANGED_HEADING = "## 本次更新";
 
 function trimBlankEdges(lines) {
   const body = [...lines];
@@ -19,13 +29,41 @@ function trimBlankEdges(lines) {
 }
 
 /**
+ * Body of one `### ` sub-section, without its heading.
+ *
+ * A leading blockquote is an editorial note (what the sub-section is for), not
+ * something a user should read on the release page, so those lines are dropped.
+ * An empty sub-section returns an empty list and the caller decides whether
+ * that is an error, because "no such sub-section" and "an empty one" mean
+ * different things for the release page.
+ */
+function readSubSection(section, heading) {
+  const at = section.findIndex((line) => heading.test(line));
+  if (at === -1) return undefined;
+  const body = [];
+  for (let index = at + 1; index < section.length; index += 1) {
+    if (SUB_HEADING_PATTERN.test(section[index])) break;
+    body.push(section[index]);
+  }
+  return trimBlankEdges(body.filter((line) => !/^> /u.test(line)));
+}
+
+/**
  * Release notes for one version, taken from CHANGELOG.md.
  *
  * The GitHub release page is an update summary, not a second copy of the
  * changelog, so a section may carry a `### Highlights` sub-section listing the
- * user-visible changes in short form. When it exists, only that sub-section is
- * published; otherwise the whole section is used, which keeps a version
- * without highlights releasable instead of shipping an empty release.
+ * user-visible changes in short form, plus an optional `### 更新摘要` with the
+ * same list in Chinese. Both are published, the English list first, each under
+ * its own heading (`## What's changed` / `## 本次更新`), so the page reads as
+ * two language versions of one short summary and stays useful to either
+ * audience.
+ *
+ * When there is no `### Highlights` at all, the whole section is used instead,
+ * which keeps a version written before this convention releasable rather than
+ * shipping an empty release. A Chinese sub-section without the English list is
+ * a mistake rather than a supported shape: it would publish Chinese bullets
+ * inside the English body.
  */
 export function extractReleaseNotes(changelog, version) {
   if (typeof changelog !== "string")
@@ -54,26 +92,34 @@ export function extractReleaseNotes(changelog, version) {
       `CHANGELOG.md "## [${version}]" section is empty; release notes would be blank`,
     );
 
-  const highlightsAt = section.findIndex((line) =>
-    HIGHLIGHTS_PATTERN.test(line),
-  );
-  if (highlightsAt === -1) return `${section.join("\n")}\n`;
+  const highlights = readSubSection(section, HIGHLIGHTS_PATTERN);
+  const chinese = readSubSection(section, ZH_HIGHLIGHTS_PATTERN);
 
-  const highlights = [];
-  for (let index = highlightsAt + 1; index < section.length; index += 1) {
-    if (SUB_HEADING_PATTERN.test(section[index])) break;
-    highlights.push(section[index]);
+  if (highlights === undefined) {
+    if (chinese !== undefined)
+      throw new Error(
+        `CHANGELOG.md "## [${version}]" has a "### 更新摘要" without a "### Highlights" section; the English list is what the release page leads with`,
+      );
+    return notesPage([CHANGED_HEADING, "", ...section]);
   }
-  // A leading blockquote is an editorial note (what this sub-section is
-  // for), not something a user should read on the release page.
-  const trimmed = trimBlankEdges(
-    highlights.filter((line) => !/^> /u.test(line)),
-  );
-  if (trimmed.length === 0)
+
+  if (highlights.length === 0)
     throw new Error(
       `CHANGELOG.md "## [${version}]" has an empty "### Highlights" section; move the summary or remove the heading`,
     );
-  return `${trimmed.join("\n")}\n`;
+  const notes = [CHANGED_HEADING, "", ...highlights];
+  if (chinese !== undefined) {
+    if (chinese.length === 0)
+      throw new Error(
+        `CHANGELOG.md "## [${version}]" has an empty "### 更新摘要" section; translate the highlights or remove the heading`,
+      );
+    notes.push("", ZH_CHANGED_HEADING, "", ...chinese);
+  }
+  return notesPage(notes);
+}
+
+function notesPage(lines) {
+  return `${trimBlankEdges(lines).join("\n")}\n`;
 }
 
 export function parseReleaseNotesArgs(argv) {

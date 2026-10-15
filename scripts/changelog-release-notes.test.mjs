@@ -41,17 +41,17 @@ test("the CLI entry point actually runs when invoked as a script", () => {
   assert.match(result.stderr, /--version is required/);
 });
 
-test("extracts only the requested version section without its heading", () => {
+test("extracts only the requested version section, under the page heading", () => {
   assert.equal(
     extractReleaseNotes(SAMPLE, "1.0.2"),
-    "- second release note\n- another note\n",
+    "## What's changed\n\n- second release note\n- another note\n",
   );
 });
 
 test("stops at the next section, so unreleased work never leaks into notes", () => {
   assert.equal(
     extractReleaseNotes(SAMPLE, "Unreleased"),
-    "- work in progress\n",
+    "## What's changed\n\n- work in progress\n",
   );
   assert.doesNotMatch(extractReleaseNotes(SAMPLE, "1.0.2"), /older note/u);
 });
@@ -87,7 +87,7 @@ test("a Highlights sub-section is what gets published", () => {
   ].join("\n");
   assert.equal(
     extractReleaseNotes(withHighlights, "1.0.2"),
-    "- Short user-facing line\n- Another short line\n",
+    "## What's changed\n\n- Short user-facing line\n- Another short line\n",
   );
   assert.doesNotMatch(
     extractReleaseNotes(withHighlights, "1.0.2"),
@@ -98,7 +98,7 @@ test("a Highlights sub-section is what gets published", () => {
 test("without highlights the whole section is still published", () => {
   assert.equal(
     extractReleaseNotes(SAMPLE, "1.0.2"),
-    "- second release note\n- another note\n",
+    "## What's changed\n\n- second release note\n- another note\n",
   );
 });
 
@@ -115,8 +115,93 @@ test("a blockquote note above the highlights is not published", () => {
     "## [1.0.1] - 2026-09-08",
   ].join("\n");
   const notes = extractReleaseNotes(noted, "1.0.2");
-  assert.equal(notes, "- User-facing line\n");
+  assert.equal(notes, "## What's changed\n\n- User-facing line\n");
   assert.doesNotMatch(notes, /Editorial note/u);
+});
+
+/**
+ * The release page is bilingual: a version may carry the same short list in
+ * Chinese under `### 更新摘要`, and both lists are published, English first.
+ * A version without Chinese copy stays English-only, so the older entries in
+ * the changelog keep producing exactly the page they produced before.
+ */
+test("a Chinese sub-section is published after the English list", () => {
+  const bilingual = [
+    "## [1.0.6] - 2026-10-15",
+    "",
+    "### Highlights",
+    "",
+    "> Editorial note for maintainers",
+    "",
+    "- English line",
+    "",
+    "### 更新摘要",
+    "",
+    "> 维护者说明，不出现在 release 页面",
+    "",
+    "- 中文要点",
+    "",
+    "### Details",
+    "",
+    "- Long internal note that stays in the changelog",
+    "",
+    "## [1.0.5] - 2026-10-12",
+    "",
+    "- older",
+  ].join("\n");
+  const notes = extractReleaseNotes(bilingual, "1.0.6");
+  assert.equal(
+    notes,
+    "## What's changed\n\n- English line\n\n## 本次更新\n\n- 中文要点\n",
+  );
+  assert.doesNotMatch(notes, /Editorial note|维护者说明|Long internal note/u);
+});
+
+test("a version without Chinese copy stays English-only", () => {
+  assert.equal(
+    extractReleaseNotes(SAMPLE, "1.0.2"),
+    "## What's changed\n\n- second release note\n- another note\n",
+  );
+});
+
+test("an empty or orphaned Chinese sub-section is an error, not a blank half", () => {
+  const empty = [
+    "## [1.0.6] - 2026-10-15",
+    "",
+    "### Highlights",
+    "",
+    "- English line",
+    "",
+    "### 更新摘要",
+    "",
+    "## [1.0.5] - 2026-10-12",
+    "",
+    "- older",
+  ].join("\n");
+  assert.throws(
+    () => extractReleaseNotes(empty, "1.0.6"),
+    /empty "### 更新摘要"/u,
+  );
+
+  // Without the English list the Chinese one would be published inside the
+  // English body of the whole-section fallback, so it is refused instead.
+  const orphan = [
+    "## [1.0.6] - 2026-10-15",
+    "",
+    "- English line",
+    "",
+    "### 更新摘要",
+    "",
+    "- 中文要点",
+    "",
+    "## [1.0.5] - 2026-10-12",
+    "",
+    "- older",
+  ].join("\n");
+  assert.throws(
+    () => extractReleaseNotes(orphan, "1.0.6"),
+    /without a "### Highlights"/u,
+  );
 });
 
 test("an empty Highlights heading is an error, not a blank release", () => {
@@ -248,7 +333,7 @@ test("writes notes to a file and rejects an unpublished version", async () => {
     });
     assert.equal(
       await readFile(output, "utf8"),
-      "- second release note\n- another note\n",
+      "## What's changed\n\n- second release note\n- another note\n",
     );
     await assert.rejects(
       writeReleaseNotes({ version: "9.9.9", changelog: changelogPath, output }),

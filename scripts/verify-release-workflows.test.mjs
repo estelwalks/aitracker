@@ -10,6 +10,7 @@ import {
   RELEASE_WORKFLOW,
   inspectDraftAssetStep,
   inspectNpmPublishSteps,
+  inspectReleaseNotesStep,
   verifyReleaseWorkflows,
 } from "./verify-release-workflows.mjs";
 
@@ -34,6 +35,17 @@ const RELEASE_WORKFLOW_BODY = [
   "          node scripts/verify-release-asset-agreement.mjs --assets drafted-assets.json --metadata drafted-release-metadata.json",
   "      - name: Confirm draft outcome",
   '        run: echo "draft created"',
+  "      - name: Prepare release notes",
+  "        shell: bash",
+  "        run: |",
+  '          version="${GITHUB_REF_NAME#v}"',
+  '          node scripts/changelog-release-notes.mjs --version "$version" --output - >> release-notes.md',
+  "          cat >> release-notes.md <<'EOF'",
+  "",
+  "          ## Download",
+  "",
+  "          安装包见下方附件。",
+  "          EOF",
   "",
 ].join("\n");
 
@@ -42,6 +54,20 @@ const RELEASE_WORKFLOW_BODY = [
 const RELEASE_WORKFLOW_READING_TAGS = RELEASE_WORKFLOW_BODY.replace(
   "gh release view \"$GITHUB_REF_NAME\" --json assets --jq '[.assets[].name]' > drafted-assets.json",
   "gh api \"repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}\" --jq '[.assets[].name]' > drafted-assets.json",
+);
+
+// Notes built from a fixed template rather than the tag's changelog section:
+// the page then describes whichever release the template was written for.
+const RELEASE_WORKFLOW_TEMPLATE_NOTES = RELEASE_WORKFLOW_BODY.replace(
+  'node scripts/changelog-release-notes.mjs --version "$version" --output - >> release-notes.md',
+  'echo "## What is new" >> release-notes.md',
+);
+
+// The highlights still arrive (the script emits them), but the copy the
+// workflow itself writes loses its Chinese half.
+const RELEASE_WORKFLOW_ENGLISH_ONLY_NOTES = RELEASE_WORKFLOW_BODY.replace(
+  "          安装包见下方附件。",
+  "          Installers are attached below.",
 );
 
 const PUBLISH_WORKFLOW_BODY = [
@@ -106,6 +132,28 @@ test("reading assets through releases/tags/ is reported as a draft-blind lookup"
 
 test("a dropped draft-asset step is reported instead of silently skipping", () => {
   const problems = inspectDraftAssetStep({ workflow: "name: Release\n" });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /step is missing/u);
+});
+
+test("notes built from a template instead of the changelog are reported", () => {
+  const problems = inspectReleaseNotesStep({
+    workflow: RELEASE_WORKFLOW_TEMPLATE_NOTES,
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /CHANGELOG section, not a fixed template/u);
+});
+
+test("an English-only notes step is reported as half a bilingual page", () => {
+  const problems = inspectReleaseNotesStep({
+    workflow: RELEASE_WORKFLOW_ENGLISH_ONLY_NOTES,
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /need a Chinese half/u);
+});
+
+test("a dropped notes step is reported instead of silently skipping", () => {
+  const problems = inspectReleaseNotesStep({ workflow: "name: Release\n" });
   assert.equal(problems.length, 1);
   assert.match(problems[0], /step is missing/u);
 });
