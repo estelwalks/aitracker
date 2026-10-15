@@ -92,9 +92,14 @@ Linux는 x86_64만 제공합니다. `.deb`는 Debian 12+/Ubuntu 22.04+, `.rpm`�
 Fedora/RHEL 9+, 그 외 x86_64 데스크톱은 AppImage(FUSE 2 필요, 없으면
 `--appimage-extract-and-run`)를 지원합니다.
 
+앱 내 업데이트는 AppImage를 제자리에서 교체합니다. `.deb` / `.rpm` 설치본은 스스로를
+교체할 수 없으므로, 앱은 내려받은 파일을 가리키고 업데이트를 마치는 명령을 알려줍니다
+(권한 상승은 하지 않습니다).
+
 각 릴리스에는 해당 버전의 `release-metadata.json`과 `checksums.txt`가 첨부되어 정확한
-버전과 SHA-256을 기록합니다. 특정 빌드를 재현해야 할 때는 `latest`가 아니라 해당 태그의
-릴리스에서 내려받으세요.
+버전과 SHA-256을 기록합니다. Linux AppImage는 같은 릴리스의
+`release-metadata-linux.json`에 기록됩니다. 특정 빌드를 재현해야 할 때는 `latest`가 아니라
+해당 태그의 릴리스에서 내려받으세요.
 
 모든 버전은 [Releases 페이지](https://github.com/estelwalks/aitracker/releases/latest)에서 확인할 수 있습니다.
 

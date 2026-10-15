@@ -79,10 +79,46 @@ export interface LocalePreferences {
   currencySource: DesktopPreferenceSource;
 }
 
+/**
+ * How an installed Linux build consumes a downloaded update.
+ *
+ * Only `appimage` can replace itself in place. `package` (deb/rpm) and
+ * `unpacked` (tarball, checkout, unpacked directory) end in a manual install,
+ * because installing a distro package needs root and the app never escalates.
+ */
+export type LinuxInstallForm = "appimage" | "package" | "unpacked";
+
 export interface RuntimeInfo {
   platform: NodeJS.Platform;
   version: string;
   packaged: boolean;
+  /** `null` on platforms where the install form is not a Linux concern. */
+  linuxInstallForm: LinuxInstallForm | null;
+}
+
+/**
+ * Which arm of the installer hand-off ran. Surfaced to the renderer so the UI
+ * can describe what actually happened instead of promising a silent install
+ * that never starts.
+ */
+export type UpdateInstallMethod =
+  | "windows-hidden"
+  | "windows-command"
+  | "darwin-auto-install"
+  | "darwin-open"
+  | "linux-appimage-swap"
+  | "linux-package-open"
+  | "linux-manual"
+  | "spawn";
+
+export interface UpdateInstallHandoff {
+  readonly started: boolean;
+  /** Absent when nothing was waiting, or the hand-off could not be armed. */
+  readonly method?: UpdateInstallMethod;
+  /** Absolute path of the verified installer; set for the manual flows. */
+  readonly installerPath?: string;
+  /** Display-only command that finishes a manual Linux install. */
+  readonly manualCommand?: string;
 }
 
 export interface AutoLaunchState {
@@ -130,7 +166,12 @@ export interface DesktopUpdateState {
     | "network"
     | "invalid-response"
     | "no-asset"
+    // A metadata document existed but failed validation, or the download did.
     | "download"
+    // No metadata document published for this platform at all: on Linux both
+    // the companion `release-metadata-linux.json` and the main document were
+    // absent or did not describe this platform.
+    | "metadata"
     | "install";
 }
 
@@ -433,11 +474,13 @@ export interface DesktopApi {
   /**
    * Hand the downloaded installer over to the platform. On Windows this starts
    * a silent install (the elevated installer closes this app and relaunches the
-   * new build itself); on macOS the app quits and opens the DMG. Resolves
-   * `{ started: false }` when no verified download is waiting or the hand-off
-   * could not be armed.
+   * new build itself); on macOS the app quits and opens the DMG; on Linux an
+   * AppImage is swapped in place while a deb/rpm or unpacked install is handed
+   * to the user. Resolves `{ started: false }` when no verified download is
+   * waiting or the hand-off could not be armed; the resolved `method` tells the
+   * renderer which of those flows actually ran.
    */
-  restartToInstall(): Promise<{ started: boolean }>;
+  restartToInstall(): Promise<UpdateInstallHandoff>;
   onUpdateStateChanged(
     callback: (state: DesktopUpdateState) => void,
   ): () => void;

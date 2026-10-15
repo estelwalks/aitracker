@@ -26,6 +26,15 @@ const DOWNLOAD_IDLE_TIMEOUT_MS = 60_000;
 /** Throttle for progress broadcasts while downloading. */
 const DOWNLOAD_PROGRESS_INTERVAL_MS = 200;
 const RELEASE_METADATA_NAME = "release-metadata.json";
+/**
+ * Linux's companion document. The main document's artifact map has to keep
+ * exactly the four macOS/Windows keys, because clients released before the
+ * tolerant validator reject any fifth key outright — a `linux-x64` entry there
+ * would permanently strand their own updates. Linux artifacts are therefore
+ * published both here (authoritative for Linux) and, from the release that
+ * merges them, in the main document.
+ */
+const RELEASE_METADATA_LINUX_NAME = "release-metadata-linux.json";
 const STRICT_SEMVER_PATTERN =
   /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$/u;
 const TRUSTED_GITHUB_ASSET_HOSTS = new Set([
@@ -441,16 +450,17 @@ function metadataArtifactOf(
     "win32-arm64",
     "win32-x64",
   ];
-  // A release may later also publish Linux installers. Clients older than the
-  // Linux launch reject any fifth key outright, which would strand their own
-  // updates for every subsequent release — so the Linux artifacts are published
-  // in a SEPARATE `release-metadata-linux.json` document instead of here, and
-  // this document keeps its four keys. (See dev-docs/linux/01-架构决策.md §3.1.)
+  // A release also publishes Linux installers, but never as a fifth key of the
+  // MAIN document: clients older than the Linux launch reject any fifth key
+  // outright, which would strand their own updates for every subsequent
+  // release. Linux artifacts live in `release-metadata-linux.json`, and the
+  // main document keeps its four keys until no such client is left.
+  // (See dev-docs/linux/01-架构决策.md §3.1.)
   //
   // This reader is nevertheless forward-tolerant: a key shaped like a platform
   // artifact entry is accepted and ignored rather than treated as a foreign
-  // document. That keeps a future `release-metadata.json` from being unusable
-  // by the clients that already shipped tolerance, without weakening the
+  // document. That is what lets a Linux client validate the companion document
+  // (five keys) today and the merged main document later, without weakening the
   // "is this document ours" check — four required keys must still validate.
   const platformKeyShape = /^(?:darwin|win32|linux)-(?:arm64|x64|ia32)$/u;
   if (
@@ -533,6 +543,19 @@ function metadataArtifactOf(
     sha256: artifact.sha256.toLowerCase(),
     size: artifact.size,
   };
+}
+
+/**
+ * Metadata documents that may describe this platform, most specific first.
+ *
+ * Linux reads its companion document first and falls back to the main one, so a
+ * release that later merges Linux into the main document keeps working for
+ * clients that shipped with the split arrangement.
+ */
+function metadataDocumentNames(platform: NodeJS.Platform): readonly string[] {
+  return platform === "linux"
+    ? [RELEASE_METADATA_LINUX_NAME, RELEASE_METADATA_NAME]
+    : [RELEASE_METADATA_NAME];
 }
 
 function extensionsFor(platform: NodeJS.Platform): readonly string[] {
@@ -771,24 +794,71 @@ export class UpdateManager {
       };
       if (!isNewer || !asset) return this.setState(next);
 
-      const metadataAsset = assets.find(
-        (candidate) => candidate.name === RELEASE_METADATA_NAME,
+      const resolved = await this.resolveExpectedArtifact(
+        release,
+        asset,
+        assets,
       );
-      if (
-        !metadataAsset ||
-        // The metadata asset name is versionless like the installer names, so
-        // the URL is taken from this release's own asset list (already filtered
-        // to non-draft semver tags) rather than rebuilt from a version.
-        !trustedDownloadUrl(metadataAsset.browser_download_url)
-      ) {
-        this.reportIntegrityFailure("metadata-missing", latestVersion);
+      if (resolved.kind === "ok") {
+        this.#expectedArtifact = resolved.artifact;
         return this.setState({
           ...next,
-          status: "error",
-          errorCode: "download",
+          downloadUrl: resolved.artifact.url,
+          assetName: resolved.artifact.name,
         });
       }
+      this.reportIntegrityFailure(
+        resolved.kind === "missing" ? "metadata-missing" : "metadata-invalid",
+        latestVersion,
+      );
+      return this.setState({
+        ...next,
+        status: "error",
+        // `metadata` means no document for this platform was published at all,
+        // which needs a different fix from a document that failed validation.
+        errorCode: resolved.kind === "missing" ? "metadata" : "download",
+      });
+    } catch {
+      return this.setState({
+        ...emptyState(this.#options.currentVersion, "unknown"),
+        errorCode: "network",
+      });
+    }
+  }
 
+  /**
+   * Resolve the verified artifact (name/url/sha256/size) for the selected
+   * installer from the release's metadata document(s).
+   *
+   * The candidate list comes from {@link metadataDocumentNames}. A document
+   * that is not published is skipped silently; one that exists but does not
+   * validate is skipped too, so a future release that merges Linux into the
+   * main document keeps working for this client. Only when no document produced
+   * an artifact does the caller fail, and it distinguishes "nothing was
+   * published for this platform" from "what was published did not validate".
+   */
+  private async resolveExpectedArtifact(
+    release: GitHubRelease,
+    asset: SelectedAsset,
+    assets: readonly GitHubAsset[],
+  ): Promise<
+    | { kind: "ok"; artifact: ExpectedArtifact }
+    | { kind: "missing" }
+    | { kind: "invalid" }
+  > {
+    let sawDocument = false;
+    for (const name of metadataDocumentNames(this.#options.platform)) {
+      const metadataAsset = assets.find((candidate) => candidate.name === name);
+      // The metadata asset name is versionless like the installer names, so the
+      // URL is taken from this release's own asset list (already filtered to
+      // non-draft semver tags) rather than rebuilt from a version.
+      if (
+        !metadataAsset ||
+        !trustedDownloadUrl(metadataAsset.browser_download_url)
+      ) {
+        continue;
+      }
+      sawDocument = true;
       try {
         const metadataResponse = await this.#fetch(
           metadataAsset.browser_download_url,
@@ -798,7 +868,7 @@ export class UpdateManager {
           },
         );
         if (!metadataResponse.ok || !isTrustedResponseUrl(metadataResponse)) {
-          throw new Error("metadata-response");
+          continue;
         }
         const metadataBytes = await readResponseBytes(
           metadataResponse,
@@ -807,7 +877,7 @@ export class UpdateManager {
         const metadata = JSON.parse(
           new TextDecoder().decode(metadataBytes),
         ) as unknown;
-        const expectedArtifact = metadataArtifactOf(
+        const artifact = metadataArtifactOf(
           metadata,
           release,
           this.#channel,
@@ -817,27 +887,12 @@ export class UpdateManager {
           this.#maxDownloadBytes,
           assets,
         );
-        if (!expectedArtifact) throw new Error("metadata-invalid");
-        this.#expectedArtifact = expectedArtifact;
-        return this.setState({
-          ...next,
-          downloadUrl: expectedArtifact.url,
-          assetName: expectedArtifact.name,
-        });
+        if (artifact) return { kind: "ok", artifact };
       } catch {
-        this.reportIntegrityFailure("metadata-invalid", latestVersion);
-        return this.setState({
-          ...next,
-          status: "error",
-          errorCode: "download",
-        });
+        // Try the next document; the caller reports one failure for the set.
       }
-    } catch {
-      return this.setState({
-        ...emptyState(this.#options.currentVersion, "unknown"),
-        errorCode: "network",
-      });
     }
+    return sawDocument ? { kind: "invalid" } : { kind: "missing" };
   }
 
   /**

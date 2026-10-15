@@ -13,6 +13,63 @@ the tag, so a numbered section means "this version shipped" and is never
 opened early. Individual fixes do not have to touch this file.
 -->
 
+### Highlights
+
+> Published as this release's GitHub notes; keep these short and user-facing.
+> `### 更新摘要` below carries the same list in Chinese and is published as
+> `## 本次更新` right after the English one, so the release page is bilingual.
+
+- In-app updates work on Linux again: 1.0.6 could see a newer release but failed to verify the Linux package, so every check ended in "Could not fetch version info" and no Linux install could update itself
+- If you are on Linux with 1.0.6, install 1.0.7 once by hand — the broken build cannot receive its own fix; from 1.0.7 everything is automatic again
+- An AppImage install now updates silently in place, and the restart prompt says so; a deb/rpm install is instead told exactly which command finishes the install
+- The prompt no longer describes a silent install on a deb/rpm install, and no longer reports a failed install when nothing was ever started
+- Linux downloads land in AITracker's own data folder instead of `/tmp`, so a large AppImage is not held in RAM and stays runnable on systems that mount `/tmp` no-exec
+
+### 更新摘要
+
+> 与上面的 `### Highlights` 一一对应，发布时作为 `## 本次更新` 出现在英文摘要之后。
+
+- Linux 应用内更新恢复正常：1.0.6 能看到新版本，却在校验 Linux 安装包时失败，于是每次检查都以「无法获取版本信息」结束，Linux 用户无法自动更新
+- 如果你在 Linux 上用的是 1.0.6，请手动安装一次 1.0.7——出问题的版本收不到自己的修复；从 1.0.7 起一切恢复自动
+- AppImage 安装现在是真正的静默就地替换，重启提示也如实说明；deb/rpm 安装则直接告诉您完成安装需要执行哪条命令
+- 提示不再对 deb/rpm 安装宣称「静默安装」，也不会在什么都没启动时报告「安装失败」
+- Linux 的下载改放在 AITracker 自己的数据目录，不再占用 `/tmp`：大文件不会驻留内存，在把 `/tmp` 挂成 noexec 的系统上也能正常运行
+
+### Details
+
+- Linux clients read the release's **companion** `release-metadata-linux.json`
+  first and fall back to the main `release-metadata.json`, in that order. The
+  companion document records `linux-x64` with its `sha256`, which is what 1.0.6
+  never looked at: it validated the main document (four macOS/Windows keys, and
+  correctly so) and then failed to find a Linux artifact in it, ending every
+  check as an integrity failure. macOS and Windows clients still read the main
+  document only, so their update path is untouched.
+- The document order also keeps the planned merge working: once Linux is merged
+  into the main document, a 1.0.7-and-later client finds `linux-x64` through the
+  fallback instead of being stranded. The merge itself is deliberately **not**
+  part of this release — a client shipped before 1.0.6 rejects any fifth key
+  outright, so merging early would stop those installs from ever updating again.
+- A release that publishes no metadata document for this platform now reports a
+  distinct state (`errorCode: "metadata"`, "no update info for your platform —
+  download it from the release page") instead of the same "Could not fetch
+  version info" that also covered a document that failed validation.
+- The Linux restart prompt is chosen by install form, read from the main process
+  (`$APPIMAGE` set → AppImage; a package under `/opt` or `/usr/lib` → deb/rpm; a
+  checkout or unpacked directory → unpacked). The AppImage copy promises the
+  in-place swap it can perform; the other two say that the folder will open and
+  that the command shown finishes the install, because installing a distro
+  package needs root and the app never escalates.
+- Clicking "Restart & update" now reports what actually happened instead of
+  always claiming an install had started: a manual hand-off shows the real
+  command (`chmod +x <file> && <file>` for an AppImage, `sudo apt install <file>`
+  for a deb, `sudo rpm -U <file>` for an rpm) and no longer arms the 90-second
+  watchdog that used to report a failure for an install nobody started.
+- On Linux the downloaded installer and its hand-off script live in
+  `userData/updates` rather than the system temp directory: `/tmp` is often a
+  `tmpfs` (a 150 MB AppImage parked in RAM) and is sometimes mounted `noexec`,
+  which would make the hand-off script unrunnable and the displayed manual
+  command useless.
+
 ## [1.0.6] - 2026-10-15
 
 ### Highlights

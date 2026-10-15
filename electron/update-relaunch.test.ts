@@ -1,11 +1,25 @@
 import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
   appBundleFromExecutable,
+  buildLinuxHandoffCommand,
   buildMacHandoffCommand,
   buildWindowsHandoffCommand,
   handOffInstaller,
+  linuxManualInstallCommand,
+  resolveLinuxInstallForm,
   MACOS_HANDOFF_COMMAND_NAME,
   WINDOWS_HANDOFF_COMMAND_NAME,
 } from "./update-relaunch.ts";
@@ -486,3 +500,156 @@ test("a Linux artifact with no install path is revealed, never spawned", async (
   assert.equal(calls.length, 0);
   assert.deepEqual(revealed, ["/home/me/Downloads/AITracker-Linux-x64.tar.gz"]);
 });
+
+test("the Linux install form separates an AppImage from a package or a checkout", () => {
+  // The restart prompt has to know whether a silent in-place swap is possible:
+  // `$APPIMAGE` is the only reliable signal, and a distro package runs from a
+  // stable path under /opt or /usr/lib while everything else is unpacked.
+  const form = (options: {
+    platform?: NodeJS.Platform;
+    isPackaged?: boolean;
+    appImagePath?: string;
+    executablePath?: string;
+  }) =>
+    resolveLinuxInstallForm({
+      platform: options.platform ?? "linux",
+      isPackaged: options.isPackaged ?? true,
+      appImagePath: options.appImagePath,
+      executablePath: options.executablePath ?? "/opt/AITracker/aitracker",
+    });
+
+  assert.equal(
+    form({ appImagePath: "/home/me/Apps/AITracker.AppImage" }),
+    "appimage",
+  );
+  assert.equal(form({ executablePath: "/opt/AITracker/aitracker" }), "package");
+  assert.equal(
+    form({ executablePath: "/usr/lib/aitracker/aitracker" }),
+    "package",
+  );
+  assert.equal(
+    form({ executablePath: "/home/me/aitracker-linux/aitracker" }),
+    "unpacked",
+  );
+  assert.equal(
+    form({ isPackaged: false, executablePath: "/usr/lib/electron/electron" }),
+    "unpacked",
+  );
+  // Off Linux the field is not a Linux concern at all.
+  assert.equal(
+    form({
+      platform: "darwin",
+      executablePath: "/Applications/AITracker.app/Contents/MacOS/AITracker",
+    }),
+    null,
+  );
+  assert.equal(
+    form({ platform: "win32", executablePath: "C:\\AITracker\\AITracker.exe" }),
+    null,
+  );
+});
+
+test("the manual Linux command matches the artifact the user actually has", () => {
+  // The dialog used to promise a `.deb` command while the updater always
+  // downloaded the AppImage, which is a command that cannot work.
+  assert.equal(
+    linuxManualInstallCommand(
+      "/home/me/.config/AITracker/updates/aitracker-AITracker-Linux-x64.AppImage",
+    ),
+    "chmod +x '/home/me/.config/AITracker/updates/aitracker-AITracker-Linux-x64.AppImage' && '/home/me/.config/AITracker/updates/aitracker-AITracker-Linux-x64.AppImage'",
+  );
+  assert.equal(
+    linuxManualInstallCommand("/tmp/AITracker-Linux-x64.deb"),
+    "sudo apt install '/tmp/AITracker-Linux-x64.deb'",
+  );
+  assert.equal(
+    linuxManualInstallCommand("/tmp/AITracker-Linux-x64.rpm"),
+    "sudo rpm -U '/tmp/AITracker-Linux-x64.rpm'",
+  );
+  // A path with a quote must stay one argument instead of breaking the command.
+  assert.equal(
+    linuxManualInstallCommand("/tmp/it's here/AITracker.AppImage"),
+    "chmod +x '/tmp/it'\\''s here/AITracker.AppImage' && '/tmp/it'\\''s here/AITracker.AppImage'",
+  );
+});
+
+test(
+  "the AppImage swap script really replaces the image and relaunches it",
+  { skip: process.platform !== "linux" ? "Linux-only integration" : false },
+  async () => {
+    // The unit tests above only assert what the generated script says. This one
+    // runs it: "Restart and update" on an AppImage has to end with the file
+    // swapped, executable, and started again — the acceptance step
+    // dev-docs/linux/03-更新链路.md §4.3 used to leave to a human.
+    const directory = await mkdtemp(join(tmpdir(), "aitracker-swap-"));
+    // A space in the path keeps the shell quoting honest.
+    const spaced = join(directory, "with space");
+    await mkdir(spaced, { recursive: true });
+    const target = join(spaced, "AITracker.AppImage");
+    const installer = join(spaced, "aitracker-AITracker-Linux-x64.AppImage");
+    const relaunchMarker = join(spaced, "relaunched.txt");
+    const imageBody = (marker: string) =>
+      `#!/bin/sh\nprintf '%s' swapped > '${marker}'\n`;
+
+    const previousMarker = join(spaced, "previous-run.txt");
+    await writeFile(target, imageBody(previousMarker), { mode: 0o755 });
+    // The download is written by the updater, so it arrives executable here too.
+    await writeFile(installer, imageBody(relaunchMarker), { mode: 0o755 });
+
+    // A pid that has certainly exited before the script starts polling: this is
+    // the "app stepped aside" half of the hand-off.
+    const sleeper = spawn("sleep", ["0.2"]);
+    const exitedPid = sleeper.pid;
+    assert.ok(exitedPid);
+    await new Promise((resolve) => sleeper.on("exit", resolve));
+
+    const scriptPath = join(spaced, "aitracker-update-handoff.sh");
+    await writeFile(
+      scriptPath,
+      buildLinuxHandoffCommand({
+        installerPath: installer,
+        appImagePath: target,
+        processId: exitedPid,
+      }),
+      { mode: 0o755 },
+    );
+
+    const result = spawnSync("/bin/sh", [scriptPath], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+
+    // The swapped image is byte-identical to the download and still executable.
+    assert.equal(await readFile(target, "utf8"), imageBody(relaunchMarker));
+    assert.equal((await stat(target)).mode & 0o777, 0o755);
+    // The old image was only set aside, never left behind.
+    assert.equal(
+      await readFile(`${target}.old`, "utf8").catch(() => null),
+      null,
+    );
+    assert.equal(
+      await readFile(`${target}.new`, "utf8").catch(() => null),
+      null,
+    );
+    // The download is spent once it is in place: leaving it would keep a second
+    // full copy of the app in the data directory for as long as the install
+    // lives, which is exactly why the staging directory moved out of `/tmp`.
+    assert.equal(await stat(installer).catch(() => null), null);
+
+    // Relaunching happens in the background, so give it a moment to land.
+    let relaunched: string | null = null;
+    for (let attempt = 0; attempt < 40 && relaunched === null; attempt += 1) {
+      relaunched = await readFile(relaunchMarker, "utf8").catch(() => null);
+      if (relaunched === null) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+    assert.match(relaunched ?? "", /swapped/u);
+    const log = await readFile(
+      join(spaced, "aitracker-update-launch.log"),
+      "utf8",
+    );
+    assert.match(log, /app exited/u);
+    assert.match(log, /swap complete/u);
+    assert.match(log, /relaunch requested/u);
+    await rm(directory, { recursive: true, force: true });
+  },
+);

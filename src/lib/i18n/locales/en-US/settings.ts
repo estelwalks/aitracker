@@ -249,6 +249,8 @@ export const settings = {
   installUpdate: "Open installer",
   upToDate: "You're up to date",
   updateFailed: "Could not fetch version info",
+  updateMetadataMissing:
+    "This release published no update info for your platform; download it from the release page",
   viewRelease: "View release page",
   sourceRepo: "Source repository",
   updateRestartTitle: "Update ready",
@@ -257,7 +259,9 @@ export const settings = {
   updateRestartBodyMac:
     "Version v{version} is ready. Restarting now quits the app, installs the new version and starts it again. macOS asks you to confirm opening the downloaded app the first time.",
   updateRestartBodyLinux:
-    "Version v{version} has been downloaded. Choose “Restart and update” and the app will quit, replace itself in place, and reopen. (If a .deb or .rpm package was downloaded instead, the app opens the folder containing it — run the install command shown there to finish.)",
+    "Version v{version} has been downloaded. Choose “Restart and update” and the app will quit, replace itself in place, and reopen.",
+  updateRestartBodyLinuxManual:
+    "Version v{version} has been downloaded. This install is not an AppImage (deb/rpm or an unpacked directory), so the app cannot replace itself: “Restart and update” opens the folder holding the download and shows the command that finishes the install. Install the AppImage to get automatic updates.",
   updateRestartNow: "Restart & update now",
   updateInstallingShort: "Installing…",
   updateLater: "Later",
@@ -400,6 +404,9 @@ export const settings = {
     updateInstalling:
       "Installing the update; the app reopens automatically when it finishes",
     updateInstallTimeout: "No installation detected; please try again",
+    updateManualInstall: "Update downloaded — run this to finish: {command}",
+    updatePackageOpened:
+      "Opened the installer in your software centre; restart AITracker when it finishes",
     updateProxySaved: "Update proxy saved",
     updateProxyFormatInvalid:
       "Invalid proxy. Check the address, for example http://127.0.0.1:7890",

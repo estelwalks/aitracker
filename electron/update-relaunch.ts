@@ -4,19 +4,13 @@ import { access, chmod, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, win32 } from "node:path";
 
+import type { LinuxInstallForm, UpdateInstallMethod } from "./contracts.js";
+
 export interface InstallerHandoffResult {
   readonly launched: boolean;
   readonly reason?: string;
   /** How the hand-off was armed; useful in diagnostics. */
-  readonly method?:
-    | "windows-hidden"
-    | "windows-command"
-    | "darwin-auto-install"
-    | "darwin-open"
-    | "linux-appimage-swap"
-    | "linux-package-open"
-    | "linux-manual"
-    | "spawn";
+  readonly method?: UpdateInstallMethod;
 }
 
 /**
@@ -427,6 +421,56 @@ export function linuxArtifactKind(
 }
 
 /**
+ * How this Linux process was installed, which decides what an update can do.
+ *
+ * `$APPIMAGE` is the only reliable AppImage signal: inside one, `execPath` is
+ * an ephemeral `/tmp/.mount_*` path, while a distro package or an unpacked
+ * directory runs from a stable location. Distro packages land under `/opt` (and
+ * `rpm`-based ones may run from `/usr/lib`), which is what separates "the user
+ * finishes the install with their package manager" from "there is nothing to
+ * replace at all".
+ *
+ * Returns `null` off Linux: the renderer only needs this to word the Linux
+ * restart prompt, and inventing a value elsewhere would be noise.
+ */
+export function resolveLinuxInstallForm(options: {
+  readonly platform: NodeJS.Platform;
+  readonly isPackaged: boolean;
+  readonly appImagePath?: string | undefined;
+  readonly executablePath: string;
+}): LinuxInstallForm | null {
+  if (options.platform !== "linux") return null;
+  if (!options.isPackaged) return "unpacked";
+  if (options.appImagePath) return "appimage";
+  return /^\/(?:opt|usr\/lib)\//u.test(options.executablePath)
+    ? "package"
+    : "unpacked";
+}
+
+/** Single-quote a path for display in a copyable shell command. */
+function shellQuoteForDisplay(path: string): string {
+  return `'${path.replaceAll("'", `'\\''`)}'`;
+}
+
+/**
+ * The command a user runs to finish an update the app is not allowed to install
+ * itself. Display only — nothing here is executed, because installing a distro
+ * package needs root and the app never escalates.
+ */
+export function linuxManualInstallCommand(installerPath: string): string {
+  const quoted = shellQuoteForDisplay(installerPath);
+  const kind = linuxArtifactKind(installerPath);
+  if (kind === "appimage") return `chmod +x ${quoted} && ${quoted}`;
+  if (installerPath.toLowerCase().endsWith(".deb")) {
+    return `sudo apt install ${quoted}`;
+  }
+  if (installerPath.toLowerCase().endsWith(".rpm")) {
+    return `sudo rpm -U ${quoted}`;
+  }
+  return quoted;
+}
+
+/**
  * Build the Linux AppImage hand-off script.
  *
  * An AppImage cannot replace itself while it is running, and replacing the file
@@ -495,6 +539,10 @@ fi
 chmod 755 ${target}
 rm -f "$backup"
 say "swap complete"
+
+# 3b. The download has been copied into place, so keeping it would park a second
+# copy of the app in the user's data directory for as long as the install lives.
+rm -f ${installer}
 
 # 4. Relaunch the updated image.
 if ${target} >/dev/null 2>&1 & then

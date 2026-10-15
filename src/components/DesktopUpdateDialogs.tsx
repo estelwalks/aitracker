@@ -4,6 +4,10 @@ import { toast } from "sonner";
 import type {} from "../../electron/global";
 import { useI18n } from "../lib/i18n/context";
 import { UPDATE_RESTART_DISMISSED_KEY } from "../lib/update-preferences";
+import {
+  classifyUpdateRestart,
+  updateRestartBodyKey,
+} from "../lib/update-restart";
 import { AITrackerButton } from "./aitracker";
 import {
   AlertDialog,
@@ -31,6 +35,14 @@ export function DesktopUpdateDialogs() {
   const [state, setState] = useState<DesktopUpdateState | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
   const [platform, setPlatform] = useState<string | null>(null);
+  /**
+   * Linux only: whether this install can replace itself in place. A deb/rpm or
+   * unpacked install cannot, and the prompt must not promise a silent swap it
+   * is unable to perform.
+   */
+  const [linuxInstallForm, setLinuxInstallForm] = useState<
+    "appimage" | "package" | "unpacked" | null
+  >(null);
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
   const [dismissedLoaded, setDismissedLoaded] = useState(false);
   const previousStatus = useRef<DesktopUpdateState["status"] | null>(null);
@@ -50,7 +62,9 @@ export function DesktopUpdateDialogs() {
     void desktop
       .getRuntimeInfo()
       .then((info) => {
-        if (!cancelled) setPlatform(info.platform);
+        if (cancelled) return;
+        setPlatform(info.platform);
+        setLinuxInstallForm(info.linuxInstallForm ?? null);
       })
       .catch(() => undefined);
     void desktop
@@ -107,10 +121,26 @@ export function DesktopUpdateDialogs() {
     const desktop = api;
     if (!desktop) return;
     try {
-      const result = await desktop.restartToInstall();
-      if (!result.started) {
+      const outcome = classifyUpdateRestart(await desktop.restartToInstall());
+      if (outcome.kind === "failed") {
         toast.error(t("settings.toast.updateRestartFailed"));
         setRestartOpen(false);
+        return;
+      }
+      // The manual Linux hand-off hands the file back instead of installing it:
+      // saying "installing" there would be a lie, and the 90 s watchdog would
+      // fire on an install that was never started.
+      if (outcome.kind === "manual") {
+        setRestartOpen(false);
+        toast.message(
+          t("settings.toast.updateManualInstall", { command: outcome.command }),
+          { duration: 20_000 },
+        );
+        return;
+      }
+      if (outcome.kind === "package-opened") {
+        setRestartOpen(false);
+        toast.success(t("settings.toast.updatePackageOpened"));
         return;
       }
       // The silent installer closes this app itself; if it is still running
@@ -129,16 +159,12 @@ export function DesktopUpdateDialogs() {
   };
 
   if (!api) return null;
-  // Three flows, three different promises: macOS swaps the bundle, Windows runs
-  // an elevated installer, Linux swaps the AppImage in place (or hands a
-  // .deb/.rpm to the user). Showing the Windows copy on Linux described a UAC
-  // prompt that does not exist there.
-  const restartBodyKey =
-    platform === "darwin"
-      ? "settings.updateRestartBodyMac"
-      : platform === "linux"
-        ? "settings.updateRestartBodyLinux"
-        : "settings.updateRestartBody";
+  // Four flows now, four different promises: macOS swaps the bundle, Windows
+  // runs an elevated installer, Linux swaps an AppImage in place, and a
+  // deb/rpm (or unpacked) Linux install ends with the user running one command.
+  // Showing the swap copy on a deb install described an install that cannot
+  // happen there.
+  const restartBodyKey = updateRestartBodyKey(platform, linuxInstallForm);
   const latestVersion = state?.latestVersion ?? null;
 
   return (

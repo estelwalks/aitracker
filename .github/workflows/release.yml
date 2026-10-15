@@ -434,11 +434,11 @@ jobs:
 
           ## Download
 
-          Installers are attached below: `AITracker-macOS-*.dmg` for macOS, `AITracker-Windows-*.exe` for Windows and `AITracker-Linux-*.AppImage` / `.deb` / `.rpm` for Linux, with SHA-256 checksums in `checksums.txt`. The builds are unsigned, so macOS Gatekeeper or Windows SmartScreen may ask for a per-file confirmation on first launch.
+          Installers are attached below: `AITracker-macOS-*.dmg` for macOS, `AITracker-Windows-*.exe` for Windows and `AITracker-Linux-*.AppImage` / `.deb` / `.rpm` for Linux, with SHA-256 checksums in `checksums.txt` — the Linux AppImage's checksum is recorded in `release-metadata-linux.json`. The builds are unsigned, so macOS Gatekeeper or Windows SmartScreen may ask for a per-file confirmation on first launch.
 
           Install commands and platform notes: see the [README](https://github.com/estelwalks/aitracker#install), or run `npx --yes @estelwalks/aitracker@latest`.
 
-          安装包见下方附件：macOS 用 `AITracker-macOS-*.dmg`，Windows 用 `AITracker-Windows-*.exe`，Linux 用 `AITracker-Linux-*.AppImage` / `.deb` / `.rpm`；SHA-256 校验值在 `checksums.txt`。构建未签名，macOS 的 Gatekeeper 或 Windows 的 SmartScreen 首次启动时可能要求确认。
+          安装包见下方附件：macOS 用 `AITracker-macOS-*.dmg`，Windows 用 `AITracker-Windows-*.exe`，Linux 用 `AITracker-Linux-*.AppImage` / `.deb` / `.rpm`；SHA-256 校验值在 `checksums.txt`（Linux AppImage 的记录在 `release-metadata-linux.json`）。构建未签名，macOS 的 Gatekeeper 或 Windows 的 SmartScreen 首次启动时可能要求确认。
 
           安装命令与平台说明见 [README](https://github.com/estelwalks/aitracker#install)，或直接运行 `npx --yes @estelwalks/aitracker@latest`。
           EOF

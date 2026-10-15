@@ -28,6 +28,7 @@ import {
   normalizeUpdateProxyInput,
   parseAutoUpdateEnabled,
 } from "../../../lib/update-preferences";
+import { classifyUpdateRestart } from "../../../lib/update-restart";
 import {
   listPreferences,
   getPreference,
@@ -459,9 +460,24 @@ export function SettingsPage({
   const handleRestartNow = async () => {
     if (!desktopApi) return;
     try {
-      const result = await desktopApi.restartToInstall();
-      if (!result.started) {
+      const outcome = classifyUpdateRestart(
+        await desktopApi.restartToInstall(),
+      );
+      if (outcome.kind === "failed") {
         toast.error(t("settings.toast.updateRestartFailed"));
+        return;
+      }
+      // Manual/package flows leave the app running and the user in charge, so
+      // the page must not claim an install is under way or arm the watchdog.
+      if (outcome.kind === "manual") {
+        toast.message(
+          t("settings.toast.updateManualInstall", { command: outcome.command }),
+          { duration: 20_000 },
+        );
+        return;
+      }
+      if (outcome.kind === "package-opened") {
+        toast.success(t("settings.toast.updatePackageOpened"));
         return;
       }
       // The silent installer closes this app itself; when this page is still
@@ -1251,11 +1267,14 @@ export function SettingsPage({
                               ? t("settings.updateNoAsset", {
                                   version: shownUpdate.latestVersion ?? "",
                                 })
-                              : shownUpdate.status === "error"
-                                ? t("settings.updateFailed")
-                                : shownUpdate.status === "current"
-                                  ? t("settings.upToDate")
-                                  : null}
+                              : shownUpdate.status === "error" &&
+                                  shownUpdate.errorCode === "metadata"
+                                ? t("settings.updateMetadataMissing")
+                                : shownUpdate.status === "error"
+                                  ? t("settings.updateFailed")
+                                  : shownUpdate.status === "current"
+                                    ? t("settings.upToDate")
+                                    : null}
                     </span>
                   )}
                   {desktopApi && shownUpdate?.status === "downloaded" && (

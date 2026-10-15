@@ -250,6 +250,8 @@ export const settings = {
   installUpdate: "インストーラーを開く",
   upToDate: "最新バージョンです",
   updateFailed: "バージョン情報を取得できませんでした",
+  updateMetadataMissing:
+    "このバージョンには現在のプラットフォーム向けの更新情報がありません。リリースページから手動でダウンロードしてください",
   viewRelease: "リリースページを表示",
   sourceRepo: "ソースリポジトリ",
   updateRestartTitle: "更新の準備ができました",
@@ -258,7 +260,9 @@ export const settings = {
   updateRestartBodyMac:
     "v{version} のダウンロードが完了しました。「今すぐ再起動して更新」を選ぶとアプリが終了し、自動でインストールして再起動します。初回起動時に macOS の確認が一度だけ表示されるので「開く」を選んでください。",
   updateRestartBodyLinux:
-    "新バージョン v{version} のダウンロードが完了しました。「今すぐ再起動して更新」を選ぶとアプリが終了し、その場で置き換えてから再起動します。（.deb / .rpm パッケージをダウンロードした場合は、保存先のフォルダーが開きます。表示されるインストールコマンドを実行してください。）",
+    "新バージョン v{version} のダウンロードが完了しました。「今すぐ再起動して更新」を選ぶとアプリが終了し、その場で置き換えてから再起動します。",
+  updateRestartBodyLinuxManual:
+    "新バージョン v{version} のダウンロードが完了しました。現在は AppImage ではないインストール（deb / rpm または展開ディレクトリ）のため、アプリ自身は置き換えられません。「今すぐ再起動して更新」を選ぶと保存先のフォルダーが開き、手動インストール用のコマンドを表示します。AppImage でインストールすると自動更新が有効になります。",
   updateRestartNow: "今すぐ再起動して更新",
   updateInstallingShort: "インストール中…",
   updateLater: "あとで",
@@ -401,6 +405,10 @@ export const settings = {
       "更新をインストールしています。完了するとアプリが自動的に再起動します",
     updateInstallTimeout:
       "インストールが確認できませんでした。もう一度お試しください",
+    updateManualInstall:
+      "更新パッケージをダウンロードしました。次を実行してください：{command}",
+    updatePackageOpened:
+      "ソフトウェアセンターでインストーラーを開きました。完了したら AITracker を再起動してください",
     updateProxySaved: "更新用プロキシを保存しました",
     updateProxyFormatInvalid:
       "プロキシの形式が無効です。例：http://127.0.0.1:7890",

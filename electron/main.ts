@@ -34,6 +34,7 @@ import {
   type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
   type SecurityScanState,
+  type UpdateInstallHandoff,
   type UpdateProxyState,
 } from "./contracts.js";
 import {
@@ -135,7 +136,11 @@ import {
   parseAutoUpdateEnabled,
 } from "./update-preferences.js";
 import { UpdateManager } from "./update-manager.js";
-import { handOffInstaller } from "./update-relaunch.js";
+import {
+  handOffInstaller,
+  linuxManualInstallCommand,
+  resolveLinuxInstallForm,
+} from "./update-relaunch.js";
 import { normalizeUpdateProxy, updateProxyConfig } from "./update-proxy.js";
 
 /**
@@ -281,9 +286,10 @@ function startPeriodicUpdateChecks(): void {
  * frequently a `tmpfs` (so a 100-200 MB AppImage is held in RAM) and is
  * sometimes mounted `noexec`, which would make the hand-off script impossible
  * to run at all. `userData` is on disk, is already per-user (0700), and is where
- * the update is going to be needed anyway.
+ * the update is going to be needed anyway — including for the manual flows,
+ * where the path is handed to the user to run.
  */
-function updateHandoffDirectory(): string {
+function updateStagingDirectory(): string {
   if (process.platform !== "linux") return app.getPath("temp");
   return join(app.getPath("userData"), "updates");
 }
@@ -299,7 +305,7 @@ function updateHandoffDirectory(): string {
  * in a writable bundle the image opens instead and the user installs it
  * manually. Fails closed when nothing is waiting.
  */
-async function restartToInstallNow(): Promise<{ started: boolean }> {
+async function restartToInstallNow(): Promise<UpdateInstallHandoff> {
   const manager = updateManager;
   if (!manager || manager.state.status !== "downloaded") {
     return { started: false };
@@ -313,7 +319,7 @@ async function restartToInstallNow(): Promise<{ started: boolean }> {
     processId: process.pid,
     // The macOS script refuses to install a build older than this one.
     currentVersion: manager.state.latestVersion ?? app.getVersion(),
-    tempDirectory: updateHandoffDirectory(),
+    tempDirectory: updateStagingDirectory(),
     // Inside an AppImage `execPath` is the ephemeral mount point, so the file
     // to replace is the one the user actually launched.
     ...(process.env.APPIMAGE ? { appImagePath: process.env.APPIMAGE } : {}),
@@ -328,7 +334,7 @@ async function restartToInstallNow(): Promise<{ started: boolean }> {
     // Last resort: open the installer's own wizard so the user can still
     // finish the update manually instead of being left with nothing.
     const opened = await shell.openPath(installerPath).catch(() => "failed");
-    return { started: opened.length === 0 };
+    return { started: opened.length === 0, installerPath };
   }
   if (process.platform === "darwin") {
     // Both macOS hand-offs run outside this process, which has to step aside:
@@ -346,7 +352,20 @@ async function restartToInstallNow(): Promise<{ started: boolean }> {
     isQuitting = true;
     app.quit();
   }
-  return { started: true };
+  // The manual flows leave the app running and hand the file (plus the command
+  // that finishes the install) back to the renderer, so the UI can stop
+  // claiming an install is under way when the user still has to act.
+  const manual = result.method === "linux-manual";
+  return {
+    started: true,
+    ...(result.method ? { method: result.method } : {}),
+    ...(manual
+      ? {
+          installerPath,
+          manualCommand: linuxManualInstallCommand(installerPath),
+        }
+      : {}),
+  };
 }
 /** Resolved at startup: manual preference > system mapping > fallback. */
 let currentPreferences: LocalePreferences = {
@@ -939,6 +958,14 @@ function registerIpcHandlers(): void {
       platform: process.platform,
       version: app.getVersion(),
       packaged: app.isPackaged,
+      // Decides whether the restart prompt may promise a silent swap: a
+      // deb/rpm or unpacked install has no AppImage to replace in place.
+      linuxInstallForm: resolveLinuxInstallForm({
+        platform: process.platform,
+        isPackaged: app.isPackaged,
+        appImagePath: process.env.APPIMAGE,
+        executablePath: process.execPath,
+      }),
     };
   });
   ipcMain.handle(desktopIpc.getAutoLaunch, (event): AutoLaunchState => {
@@ -2177,7 +2204,10 @@ if (!hasSingleInstanceLock) {
         isPackaged: app.isPackaged,
         platform: process.platform,
         arch: process.arch,
-        tempDirectory: app.getPath("temp"),
+        // Same directory as the hand-off: on Linux that is userData rather than
+        // `/tmp`, so a 150 MB AppImage is not parked in RAM and the manual
+        // flows can hand the user a path they can actually execute.
+        tempDirectory: updateStagingDirectory(),
         fetchFn: updateSessionFetch,
       });
       updateManager.setEnabled(

@@ -245,6 +245,8 @@ export const settings = {
   installUpdate: "설치 파일 열기",
   upToDate: "최신 버전입니다",
   updateFailed: "버전 정보를 가져올 수 없습니다",
+  updateMetadataMissing:
+    "이 버전에는 현재 플랫폼용 업데이트 정보가 없습니다. 릴리스 페이지에서 직접 내려받으세요",
   viewRelease: "릴리스 페이지 보기",
   sourceRepo: "소스 저장소",
   updateRestartTitle: "업데이트 준비 완료",
@@ -253,7 +255,9 @@ export const settings = {
   updateRestartBodyMac:
     "새 버전 v{version} 다운로드가 완료되었습니다. '지금 다시 시작하여 업데이트'를 선택하면 앱이 종료되고 자동으로 설치한 뒤 다시 시작합니다. 처음 실행할 때 macOS 확인 창이 한 번 표시되면 '열기'를 선택하세요.",
   updateRestartBodyLinux:
-    "새 버전 v{version}을(를) 내려받았습니다. “지금 다시 시작하여 업데이트”를 선택하면 앱이 종료되고 제자리에서 교체된 뒤 다시 열립니다. (.deb / .rpm 패키지를 내려받은 경우에는 파일이 있는 폴더가 열리며, 표시되는 설치 명령을 실행해 주세요.)",
+    "새 버전 v{version}을(를) 내려받았습니다. “지금 다시 시작하여 업데이트”를 선택하면 앱이 종료되고 제자리에서 교체된 뒤 다시 열립니다.",
+  updateRestartBodyLinuxManual:
+    "새 버전 v{version}을(를) 내려받았습니다. 현재는 AppImage 설치가 아니므로(deb / rpm 또는 압축 해제 디렉터리) 앱이 스스로 교체할 수 없습니다. “지금 다시 시작하여 업데이트”를 선택하면 파일이 있는 폴더가 열리고 수동 설치 명령이 표시됩니다. AppImage로 설치하면 자동 업데이트를 사용할 수 있습니다.",
   updateRestartNow: "지금 다시 시작하여 업데이트",
   updateInstallingShort: "설치 중…",
   updateLater: "나중에",
@@ -395,6 +399,10 @@ export const settings = {
     updateInstalling:
       "업데이트를 설치하는 중입니다. 완료되면 앱이 자동으로 다시 열립니다",
     updateInstallTimeout: "설치가 감지되지 않았습니다. 다시 시도하세요",
+    updateManualInstall:
+      "업데이트 패키지를 내려받았습니다. 다음 명령을 실행하세요: {command}",
+    updatePackageOpened:
+      "소프트웨어 센터에서 설치 프로그램을 열었습니다. 설치가 끝나면 AITracker를 다시 시작하세요",
     updateProxySaved: "업데이트 프록시가 저장되었습니다",
     updateProxyFormatInvalid:
       "프록시 형식이 올바르지 않습니다. 예: http://127.0.0.1:7890",

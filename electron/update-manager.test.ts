@@ -1403,3 +1403,251 @@ test("a tampered file on disk is not reused", async () => {
   );
   await rm(directory, { recursive: true, force: true });
 });
+
+/** Installer name the Linux fixtures select; carries no version, by design. */
+const LINUX_APPIMAGE_NAME = "AITracker-Linux-x64.AppImage";
+
+/**
+ * Linux release fixture. Asset names carry no version, so the same names serve
+ * every release and `releases/latest/download/<name>` stays valid.
+ *
+ * `documents` decides which metadata documents the release publishes, which is
+ * what the Linux client's document order is about; `linuxExtra: null` publishes
+ * a companion document with only the four macOS/Windows keys.
+ */
+function linuxReleaseFixture(options: {
+  readonly version?: string;
+  readonly documents: readonly ("main" | "linux")[];
+  readonly mainExtra?: Record<string, unknown>;
+  readonly linuxExtra?: Record<string, unknown> | null;
+}) {
+  const version = options.version ?? "2.0.0";
+  const base = `https://github.com/estelwalks/aitracker/releases/download/v${version}`;
+  const latest =
+    "https://github.com/estelwalks/aitracker/releases/latest/download";
+  const release = {
+    tag_name: `v${version}`,
+    prerelease: false,
+    draft: false,
+    html_url: `https://github.com/estelwalks/aitracker/releases/tag/v${version}`,
+    assets: [
+      {
+        name: "AITracker-macOS-arm64.dmg",
+        browser_download_url: `${base}/AITracker-macOS-arm64.dmg`,
+      },
+      {
+        name: "AITracker-macOS-x64.dmg",
+        browser_download_url: `${base}/AITracker-macOS-x64.dmg`,
+      },
+      {
+        name: "AITracker-Windows-arm64.exe",
+        browser_download_url: `${base}/AITracker-Windows-arm64.exe`,
+      },
+      {
+        name: "AITracker-Windows-x64.exe",
+        browser_download_url: `${base}/AITracker-Windows-x64.exe`,
+      },
+      {
+        name: LINUX_APPIMAGE_NAME,
+        browser_download_url: `${base}/${LINUX_APPIMAGE_NAME}`,
+      },
+      ...options.documents.map((document) => {
+        const name =
+          document === "linux"
+            ? "release-metadata-linux.json"
+            : "release-metadata.json";
+        return { name, browser_download_url: `${base}/${name}` };
+      }),
+    ],
+  };
+  const fourKeys = metadataFor(version, "stable").artifacts;
+  const linuxArtifact = {
+    name: LINUX_APPIMAGE_NAME,
+    url: `${latest}/${LINUX_APPIMAGE_NAME}`,
+    sha256: downloadedSha256,
+    size: downloadedBytes.byteLength,
+  };
+  const documents: Record<string, unknown> = {
+    main: {
+      ...metadataFor(version, "stable"),
+      artifacts: { ...fourKeys, ...(options.mainExtra ?? {}) },
+    },
+    linux: {
+      ...metadataFor(version, "stable"),
+      artifacts: {
+        ...fourKeys,
+        ...(options.linuxExtra === null
+          ? {}
+          : (options.linuxExtra ?? { "linux-x64": linuxArtifact })),
+      },
+    },
+  };
+  return { release, documents };
+}
+
+test("a Linux client resolves its installer from the companion metadata document", async () => {
+  // The main document has to keep exactly the four macOS/Windows keys, so the
+  // only place a Linux artifact can be described today is the companion
+  // document. Reading the main document here is precisely the bug this covers:
+  // it validated fine and then failed to find `linux-x64`, which surfaced as
+  // "Could not fetch version info" for every Linux user.
+  const fixture = linuxReleaseFixture({ documents: ["main", "linux"] });
+  const requested: string[] = [];
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "linux",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    mkdirFn: async () => undefined,
+    writeFileFn: async () => undefined,
+    fetchFn: async (url) => {
+      requested.push(url);
+      if (url.includes("api.github.com")) return response([fixture.release]);
+      if (url.endsWith("release-metadata-linux.json")) {
+        return response(fixture.documents.linux);
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response(fixture.documents.main);
+      }
+      if (url.endsWith(LINUX_APPIMAGE_NAME)) {
+        return new Response(downloadedBytes);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    },
+  });
+
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "available");
+  assert.equal(state.assetName, LINUX_APPIMAGE_NAME);
+  assert.ok(
+    requested.some((url) => url.endsWith("release-metadata-linux.json")),
+    "the companion document has to be consulted",
+  );
+
+  // End to end: the sha256 the download verifies against came from that
+  // document, so bytes that match only it have to pass.
+  assert.equal((await manager.downloadUpdate()).status, "downloaded");
+});
+
+test("a Linux client falls back to the main document once Linux is merged into it", async () => {
+  // Forward compatibility for the release that merges the two documents: the
+  // companion asset is gone, so refusing to look at the main document would
+  // strand this client's own updates.
+  const fixture = linuxReleaseFixture({
+    documents: ["main"],
+    mainExtra: {
+      "linux-x64": {
+        name: LINUX_APPIMAGE_NAME,
+        url: `https://github.com/estelwalks/aitracker/releases/latest/download/${LINUX_APPIMAGE_NAME}`,
+        sha256: downloadedSha256,
+        size: downloadedBytes.byteLength,
+      },
+    },
+  });
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "linux",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) return response([fixture.release]);
+      if (url.endsWith("release-metadata.json")) {
+        return response(fixture.documents.main);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    },
+  });
+
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "available");
+  assert.equal(state.assetName, LINUX_APPIMAGE_NAME);
+});
+
+test("a Linux release that publishes no metadata document at all says so", async () => {
+  // Distinct from "the document did not validate": here the release simply has
+  // nothing for this platform, which is a different thing to fix.
+  const fixture = linuxReleaseFixture({ documents: [] });
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "linux",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) return response([fixture.release]);
+      throw new Error(`unexpected URL: ${url}`);
+    },
+  });
+
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "error");
+  assert.equal(state.errorCode, "metadata");
+  assert.equal(state.latestVersion, "2.0.0");
+});
+
+test("a Linux companion document without a Linux artifact reports a download failure", async () => {
+  // A document was published and fetched, so this is an integrity failure
+  // rather than a missing contract: the four macOS/Windows keys still decide
+  // that the document is ours, and `linux-x64` is the part that is wrong.
+  const fixture = linuxReleaseFixture({
+    documents: ["main", "linux"],
+    linuxExtra: null,
+  });
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "linux",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) return response([fixture.release]);
+      if (url.endsWith("release-metadata-linux.json")) {
+        return response(fixture.documents.linux);
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response(fixture.documents.main);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    },
+  });
+
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "error");
+  assert.equal(state.errorCode, "download");
+});
+
+test("macOS and Windows never read the Linux companion document", async () => {
+  // The document order is platform-specific on purpose: a Darwin client that
+  // started trusting a second document would widen what can steer its update.
+  const fixture = linuxReleaseFixture({ documents: ["main", "linux"] });
+  const requested: string[] = [];
+  const manager = new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "darwin",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    fetchFn: async (url) => {
+      requested.push(url);
+      if (url.includes("api.github.com")) return response([fixture.release]);
+      if (url.endsWith("release-metadata-linux.json")) {
+        // Deliberately unusable: reaching it at all is the failure.
+        return new Response("not ours", { status: 200 });
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response(fixture.documents.main);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    },
+  });
+
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "available");
+  assert.equal(state.assetName, "AITracker-macOS-x64.dmg");
+  assert.ok(
+    !requested.some((url) => url.endsWith("release-metadata-linux.json")),
+    "a non-Linux client must not read the companion document",
+  );
+});

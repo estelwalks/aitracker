@@ -100,17 +100,19 @@ npm run dist:win:x64
 
 Before packaging or tagging, run the release contract gate. It reads the root
 and CLI package manifests, requires matching strict semantic versions, and
-prints the four electron-builder artifact names. Those names carry the operating
-system and no version (`AITracker-macOS-arm64.dmg`, `AITracker-macOS-x64.dmg`,
-`AITracker-Windows-x64.exe`, `AITracker-Windows-arm64.exe`) so that
+prints the electron-builder artifact names for macOS, Windows and Linux. Those
+names carry the operating system and no version (`AITracker-macOS-arm64.dmg`,
+`AITracker-macOS-x64.dmg`, `AITracker-Windows-x64.exe`,
+`AITracker-Windows-arm64.exe`, `AITracker-Linux-x64.AppImage`,
+`AITracker-Linux-x64.deb`, `AITracker-Linux-x64.rpm`) so that
 `releases/latest/download/<name>` keeps resolving to the newest release;
 `npm run verify:release-artifact-names` fails if a `${version}` placeholder
 returns to `electron-builder.yml`, and it also pins every module that names an
-installer to the same four names in the same order — a rename that stops at the
+installer to the same names in the same order — a rename that stops at the
 packaging config would publish assets whose names no install can match against
 `release-metadata.json`, which breaks in-app updating for every 1.0.3+ install.
 `--tag` and `--channel` are optional for local checks; `--release-dir`
-additionally requires all four installers to be present:
+additionally requires every one of those installers to be present:
 
 ```bash
 npm run verify:release-contract
@@ -134,14 +136,16 @@ maintainer must inspect the draft, installers, metadata, and checksums before
 manually publishing it; a failed workflow does not publish a formal/stable
 release channel.
 
-Unsigned local packages are suitable for testing. Phase 1 is limited to an
-unsigned beta for macOS x64/arm64 and Windows x64/arm64. The CLI tarball, release
+Unsigned local packages are suitable for testing. The unsigned beta covers
+macOS x64/arm64, Windows x64/arm64 and Linux x64. The CLI tarball, release
 metadata, and Cask generator are release-tooling inputs and are not yet
 published to npm or a Tap by this checkout. When those local tools are
 available, the expected dry-run sequence is:
 
 ```bash
-# Build local installers, then generate one local source of release metadata.
+# Build local installers, then generate the release metadata. This also writes
+# the Linux companion `release-metadata-linux.json` and `checksums.txt` unless
+# `--linux-output` / `--checksums` say otherwise.
 npm run dist:mac
 npm run dist:win:x64
 npm run dist:win:arm64

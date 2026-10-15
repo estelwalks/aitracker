@@ -95,8 +95,13 @@ Linux is x86_64 only: `.deb` for Debian 12+/Ubuntu 22.04+, `.rpm` for
 Fedora/RHEL 9+, and the AppImage for other x86_64 desktops with FUSE 2
 (`--appimage-extract-and-run` works without it).
 
+In-app updates replace the AppImage in place. A `.deb` or `.rpm` install cannot
+replace itself, so the app points at the downloaded file and shows the exact
+command that finishes the update — it never escalates privileges for you.
+
 Each release lists its own `release-metadata.json` and `checksums.txt`, which
-record the exact version and SHA-256 of the files in that release. For a
+record the exact version and SHA-256 of the files in that release; the Linux
+AppImage is recorded in the companion `release-metadata-linux.json`. For a
 byte-exact build, take the file from the release whose tag you need instead of
 from `latest`.
 

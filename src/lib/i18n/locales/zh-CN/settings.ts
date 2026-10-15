@@ -239,6 +239,7 @@ export const settings = {
   installUpdate: "打开安装包",
   upToDate: "已是最新版本",
   updateFailed: "无法获取版本信息",
+  updateMetadataMissing: "该版本未为当前平台发布更新信息，请到发布页面手动下载",
   viewRelease: "查看发布页面",
   sourceRepo: "源码仓库",
   updateRestartTitle: "更新已就绪",
@@ -247,7 +248,9 @@ export const settings = {
   updateRestartBodyMac:
     "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出、自动完成安装并重新打开；首次启动时 macOS 会弹一次安全确认，选择「打开」即可。",
   updateRestartBodyLinux:
-    "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出，并自动替换为新版本后重新打开。（若下载的是 .deb / .rpm 安装包，应用会打开文件所在目录，请在终端执行提示的安装命令完成安装。）",
+    "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出，并自动替换为新版本后重新打开。",
+  updateRestartBodyLinuxManual:
+    "新版本 v{version} 已下载完成。当前不是 AppImage 安装（deb / rpm 或解压目录），应用无法替换自身：点击「立即重启更新」后会打开文件所在目录，并给出手动安装命令。改用 AppImage 安装后即可自动更新。",
   updateRestartNow: "立即重启更新",
   updateInstallingShort: "安装中…",
   updateLater: "稍后",
@@ -376,6 +379,9 @@ export const settings = {
     updateRestartFailed: "无法启动更新程序，请稍后重试",
     updateInstalling: "正在安装更新，安装完成后应用会自动重新打开",
     updateInstallTimeout: "未检测到安装过程，请重试",
+    updateManualInstall: "更新包已下载，请手动执行：{command}",
+    updatePackageOpened:
+      "已在系统软件中心打开安装包，安装完成后请重启 AITracker",
     updateProxySaved: "更新代理已保存",
     updateProxyFormatInvalid:
       "代理格式无效，请检查地址，例如 http://127.0.0.1:7890",

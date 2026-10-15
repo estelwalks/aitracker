@@ -91,8 +91,12 @@ Linux 仅提供 x86_64：`.deb` 支持 Debian 12+/Ubuntu 22.04+，`.rpm` 支持
 Fedora/RHEL 9+，其它 x86_64 桌面发行版可用 AppImage（需要 FUSE 2；没有 FUSE 时可用
 `--appimage-extract-and-run`）。
 
+应用内更新会就地替换 AppImage。`.deb` / `.rpm` 安装无法替换自身，应用会指向已下载的
+文件并给出一条完成更新的命令，不会替你提权。
+
 每个 Release 都带有该版本的 `release-metadata.json` 和 `checksums.txt`，其中记录了
-该 Release 的准确版本号与 SHA-256。需要精确复现某个构建时，请到对应 tag 的 Release
+该 Release 的准确版本号与 SHA-256；Linux AppImage 记录在同版本的
+`release-metadata-linux.json` 中。需要精确复现某个构建时，请到对应 tag 的 Release
 下载，而不要使用 `latest`。
 
 所有版本可以在 [Releases 页面](https://github.com/estelwalks/aitracker/releases/latest) 查看。
