@@ -13,6 +13,8 @@ the tag, so a numbered section means "this version shipped" and is never
 opened early. Individual fixes do not have to touch this file.
 -->
 
+## [1.0.7] - 2026-10-15
+
 ### Highlights
 
 > Published as this release's GitHub notes; keep these short and user-facing.
