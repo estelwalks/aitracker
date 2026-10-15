@@ -134,6 +134,14 @@ opened early. Individual fixes do not have to touch this file.
   `npm publish` and nothing else, so `npm dist-tag add` failed with E401 and a
   prerelease published without `--tag beta` would have landed on `latest` too.
   `scripts/verify-release-workflows.mjs` now pins both invariants.
+- The `.deb` now declares `libasound2t64 | libasound2` rather than the reverse
+  order. Ubuntu 24.04 ships no real `libasound2`, so apt satisfied the old name
+  with `liboss4-salsa-asound2`, a compatibility shim that `Provides: libasound2`
+  while its library does not export the ALSA API. On a minimal install the app
+  then died at startup with a symbol lookup error for
+  `snd_device_name_get_hint`, before any window existed. Debian 12 and Ubuntu
+  22.04 keep the fallback, because the old name is the real package there; the
+  `ubuntu:24.04` leg of the install smoke matrix is what caught it.
 - Three runs of this release's own tag exposed nine pipeline defects, all fixed
   here. The first picked the RPM by file presence (true on every image, so the
   Debian and Ubuntu legs ran `dnf` and failed), asked for Debian package names

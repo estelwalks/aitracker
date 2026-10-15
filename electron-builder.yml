@@ -186,7 +186,16 @@ deb:
     - libuuid1
     - libsecret-1-0
     - libgbm1
-    - libasound2 | libasound2t64
+    # `libasound2t64` first. Debian 12 and Ubuntu 22.04 only have `libasound2`,
+    # so it stays as the fallback; from Debian 13 / Ubuntu 24.04 on, the t64
+    # name is the real package and naming it first is what keeps apt away from
+    # `liboss4-salsa-asound2`, which `Provides: libasound2` with a compatibility
+    # symlink whose library does not export the ALSA API. With the old name
+    # listed first, a minimal install (a container, where nothing else pulls
+    # ALSA in) satisfied the dependency with that shim and the app died on
+    # startup: `undefined symbol: snd_device_name_get_hint, version ALSA_0.9`.
+    # The ubuntu:24.04 leg of the install smoke matrix is what catches this.
+    - libasound2t64 | libasound2
     - libxkbcommon0
     - libxdamage1
     - libxcomposite1
