@@ -110,10 +110,12 @@ npm run test:e2e:offline
   beta releases may remain unsigned; stable releases must be signed and
   notarized/smoke-tested for the target platform.
 - Confirm the target set is macOS x64/arm64, Windows x64/arm64 and Linux x64.
-  Linux ships an AppImage, a `.deb` and an `.rpm`; the AppImage is the file the
-  updater and the CLI hand over, and the two system packages are installed and
-  updated through the distribution's own package manager. Keep the beta channel
-  separate from stable.
+  Linux ships an AppImage, a `.deb` and an `.rpm`. A build installed from a
+  distro package downloads that package and hands it to the software centre
+  (`xdg-open`), where the user confirms and authenticates; an AppImage install —
+  and any host whose desktop has no installer registered for the package type —
+  is handed the AppImage instead. The CLI always hands over the AppImage. Keep
+  the beta channel separate from stable.
 - The tag-triggered [unsigned release workflow](../.github/workflows/release.yml)
   runs the version and README-link gates first, builds the installers on
   platform runners, verifies their electron-builder names, and generates

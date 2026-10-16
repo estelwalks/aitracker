@@ -1651,3 +1651,199 @@ test("macOS and Windows never read the Linux companion document", async () => {
     "a non-Linux client must not read the companion document",
   );
 });
+
+/**
+ * A Linux release that also publishes the distro packages, described the way
+ * the GitHub API describes every asset: with its size and the sha256 digest of
+ * the uploaded bytes.
+ */
+function packageReleaseFixture(options: {
+  /** Package formats published beside the AppImage. */
+  readonly packages: readonly ("deb" | "rpm")[];
+  /** Whether the feed carries size and digest (the live API always does). */
+  readonly withDigests?: boolean;
+}) {
+  const version = "2.0.0";
+  const base = `https://github.com/estelwalks/aitracker/releases/download/v${version}`;
+  const latest =
+    "https://github.com/estelwalks/aitracker/releases/latest/download";
+  const bodies = new Map<string, Uint8Array>([
+    ["AITracker-macOS-arm64.dmg", new Uint8Array([11])],
+    ["AITracker-macOS-x64.dmg", new Uint8Array([12])],
+    ["AITracker-Windows-arm64.exe", new Uint8Array([13])],
+    ["AITracker-Windows-x64.exe", new Uint8Array([14])],
+    ["AITracker-Linux-x64.AppImage", new Uint8Array([15, 16, 17])],
+    ["AITracker-Linux-x64.deb", new Uint8Array([21, 22, 23, 24])],
+    ["AITracker-Linux-x64.rpm", new Uint8Array([31, 32])],
+  ]);
+  const published = [
+    "AITracker-macOS-arm64.dmg",
+    "AITracker-macOS-x64.dmg",
+    "AITracker-Windows-arm64.exe",
+    "AITracker-Windows-x64.exe",
+    "AITracker-Linux-x64.AppImage",
+    ...options.packages.map((format) => `AITracker-Linux-x64.${format}`),
+  ];
+  const describe = (name: string) => {
+    const bytes = bodies.get(name)!;
+    return {
+      name,
+      browser_download_url: `${base}/${name}`,
+      ...(options.withDigests === false
+        ? {}
+        : {
+            size: bytes.byteLength,
+            digest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+          }),
+    };
+  };
+  const appImageBytes = bodies.get("AITracker-Linux-x64.AppImage")!;
+  const release = {
+    tag_name: `v${version}`,
+    prerelease: false,
+    draft: false,
+    html_url: `https://github.com/estelwalks/aitracker/releases/tag/v${version}`,
+    assets: [
+      ...published.map(describe),
+      {
+        name: "release-metadata.json",
+        browser_download_url: `${base}/release-metadata.json`,
+      },
+      {
+        name: "release-metadata-linux.json",
+        browser_download_url: `${base}/release-metadata-linux.json`,
+      },
+    ],
+  };
+  // The companion document keeps recording the AppImage for `linux-x64`: the
+  // packages are deliberately not in the metadata contract.
+  const documents = {
+    main: metadataFor(version, "stable"),
+    linux: {
+      ...metadataFor(version, "stable"),
+      artifacts: {
+        ...metadataFor(version, "stable").artifacts,
+        "linux-x64": {
+          name: "AITracker-Linux-x64.AppImage",
+          url: `${latest}/AITracker-Linux-x64.AppImage`,
+          sha256: createHash("sha256").update(appImageBytes).digest("hex"),
+          size: appImageBytes.byteLength,
+        },
+      },
+    },
+  };
+  return { release, documents, bodies };
+}
+
+function packageHostManager(
+  fixture: ReturnType<typeof packageReleaseFixture>,
+  options: Partial<ConstructorParameters<typeof UpdateManager>[0]> = {},
+  installerBody: (name: string, fallback: Uint8Array) => Uint8Array = (
+    _name,
+    fallback,
+  ) => fallback,
+) {
+  return new UpdateManager({
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    platform: "linux",
+    arch: "x64",
+    tempDirectory: "/tmp/aitracker-updates",
+    mkdirFn: async () => undefined,
+    writeFileFn: async () => undefined,
+    ...options,
+    fetchFn: async (url) => {
+      if (url.includes("api.github.com")) return response([fixture.release]);
+      if (url.endsWith("release-metadata-linux.json")) {
+        return response(fixture.documents.linux);
+      }
+      if (url.endsWith("release-metadata.json")) {
+        return response(fixture.documents.main);
+      }
+      const name = url.slice(url.lastIndexOf("/") + 1);
+      const bytes = fixture.bodies.get(name);
+      if (bytes) return new Response(installerBody(name, bytes));
+      throw new Error(`unexpected URL: ${url}`);
+    },
+  });
+}
+
+test("a deb host downloads the deb its software centre can open", async () => {
+  // The metadata records only the AppImage, so this artifact is verified
+  // against the sha256 GitHub computed for the uploaded file. That is what lets
+  // a distro install update through its own package manager instead of being
+  // handed an AppImage and a command to run.
+  const fixture = packageReleaseFixture({ packages: ["deb", "rpm"] });
+  const manager = packageHostManager(fixture, {
+    preferredLinuxPackageFormat: "deb",
+  });
+
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "available");
+  assert.equal(state.assetName, "AITracker-Linux-x64.deb");
+  assert.equal(
+    state.downloadUrl,
+    fixture.release.assets[5]!.browser_download_url,
+  );
+  assert.equal((await manager.downloadUpdate()).status, "downloaded");
+});
+
+test("an rpm host gets the rpm, and a host without a preference gets the AppImage", async () => {
+  const fixture = packageReleaseFixture({ packages: ["deb", "rpm"] });
+
+  const rpmHost = packageHostManager(fixture, {
+    preferredLinuxPackageFormat: "rpm",
+  });
+  assert.equal(
+    (await rpmHost.checkForUpdates()).assetName,
+    "AITracker-Linux-x64.rpm",
+  );
+
+  // No preference (an unrecognised distro, or a non-distro install): the
+  // AppImage stays first, exactly as before this change.
+  const plain = packageHostManager(fixture);
+  assert.equal(
+    (await plain.checkForUpdates()).assetName,
+    "AITracker-Linux-x64.AppImage",
+  );
+});
+
+test("a release without that package falls back to the AppImage", async () => {
+  // The packages are attached beside the AppImage, so a release that publishes
+  // none of them must still update rather than fail.
+  const fixture = packageReleaseFixture({ packages: [] });
+  const manager = packageHostManager(fixture, {
+    preferredLinuxPackageFormat: "deb",
+  });
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "available");
+  assert.equal(state.assetName, "AITracker-Linux-x64.AppImage");
+});
+
+test("a package the feed cannot verify is refused, not installed", async () => {
+  // Without GitHub's digest there is no sha256 for an artifact the metadata
+  // does not record, and installing an unverified package as root is exactly
+  // what the update path must never do.
+  const fixture = packageReleaseFixture({
+    packages: ["deb"],
+    withDigests: false,
+  });
+  const manager = packageHostManager(fixture, {
+    preferredLinuxPackageFormat: "deb",
+  });
+  const state = await manager.checkForUpdates();
+  assert.equal(state.status, "error");
+  assert.equal(state.errorCode, "download");
+  assert.equal((await manager.downloadUpdate()).status, "error");
+});
+
+test("a tampered package is rejected against GitHub's digest", async () => {
+  const fixture = packageReleaseFixture({ packages: ["deb"] });
+  const manager = packageHostManager(
+    fixture,
+    { preferredLinuxPackageFormat: "deb" },
+    (name, fallback) =>
+      name.endsWith(".deb") ? new Uint8Array([9, 9, 9, 9]) : fallback,
+  );
+  assert.equal((await manager.startAutomaticCheck()).status, "error");
+});

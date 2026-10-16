@@ -261,7 +261,9 @@ export const settings = {
   updateRestartBodyLinux:
     "Version v{version} has been downloaded. Choose “Restart and update” and the app will quit, replace itself in place, and reopen.",
   updateRestartBodyLinuxManual:
-    "Version v{version} has been downloaded. This install is not an AppImage (deb/rpm or an unpacked directory), so the app cannot replace itself: “Restart and update” opens the folder holding the download and shows the command that finishes the install. Install the AppImage to get automatic updates.",
+    "Version v{version} has been downloaded. This install is not an AppImage (an unpacked directory, or a release without the matching distro package), so the app cannot replace itself: “Restart and update” opens the folder holding the download and shows the command that finishes the install. Install the AppImage to get automatic updates.",
+  updateRestartBodyLinuxPackage:
+    "Version v{version} has been downloaded. “Restart and update” opens the installer in your software centre — confirm it there and enter your password to finish. (If no software centre is registered for this package type, the folder opens with the command that installs it instead.)",
   updateRestartNow: "Restart & update now",
   updateInstallingShort: "Installing…",
   updateLater: "Later",
@@ -406,7 +408,7 @@ export const settings = {
     updateInstallTimeout: "No installation detected; please try again",
     updateManualInstall: "Update downloaded — run this to finish: {command}",
     updatePackageOpened:
-      "Opened the installer in your software centre; restart AITracker when it finishes",
+      "Opened the installer in your software centre — confirm and authenticate, then restart AITracker",
     updateProxySaved: "Update proxy saved",
     updateProxyFormatInvalid:
       "Invalid proxy. Check the address, for example http://127.0.0.1:7890",

@@ -95,9 +95,11 @@ Linux is x86_64 only: `.deb` for Debian 12+/Ubuntu 22.04+, `.rpm` for
 Fedora/RHEL 9+, and the AppImage for other x86_64 desktops with FUSE 2
 (`--appimage-extract-and-run` works without it).
 
-In-app updates replace the AppImage in place. A `.deb` or `.rpm` install cannot
-replace itself, so the app points at the downloaded file and shows the exact
-command that finishes the update — it never escalates privileges for you.
+In-app updates replace the AppImage in place. A `.deb` or `.rpm` install
+downloads that package and opens it in the system software centre, where you
+confirm the install and enter your password — the app never escalates privileges
+for you. An install that is neither (an unpacked directory, or a release without
+the matching package) is handed over with the command that finishes it.
 
 Each release lists its own `release-metadata.json` and `checksums.txt`, which
 record the exact version and SHA-256 of the files in that release; the Linux

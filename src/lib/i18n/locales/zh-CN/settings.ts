@@ -250,7 +250,9 @@ export const settings = {
   updateRestartBodyLinux:
     "新版本 v{version} 已下载完成。点击「立即重启更新」后应用将退出，并自动替换为新版本后重新打开。",
   updateRestartBodyLinuxManual:
-    "新版本 v{version} 已下载完成。当前不是 AppImage 安装（deb / rpm 或解压目录），应用无法替换自身：点击「立即重启更新」后会打开文件所在目录，并给出手动安装命令。改用 AppImage 安装后即可自动更新。",
+    "新版本 v{version} 已下载完成。当前不是 AppImage 安装（解压目录，或该版本没有对应的系统包），应用无法替换自身：点击「立即重启更新」后会打开文件所在目录，并给出手动安装命令。改用 AppImage 安装后即可自动更新。",
+  updateRestartBodyLinuxPackage:
+    "新版本 v{version} 已下载完成。点击「立即重启更新」后会用系统软件中心打开安装包，请在那里确认并输入密码完成安装。（若系统未注册可安装它的软件中心，则会打开文件所在目录并给出安装命令。）",
   updateRestartNow: "立即重启更新",
   updateInstallingShort: "安装中…",
   updateLater: "稍后",
@@ -381,7 +383,7 @@ export const settings = {
     updateInstallTimeout: "未检测到安装过程，请重试",
     updateManualInstall: "更新包已下载，请手动执行：{command}",
     updatePackageOpened:
-      "已在系统软件中心打开安装包，安装完成后请重启 AITracker",
+      "已在系统软件中心打开安装包，请确认并输入密码；安装完成后重启 AITracker",
     updateProxySaved: "更新代理已保存",
     updateProxyFormatInvalid:
       "代理格式无效，请检查地址，例如 http://127.0.0.1:7890",

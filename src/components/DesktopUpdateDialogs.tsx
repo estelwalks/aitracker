@@ -160,11 +160,14 @@ export function DesktopUpdateDialogs() {
 
   if (!api) return null;
   // Four flows now, four different promises: macOS swaps the bundle, Windows
-  // runs an elevated installer, Linux swaps an AppImage in place, and a
-  // deb/rpm (or unpacked) Linux install ends with the user running one command.
-  // Showing the swap copy on a deb install described an install that cannot
-  // happen there.
-  const restartBodyKey = updateRestartBodyKey(platform, linuxInstallForm);
+  // runs an elevated installer, a Linux AppImage swaps itself in place, and a
+  // downloaded `.deb`/`.rpm` goes to the software centre for the user to confirm
+  // — or, when the AppImage cannot replace this install, is run by hand.
+  const restartBodyKey = updateRestartBodyKey(
+    platform,
+    linuxInstallForm,
+    state?.assetName ?? null,
+  );
   const latestVersion = state?.latestVersion ?? null;
 
   return (

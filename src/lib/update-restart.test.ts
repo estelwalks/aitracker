@@ -96,3 +96,48 @@ test("the restart copy follows the install form, not just the platform", () => {
   // copy is the generic one, and it is never the AppImage promise.
   assert.equal(updateRestartBodyKey(null, null), "settings.updateRestartBody");
 });
+
+test("a downloaded distro package promises the software centre, not a swap", () => {
+  // The artifact decides the flow: a `.deb`/`.rpm` is handed to the software
+  // centre, where the user confirms and authenticates. Saying "the app will
+  // replace itself" there would describe an install this build cannot perform.
+  assert.equal(
+    updateRestartBodyKey("linux", "package", "AITracker-Linux-x64.deb"),
+    "settings.updateRestartBodyLinuxPackage",
+  );
+  assert.equal(
+    updateRestartBodyKey("linux", "package", "AITracker-Linux-x64.rpm"),
+    "settings.updateRestartBodyLinuxPackage",
+  );
+  // Uppercase extensions come from hand-built fixtures; they must behave the
+  // same way rather than silently falling into the AppImage copy.
+  assert.equal(
+    updateRestartBodyKey("linux", "package", "AITracker-Linux-x64.DEB"),
+    "settings.updateRestartBodyLinuxPackage",
+  );
+  // The package wins even for an AppImage install, because that is what the
+  // click would hand over.
+  assert.equal(
+    updateRestartBodyKey("linux", "appimage", "AITracker-Linux-x64.deb"),
+    "settings.updateRestartBodyLinuxPackage",
+  );
+  // An AppImage artifact on a distro install still ends with the user running
+  // it: only the in-place swap may promise a silent install.
+  assert.equal(
+    updateRestartBodyKey("linux", "package", "AITracker-Linux-x64.AppImage"),
+    "settings.updateRestartBodyLinuxManual",
+  );
+  assert.equal(
+    updateRestartBodyKey("linux", "appimage", "AITracker-Linux-x64.AppImage"),
+    "settings.updateRestartBodyLinux",
+  );
+  // macOS and Windows never see package copy, whatever the artifact is called.
+  assert.equal(
+    updateRestartBodyKey("win32", null, "AITracker-Windows-x64.exe"),
+    "settings.updateRestartBody",
+  );
+  assert.equal(
+    updateRestartBodyKey("darwin", null, "AITracker-macOS-x64.dmg"),
+    "settings.updateRestartBodyMac",
+  );
+});

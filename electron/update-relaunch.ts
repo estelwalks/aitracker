@@ -1,8 +1,13 @@
-import { spawn, type SpawnOptions } from "node:child_process";
+import {
+  execFile as execFileCallback,
+  spawn,
+  type SpawnOptions,
+} from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import { access, chmod, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, win32 } from "node:path";
+import { promisify } from "node:util";
 
 import type { LinuxInstallForm, UpdateInstallMethod } from "./contracts.js";
 
@@ -470,6 +475,64 @@ export function linuxManualInstallCommand(installerPath: string): string {
   return quoted;
 }
 
+/** MIME type a distro package file is registered under. */
+function packageMimeType(installerPath: string): string | null {
+  const lower = installerPath.toLowerCase();
+  if (lower.endsWith(".deb")) return "application/vnd.debian.binary-package";
+  if (lower.endsWith(".rpm")) return "application/x-rpm";
+  return null;
+}
+
+/**
+ * Desktop entries that *install* a local package.
+ *
+ * The list is deliberately an allow-list. An unrecognised handler means the
+ * package is shown to the user with the command that finishes the install —
+ * `sudo apt install <file>`, which always works on the host that just
+ * downloaded a `.deb` — rather than being handed to, say, an archive manager,
+ * which would look like nothing happened.
+ */
+const PACKAGE_INSTALLER_HANDLERS: readonly RegExp[] = [
+  /^gnome-software/u,
+  /^org\.gnome\.software/u,
+  /^org\.kde\.discover/u,
+  /^plasma-discover/u,
+  /^gdebi/u,
+  /^apper/u,
+  /^mintinstall/u,
+  /^io\.elementary\.appcenter/u,
+  /^deepin-deb-installer/u,
+  /^dnfdragora/u,
+  /^org\.opensuse\.yast/u,
+  /^packagekit/u,
+  /^org\.freedesktop\.packagekit/u,
+];
+
+/** Whether a desktop entry installs a local package rather than opening it. */
+export function isPackageInstallerHandler(desktopId: string | null): boolean {
+  if (desktopId == null) return false;
+  const id = desktopId.trim().toLowerCase();
+  if (id.length === 0) return false;
+  return PACKAGE_INSTALLER_HANDLERS.some((pattern) => pattern.test(id));
+}
+
+/** Ask the desktop which application handles this package type. */
+async function defaultPackageHandler(mime: string): Promise<string | null> {
+  try {
+    const { stdout } = await promisify(execFileCallback)("xdg-mime", [
+      "query",
+      "default",
+      mime,
+    ]);
+    const id = stdout.trim();
+    return id.length > 0 ? id : null;
+  } catch {
+    // No `xdg-mime`, or no association at all: the caller falls back to the
+    // folder and the command.
+    return null;
+  }
+}
+
 /**
  * Build the Linux AppImage hand-off script.
  *
@@ -589,6 +652,8 @@ async function handOffLinuxInstaller(options: {
   readonly spawnFn?: DetachedSpawn;
   readonly chmodFn?: (path: string, mode: number) => Promise<void>;
   readonly accessFn?: (path: string, mode: number) => Promise<void>;
+  /** Desktop handler for a package type; injectable for tests. */
+  readonly packageHandlerFn?: (mime: string) => Promise<string | null>;
 }): Promise<InstallerHandoffResult> {
   const { installerPath, processId } = options;
   const chmodFn = options.chmodFn ?? chmod;
@@ -653,7 +718,16 @@ async function handOffLinuxInstaller(options: {
 
   if (kind === "package") {
     const openPath = options.openPathFn;
-    if (openPath) {
+    const mime = packageMimeType(installerPath);
+    const handler = mime
+      ? await (options.packageHandlerFn ?? defaultPackageHandler)(mime)
+      : null;
+    // Only hand the package to an application that installs it. Plenty of
+    // desktops associate `.deb` with an archive manager — Kali/XFCE does — and
+    // opening the file there shows its contents and installs nothing, which
+    // reads as "the update did nothing at all". Anything we cannot recognise
+    // falls through to the folder plus the command that always works.
+    if (openPath && isPackageInstallerHandler(handler)) {
       try {
         // Electron resolves an empty string on success and the error message
         // otherwise. `xdg-open` has no handler for a bare `.deb` on minimal
@@ -740,6 +814,12 @@ export async function handOffInstaller(options: {
   readonly openPathFn?: (path: string) => Promise<string>;
   /** Electron `shell.showItemInFolder`; the manual fallback. */
   readonly showItemInFolderFn?: (path: string) => void;
+  /**
+   * Which desktop entry handles a package MIME type, e.g. `xdg-mime query
+   * default`. Injected in tests; the answer decides whether a `.deb`/`.rpm` is
+   * handed to a software centre or shown with the command that installs it.
+   */
+  readonly packageHandlerFn?: (mime: string) => Promise<string | null>;
   readonly writeFileFn?: (
     path: string,
     data: string,

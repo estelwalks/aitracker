@@ -18,6 +18,7 @@ import {
   buildMacHandoffCommand,
   buildWindowsHandoffCommand,
   handOffInstaller,
+  isPackageInstallerHandler,
   linuxManualInstallCommand,
   resolveLinuxInstallForm,
   MACOS_HANDOFF_COMMAND_NAME,
@@ -452,6 +453,7 @@ test("Linux without an AppImage path falls back to revealing the file", async ()
 test("Linux deb hand-off opens the system installer and never spawns", async () => {
   const { calls, spawnFn } = recordingSpawn();
   const opened: string[] = [];
+  const queried: string[] = [];
   const result = await handOffInstaller({
     platform: "linux",
     installerPath: "/home/me/Downloads/AITracker-Linux-x64.deb",
@@ -460,24 +462,101 @@ test("Linux deb hand-off opens the system installer and never spawns", async () 
       opened.push(path);
       return "";
     },
+    // The desktop says a software centre installs this type.
+    packageHandlerFn: async (mime) => {
+      queried.push(mime);
+      return "org.gnome.Software.desktop";
+    },
     ...linuxSeams(),
   });
   assert.deepEqual(result, { launched: true, method: "linux-package-open" });
   assert.deepEqual(opened, ["/home/me/Downloads/AITracker-Linux-x64.deb"]);
+  // The association is asked for by the package's own MIME type, so an rpm host
+  // is never judged by the deb answer.
+  assert.deepEqual(queried, ["application/vnd.debian.binary-package"]);
   // Installing a distro package needs root; the app must not invoke anything
   // that could escalate on the user's behalf.
   assert.equal(calls.length, 0);
 });
 
+test("Linux package hand-off refuses an archive manager and hands over the command", async () => {
+  // Kali/XFCE associates `.deb` with File Roller: opening it there shows the
+  // archive's contents and installs nothing, which reads as "the update did
+  // nothing". The folder plus `sudo apt install <file>` is the honest answer.
+  const opened: string[] = [];
+  const revealed: string[] = [];
+  const result = await handOffInstaller({
+    platform: "linux",
+    installerPath:
+      "/home/me/.config/aitracker-desktop/updates/aitracker-AITracker-Linux-x64.deb",
+    openPathFn: async (path) => {
+      opened.push(path);
+      return "";
+    },
+    showItemInFolderFn: (path) => revealed.push(path),
+    packageHandlerFn: async () => "org.gnome.FileRoller.desktop",
+    ...linuxSeams(),
+  });
+  assert.deepEqual(result, { launched: true, method: "linux-manual" });
+  assert.deepEqual(opened, [], "an archive manager must not be opened");
+  assert.deepEqual(revealed, [
+    "/home/me/.config/aitracker-desktop/updates/aitracker-AITracker-Linux-x64.deb",
+  ]);
+});
+
+test("a package host with no usable association gets the command, not an error", async () => {
+  // No `xdg-mime`, or nothing associated: the update still finishes, through
+  // the command the toast shows.
+  const opened: string[] = [];
+  const result = await handOffInstaller({
+    platform: "linux",
+    installerPath: "/home/me/Downloads/AITracker-Linux-x64.rpm",
+    openPathFn: async (path) => {
+      opened.push(path);
+      return "";
+    },
+    showItemInFolderFn: () => undefined,
+    packageHandlerFn: async () => null,
+    ...linuxSeams(),
+  });
+  assert.deepEqual(result, { launched: true, method: "linux-manual" });
+  assert.deepEqual(opened, []);
+});
+
+test("only package installers are recognised as package handlers", () => {
+  for (const id of [
+    "org.gnome.Software.desktop",
+    "gnome-software-local-file.desktop",
+    "org.kde.discover.desktop",
+    "gdebi.desktop",
+    "apper.desktop",
+    "dnfdragora.desktop",
+  ]) {
+    assert.equal(isPackageInstallerHandler(id), true, id);
+  }
+  for (const id of [
+    "org.gnome.FileRoller.desktop",
+    "ark.desktop",
+    "xarchiver.desktop",
+    "vim.desktop",
+    "",
+    null,
+  ]) {
+    assert.equal(isPackageInstallerHandler(id), false, String(id));
+  }
+});
+
 test("Linux deb hand-off falls back to revealing when the opener fails", async () => {
-  // `xdg-open` has no handler for a bare .deb on minimal distributions, and
-  // Electron reports that as a non-empty string rather than a rejection.
+  // The association is a software centre, but opening the file still fails —
+  // `xdg-open` has no handler on minimal distributions, and Electron reports
+  // that as a non-empty string rather than a rejection.
   const revealed: string[] = [];
   const result = await handOffInstaller({
     platform: "linux",
     installerPath: "/home/me/Downloads/AITracker-Linux-x64.deb",
     openPathFn: async () => "no application to open this file",
     showItemInFolderFn: (path) => revealed.push(path),
+    packageHandlerFn: async () => "gdebi.desktop",
     ...linuxSeams(),
   });
   assert.deepEqual(result, { launched: true, method: "linux-manual" });

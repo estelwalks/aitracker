@@ -223,7 +223,8 @@ metadataArtifactOf() → null
 
 1. **必需 key** = 原有 4 个（保证 mac/win 语义不变）。
 2. **未知 key** 不再导致整份拒绝，改为：形状匹配 `^(darwin|win32|linux)-(arm64|x64|ia32)$` 时**忽略**（不参与必需性判断），否则仍拒绝。
-3. Linux 的产物选择**优先读 `release-metadata-linux.json`**（存在即用其 sha256 强校验）；文件缺失时回退到「按固定命名 + 扩展名 + 架构别名」的通用资产选择（`selectUpdateAsset` 已支持），仅失去 sha256 元数据比对，仍保留下载后 sha256 校验。
+3. Linux 的产物选择**优先读 `release-metadata-linux.json`**（存在即用其 sha256 强校验）；该文档缺失时**回退到主文档**（两份合并后仍可用）；两份文档都没有本平台条目时，改用 **GitHub API 为该 asset 返回的 `size` + `sha256` digest** 校验（见下条）。**不存在"无校验下载"这一级**：任何一次安装都必须有 sha256 来源，拿不到就报错拒绝，而不是放行。
+4. **deb / rpm 不进元数据契约**：契约允许每个平台 key 记录一个产物，而 `linux-x64` 记的是 AppImage。发行版包（`AITracker-Linux-x64.deb` / `.rpm`）改用 **GitHub Releases API 为每个 asset 返回的 `size` 与 `sha256` digest** 校验——它与选版本是同一次响应，因此不需要新 key，也不改变任何已发布客户端的解析（老客户端根本不走这条路径）。没有 digest 的 asset 会被拒绝，不会在未校验的情况下安装。
 
 > **注意**：Linux 产物资产本身在第 N 个版本里挂上去是**安全的**。`selectUpdateAsset`（`:529-570`）按扩展名过滤，mac/win 客户端不会选中 `.AppImage`；`verify-release-asset-agreement.mjs` 只校验 `expected ⊆ assets` 与 `metadata ⊆ assets`。
 
@@ -701,7 +702,9 @@ mainWindow = new BrowserWindow({
 **更新**
 
 - [ ] AppImage：旧版本内点击更新 → 下载 → 重启 → 版本号已变更，且 `$APPIMAGE` 路径文件被替换。
-- [ ] deb：点击更新 → 明确提示手动安装命令，**不出现静默无反应**。
+- [ ] deb：点击更新 → 下载对应的 `.deb` → 由系统软件中心打开，用户在软件中心确认并输入密码完成安装，**不出现静默无反应**。
+- [ ] rpm：同上，下载 `.rpm`（发行版包族由 `electron/linux-package-format.ts` 从 `/etc/os-release` 判定）。
+- [ ] 无法识别发行版，或该版本没有对应系统包时：回退为 AppImage + 手动安装命令，且提示与实际下载到的产物一致。
 - [ ] 断网 / 校验失败时错误提示准确。
 
 **回归（不可退化）**
