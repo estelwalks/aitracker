@@ -306,12 +306,6 @@ Skills 市场列表与汇率数据来自项目自建服务 `ai.trusttools.cn`；
 
 ## AITracker 想解决什么？
 
-过去，我们通常是：
-
-![](./assets/cn/06-past-scattered-tools.png)
-
-现在越来越像：
-
 ![](./assets/cn/07-now-unified-platform.png)
 
 AI 工具越来越强，也越来越多。
@@ -333,6 +327,16 @@ AITracker 是开源项目，欢迎提交 Issue、功能建议、文档改进与 
 如果你正在使用某个 AI Coding Tool，而 AITracker 还没有支持，也欢迎告诉我们。
 
 数据本地化处理方式见 [PRIVACY.md](../PRIVACY.md)。
+
+---
+
+## 社区交流
+
+用微信扫码加入 AITracker 交流群。
+
+<p align="center">
+  <img src="assets/community/wechat-group.jpg" alt="AITracker 微信交流群二维码" width="360" />
+</p>
 
 ---
 

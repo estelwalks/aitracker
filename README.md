@@ -326,12 +326,6 @@ back to cached or built-in data instead.
 
 ## What Is AITracker Trying to Solve?
 
-In the past, we were usually like this:
-
-![](docs/assets/en/06-past-scattered-tools.png)
-
-Now, it increasingly looks like this:
-
 ![](docs/assets/en/07-now-unified-platform.png)
 
 AI tools are becoming more powerful—and more numerous.
@@ -352,6 +346,16 @@ change. For vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of
 opening a public issue.
 
 See [PRIVACY.md](PRIVACY.md) for the local-first data-handling model.
+
+---
+
+## Community
+
+Scan the QR code with WeChat to join the AITracker user group.
+
+<p align="center">
+  <img src="docs/assets/community/wechat-group.jpg" alt="AITracker WeChat group QR code" width="360" />
+</p>
 
 ---
 

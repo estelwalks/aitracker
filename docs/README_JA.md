@@ -313,12 +313,6 @@ Skillsマーケットの一覧と為替レートのデータは、プロジェ�
 
 ## AITrackerが解決したいこと
 
-これまで、私たちは通常このように使っていました：
-
-![](./assets/ja/06-past-scattered-tools.png)
-
-これからは、ますますこのような形になります：
-
 ![](./assets/ja/07-now-unified-platform.png)
 
 AIツールは、ますます強力になり、ますます増えています。
@@ -341,6 +335,16 @@ AITrackerはオープンソースです。Issue、機能提案、ドキュメン
 利用中のAIコーディングツールがAITrackerにまだ対応していない場合も、ぜひお知らせください。
 
 データのローカル処理については[PRIVACY.md](../PRIVACY.md)をご覧ください。
+
+---
+
+## コミュニティ
+
+WeChatでQRコードを読み取ると、AITrackerのユーザーグループに参加できます。
+
+<p align="center">
+  <img src="assets/community/wechat-group.jpg" alt="AITracker WeChatグループのQRコード" width="360" />
+</p>
 
 ---
 

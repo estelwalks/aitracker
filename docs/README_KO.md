@@ -309,12 +309,6 @@ Skills 마켓 목록과 환율 데이터는 프로젝트가 운영하는 서비�
 
 ## AITracker가 해결하려는 문제
 
-과거에는 다음과 같았습니다.
-
-![](./assets/ko/06-past-scattered-tools.png)
-
-이제는 점점 다음과 비슷해지고 있습니다.
-
 ![](./assets/ko/07-now-unified-platform.png)
 
 AI 도구는 점점 더 강력해지고, 동시에 점점 더 많아지고 있습니다.
@@ -336,6 +330,16 @@ AITracker는 오픈 소스 프로젝트입니다. Issue, 기능 제안, 문서 �
 사용 중인 AI Coding Tool이 아직 AITracker에서 지원되지 않는다면, 언제든 알려주세요.
 
 데이터의 로컬 처리 방식은 [PRIVACY.md](../PRIVACY.md)를 참고하세요.
+
+---
+
+## 커뮤니티
+
+WeChat으로 QR 코드를 스캔하면 AITracker 사용자 그룹에 참여할 수 있습니다.
+
+<p align="center">
+  <img src="assets/community/wechat-group.jpg" alt="AITracker WeChat 그룹 QR 코드" width="360" />
+</p>
 
 ---
 
