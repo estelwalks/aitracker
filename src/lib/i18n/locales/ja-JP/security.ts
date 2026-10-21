@@ -512,6 +512,12 @@ export const security = {
       prompt_injection:
         "ジェイルブレイク試行、DAN モードの活性化、安全フィルターの回避テクニックを検出します。",
     },
+    noSkills: {
+      title: "検査できる Skill が見つかりません",
+      desc: "セキュリティ検査は、この環境にインストールされた Agent の Skill フォルダー（例: ~/.claude/skills、~/.codex/skills）を走査します。先に Skill をインストールするか、「データソース」で該当ツールのデータディレクトリを指定してから再検査してください。",
+      refreshSkills: "Skill を再読み込み",
+      openSources: "データソースを開く",
+    },
     toast: {
       started: "実際のスキャンタスクを開始しました",
       cancelled:
@@ -521,6 +527,8 @@ export const security = {
       failed: "スキャンに失敗しました",
       modelSaved: "モデル設定を安全に保存しました",
       directorySelected: "Skill フォルダーを選択しました",
+      noSkills:
+        "検査できる Skill がありません。先に Skill をインストールするか、「データソース」でツールのディレクトリを設定してから再検査してください。",
     },
   },
 } as const;

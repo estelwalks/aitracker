@@ -13,6 +13,7 @@ import {
   effectiveSecurityScanMode,
   hitDimensionsOf,
   historyForCurrentSkills,
+  isNoSkillTargetError,
   latestHistory,
   relativeTimeParts,
   reportNeedsLocaleRefresh,
@@ -261,6 +262,31 @@ test("AI-assisted scan mode requires both a model and the feature toggle", () =>
   assert.equal(effectiveSecurityScanMode("full", true, false), "quick");
   assert.equal(effectiveSecurityScanMode("full", false, true), "quick");
   assert.equal(effectiveSecurityScanMode("quick", true, true), "full");
+});
+
+test("no-target scan rejections are recognised across desktop and companion transports", () => {
+  assert.equal(
+    isNoSkillTargetError(new Error("No trusted Skill target was found")),
+    true,
+  );
+  assert.equal(
+    isNoSkillTargetError(
+      Object.assign(new Error("security.http.no_skills"), {
+        code: "security.http.no_skills",
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    isNoSkillTargetError(new Error("A security scan is already running")),
+    false,
+  );
+  // A non-Error rejection must not be guessed at from its string form.
+  assert.equal(
+    isNoSkillTargetError("No trusted Skill target was found"),
+    false,
+  );
+  assert.equal(isNoSkillTargetError(null), false);
 });
 
 test("dedupeHistoryByContentHash collapses re-scans and install copies by content hash", () => {

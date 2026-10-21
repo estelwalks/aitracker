@@ -518,6 +518,12 @@ export const security = {
       prompt_injection:
         "Detects jailbreak attempts, DAN mode activation, and safety-filter bypass techniques.",
     },
+    noSkills: {
+      title: "No Skill available to scan",
+      desc: "Security checks scan the Skill folders of the agents installed here, such as ~/.claude/skills and ~/.codex/skills. Install a Skill first, or point the matching tool at its data directory on Sources, then scan again.",
+      refreshSkills: "Re-read Skills",
+      openSources: "Open Sources",
+    },
     toast: {
       started: "Real scan task started",
       cancelled:
@@ -527,6 +533,8 @@ export const security = {
       failed: "Scan failed",
       modelSaved: "Model configuration stored securely",
       directorySelected: "Skill folder selected",
+      noSkills:
+        "There is no Skill to scan yet. Install a Skill, or set the tool data directory on Sources, then scan again.",
     },
   },
 } as const;

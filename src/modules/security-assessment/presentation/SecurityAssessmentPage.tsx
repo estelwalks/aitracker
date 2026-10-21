@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, MonitorX, RefreshCw } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Loader2, MonitorX, RefreshCw, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { brandParams } from "../../../lib/app-config";
@@ -33,6 +34,7 @@ import {
   effectiveSecurityScanMode,
   historyForCurrentSkills,
   clampPercent,
+  isNoSkillTargetError,
   isScanActive,
   latestHistory,
   resolveNextScheduledScanAt,
@@ -318,6 +320,13 @@ export function SecurityAssessmentPage() {
     ) => {
       const client = clientRef.current;
       if (client == null || isScanActive(scanState.status)) return;
+      // The scanner rejects an all-skills run when nothing is discoverable.
+      // That is a state to explain, not a failure: answer it before the IPC
+      // round trip so the common zero-Skill case never surfaces as "出错了".
+      if (scope === "all" && skills.length === 0) {
+        toast.info(t("security.center.toast.noSkills"));
+        return;
+      }
       try {
         const effectiveMode = effectiveSecurityScanMode(
           mode,
@@ -339,11 +348,38 @@ export function SecurityAssessmentPage() {
           toast.success(t("security.center.toast.started"));
         }
       } catch (error) {
+        // A stale list can still reach the scanner (Skill removed between the
+        // page load and the click); keep the same actionable guidance.
+        if (isNoSkillTargetError(error)) {
+          toast.info(t("security.center.toast.noSkills"));
+          return;
+        }
         reportError(error);
       }
     },
-    [aiAssistedEnabled, modelConfigured, reportError, scanState.status, t],
+    [
+      aiAssistedEnabled,
+      modelConfigured,
+      reportError,
+      scanState.status,
+      skills.length,
+      t,
+    ],
   );
+
+  const reloadSkills = useCallback(async () => {
+    const client = clientRef.current;
+    if (client == null) return;
+    try {
+      const nextSkills = await client.listSkills();
+      setSkills(nextSkills);
+      if (nextSkills.length === 0) {
+        toast.info(t("security.center.toast.noSkills"));
+      }
+    } catch (error) {
+      reportError(error);
+    }
+  }, [reportError, t]);
 
   const cancelScan = useCallback(async () => {
     const client = clientRef.current;
@@ -378,6 +414,42 @@ export function SecurityAssessmentPage() {
             )
           }
         />
+      )}
+
+      {connection === "available" && skills.length === 0 && (
+        <section
+          className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-xl border border-warn/25 bg-warn/5 px-4 py-3"
+          aria-live="polite"
+        >
+          <ShieldAlert
+            className="mt-0.5 size-4 shrink-0 text-warn"
+            strokeWidth={1.8}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-medium text-foreground">
+              {t("security.center.noSkills.title")}
+            </p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+              {t("security.center.noSkills.desc")}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void reloadSkills()}
+              className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-foreground transition-colors hover:bg-accent"
+            >
+              <RefreshCw className="size-3" aria-hidden="true" />
+              {t("security.center.noSkills.refreshSkills")}
+            </button>
+            <Link
+              to="/sources"
+              className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-foreground transition-colors hover:bg-accent"
+            >
+              {t("security.center.noSkills.openSources")}
+            </Link>
+          </div>
+        </section>
       )}
 
       {connection === "available" && isScanActive(scanState.status) && (
