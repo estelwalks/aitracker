@@ -20,14 +20,14 @@ opened early. Individual fixes do not have to touch this file.
 > `## 本次更新` right after the English one, so the release page is bilingual.
 
 - A `.deb` or `.rpm` install now updates with its own package instead of an AppImage: the software centre opens where the desktop has one registered, otherwise the exact install command is shown
-- A page that fails to load now names the actual cause instead of only "Failed to Load Page", and keeps the last errors on this machine so they survive a restart and can be copied into a bug report
+- A page that fails to load now names the actual cause instead of only "Failed to Load Page", and the details can be copied into a bug report
 
 ### 更新摘要
 
 > 与上面的 `### Highlights` 一一对应，发布时作为 `## 本次更新` 出现在英文摘要之后。
 
 - `.deb` / `.rpm` 安装现在改用本机包管理器能装的系统包来更新，不再下载 AppImage：桌面注册了软件中心就直接打开，否则给出确切的安装命令
-- 页面加载失败时会直接给出真实原因，不再只有「页面加载失败」一句话；最近几次错误会留存在本机，重启后仍可查看并一键复制到问题反馈里
+- 页面加载失败时会直接给出真实原因，不再只有「页面加载失败」一句话；错误详情可一键复制到问题反馈里
 
 ### Details
 
@@ -59,10 +59,10 @@ install <file>`, or `sudo rpm -U <file>` for an rpm — which asks for the
 - The route error boundary renders the thrown value's own `name`, `message`,
   cause chain and stack, so a load failure is legible without a debugger. The
   report also records the route, the resolved locale and currency, the app
-  version and the platform, and the last 20 records are kept in browser storage
-  under the app's own key prefix — no network call and no business data. The
-  same panel replaces the bare "Failed to Load Page" line in the sessions list
-  and can be copied to the clipboard as one block.
+  version and the platform. The same panel replaces the bare "Failed to Load
+  Page" line in the sessions list, and the report can be copied to the
+  clipboard as one block. It is built and shown locally — no network call, no
+  business data and no browser persistence.
 
 ## [1.0.7] - 2026-10-15
 

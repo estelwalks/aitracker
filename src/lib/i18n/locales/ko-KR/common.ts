@@ -39,8 +39,6 @@ export const common = {
     copy: "오류 상세 복사",
     copied: "복사했습니다",
     copyFailed: "복사하지 못했습니다. 텍스트를 직접 선택하세요",
-    storedHint:
-      "최근 {count}건의 오류가 이 기기에 저장되어 다시 시작한 뒤에도 확인할 수 있습니다.",
   },
   collapse: "접기",
   localServiceConnected: "로컬 서비스 연결됨",

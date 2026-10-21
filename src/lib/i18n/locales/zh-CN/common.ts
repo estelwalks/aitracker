@@ -39,7 +39,6 @@ export const common = {
     copy: "复制错误详情",
     copied: "已复制",
     copyFailed: "复制失败，请手动选择文本",
-    storedHint: "最近 {count} 条错误已留存在本机，重启后仍可查看。",
   },
   collapse: "收起",
   localServiceConnected: "本地服务已连接",

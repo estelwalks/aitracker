@@ -41,8 +41,6 @@ export const common = {
     copy: "エラーの詳細をコピー",
     copied: "コピーしました",
     copyFailed: "コピーできませんでした。テキストを手動で選択してください",
-    storedHint:
-      "直近 {count} 件のエラーはこの端末に保存され、再起動後も確認できます。",
   },
   collapse: "折りたたむ",
   localServiceConnected: "ローカルサービス接続済み",

@@ -1,18 +1,16 @@
-import { APP_NAME, APP_VERSION, STORAGE_KEY_PREFIX } from "./app-config";
+import { APP_NAME, APP_VERSION } from "./app-config";
 
 /**
  * Renderer-side diagnostics for the route error boundaries.
  *
  * The value of a load failure is entirely in its cause, so the boundary keeps
  * the original error text instead of collapsing it into "page failed to load".
- * Records stay on this machine: a small ring buffer in `localStorage` survives
- * a restart, and the formatted report can be copied out by hand. Nothing here
- * talks to the network, and no business data is included — only the error, the
- * route it happened on and the resolved preferences.
+ * The record is derived in memory and the formatted report can be copied out
+ * by hand. Nothing here talks to the network or persists browser state:
+ * application-owned state belongs in SQLite, and a debug report is not worth
+ * an exception.
  */
 
-const DIAGNOSTICS_STORAGE_KEY = `${STORAGE_KEY_PREFIX}error-diagnostics.v1`;
-const KEEP_RECORDS = 20;
 const MAX_FIELD_LENGTH = 8_000;
 const MAX_STACK_LENGTH = 12_000;
 const CAUSE_DEPTH_LIMIT = 4;
@@ -40,11 +38,6 @@ export interface ErrorDiagnosticsContext {
   readonly route?: string;
   readonly locale?: string;
   readonly currency?: string;
-}
-
-export interface DiagnosticsStorage {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
 }
 
 function clip(value: string, limit: number): string {
@@ -153,56 +146,6 @@ export function formatErrorRecord(record: RenderErrorRecord): string {
     );
   }
   return lines.join("\n");
-}
-
-/** Best-effort persistence — locked-down storage must never mask the error. */
-export function storeErrorRecord(
-  record: RenderErrorRecord,
-  storage?: DiagnosticsStorage,
-): readonly RenderErrorRecord[] {
-  const target =
-    storage ?? (typeof localStorage === "undefined" ? null : localStorage);
-  if (target == null) return [];
-  try {
-    const existing = readErrorRecords(target);
-    const next = [...existing, record].slice(-KEEP_RECORDS);
-    target.setItem(DIAGNOSTICS_STORAGE_KEY, JSON.stringify(next));
-    return next;
-  } catch {
-    return [];
-  }
-}
-
-export function readErrorRecords(
-  storage?: DiagnosticsStorage,
-): readonly RenderErrorRecord[] {
-  const target =
-    storage ?? (typeof localStorage === "undefined" ? null : localStorage);
-  if (target == null) return [];
-  try {
-    const raw = target.getItem(DIAGNOSTICS_STORAGE_KEY);
-    if (raw == null) return [];
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? (parsed as RenderErrorRecord[]).filter(
-          (item) => item != null && typeof item === "object",
-        )
-      : [];
-  } catch {
-    // Corrupt or unavailable storage degrades to "no history".
-    return [];
-  }
-}
-
-export function clearErrorRecords(storage?: DiagnosticsStorage): void {
-  const target =
-    storage ?? (typeof localStorage === "undefined" ? null : localStorage);
-  if (target == null) return;
-  try {
-    target.setItem(DIAGNOSTICS_STORAGE_KEY, "[]");
-  } catch {
-    // Ignore: clearing history is best effort.
-  }
 }
 
 /** Copies text, preferring the async clipboard API of the desktop shell. */

@@ -1,18 +1,11 @@
-import {
-  AlertTriangle,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-} from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { useI18n } from "../lib/i18n/context";
 import {
   copyDiagnostics,
   createErrorRecord,
   formatErrorRecord,
-  storeErrorRecord,
   type RenderErrorRecord,
 } from "../lib/error-diagnostics";
 
@@ -20,9 +13,9 @@ import {
  * Shared renderer for the route error boundaries.
  *
  * "Page failed to load" alone is undebuggable, so the boundary always shows the
- * real error and keeps the last records on this machine. Primary actions stay
- * untouched above; everything here is secondary and collapsed by default, but
- * the error line itself is always visible.
+ * real error for the current failure. Primary actions stay untouched above;
+ * everything here is secondary and collapsed by default, but the error line
+ * itself is always visible.
  */
 
 interface ErrorDetailsProps {
@@ -45,19 +38,14 @@ export function ErrorDetails({
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
   );
-  const [storedCount, setStoredCount] = useState<number | null>(null);
 
   // Derived during render, not in an effect: the cause must be readable in the
   // very first frame (and in the SSR markup), including the frame in which the
-  // route failed. Storage is the only side effect, so it stays in the effect.
+  // route failed.
   const record = useMemo<RenderErrorRecord>(
     () => createErrorRecord(error, { locale, currency }),
     [currency, error, locale],
   );
-
-  useEffect(() => {
-    setStoredCount(storeErrorRecord(record).length);
-  }, [record]);
 
   const report = formatErrorRecord(record);
   const compact = variant === "compact";
@@ -111,7 +99,7 @@ export function ErrorDetails({
           >
             {report}
           </pre>
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -128,12 +116,6 @@ export function ErrorDetails({
                 ? t("common.errorDetails.copied")
                 : t("common.errorDetails.copy")}
             </button>
-            {storedCount != null && storedCount > 0 && (
-              <span className="aitracker-text-body-sm inline-flex items-center gap-1.5 text-muted-foreground">
-                <AlertTriangle className="size-3.5" aria-hidden="true" />
-                {t("common.errorDetails.storedHint", { count: storedCount })}
-              </span>
-            )}
           </div>
           {copyState === "failed" && (
             <p className="aitracker-text-body-sm text-muted-foreground">

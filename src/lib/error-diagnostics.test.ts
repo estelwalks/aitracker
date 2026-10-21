@@ -1,27 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  clearErrorRecords,
-  createErrorRecord,
-  formatErrorRecord,
-  readErrorRecords,
-  storeErrorRecord,
-  type DiagnosticsStorage,
-} from "./error-diagnostics.ts";
-
-function memoryStorage(): DiagnosticsStorage & {
-  readonly raw: Map<string, string>;
-} {
-  const raw = new Map<string, string>();
-  return {
-    raw,
-    getItem: (key) => raw.get(key) ?? null,
-    setItem: (key, value) => {
-      raw.set(key, value);
-    },
-  };
-}
+import { createErrorRecord, formatErrorRecord } from "./error-diagnostics.ts";
 
 test("a real Error keeps its name, message, stack and cause chain", () => {
   const cause = new Error("database is locked");
@@ -59,51 +39,6 @@ test("a thrown plain object keeps its serialized shape", () => {
   assert.equal(record.name, "object");
   assert.match(record.message, /E_LOCKED/);
   assert.equal(record.fallback, true);
-});
-
-test("storing keeps a bounded ring buffer without losing the newest record", () => {
-  const storage = memoryStorage();
-  for (let index = 0; index < 25; index += 1) {
-    storeErrorRecord(
-      createErrorRecord(new Error(`failure ${index}`), { route: "/tracker" }),
-      storage,
-    );
-  }
-
-  const records = readErrorRecords(storage);
-  assert.equal(records.length, 20);
-  assert.equal(records.at(-1)?.message, "failure 24");
-  assert.equal(records[0]?.message, "failure 5");
-});
-
-test("corrupt or unavailable storage degrades to an empty history", () => {
-  const storage = memoryStorage();
-  storage.setItem("anything", "not json");
-
-  assert.deepEqual(readErrorRecords(storage), []);
-
-  const failing: DiagnosticsStorage = {
-    getItem: () => {
-      throw new Error("storage disabled");
-    },
-    setItem: () => {
-      throw new Error("storage disabled");
-    },
-  };
-  assert.deepEqual(
-    storeErrorRecord(createErrorRecord(new Error("x")), failing),
-    [],
-  );
-  assert.deepEqual(readErrorRecords(failing), []);
-});
-
-test("clearing history keeps the store readable", () => {
-  const storage = memoryStorage();
-  storeErrorRecord(createErrorRecord(new Error("x")), storage);
-  assert.equal(readErrorRecords(storage).length, 1);
-
-  clearErrorRecords(storage);
-  assert.deepEqual(readErrorRecords(storage), []);
 });
 
 test("the formatted report names the app, route and preferences", () => {

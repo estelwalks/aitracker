@@ -40,8 +40,6 @@ export const common = {
     copy: "Copy error details",
     copied: "Copied",
     copyFailed: "Copy failed — select the text manually",
-    storedHint:
-      "The last {count} errors are kept on this machine, so they are still here after a restart.",
   },
   collapse: "Collapse",
   localServiceConnected: "Local service connected",
