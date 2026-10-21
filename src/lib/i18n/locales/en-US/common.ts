@@ -34,6 +34,15 @@ export const common = {
   pageLoadFailed: "Failed to Load Page",
   pageLoadFailedDesc:
     "Something went wrong — retry or go back to the dashboard.",
+  errorDetails: {
+    show: "Show error details",
+    hide: "Hide error details",
+    copy: "Copy error details",
+    copied: "Copied",
+    copyFailed: "Copy failed — select the text manually",
+    storedHint:
+      "The last {count} errors are kept on this machine, so they are still here after a restart.",
+  },
   collapse: "Collapse",
   localServiceConnected: "Local service connected",
   localApiConnected: "Local API connected",
