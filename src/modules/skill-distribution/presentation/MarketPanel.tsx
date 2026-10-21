@@ -55,6 +55,10 @@ import {
 } from "../query.ts";
 import { compactNumber, formatSizeBytes } from "../../skill-catalog/index.ts";
 import { AgentInstallBar } from "./AgentInstallBar.tsx";
+import {
+  buildMarketInstallIndex,
+  marketInstalledAgents,
+} from "./market-install-status.ts";
 
 /** Fixed market category taxonomy → upstream `tags` slugs. */
 const MARKET_DOMAINS: ReadonlyArray<{
@@ -268,34 +272,18 @@ export function MarketPanel({
     };
   }, [query, sort, page, domain, refreshRequest, t]);
 
-  const installedBySkill = useMemo(() => {
-    // The local Skill name is taken from SKILL.md frontmatter and may be different from the market name; the market-installed
-    // source.label is fixed to "${repoOwner}/${repoName}", use it as the second index to ensure
-    // After installation, the icon lights up correctly (to avoid misjudgment that it is not installed and causing repeated installation errors).
-    const byName = new Map<string, Record<string, boolean>>();
-    const byMarket = new Map<string, Record<string, boolean>>();
-    for (const skill of localSnapshot?.skills ?? []) {
-      const per: Record<string, boolean> = {};
-      for (const installation of skill.installations) {
-        per[installation.agent] = true;
-      }
-      byName.set(skill.name, per);
-      for (const installation of skill.installations) {
-        if (
-          installation.source?.kind === "market" &&
-          installation.source.label
-        ) {
-          byMarket.set(installation.source.label, per);
-        }
-      }
-    }
-    return { byName, byMarket };
-  }, [localSnapshot]);
-
-  const installedNames = useMemo(
-    () => new Set((localSnapshot?.skills ?? []).map((skill) => skill.name)),
+  // A market install is identified by its repository *and* its installed
+  // folder: the repository label alone is shared by every Skill in that repo,
+  // so keying on it lit up all siblings after a single install.
+  const marketInstallIndex = useMemo(
+    () => buildMarketInstallIndex(localSnapshot?.skills ?? []),
     [localSnapshot],
   );
+  const installedFor = (
+    skill: MarketSkill,
+  ): Readonly<Record<string, boolean>> =>
+    marketInstalledAgents(marketInstallIndex, skill);
+
   const detectedAgents = useMemo(
     () =>
       MARKET_AGENTS.filter(
@@ -540,12 +528,7 @@ export function MarketPanel({
               {result.skills.map((skill, index) => {
                 const security = securityOf(skill, t);
                 const domain = domainOf(skill, t);
-                const installed =
-                  installedBySkill.byName.get(skill.name) ??
-                  installedBySkill.byMarket.get(
-                    `${skill.repoOwner}/${skill.repoName}`,
-                  ) ??
-                  {};
+                const installed = installedFor(skill);
                 return (
                   <li
                     key={skill.id}
@@ -681,14 +664,8 @@ export function MarketPanel({
         <MarketDetailModal
           skill={detail}
           agents={detectedAgents}
-          installed={
-            installedBySkill.byName.get(detail.name) ??
-            installedBySkill.byMarket.get(
-              `${detail.repoOwner}/${detail.repoName}`,
-            ) ??
-            {}
-          }
-          skillInstalled={installedNames.has(detail.name)}
+          installed={installedFor(detail)}
+          skillInstalled={Object.keys(installedFor(detail)).length > 0}
           onInstalled={() => {
             void refreshSkillSnapshot()
               .then(setLocalSnapshot)

@@ -33,6 +33,13 @@ export const common = {
   notFoundDesc: "你访问的页面不存在或已被移动。",
   pageLoadFailed: "页面加载失败",
   pageLoadFailedDesc: "出了点问题，可以重试或回到首页。",
+  errorDetails: {
+    show: "查看错误详情",
+    hide: "收起错误详情",
+    copy: "复制错误详情",
+    copied: "已复制",
+    copyFailed: "复制失败，请手动选择文本",
+  },
   collapse: "收起",
   localServiceConnected: "本地服务已连接",
   localApiConnected: "本地 API 已连接",

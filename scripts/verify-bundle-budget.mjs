@@ -6,6 +6,11 @@
 //   - no public chunk statically imports Node builtins (`node:*`, bare
 //     `fs`/`path`/`os`/`child_process`) — browser chunks must never carry
 //     externalized Node modules (G6: node externalization = 0)
+//   - no browser-reachable chunk references a Node global (`process.platform`,
+//     `process.env`, `__dirname`, …) — the renderer crashes with
+//     `ReferenceError: process is not defined` the first time such a chunk
+//     runs, and Vite's dev client defines a `process` polyfill that masks the
+//     bug in dev/e2e, so only the production bundle can catch it
 //   - initial shared JS gzip ≤ 250 KB and non-font CSS gzip ≤ 40 KB are
 //     BLOCKING (G6 acceptance); @font-face declarations are reported
 //     separately because bundled fonts are assets, not style rules. Single-
@@ -61,6 +66,40 @@ const NODE_BUILTIN_IMPORTS = new Set([
   "node:tls",
   "node:worker_threads",
 ]);
+
+/**
+ * Node globals that do not exist in a browser. A hit in a reachable client
+ * chunk is a hard failure: Vite does not substitute these, so the chunk
+ * throws `ReferenceError: process is not defined` (or `__dirname` /
+ * `__filename`) the moment it evaluates. `process.emit` is deliberately
+ * absent — libraries guard it with `typeof process === "object"`.
+ */
+const NODE_GLOBAL_PATTERN =
+  /\b(?:process\.(?:env|platform|versions|cwd|argv|argv0|nextTick|execPath|execArgv|hrtime|memoryUsage|stdin|stdout|stderr|pid|ppid|umask|chdir|getuid|getgid)\b|__dirname\b|__filename\b)/g;
+
+/**
+ * Chunks reachable from the entry, following both static imports and the
+ * dynamic-import/preload map. TanStack Start also emits unreferenced
+ * server-graph chunks into `public/assets` (the prune step only removes
+ * `*.server-*.js`); those never execute and must not fail the gate.
+ */
+async function reachableChunks(entry, jsFileSet) {
+  const reachable = new Set([entry]);
+  const queue = [entry];
+  while (queue.length > 0) {
+    const name = queue.pop();
+    const source = await readFile(join(assetsDir, name), "utf8");
+    for (const match of source.matchAll(
+      /["'`]\.\/([A-Za-z0-9._-]+\.js)["'`]/g,
+    )) {
+      const candidate = match[1];
+      if (!jsFileSet.has(candidate) || reachable.has(candidate)) continue;
+      reachable.add(candidate);
+      queue.push(candidate);
+    }
+  }
+  return reachable;
+}
 
 /**
  * Extract only ESM imports that execute synchronously. The old `includes()`
@@ -173,6 +212,21 @@ async function main() {
     if (hits.size > 0) nodeBuiltinChunks.push({ name, specifiers: [...hits] });
   }
 
+  // Browser-global gate: a Node global anywhere in the client graph crashes
+  // the renderer on first evaluation. Only reachable chunks count; see
+  // `reachableChunks` for why orphaned server-graph chunks are ignored.
+  const reachable = await reachableChunks(entry, jsFileSet);
+  const nodeGlobalChunks = [];
+  for (const name of reachable) {
+    const source = await readFile(join(assetsDir, name), "utf8");
+    const globals = [
+      ...new Set(
+        [...source.matchAll(NODE_GLOBAL_PATTERN)].map((match) => match[0]),
+      ),
+    ];
+    if (globals.length > 0) nodeGlobalChunks.push({ name, globals });
+  }
+
   // Single-route incremental budget: each lazy route chunk measured on its
   // own (plus its direct dependencies is intentionally not computed here —
   // that is the fixed performance environment's job, T7-03).
@@ -211,6 +265,7 @@ async function main() {
     serverChunksInEntry: serverChunksInEntry.length,
     serverChunkNames: serverChunksInEntry,
     nodeBuiltinChunks,
+    nodeGlobalChunks,
     largestLazyRouteGzip: largestLazy,
     largestLazyRouteName: largestLazyName,
     singleRouteBudget: BUDGETS.singleRouteIncrementalJsGzip,
@@ -227,6 +282,12 @@ async function main() {
   if (nodeBuiltinChunks.length > 0) {
     console.error(
       `bundle budget FAIL: Node builtins statically imported by public chunks: ${nodeBuiltinChunks.map((item) => `${item.name}(${item.specifiers.join(",")})`).join(", ")}`,
+    );
+    failures += 1;
+  }
+  if (nodeGlobalChunks.length > 0) {
+    console.error(
+      `bundle budget FAIL: Node globals referenced by browser-reachable chunks: ${nodeGlobalChunks.map((item) => `${item.name}(${item.globals.join(",")})`).join(", ")}`,
     );
     failures += 1;
   }

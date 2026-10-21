@@ -35,6 +35,13 @@ export const common = {
   pageLoadFailed: "ページの読み込みに失敗しました",
   pageLoadFailedDesc:
     "問題が発生しました。再試行するか、ホームに戻ってください。",
+  errorDetails: {
+    show: "エラーの詳細を表示",
+    hide: "エラーの詳細を閉じる",
+    copy: "エラーの詳細をコピー",
+    copied: "コピーしました",
+    copyFailed: "コピーできませんでした。テキストを手動で選択してください",
+  },
   collapse: "折りたたむ",
   localServiceConnected: "ローカルサービス接続済み",
   localApiConnected: "ローカル API 接続済み",

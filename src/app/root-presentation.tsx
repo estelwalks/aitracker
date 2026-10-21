@@ -25,6 +25,7 @@ import {
 import { useI18n } from "../lib/i18n/context";
 import { useTheme } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
+import { ErrorDetails } from "../components/ErrorDetails";
 import { AppProviders } from "./providers";
 import type { QueryClient } from "@tanstack/react-query";
 import { PlatformProvider } from "../lib/platform";
@@ -248,7 +249,7 @@ export function ErrorComponent({
 }) {
   console.error(error);
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale, displayCurrency } = useI18n();
   useEffect(() => {
     if (!isChunkLoadError(error)) return;
     console.error("Route chunk failed; attempting one safe reload", error);
@@ -267,6 +268,11 @@ export function ErrorComponent({
         <p className="mt-2 text-sm text-muted-foreground">
           {t("common.pageLoadFailedDesc")}
         </p>
+        <ErrorDetails
+          error={error}
+          locale={locale}
+          currency={displayCurrency}
+        />
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {

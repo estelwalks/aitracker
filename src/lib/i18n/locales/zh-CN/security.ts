@@ -496,6 +496,12 @@ export const security = {
       network_abuse: "标记未加密的 WebSocket 连接与不安全的 FTP 协议使用。",
       prompt_injection: "检测越狱尝试、DAN 模式激活与安全过滤器绕过技术。",
     },
+    noSkills: {
+      title: "未发现可检测的 Skill",
+      desc: "安全检测会扫描本机已安装 Agent 的 Skill 目录，例如 ~/.claude/skills、~/.codex/skills。请先安装 Skill，或到「数据来源」为对应工具指定数据目录，再重新检测。",
+      refreshSkills: "重新读取 Skill",
+      openSources: "去数据来源",
+    },
     toast: {
       started: "真实扫描任务已开始",
       cancelled: "已请求取消；受控边界可能会先完成正在执行的步骤",
@@ -504,6 +510,8 @@ export const security = {
       failed: "扫描失败",
       modelSaved: "模型配置已安全保存",
       directorySelected: "已选择 Skill 目录",
+      noSkills:
+        "当前没有可检测的 Skill。请先安装 Skill，或到「数据来源」设置工具目录后再检测。",
     },
   },
 } as const;

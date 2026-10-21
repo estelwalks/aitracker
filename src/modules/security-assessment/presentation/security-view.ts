@@ -520,6 +520,21 @@ export function isScanActive(status: SecurityScanPhase): boolean {
   return status === "running" || status === "cancelling";
 }
 
+/**
+ * Starting an all-Skills scan with nothing discoverable is rejected by the
+ * desktop scanner (`No trusted Skill target was found`) and by the companion
+ * HTTP API (`security.http.no_skills`). Both mean "there is nothing to scan",
+ * which the page explains instead of reporting a generic failure.
+ */
+export function isNoSkillTargetError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.message.includes("No trusted Skill target was found")) return true;
+  return (
+    (error as Error & { readonly code?: unknown }).code ===
+    "security.http.no_skills"
+  );
+}
+
 export function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 }

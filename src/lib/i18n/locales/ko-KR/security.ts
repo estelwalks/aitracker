@@ -509,6 +509,12 @@ export const security = {
       prompt_injection:
         "탈옥 시도, DAN 모드 활성화, 안전 필터 우회 기법을 탐지합니다.",
     },
+    noSkills: {
+      title: "검사할 Skill을 찾지 못했습니다",
+      desc: "보안 검사는 이 기기에 설치된 Agent의 Skill 폴더(예: ~/.claude/skills, ~/.codex/skills)를 검사합니다. 먼저 Skill을 설치하거나 '데이터 소스'에서 해당 도구의 데이터 디렉터리를 지정한 뒤 다시 검사하세요.",
+      refreshSkills: "Skill 다시 읽기",
+      openSources: "데이터 소스 열기",
+    },
     toast: {
       started: "실제 검사 작업을 시작했습니다",
       cancelled:
@@ -518,6 +524,8 @@ export const security = {
       failed: "검사에 실패했습니다",
       modelSaved: "모델 설정을 안전하게 저장했습니다",
       directorySelected: "Skill 폴더를 선택했습니다",
+      noSkills:
+        "검사할 Skill이 없습니다. 먼저 Skill을 설치하거나 '데이터 소스'에서 도구 디렉터리를 설정한 뒤 다시 검사하세요.",
     },
   },
 } as const;

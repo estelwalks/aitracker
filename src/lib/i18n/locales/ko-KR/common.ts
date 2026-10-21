@@ -33,6 +33,13 @@ export const common = {
   notFoundDesc: "방문한 페이지가 존재하지 않거나 이동되었습니다.",
   pageLoadFailed: "페이지를 불러오지 못했습니다",
   pageLoadFailedDesc: "문제가 발생했습니다. 다시 시도하거나 홈으로 돌아가세요.",
+  errorDetails: {
+    show: "오류 상세 보기",
+    hide: "오류 상세 접기",
+    copy: "오류 상세 복사",
+    copied: "복사했습니다",
+    copyFailed: "복사하지 못했습니다. 텍스트를 직접 선택하세요",
+  },
   collapse: "접기",
   localServiceConnected: "로컬 서비스 연결됨",
   localApiConnected: "로컬 API 연결됨",

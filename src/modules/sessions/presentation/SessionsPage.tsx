@@ -20,6 +20,7 @@ import {
 } from "../../../components/aitracker.tsx";
 import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { brandColorOf } from "../../../components/BrandIcon.helpers.ts";
+import { ErrorDetails } from "../../../components/ErrorDetails.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
 import { downloadExport } from "../../../lib/export/download.ts";
@@ -108,7 +109,7 @@ function localDateKey(date: Date): string {
  * period-scoped stat cards, a filter rail, and date-grouped session rows.
  */
 export function SessionsPage({ initial }: { initial: SessionPage }) {
-  const { t, format } = useI18n();
+  const { t, format, locale, displayCurrency } = useI18n();
   const [page, setPage] = useState(initial);
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -117,7 +118,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     useState<NonNullable<SessionFilter["range"]>>("30d");
   const [dateField, setDateField] = useState<SessionDateField>("endedAt");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<unknown>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -157,13 +158,13 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     }
     let cancelled = false;
     setLoading(true);
-    setError(false);
+    setError(null);
     void getSessionsQuery({ data: request })
       .then((next) => {
         if (!cancelled) setPage(next);
       })
-      .catch(() => {
-        if (!cancelled) setError(true);
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(cause);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -178,7 +179,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     const refreshRequest = requestRef.current;
     const requestId = ++refreshRequestId.current;
     setLoading(true);
-    setError(false);
+    setError(null);
     try {
       const next = await refreshSessionsQuery({ data: refreshRequest });
       if (
@@ -186,14 +187,14 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
         requestRef.current === refreshRequest
       ) {
         setPage(next);
-        setError(false);
+        setError(null);
       }
-    } catch {
+    } catch (cause: unknown) {
       if (
         requestId === refreshRequestId.current &&
         requestRef.current === refreshRequest
       ) {
-        setError(true);
+        setError(cause);
       }
     } finally {
       if (
@@ -231,7 +232,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
   const exportSessions = async (selectedOnly: boolean) => {
     if (loading || (selectedOnly && selectedKeys.size === 0)) return;
     setLoading(true);
-    setError(false);
+    setError(null);
     try {
       const selection = selectedOnly
         ? [...selectedKeys].map((key) => {
@@ -535,9 +536,15 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
 
       {/* 按本地日期分组的会话记录；分页保留，组内为当前页会话 */}
       <div className="min-w-0 space-y-5">
-        {error ? (
+        {error != null ? (
           <div className="px-4 py-10 text-center">
             <p className="text-sm font-medium">{t("common.pageLoadFailed")}</p>
+            <ErrorDetails
+              error={error}
+              variant="compact"
+              locale={locale}
+              currency={displayCurrency}
+            />
           </div>
         ) : page.sessions.length === 0 ? (
           <EmptyState
