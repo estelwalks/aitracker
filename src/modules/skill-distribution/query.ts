@@ -71,10 +71,17 @@ import type {
   MarketSort,
   InstallSkillResult as LegacyInstallSkillResult,
 } from "../../lib/local-market/types.ts";
+import { marketSkillInstallDirectory } from "../../lib/local-market/install-directory.ts";
 
 export type MarketSkill = Omit<LegacyMarketSkill, "repoPath"> & {
   /** Opaque market package identity; repository paths never reach the renderer. */
   readonly packageRef: string;
+  /**
+   * Folder the installer copies for this Skill (the parent of `repoPath`).
+   * Only this leaf name is projected — never the repository path itself — and
+   * it is what pairs with the install's repository label to identify a row.
+   */
+  readonly installDirectory: string;
 };
 export type MarketListResult = Omit<LegacyMarketListResult, "skills"> & {
   readonly skills: readonly MarketSkill[];
@@ -116,8 +123,12 @@ const packageRefFor = (skill: LegacyMarketSkill) =>
   `package:${skill.id}:${encodeURIComponent(skill.slug)}`;
 
 function projectSkill(skill: LegacyMarketSkill): MarketSkill {
-  const { repoPath: _repoPath, ...safe } = skill;
-  return { ...safe, packageRef: packageRefFor(skill) };
+  const { repoPath, ...safe } = skill;
+  return {
+    ...safe,
+    packageRef: packageRefFor(skill),
+    installDirectory: marketSkillInstallDirectory(repoPath, skill.slug),
+  };
 }
 
 function projectResult(value: LegacyMarketListResult): MarketListResult {
