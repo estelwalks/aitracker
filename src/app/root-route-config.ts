@@ -18,11 +18,12 @@ import {
   type Currency,
   type Locale,
 } from "../lib/i18n/locale";
-import { hostPlatformFromNode, type HostPlatform } from "../lib/platform";
+import { type HostPlatform } from "../lib/platform";
 import {
   getRatesSnapshot,
   type RatesSnapshot,
 } from "../lib/pricing/server-fns";
+import { getRootHostPlatform } from "./runtime-facts";
 
 export interface RootLoaderData {
   readonly locale: Locale;
@@ -33,9 +34,11 @@ export interface RootLoaderData {
   /**
    * The operating system this server runs on. In the desktop build the local
    * web server runs inside the Electron main process, so this is the same
-   * machine as the window and `process.platform` is known synchronously — which
-   * is what makes it hydration-stable. A browser talking to a remote host gets
-   * that host's value, hence the name.
+   * machine as the window — which is what makes it hydration-stable. The
+   * value comes from a ServerFn (`getRootHostPlatform`), never from a direct
+   * `process` read: the root loader also runs in the browser when the router
+   * revalidates, where `process` does not exist. A browser talking to a remote
+   * host gets that host's value, hence the name.
    */
   readonly hostPlatform: HostPlatform;
 }
@@ -46,9 +49,10 @@ export async function rootLoader({
   location: { search: Record<string, unknown> };
 }): Promise<RootLoaderData> {
   const locale = resolveLocaleFromSearch(location.search);
-  const [catalog, rates] = await Promise.all([
+  const [catalog, rates, hostPlatform] = await Promise.all([
     loadCatalog(locale),
     getRatesSnapshot({ data: false }).catch(() => null),
+    getRootHostPlatform(),
   ]);
   return {
     locale,
@@ -58,7 +62,7 @@ export async function rootLoader({
       mapSystemCurrency(locale),
     ),
     rates,
-    hostPlatform: hostPlatformFromNode(process.platform),
+    hostPlatform,
   };
 }
 
