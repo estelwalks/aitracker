@@ -11,7 +11,7 @@
   "platforms": {
     "macos": "supported",
     "windows": "supported",
-    "linux": "planned"
+    "linux": "supported"
   },
   "detection": {
     "locations": [
@@ -56,6 +56,20 @@
     }
   },
   "storage": {
+    "dataRoots": [
+      {
+        "base": "appData",
+        "path": "Cursor"
+      },
+      {
+        "base": "appDataRoaming",
+        "path": "Cursor"
+      },
+      {
+        "base": "configHome",
+        "path": "Cursor"
+      }
+    ],
     "skills": {
       "rootSpecs": [
         {
@@ -133,7 +147,8 @@
     "skills": "read-write",
     "agents": "unsupported",
     "sessions": {
-      "mode": "unsupported"
+      "mode": "read",
+      "reader": "cursor-session-v1"
     },
     "market": "install-target",
     "security": "unsupported"

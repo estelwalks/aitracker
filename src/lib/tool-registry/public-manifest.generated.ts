@@ -56,13 +56,13 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "macos": "supported",
         "windows10": "supported",
         "windows11": "supported",
-        "linux": "planned"
+        "linux": "supported"
       },
       "capabilities": {
         "usage": "adapter",
         "skills": "read-write",
         "agents": "unsupported",
-        "sessions": "unsupported",
+        "sessions": "read",
         "market": "install-target",
         "security": "unsupported"
       }

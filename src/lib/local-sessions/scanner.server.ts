@@ -3688,6 +3688,352 @@ async function scanTraeWorkSessions(
   );
 }
 
+// Cursor — every Agent/Composer conversation lives in the IDE's VS Code state
+// database (`User/globalStorage/state.vscdb`): `composerHeaders` has one row per
+// conversation, and `cursorDiskKV` carries the `composerData:<id>` head (model,
+// workspace URI, bubble index) plus one `bubbleId:<composerId>:<id>` row per
+// message. Cursor keeps no per-turn token accounting locally, so these records
+// carry turn/time metadata only; token totals come from the opt-in account
+// collector. Read-only: Cursor ships no shell-safe resume entry point for an
+// IDE composer.
+// ---------------------------------------------------------------------------
+
+const CURSOR_STATE_DATABASE = join("User", "globalStorage", "state.vscdb");
+const CURSOR_COMPOSER_KEY_PREFIX = "composerData:";
+const CURSOR_BUBBLE_KEY_PREFIX = "bubbleId:";
+const CURSOR_MAX_COMPOSERS = 5_000;
+const CURSOR_MAX_BUBBLES_PER_COMPOSER = 2_000;
+/** Cursor's synthetic workspace id for a window with no folder open. */
+const CURSOR_EMPTY_WORKSPACE = "empty-window";
+
+interface CursorComposerRow {
+  readonly composerId: string;
+  readonly name: string | null;
+  readonly createdAt: number | null;
+  readonly lastUpdatedAt: number | null;
+  readonly workspaceId: string | null;
+  readonly isSubagent: boolean;
+  readonly isDraft: boolean;
+}
+
+interface CursorBubbleSummary {
+  readonly type: number | null;
+  readonly timestamp: RecordTimestamp | null;
+  readonly preview: string | null;
+  readonly model: string | null;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+}
+
+function parseCursorJson(value: unknown): JsonObject | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    return asObject(JSON.parse(value));
+  } catch {
+    return undefined;
+  }
+}
+
+function cursorPositiveNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : null;
+}
+
+function cursorFlag(value: unknown): boolean {
+  return value === true || value === 1;
+}
+
+/** Newer Cursor keeps a `composerHeaders` table; older builds only the KV. */
+function readCursorComposerRows(database: DatabaseSync): CursorComposerRow[] {
+  const rows: CursorComposerRow[] = [];
+  try {
+    const headers = database
+      .prepare(
+        `SELECT composerId, workspaceId, createdAt, lastUpdatedAt, isSubagent, value
+         FROM composerHeaders LIMIT ?`,
+      )
+      .all(CURSOR_MAX_COMPOSERS) as Array<Record<string, unknown>>;
+    for (const row of headers) {
+      const composerId = stringValue(row.composerId);
+      if (composerId == null) continue;
+      const head = parseCursorJson(row.value);
+      rows.push({
+        composerId,
+        name: stringValue(head?.name) ?? null,
+        createdAt: cursorPositiveNumber(row.createdAt),
+        lastUpdatedAt: cursorPositiveNumber(row.lastUpdatedAt),
+        workspaceId: stringValue(row.workspaceId) ?? null,
+        isSubagent: cursorFlag(row.isSubagent),
+        isDraft: cursorFlag(head?.isDraft),
+      });
+    }
+  } catch {
+    // Older Cursor builds have no composerHeaders table.
+  }
+  if (rows.length > 0) return rows;
+
+  try {
+    const stored = database
+      .prepare(
+        `SELECT key, value FROM cursorDiskKV
+         WHERE key LIKE 'composerData:%' LIMIT ?`,
+      )
+      .all(CURSOR_MAX_COMPOSERS) as Array<Record<string, unknown>>;
+    for (const row of stored) {
+      const key = stringValue(row.key);
+      const head = parseCursorJson(row.value);
+      if (head == null) continue;
+      const composerId =
+        stringValue(head.composerId) ??
+        key?.slice(CURSOR_COMPOSER_KEY_PREFIX.length);
+      if (composerId == null || composerId === "") continue;
+      rows.push({
+        composerId,
+        name: stringValue(head.name) ?? null,
+        createdAt: cursorPositiveNumber(head.createdAt),
+        lastUpdatedAt: cursorPositiveNumber(head.lastUpdatedAt),
+        workspaceId: null,
+        isSubagent: cursorFlag(head.isSubagent),
+        isDraft: cursorFlag(head.isDraft),
+      });
+    }
+  } catch {
+    // An unreadable KV table is an empty source, never an error.
+  }
+  return rows;
+}
+
+function readCursorComposerData(
+  database: DatabaseSync,
+  composerId: string,
+): JsonObject | undefined {
+  try {
+    const row = database
+      .prepare("SELECT value FROM cursorDiskKV WHERE key = ?")
+      .get(`${CURSOR_COMPOSER_KEY_PREFIX}${composerId}`) as
+      { value?: unknown } | undefined;
+    return parseCursorJson(row?.value);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Cheap bubble index stored in the composer head (ids + timestamps + preview). */
+function cursorBubblesFromIndex(
+  data: JsonObject | undefined,
+): CursorBubbleSummary[] {
+  const headers = data?.fullConversationHeadersOnly;
+  if (!Array.isArray(headers)) return [];
+  const bubbles: CursorBubbleSummary[] = [];
+  for (const entry of headers) {
+    const bubble = asObject(entry);
+    if (bubble == null) continue;
+    const grouping = asObject(bubble.grouping);
+    bubbles.push({
+      type: typeof bubble.type === "number" ? bubble.type : null,
+      timestamp: parseTimestampValue(bubble.createdAt) ?? null,
+      preview: stringValue(grouping?.textPreview) ?? null,
+      model: null,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+  }
+  return bubbles;
+}
+
+/** Richer per-message rows; the only place Cursor ever records token counts. */
+function cursorBubblesFromDisk(
+  database: DatabaseSync,
+  composerId: string,
+): CursorBubbleSummary[] {
+  let rows: Array<Record<string, unknown>>;
+  try {
+    rows = database
+      .prepare("SELECT value FROM cursorDiskKV WHERE key LIKE ? LIMIT ?")
+      .all(
+        `${CURSOR_BUBBLE_KEY_PREFIX}${composerId}:%`,
+        CURSOR_MAX_BUBBLES_PER_COMPOSER,
+      ) as Array<Record<string, unknown>>;
+  } catch {
+    return [];
+  }
+  const bubbles: CursorBubbleSummary[] = [];
+  for (const row of rows) {
+    const bubble = parseCursorJson(row.value);
+    if (bubble == null) continue;
+    const tokens = asObject(bubble.tokenCount);
+    const modelInfo = asObject(bubble.modelInfo);
+    bubbles.push({
+      type: typeof bubble.type === "number" ? bubble.type : null,
+      timestamp: parseTimestampValue(bubble.createdAt) ?? null,
+      preview: stringValue(bubble.text) ?? null,
+      model: stringValue(modelInfo?.modelName) ?? null,
+      inputTokens: tokenValue(tokens?.inputTokens),
+      outputTokens: tokenValue(tokens?.outputTokens),
+    });
+  }
+  return bubbles;
+}
+
+/** Decode a Cursor workspace URI (`{fsPath}` or a `file:` URL) to a path. */
+function cursorWorkspacePath(data: JsonObject | undefined): string | null {
+  const uri = asObject(asObject(data?.workspaceIdentifier)?.uri);
+  const fsPath = stringValue(uri?.fsPath);
+  if (fsPath != null) return fsPath;
+  const external = stringValue(uri?.external);
+  if (external == null || !external.startsWith("file:")) return null;
+  try {
+    const decoded = decodeURIComponent(new URL(external).pathname);
+    // `/d:/Dev/app` -> `d:/Dev/app` (Windows drive-letter form).
+    return /^\/[A-Za-z]:\//u.test(decoded) ? decoded.slice(1) : decoded;
+  } catch {
+    return null;
+  }
+}
+
+/** `workspaceStorage/<id>/workspace.json` still names the folder for older heads. */
+async function cursorWorkspaceFolderPath(
+  cursorDirectory: string,
+  workspaceId: string,
+  cache: Map<string, string | null>,
+): Promise<string | null> {
+  const cached = cache.get(workspaceId);
+  if (cached !== undefined) return cached;
+  let folder: string | null = null;
+  try {
+    const document = JSON.parse(
+      await readFile(
+        join(
+          cursorDirectory,
+          "User",
+          "workspaceStorage",
+          workspaceId,
+          "workspace.json",
+        ),
+        "utf8",
+      ),
+    ) as unknown;
+    const raw = stringValue(asObject(document)?.folder);
+    if (raw != null && raw.startsWith("file:")) {
+      const decoded = decodeURIComponent(new URL(raw).pathname);
+      folder = /^\/[A-Za-z]:\//u.test(decoded) ? decoded.slice(1) : decoded;
+    }
+  } catch {
+    folder = null;
+  }
+  cache.set(workspaceId, folder);
+  return folder;
+}
+
+async function scanCursorSessions(
+  cursorDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  const databasePath = join(cursorDirectory, CURSOR_STATE_DATABASE);
+  try {
+    const info = await stat(databasePath);
+    if (!info.isFile()) return [];
+  } catch {
+    // A platform layout Cursor does not use on this machine.
+    return [];
+  }
+
+  const fragments = new Map<string, SessionFragment>();
+  const workspaceFolders = new Map<string, string | null>();
+  let database: DatabaseSync | undefined;
+  try {
+    database = new DatabaseSync(databasePath, { readOnly: true });
+    for (const composer of readCursorComposerRows(database)) {
+      signal?.throwIfAborted();
+      if (composer.isSubagent || composer.isDraft) continue;
+
+      const data = readCursorComposerData(database, composer.composerId);
+      const indexed = cursorBubblesFromIndex(data);
+      const bubbles =
+        indexed.length > 0
+          ? indexed
+          : cursorBubblesFromDisk(database, composer.composerId);
+      if (bubbles.length === 0) continue;
+
+      const fragment = createEmptyFragment("cursor", composer.composerId);
+      fragment.title = composer.name ?? stringValue(data?.name) ?? "";
+
+      const workspacePath =
+        cursorWorkspacePath(data) ??
+        (composer.workspaceId != null &&
+        composer.workspaceId !== CURSOR_EMPTY_WORKSPACE
+          ? await cursorWorkspaceFolderPath(
+              cursorDirectory,
+              composer.workspaceId,
+              workspaceFolders,
+            )
+          : null);
+      if (workspacePath != null) fragment.projectRef = workspacePath;
+
+      const createdAt = parseTimestampValue(composer.createdAt);
+      if (createdAt != null) fragment.timestamps.push(createdAt);
+      const updatedAt = parseTimestampValue(composer.lastUpdatedAt);
+      if (updatedAt != null) fragment.timestamps.push(updatedAt);
+
+      const modelName = stringValue(asObject(data?.modelConfig)?.modelName);
+      if (modelName != null && modelName !== "default") {
+        fragment.model = modelName;
+      }
+
+      let inputTokens = 0;
+      let outputTokens = 0;
+      for (const bubble of bubbles) {
+        if (bubble.timestamp != null) {
+          fragment.timestamps.push(bubble.timestamp);
+        }
+        if (bubble.model != null && fragment.model == null) {
+          fragment.model = bubble.model;
+        }
+        inputTokens += bubble.inputTokens;
+        outputTokens += bubble.outputTokens;
+        if (bubble.type !== 1) continue;
+        fragment.turns += 1;
+        if (
+          bubble.timestamp != null &&
+          (fragment.firstUserAt == null ||
+            bubble.timestamp.ms < fragment.firstUserAt.ms)
+        ) {
+          fragment.firstUserAt = bubble.timestamp;
+        }
+        if (fragment.fallbackTitle === "" && bubble.preview != null) {
+          const title = safeFallbackTitle(bubble.preview);
+          if (title != null) {
+            fragment.fallbackTitle = title;
+            fragment.fallbackTitleAt = bubble.timestamp?.ms ?? null;
+          }
+        }
+      }
+      if (fragment.turns === 0) continue;
+      addTokenCounts(fragment.totals, {
+        inputTokens,
+        outputTokens,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        reasoningOutputTokens: 0,
+        totalTokens: inputTokens + outputTokens,
+      });
+      // No shell-safe resume entry point exists for an IDE composer.
+      fragment.resumeSupported = false;
+      fragments.set(composer.composerId, fragment);
+    }
+  } catch {
+    // A locked or concurrently rewritten database is an empty source.
+  } finally {
+    database?.close();
+  }
+  signal?.throwIfAborted();
+
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
+}
+
 registerSessionReader({
   key: "zcode-session-v1",
   scan: scanZcodeSessions,
@@ -3727,6 +4073,13 @@ registerSessionReader({
   key: "trae-work-session-v1",
   scan: scanTraeWorkSessions,
   defaultRoots: [".trae", ".trae-cn"],
+});
+registerSessionReader({
+  key: "cursor-session-v1",
+  scan: scanCursorSessions,
+  // The registry declares the per-platform Cursor app-data roots; there is no
+  // HOME-relative fallback that holds the VS Code state database.
+  defaultRoots: [],
 });
 /**
  * Scan every registry-declared session tool and return a merged, deduplicated,

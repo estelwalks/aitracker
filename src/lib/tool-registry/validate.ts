@@ -70,6 +70,7 @@ export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([
   "qcode-session-v1",
   "marvis-session-v1",
   "trae-work-session-v1",
+  "cursor-session-v1",
 ]);
 
 export const BUILTIN_CONTEXT_READERS: ReadonlySet<string> = new Set([

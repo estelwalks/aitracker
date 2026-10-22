@@ -1327,3 +1327,78 @@ test("ZCode: extracts ordered user/assistant text and reasoning from db.sqlite",
     assert.deepEqual(after, before);
   });
 });
+
+test("Cursor: reads composer bubbles from the IDE state database", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "composer-abc123";
+    const globalStorage = join(
+      home,
+      "AppData",
+      "Roaming",
+      "Cursor",
+      "User",
+      "globalStorage",
+    );
+    await mkdir(globalStorage, { recursive: true });
+    // Build the fixture through the platform adapter, never `node:sqlite`
+    // directly: business modules (`src/modules/**`) may not import the driver,
+    // and verify:browser-server-boundary enforces that even in tests.
+    const database = new NodeSqliteDatabase({
+      path: join(globalStorage, "state.vscdb"),
+    });
+    try {
+      database.exec(
+        "CREATE TABLE cursorDiskKV (key TEXT PRIMARY KEY, value TEXT)",
+      );
+      const insert = database.prepare(
+        "INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)",
+      );
+      insert.run(
+        `bubbleId:${sessionId}:b1`,
+        JSON.stringify({
+          type: 1,
+          text: "Fix the build",
+          createdAt: "2026-10-21T10:00:05.000Z",
+        }),
+      );
+      insert.run(
+        `bubbleId:${sessionId}:b2`,
+        JSON.stringify({
+          type: 2,
+          text: "Looking into it.",
+          thinking: "Scan the logs.",
+          createdAt: "2026-10-21T10:00:30.000Z",
+        }),
+      );
+      // A tool-only assistant turn renders no text and must be skipped.
+      insert.run(
+        `bubbleId:${sessionId}:b3`,
+        JSON.stringify({
+          type: 2,
+          text: "",
+          createdAt: "2026-10-21T10:00:40.000Z",
+        }),
+      );
+      insert.run(
+        "bubbleId:another-session:b1",
+        JSON.stringify({ type: 1, text: "Other session" }),
+      );
+    } finally {
+      database.close();
+    }
+
+    const transcript = await loadSessionTranscript(
+      { source: "cursor", sessionId },
+      { homeDirectory: home, platform: "win32" },
+    );
+    assert.equal(transcript.source, "cursor");
+    assert.deepEqual(transcript.messages, [
+      { role: "user", text: "Fix the build" },
+      {
+        role: "assistant",
+        text: "Looking into it.",
+        thinking: "Scan the logs.",
+      },
+    ]);
+  });
+});
