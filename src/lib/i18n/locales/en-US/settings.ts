@@ -389,6 +389,28 @@ export const settings = {
       saveFailed: "Failed to save insight settings",
     },
   },
+  cursorAccount: {
+    title: "Cursor account usage",
+    hintOff:
+      "Cursor only exposes per-request token usage through its account API; there is no local usage log to parse. Enabling this lets AITracker use your local Cursor sign-in to fetch the usage export from cursor.com and cache it on this machine (models and token counts only, never prompts or conversation content). While it is off, no request is made.",
+    hintOn:
+      "Enabled: AITracker periodically fetches Cursor's usage export from cursor.com using your local Cursor sign-in and caches it for the offline scan (models and token counts only, never prompts or conversation content).",
+    notInstalled: "Cursor is not installed",
+    signedOut: "Cursor is not signed in; sign in to Cursor first",
+    synced: "{count} records cached · {time}",
+    neverSynced: "Not synced yet",
+    syncNow: "Sync now",
+    syncing: "Syncing…",
+    syncDone: "Cursor usage synced",
+    syncFailed: "Sync failed: {reason}",
+    errors: {
+      signInExpired: "Cursor session expired; sign in again",
+      requestFailed: "Cursor API request failed",
+      timeout: "Request timed out",
+      responseTooLarge: "Usage export is too large",
+      untrustedRedirect: "Cursor API redirected to a non-cursor.com origin",
+    },
+  },
   toast: {
     autoLaunchDesktopOnly:
       "Launch at login is only available in the desktop app",
@@ -429,5 +451,8 @@ export const settings = {
     resetFailed: "Failed to reset app preferences",
     llmReviewSaved: "AI detection settings saved",
     llmReviewSaveFailed: "Failed to save AI detection settings",
+    cursorAccountSaved: "Cursor usage collection setting saved",
+    cursorAccountSaveFailed:
+      "Failed to save the Cursor usage collection setting",
   },
 } as const;

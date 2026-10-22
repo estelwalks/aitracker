@@ -55,6 +55,11 @@ export interface ApplyBackupPort {
 
 export interface ExecutorRegistryOptions {
   readonly usage?: RefreshUsagePort;
+  /**
+   * Opt-in Cursor account usage sync. The executor no-ops while the user has
+   * not enabled the feature; the task itself is the declared network surface.
+   */
+  readonly cursorAccount?: RefreshUsagePort;
   readonly sessions?: RefreshSessionsPort;
   readonly insights?: RefreshInsightsPort;
   readonly skills?: RefreshSkillsPort;
@@ -225,6 +230,11 @@ export function createExecutorRegistry(
     "refresh-usage-v1": monitored(
       "usage",
       bindUsage(options.usage),
+      options.monitoring,
+    ),
+    "refresh-cursor-v1": monitored(
+      "cursor",
+      bindUsage(options.cursorAccount),
       options.monitoring,
     ),
     "refresh-skills-v1": monitored(

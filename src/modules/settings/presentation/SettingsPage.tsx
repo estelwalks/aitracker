@@ -84,6 +84,12 @@ import {
   getSecurityLlmReviewAvailability,
   setSecurityLlmReviewEnabled,
 } from "../../security-assessment/index.ts";
+import {
+  getCursorAccountUsageStatus,
+  setCursorAccountUsageEnabled,
+  syncCursorAccountUsageNow,
+  type CursorAccountUsageView,
+} from "../cursor-account.server-fns.ts";
 
 const categoryKeys: Record<SettingsCategory, MessageKey> = {
   preferences: "settings.sections.preferences",
@@ -245,6 +251,10 @@ export function SettingsPage({
   const [llmReviewConfigured, setLlmReviewConfigured] = useState(false);
   const [llmReviewEnabled, setLlmReviewEnabled] = useState(true);
   const [llmReviewLoading, setLlmReviewLoading] = useState(true);
+  const [cursorUsage, setCursorUsage] = useState<CursorAccountUsageView | null>(
+    null,
+  );
+  const [cursorUsageBusy, setCursorUsageBusy] = useState(false);
 
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
     setSettings((current) => ({ ...current, [key]: value }));
@@ -254,6 +264,22 @@ export function SettingsPage({
   useEffect(() => {
     setCategory(resolveSettingsCategory(requestedSection));
   }, [requestedSection]);
+
+  // Cursor account usage is opt-in: the status read is local-only (install,
+  // Cursor sign-in, cached export) and never triggers a request.
+  useEffect(() => {
+    let disposed = false;
+    getCursorAccountUsageStatus()
+      .then((next) => {
+        if (!disposed) setCursorUsage(next);
+      })
+      .catch(() => {
+        if (!disposed) setCursorUsage(null);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   // Optional LLM review supplement (M4): master toggle. It defaults on; an
   // unconfigured model still degrades to the local rule result.
@@ -342,6 +368,93 @@ export function SettingsPage({
       toast.error(t("settings.toast.llmReviewSaveFailed"));
     }
   };
+
+  const cursorErrorKeys: Record<string, MessageKey> = {
+    "cursor-account.sign-in-expired":
+      "settings.cursorAccount.errors.signInExpired",
+    "cursor-account.request-failed":
+      "settings.cursorAccount.errors.requestFailed",
+    "cursor-account.timeout": "settings.cursorAccount.errors.timeout",
+    "cursor-account.response-too-large":
+      "settings.cursorAccount.errors.responseTooLarge",
+    "cursor-account.untrusted-redirect":
+      "settings.cursorAccount.errors.untrustedRedirect",
+  };
+
+  const changeCursorUsage = async (enabled: boolean) => {
+    setCursorUsageBusy(true);
+    try {
+      const next = await setCursorAccountUsageEnabled({ data: { enabled } });
+      setCursorUsage(next);
+      toast.success(t("settings.toast.cursorAccountSaved"));
+    } catch {
+      toast.error(t("settings.toast.cursorAccountSaveFailed"));
+    } finally {
+      setCursorUsageBusy(false);
+    }
+  };
+
+  const syncCursorUsage = async () => {
+    setCursorUsageBusy(true);
+    try {
+      const response = await syncCursorAccountUsageNow();
+      setCursorUsage(response.status);
+      const result = response.result;
+      if (result.status === "synced") {
+        toast.success(t("settings.cursorAccount.syncDone"));
+        return;
+      }
+      if (result.status === "not-installed") {
+        toast.error(t("settings.cursorAccount.notInstalled"));
+        return;
+      }
+      if (result.status === "not-signed-in") {
+        toast.error(t("settings.cursorAccount.signedOut"));
+        return;
+      }
+      if (result.status === "failed") {
+        const key =
+          result.errorCode == null
+            ? undefined
+            : cursorErrorKeys[result.errorCode];
+        toast.error(
+          t("settings.cursorAccount.syncFailed", {
+            reason:
+              key == null
+                ? t("settings.cursorAccount.errors.requestFailed")
+                : t(key),
+          }),
+        );
+      }
+    } catch {
+      toast.error(
+        t("settings.cursorAccount.syncFailed", {
+          reason: t("settings.cursorAccount.errors.requestFailed"),
+        }),
+      );
+    } finally {
+      setCursorUsageBusy(false);
+    }
+  };
+
+  // One status line under the toggle: install, sign-in, cache freshness.
+  // While the feature is off the toggle hint carries the explanation, so the
+  // line stays empty instead of claiming a missing sync.
+  const cursorUsageStatusText =
+    cursorUsage == null
+      ? ""
+      : cursorUsage.installed !== true
+        ? t("settings.cursorAccount.notInstalled")
+        : cursorUsage.enabled !== true
+          ? ""
+          : cursorUsage.signedIn !== true
+            ? t("settings.cursorAccount.signedOut")
+            : cursorUsage.cachedRecords > 0 && cursorUsage.syncedAt != null
+              ? t("settings.cursorAccount.synced", {
+                  count: cursorUsage.cachedRecords,
+                  time: new Date(cursorUsage.syncedAt).toLocaleString(),
+                })
+              : t("settings.cursorAccount.neverSynced");
 
   // Auto-launch logic (keep existing logic intact)
   useEffect(() => {
@@ -892,6 +1005,41 @@ export function SettingsPage({
                     disabled={llmReviewLoading}
                   />
                 </Field>
+              </div>
+              <div className="mb-3 mt-1 border-t border-border pt-3">
+                <Field
+                  label={t("settings.cursorAccount.title")}
+                  hint={
+                    cursorUsage?.enabled === true
+                      ? t("settings.cursorAccount.hintOn")
+                      : t("settings.cursorAccount.hintOff")
+                  }
+                >
+                  <Toggle
+                    value={cursorUsage?.enabled === true}
+                    onChange={(enabled) => void changeCursorUsage(enabled)}
+                    disabled={cursorUsageBusy || cursorUsage == null}
+                  />
+                </Field>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="aitracker-text-caption text-muted-foreground">
+                    {cursorUsageStatusText}
+                  </span>
+                  <AITrackerButton
+                    size="sm"
+                    variant="default"
+                    onClick={() => void syncCursorUsage()}
+                    disabled={
+                      cursorUsageBusy ||
+                      cursorUsage?.enabled !== true ||
+                      cursorUsage?.installed !== true
+                    }
+                  >
+                    {cursorUsageBusy
+                      ? t("settings.cursorAccount.syncing")
+                      : t("settings.cursorAccount.syncNow")}
+                  </AITrackerButton>
+                </div>
               </div>
               <div className="mb-3 mt-1 border-t border-border pt-3">
                 <Field

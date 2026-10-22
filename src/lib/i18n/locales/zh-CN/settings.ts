@@ -366,6 +366,28 @@ export const settings = {
       saveFailed: "保存今日洞察设置失败",
     },
   },
+  cursorAccount: {
+    title: "Cursor 账号用量",
+    hintOff:
+      "Cursor 只在账号接口里提供逐次 Token 用量，本机没有可解析的用量日志。开启后 AITracker 会用本机 Cursor 的登录状态向 cursor.com 拉取用量并缓存在本地（只含模型与 Token 数，不含提示词或对话内容）；不开启则不会发起任何请求。",
+    hintOn:
+      "已开启：AITracker 会用本机 Cursor 的登录状态定期向 cursor.com 拉取用量，并缓存到本机供离线扫描读取（不含提示词或对话内容）。",
+    notInstalled: "未检测到 Cursor",
+    signedOut: "未登录 Cursor，请先在 Cursor 中登录并同步一次",
+    synced: "已缓存 {count} 条记录 · {time}",
+    neverSynced: "尚未同步",
+    syncNow: "立即同步",
+    syncing: "同步中…",
+    syncDone: "Cursor 用量已同步",
+    syncFailed: "同步失败：{reason}",
+    errors: {
+      signInExpired: "Cursor 登录已过期，请重新登录",
+      requestFailed: "Cursor 接口请求失败",
+      timeout: "请求超时",
+      responseTooLarge: "导出数据过大",
+      untrustedRedirect: "接口跳转到非 cursor.com 域名",
+    },
+  },
   toast: {
     autoLaunchDesktopOnly: "仅桌面客户端可设置开机自启",
     autoLaunchEnabled: "已开启开机自启",
@@ -403,5 +425,7 @@ export const settings = {
     resetFailed: "重置应用偏好失败",
     llmReviewSaved: "AI检测设置已保存",
     llmReviewSaveFailed: "保存 AI检测设置失败",
+    cursorAccountSaved: "Cursor 用量采集设置已保存",
+    cursorAccountSaveFailed: "保存 Cursor 用量采集设置失败",
   },
 } as const;

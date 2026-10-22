@@ -129,6 +129,35 @@
         }
       },
       {
+        "id": "cursor.refresh",
+        "executorKey": "refresh-cursor-v1",
+        "category": "collection",
+        "defaultSchedule": {
+          "kind": "interval",
+          "minutes": 60
+        },
+        "constraints": {
+          "minMinutes": 15,
+          "maxMinutes": 1440,
+          "singleFlight": true
+        },
+        "startupPolicy": "if-stale",
+        "retry": {
+          "maxAttempts": 1,
+          "backoffSeconds": [
+            600
+          ]
+        },
+        "timeoutMs": 90000,
+        "queue": "background",
+        "network": "allowed",
+        "requiresApproval": false,
+        "ui": {
+          "settingsVisible": false,
+          "i18nKey": "tasks.cursorRefresh"
+        }
+      },
+      {
         "id": "skills.refresh",
         "executorKey": "refresh-skills-v1",
         "category": "collection",

@@ -18,6 +18,7 @@ describe("P4-T4 session whitelist derivation", () => {
         "pi",
         "zcode",
         "dsh",
+        "aipy",
         "omo",
       ],
     );

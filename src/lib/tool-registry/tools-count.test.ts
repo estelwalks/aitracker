@@ -8,14 +8,13 @@ import {
 } from "./__baseline__/baseline.ts";
 
 /** User-added extension tools that stay visible in the public catalog. */
-const VISIBLE_EXTENSION_IDS = ["cline"];
+const VISIBLE_EXTENSION_IDS = ["aipy", "cline"];
 
 /**
  * Known-but-unverified sources are retained in the server registry but hidden
  * from product navigation until a TokenTracker-aligned data contract exists.
  */
 const HIDDEN_SOURCE_IDS = [
-  "aipy",
   "qwen",
   "proma",
   "cherrystudio",
@@ -35,10 +34,11 @@ test("the registry compiles all built-in tool definitions with no diagnostics", 
 
 test("registry tools match the frozen baseline (TC-REG-001)", () => {
   const registry = getDefaultRegistry();
-  // Only TokenTracker-aligned tools are visible in the public catalog.
+  // Visible = TokenTracker-aligned tools plus the user-owned extension tools
+  // (AiPy/Cline) whose local data contracts are verified.
   assert.equal(
     registry.definitions.filter((def) => def.catalogVisible !== false).length,
-    37,
+    38,
   );
   // The frozen 27-tool baseline matches the first 27 definitions in order.
   const ids = registry.definitions.map((def) => def.id);
@@ -261,7 +261,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
 
 test("public manifest mirrors all visible tools", () => {
   const registry = getDefaultRegistry();
-  assert.equal(registry.publicManifest.tools.length, 37);
+  assert.equal(registry.publicManifest.tools.length, 38);
   assert.deepEqual(
     registry.publicManifest.tools.map((t) => t.id),
     registry.definitions

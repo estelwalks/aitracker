@@ -383,6 +383,28 @@ export const settings = {
       saveFailed: "인사이트 설정 저장에 실패했습니다",
     },
   },
+  cursorAccount: {
+    title: "Cursor 계정 사용량",
+    hintOff:
+      "Cursor는 요청별 토큰 사용량을 계정 API로만 제공하며, 로컬에서 파싱할 사용 로그가 없습니다. 켜면 AITracker가 이 Mac의 Cursor 로그인 상태로 cursor.com에서 사용량을 가져와 로컬에 캐시합니다(모델과 토큰 수만 포함, 프롬프트나 대화 내용은 포함하지 않음). 끄면 어떤 요청도 보내지 않습니다.",
+    hintOn:
+      "켜짐: AITracker가 Cursor 로그인 상태로 cursor.com에서 사용량을 주기적으로 가져와 오프라인 스캔용으로 캐시합니다(프롬프트나 대화 내용은 포함하지 않음).",
+    notInstalled: "Cursor가 설치되어 있지 않습니다",
+    signedOut: "Cursor에 로그인되어 있지 않습니다. 먼저 Cursor에 로그인하세요",
+    synced: "{count}개 기록 캐시됨 · {time}",
+    neverSynced: "아직 동기화되지 않음",
+    syncNow: "지금 동기화",
+    syncing: "동기화 중…",
+    syncDone: "Cursor 사용량을 동기화했습니다",
+    syncFailed: "동기화 실패: {reason}",
+    errors: {
+      signInExpired: "Cursor 로그인이 만료되었습니다. 다시 로그인하세요",
+      requestFailed: "Cursor API 요청 실패",
+      timeout: "요청 시간 초과",
+      responseTooLarge: "사용량 내보내기 데이터가 너무 큽니다",
+      untrustedRedirect: "cursor.com이 아닌 도메인으로 리다이렉트되었습니다",
+    },
+  },
   toast: {
     autoLaunchDesktopOnly:
       "로그인 시 실행은 데스크톱 앱에서만 설정할 수 있습니다",
@@ -426,5 +448,7 @@ export const settings = {
     resetFailed: "앱 설정 초기화에 실패했습니다",
     llmReviewSaved: "AI 검사 설정을 저장했습니다",
     llmReviewSaveFailed: "AI 검사 설정 저장에 실패했습니다",
+    cursorAccountSaved: "Cursor 사용량 수집 설정을 저장했습니다",
+    cursorAccountSaveFailed: "Cursor 사용량 수집 설정 저장에 실패했습니다",
   },
 } as const;

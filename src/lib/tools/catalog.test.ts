@@ -36,10 +36,10 @@ const EXPECTED_SKILL_TOOL_IDS = [
 ] as const;
 
 test("AI_TOOLS catalogs all built-in tools with stable ids", () => {
-  assert.equal(AI_TOOLS.length, 37);
-  assert.equal(AI_TOOL_IDS.length, 37);
+  assert.equal(AI_TOOLS.length, 38);
+  assert.equal(AI_TOOL_IDS.length, 38);
   // ids are unique, lowercase-kebab.
-  assert.equal(new Set(AI_TOOL_IDS).size, 37);
+  assert.equal(new Set(AI_TOOL_IDS).size, 38);
   for (const id of AI_TOOL_IDS) {
     assert.match(id, /^[a-z][a-z0-9-]*$/u);
   }

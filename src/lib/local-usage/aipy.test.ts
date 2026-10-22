@@ -5,7 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
 
-import { getUsagePlan } from "../tool-registry/registry.ts";
+import { getUsagePlan, listSessionTools } from "../tool-registry/registry.ts";
+import { BUILTIN_USAGE_ADAPTERS } from "./adapters/catalog.ts";
 
 /**
  * AiPy usage is a single SQLite database. The `task` table carries a per-task
@@ -31,6 +32,25 @@ async function withFixture<T>(
     await rm(dir, { recursive: true, force: true });
   }
 }
+
+test("AiPy is a catalog tool and stays wired to the usage + session scanners", () => {
+  // Regression guard: an AiPy definition with `catalogVisible: false` silently
+  // dropped the source from `BUILTIN_USAGE_ADAPTERS` and `listSessionTools`,
+  // so the whole tool stopped collecting data while its usage query and
+  // session reader remained in place. Visibility is a product-catalog fact;
+  // losing it must never silently disable AiPy collection again.
+  const adapter = BUILTIN_USAGE_ADAPTERS.find(
+    (entry) => entry.source === "aipy",
+  );
+  assert.ok(adapter, "AiPy must stay registered as a usage adapter");
+  assert.equal(adapter.reader, "generic-sqlite");
+  assert.ok(adapter.paths.length > 0, "AiPy usage paths must be declared");
+  assert.ok(
+    listSessionTools().includes("aipy"),
+    "AiPy sessions must be scanned",
+  );
+  assert.ok(getUsagePlan("aipy")?.query, "AiPy usage query must stay wired");
+});
 
 test("AiPy adapter query prefers workspace workdir and labels standalone tasks", async () => {
   await withFixture(async (db) => {

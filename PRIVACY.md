@@ -42,6 +42,19 @@ Network access is feature-driven rather than required for local analytics:
   its most recent cached results;
 - the optional update check reads the public GitHub releases API for this
   repository; and
+- **only if you turn on "Cursor account usage" in Settings**, AITracker uses
+  the Cursor sign-in state already stored on this machine (the access token in
+  Cursor's own `state.vscdb`) to download your Cursor account usage export from
+  `https://cursor.com/api/dashboard/export-usage-events-csv?strategy=tokens`.
+  That export is the only place Cursor exposes per-request token counts, which
+  is why the feature is off by default. It contains model names, token counts,
+  usage kinds and timestamps; prompts and conversation content are not part of
+  it and nothing else is sent. The rows are cached at
+  `~/.aitracker/data/cursor-account-usage/usage.json` so the network-free local
+  scanner can read them. The Cursor session token is held in memory for that
+  single request only and is never written to the database, the cache, logs,
+  or the renderer. Turning the setting off stops every Cursor request, and you
+  can delete the cached file at any time; and
 - distillation, enhanced insights, or other model features send the selected
   input to the model provider configured by the user.
 

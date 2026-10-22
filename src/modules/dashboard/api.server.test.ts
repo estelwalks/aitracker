@@ -491,12 +491,13 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
     weeklyReports: { count: null, available: false },
     monthlyReports: { count: null, available: false },
   });
-  // Public tools are restricted to TokenTracker-aligned sources. Hidden
-  // registry-only sources (AiPy/Qwen/Proma/Cherry Studio and the Work/Marvis/
-  // QCode/Trae set) do not produce dashboard cards.
+  // Public tools are restricted to TokenTracker-aligned sources plus the
+  // user-owned extension tools (AiPy/Cline). Hidden registry-only sources
+  // (Qwen/Proma/Cherry Studio and the Work/Marvis/QCode/Trae set) do not
+  // produce dashboard cards.
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport !== "unsupported").length,
-    37,
+    38,
   );
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport === "unsupported").length,

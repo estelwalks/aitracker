@@ -593,6 +593,27 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       }
     },
     {
+      "id": "aipy",
+      "name": "AiPy",
+      "nameZh": "AiPy",
+      "icon": "other",
+      "color": "#14b8a6",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "unsupported"
+      },
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "read-write",
+        "agents": "unsupported",
+        "sessions": "read",
+        "market": "install-target",
+        "security": "unsupported"
+      }
+    },
+    {
       "id": "cline",
       "name": "Cline",
       "nameZh": "Cline",

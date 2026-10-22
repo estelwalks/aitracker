@@ -177,6 +177,20 @@ export async function clearCollectedData(): Promise<{
         document.type !== "session",
     );
   const summary = clearCollectedDatabaseData(root.database.database);
+  // The Cursor account export is a downloaded copy, not an external source
+  // log: clear it with the rest of the collected data so a reset really leaves
+  // nothing behind. The next sync re-fetches it when the feature is enabled.
+  {
+    const [{ resolveCursorAccountPaths }, { removeCursorUsageCache }] =
+      await Promise.all([
+        import("../../lib/cursor-account/paths.server.ts"),
+        import("../../lib/cursor-account/cache.server.ts"),
+      ]);
+    const cursorPaths = resolveCursorAccountPaths({
+      homeDirectory: root.dataRoot,
+    });
+    await removeCursorUsageCache(cursorPaths.cachePath).catch(() => {});
+  }
   // Clear the in-memory coordinators after the transaction so the returned
   // counts reflect the rows that were actually removed from SQLite. This also
   // closes a race where a collector finishes while the reset is in progress.

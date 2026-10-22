@@ -31,6 +31,11 @@ import {
   type PerformanceRolloutStage,
 } from "./performance-rollout.ts";
 import { createExecutorRegistry } from "../modules/tasks/application/executor-registry/index.ts";
+import {
+  CURSOR_ACCOUNT_USAGE_PREFERENCE_KEY,
+  parseCursorAccountUsageEnabled,
+} from "../lib/cursor-account/preferences.ts";
+import { runCursorAccountSync } from "../lib/cursor-account/service.server.ts";
 import { createTaskScheduler } from "../modules/tasks/application/scheduler.ts";
 import type {
   CalendarCursor,
@@ -1036,6 +1041,31 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
         maybeQueueInstallationProbe(
           usageEvidenceToolIds(usageSnapshot.readLatest().data?.sources ?? []),
         );
+      },
+    },
+    cursorAccount: {
+      async refresh({ signal }) {
+        // Opt-in and network-gated: the sync itself returns "disabled" (and
+        // makes no request) until the user turns the feature on in Settings.
+        const enabled = parseCursorAccountUsageEnabled(
+          databaseRuntime.features.appPreferences.get(
+            CURSOR_ACCOUNT_USAGE_PREFERENCE_KEY,
+          )?.value,
+        );
+        const result = await runCursorAccountSync({
+          homeDirectory: dataRoot,
+          enabled,
+          signal,
+        });
+        if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        // Not installed / not signed in are expected states, not task
+        // failures: the cache keeps its last-known-good export either way.
+        if (result.status === "failed") {
+          throw new Error("errors.tasks.executor-failed");
+        }
+        if (result.status === "synced") {
+          await usageSnapshot.requestRefresh({ reason: "event" });
+        }
       },
     },
     sessions: {

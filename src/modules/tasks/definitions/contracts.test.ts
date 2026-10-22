@@ -10,8 +10,9 @@ const raw = {
 
 test("job catalog accepts the embedded catalog", () => {
   assertSafeStaticCatalog(raw);
-  // 10 baseline jobs + backup.daily + the background insight refresh.
-  assert.equal(JobCatalogSchema.parse(raw).tasks.length, 12);
+  // 10 baseline jobs + backup.daily + the background insight refresh + the
+  // opt-in Cursor account sync.
+  assert.equal(JobCatalogSchema.parse(raw).tasks.length, 13);
 });
 
 test("job catalog rejects duplicate ids and invalid schedules", () => {
