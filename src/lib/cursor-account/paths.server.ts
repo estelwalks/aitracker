@@ -42,7 +42,12 @@ export interface CursorAccountPaths {
 
 export interface CursorAccountPathInput {
   readonly homeDirectory: string;
-  /** Defaults to this process's platform. */
+  /**
+   * Defaults to the platform this process runs on. Never fall back to a fixed
+   * `"macos"` here: on Windows that resolves
+   * `<home>/Library/Application Support/Cursor`, which does not exist, so every
+   * caller that omits the platform reported "not installed" and never synced.
+   */
   readonly platform?: PlatformOs;
   /** XDG override for Linux; ignored on macOS/Windows. */
   readonly env?: { readonly XDG_CONFIG_HOME?: string | undefined };
@@ -50,6 +55,15 @@ export interface CursorAccountPathInput {
 
 function homeJoined(homeDirectory: string, ...segments: string[]): string {
   return join(homeDirectory, ...segments);
+}
+
+/** Map Node's `process.platform` to the registry's platform-os model. */
+export function cursorAccountPlatform(
+  platform: NodeJS.Platform = process.platform,
+): PlatformOs {
+  if (platform === "darwin") return "macos";
+  if (platform === "win32") return "windows";
+  return "linux";
 }
 
 /**
@@ -60,7 +74,7 @@ function homeJoined(homeDirectory: string, ...segments: string[]): string {
 export function resolveCursorAccountPaths(
   input: CursorAccountPathInput,
 ): CursorAccountPaths {
-  const platform = input.platform ?? "macos";
+  const platform = input.platform ?? cursorAccountPlatform();
   const homeDirectory = input.homeDirectory;
   let appDir: string;
   if (platform === "macos") {
