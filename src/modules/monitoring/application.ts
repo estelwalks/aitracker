@@ -14,6 +14,7 @@ export interface CreateMonitoringRuntimeOptions {
 
 const collectorIds: readonly MonitoringCollectorId[] = [
   "usage",
+  "cursor",
   "skills",
   "sessions",
   "security",

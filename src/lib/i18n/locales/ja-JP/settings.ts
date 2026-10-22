@@ -388,6 +388,29 @@ export const settings = {
       saveFailed: "インサイト設定の保存に失敗しました",
     },
   },
+  cursorAccount: {
+    title: "Cursor アカウント使用量",
+    hintOff:
+      "Cursor はリクエストごとのトークン使用量をアカウント API でのみ公開しており、ローカルに解析できるログはありません。有効にすると、AITracker はこの Mac の Cursor ログイン状態を使って cursor.com から使用量を取得し、ローカルにキャッシュします（モデル名とトークン数のみ、プロンプトや会話内容は含みません）。無効の間はリクエストを送信しません。",
+    hintOn:
+      "有効: AITracker は Cursor のログイン状態を使って cursor.com から定期的に使用量を取得し、オフラインスキャン用にキャッシュします（プロンプトや会話内容は含みません）。",
+    notInstalled: "Cursor がインストールされていません",
+    signedOut:
+      "Cursor にログインしていません。先に Cursor でログインしてください",
+    synced: "{count} 件をキャッシュ済み · {time}",
+    neverSynced: "まだ同期していません",
+    syncNow: "今すぐ同期",
+    syncing: "同期中…",
+    syncDone: "Cursor 使用量を同期しました",
+    syncFailed: "同期に失敗しました: {reason}",
+    errors: {
+      signInExpired: "Cursor のログインが期限切れです。再ログインしてください",
+      requestFailed: "Cursor API リクエストに失敗しました",
+      timeout: "リクエストがタイムアウトしました",
+      responseTooLarge: "使用量エクスポートが大きすぎます",
+      untrustedRedirect: "cursor.com 以外のドメインへリダイレクトされました",
+    },
+  },
   toast: {
     autoLaunchDesktopOnly:
       "ログイン時起動はデスクトップアプリでのみ設定できます",
@@ -433,5 +456,7 @@ export const settings = {
     resetFailed: "アプリ設定のリセットに失敗しました",
     llmReviewSaved: "AI検出の設定を保存しました",
     llmReviewSaveFailed: "AI検出の設定の保存に失敗しました",
+    cursorAccountSaved: "Cursor 使用量収集の設定を保存しました",
+    cursorAccountSaveFailed: "Cursor 使用量収集の設定の保存に失敗しました",
   },
 } as const;

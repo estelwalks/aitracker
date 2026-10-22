@@ -25,6 +25,7 @@ export const SESSION_TOOL_IDS = [
   "pi",
   "zcode",
   "dsh",
+  "aipy",
   "omo",
 ] as const;
 

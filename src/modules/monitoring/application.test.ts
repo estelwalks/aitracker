@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createMonitoringRuntime } from "./application.ts";
 import type { MonitoringStatus } from "./contracts.ts";
+import { monitoringStatusSchema } from "./infrastructure.ts";
 
 test("records renderer-safe heartbeat and collector outcomes", async () => {
   let stored: MonitoringStatus | undefined;
@@ -62,4 +63,23 @@ test("records renderer-safe heartbeat and collector outcomes", async () => {
 
   await runtime.stop();
   assert.equal((await runtime.status()).running, false);
+});
+
+test("the persisted status schema accepts every runtime collector id", async () => {
+  // Regression guard: the sqlite status store validates collectors against a
+  // literal zod enum. A collector added to the runtime but not to that enum
+  // makes every monitored task fail while recording its own start.
+  const runtime = createMonitoringRuntime({
+    store: {
+      load: async () => undefined,
+      save: async () => {},
+    },
+  });
+  const status = await runtime.status();
+  assert.ok(status.collectors.some((item) => item.id === "cursor"));
+  const parsed = monitoringStatusSchema.parse(status);
+  assert.deepEqual(
+    parsed.collectors.map((item) => item.id),
+    status.collectors.map((item) => item.id),
+  );
 });

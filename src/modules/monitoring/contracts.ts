@@ -3,7 +3,13 @@
 export const monitoringModuleId = "monitoring" as const;
 
 export type MonitoringCollectorId =
-  "usage" | "skills" | "sessions" | "security" | "exchange" | "installation";
+  | "usage"
+  | "cursor"
+  | "skills"
+  | "sessions"
+  | "security"
+  | "exchange"
+  | "installation";
 export type MonitoringCollectorState =
   "idle" | "running" | "healthy" | "degraded" | "failed";
 

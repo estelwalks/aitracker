@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const JOB_EXECUTOR_KEYS = [
   "refresh-usage-v1",
+  "refresh-cursor-v1",
   "refresh-skills-v1",
   "refresh-sessions-v1",
   "refresh-insights-v1",
@@ -13,6 +14,7 @@ export const JOB_EXECUTOR_KEYS = [
 ] as const;
 export const JOB_I18N_KEYS = [
   "tasks.usageRefresh",
+  "tasks.cursorRefresh",
   "tasks.exchangeRefresh",
   "tasks.skillsRefresh",
   "tasks.sessionsRefresh",

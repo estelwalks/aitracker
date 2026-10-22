@@ -115,6 +115,18 @@
           "path": "tokscale/cursor-cache",
           "glob": "**/*.json",
           "format": "json"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".aitracker/data/cursor-account-usage",
+          "glob": "usage.json",
+          "format": "json"
         }
       ]
     },

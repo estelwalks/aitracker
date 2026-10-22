@@ -336,6 +336,18 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "path": "tokscale/cursor-cache",
             "glob": "**/*.json",
             "format": "json"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".aitracker/data/cursor-account-usage",
+            "glob": "usage.json",
+            "format": "json"
           }
         ]
       },
@@ -3104,7 +3116,6 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "$schema": "../tool-definition.schema.json",
     "configVersion": 1,
     "id": "aipy",
-    "catalogVisible": false,
     "display": {
       "name": "AiPy",
       "nameZh": "AiPy",
@@ -5519,4 +5530,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "030f30e115b7a07f";
+export const TOOL_REGISTRY_VERSION: string = "785194ccc8eb920e";

@@ -59,7 +59,7 @@ test("baseline tools remain present in the expanded AI_TOOLS catalog", () => {
     AI_TOOLS.slice(0, 27).map((t) => t.id),
     BASELINE_TOOLS.map((t) => t.id),
   );
-  assert.equal(AI_TOOLS.length, 37);
+  assert.equal(AI_TOOLS.length, 38);
 });
 
 test("baseline usage parsing matches usageLogParsingFor for every tool", () => {

@@ -141,8 +141,8 @@ test("not-installed: tool absent from summaries", () => {
   assert.equal(cursor.status, "not-installed");
   assert.equal(cursor.events, 0);
   assert.equal(cursor.lastScannedAt, "t");
-  assert.equal(out.totals.toolCount, 37);
-  assert.equal(out.totals.notInstalledCount, 37);
+  assert.equal(out.totals.toolCount, AI_TOOLS.length);
+  assert.equal(out.totals.notInstalledCount, AI_TOOLS.length);
 });
 
 test("HOME-normalization: catalog relative path gets ~/, absolute scanner path rewritten", () => {

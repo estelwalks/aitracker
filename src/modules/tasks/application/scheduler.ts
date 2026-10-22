@@ -279,6 +279,9 @@ function taskErrorCode(error: TaskExecutionError): `errors.${string}` {
  */
 const DEFAULT_ENABLED_TASK_IDS = new Set([
   "usage.refresh",
+  // Scheduled by default, but the executor is a no-op until the user opts in
+  // to Cursor account collection in Settings; it never connects otherwise.
+  "cursor.refresh",
   "skills.refresh",
   "sessions.refresh",
   "insights.refresh",
