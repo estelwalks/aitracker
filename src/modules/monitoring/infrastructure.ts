@@ -6,6 +6,7 @@ const collectorSchema = z
   .object({
     id: z.enum([
       "usage",
+      "cursor",
       "skills",
       "sessions",
       "security",

@@ -9,6 +9,7 @@ import {
   INITIAL_SCHEMA_SQL,
   LATEST_MIGRATION_VERSION,
   MIGRATIONS,
+  MONITORING_CURSOR_COLLECTOR_SQL,
   PROJECT_IDENTITY_MERGES_SQL,
   TOOL_DATA_ROOTS_SQL,
   UPDATE_CHANNEL_SETTINGS_SQL,
@@ -117,6 +118,7 @@ assert.deepEqual(files, [
   "0003_tool_data_roots.ts",
   "0004_project_identity_merges.ts",
   "0005_update_channel_settings.ts",
+  "0006_monitoring_cursor_collector.ts",
   "index.ts",
 ]);
 assert.ok(MIGRATIONS.length >= 1, "at least the baseline migration must exist");
@@ -150,6 +152,7 @@ try {
   database.exec(TOOL_DATA_ROOTS_SQL);
   database.exec(PROJECT_IDENTITY_MERGES_SQL);
   database.exec(UPDATE_CHANNEL_SETTINGS_SQL);
+  database.exec(MONITORING_CURSOR_COLLECTOR_SQL);
 
   const objects = database
     .prepare(
