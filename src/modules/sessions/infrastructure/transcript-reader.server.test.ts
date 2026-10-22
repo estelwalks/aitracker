@@ -10,7 +10,6 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import { NodeSqliteDatabase } from "../../../platform/database/infrastructure/node-sqlite-database.server.ts";
@@ -1341,7 +1340,12 @@ test("Cursor: reads composer bubbles from the IDE state database", async () => {
       "globalStorage",
     );
     await mkdir(globalStorage, { recursive: true });
-    const database = new DatabaseSync(join(globalStorage, "state.vscdb"));
+    // Build the fixture through the platform adapter, never `node:sqlite`
+    // directly: business modules (`src/modules/**`) may not import the driver,
+    // and verify:browser-server-boundary enforces that even in tests.
+    const database = new NodeSqliteDatabase({
+      path: join(globalStorage, "state.vscdb"),
+    });
     try {
       database.exec(
         "CREATE TABLE cursorDiskKV (key TEXT PRIMARY KEY, value TEXT)",
