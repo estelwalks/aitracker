@@ -277,6 +277,20 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       }
     },
     "storage": {
+      "dataRoots": [
+        {
+          "base": "appData",
+          "path": "Cursor"
+        },
+        {
+          "base": "appDataRoaming",
+          "path": "Cursor"
+        },
+        {
+          "base": "configHome",
+          "path": "Cursor"
+        }
+      ],
       "skills": {
         "rootSpecs": [
           {
@@ -354,7 +368,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "skills": "read-write",
       "agents": "unsupported",
       "sessions": {
-        "mode": "unsupported"
+        "mode": "read",
+        "reader": "cursor-session-v1"
       },
       "market": "install-target",
       "security": "unsupported"
@@ -5530,4 +5545,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "785194ccc8eb920e";
+export const TOOL_REGISTRY_VERSION: string = "a602d303270d3264";

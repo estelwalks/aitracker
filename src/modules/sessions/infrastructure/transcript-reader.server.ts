@@ -756,6 +756,61 @@ async function readAipyTranscript(
 }
 
 // ---------------------------------------------------------------------------
+// Cursor — <Cursor app data>/User/globalStorage/state.vscdb (cursorDiskKV)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cursor persists one `bubbleId:<composerId>:<bubbleId>` row per message in the
+ * IDE state database: `type` 1 is the prompt, `type` 2 the assistant reply, and
+ * agent replies may carry a separate `thinking` block. Only the rendered text
+ * is read; the rich-text envelope is ignored.
+ */
+async function readCursorTranscript(
+  root: string,
+  sessionId: string,
+  out: CollectedMessage[],
+  limits: Limits,
+): Promise<void> {
+  const databasePath = join(root, "User", "globalStorage", "state.vscdb");
+  let database: ReturnType<typeof openReadOnlySqlite> | undefined;
+  try {
+    database = openReadOnlySqlite(databasePath);
+    const rows = database.queryRows(
+      `SELECT value FROM cursorDiskKV
+       WHERE key LIKE ? ORDER BY rowid ASC LIMIT ?`,
+      `bubbleId:${sessionId}:%`,
+      limits.maxMessages * 4,
+    );
+    for (const row of rows) {
+      if (out.length >= limits.maxMessages) break;
+      const raw = sqliteTextValue(row.value);
+      if (raw == null) continue;
+      let bubble: JsonObject | undefined;
+      try {
+        bubble = asObject(JSON.parse(raw));
+      } catch {
+        continue;
+      }
+      const type = bubble?.type;
+      const role = type === 1 ? "user" : type === 2 ? "assistant" : null;
+      if (role == null) continue;
+      pushMessage(
+        out,
+        role,
+        stringValue(bubble?.text) ?? "",
+        role === "assistant" ? stringValue(bubble?.thinking) : undefined,
+        parseTimestampMs(bubble?.createdAt),
+        limits,
+      );
+    }
+  } catch {
+    // A locked or older Cursor database degrades to an empty transcript.
+  } finally {
+    database?.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // DSH (DeepSeek Harness) — ~/.dsh/sessions/<workspace>/<session-id>/
 // session.jsonl[.zstd] for format generation 0, or the generation-addressed
 // session.v<N>.jsonl[.zstd] once the harness versioned its stored session
@@ -1771,6 +1826,8 @@ async function readSourceTranscript(
       return readQcodeTranscript(root, sessionId, out, limits);
     case "zcode-session-v1":
       return readZcodeTranscript(root, sessionId, out, limits);
+    case "cursor-session-v1":
+      return readCursorTranscript(root, sessionId, out, limits);
     default:
       // Unknown reader — no transcript extraction implemented for it yet.
       return;

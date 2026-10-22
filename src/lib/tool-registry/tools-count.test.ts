@@ -239,7 +239,8 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
           // gained read-only session support (state.db / projects JSONL);
           // ZCode sessions are read from its SQLite session database; dsh
           // sessions are listed read-only because current harnesses ship no
-          // resume entry point to launch.
+          // resume entry point to launch; Cursor composers are read from the
+          // IDE state database and have no shell-safe resume entry point.
           def.id === "aipy" ||
             def.id === "pi" ||
             def.id === "omp" ||
@@ -251,6 +252,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
             def.id === "kimi-work" ||
             def.id === "marvis" ||
             def.id === "trae-work" ||
+            def.id === "cursor" ||
             def.id === "dsh"
           ? "read"
           : "unsupported",

@@ -18,6 +18,7 @@
 export const SESSION_TOOL_IDS = [
   "claude-code",
   "codex",
+  "cursor",
   "hermes",
   "omp",
   "workbuddy",

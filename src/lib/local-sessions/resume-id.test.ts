@@ -11,6 +11,7 @@ describe("P4-T4 session whitelist derivation", () => {
       [
         "claude-code",
         "codex",
+        "cursor",
         "hermes",
         "omp",
         "workbuddy",
