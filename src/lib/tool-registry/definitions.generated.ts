@@ -232,7 +232,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "platforms": {
       "macos": "supported",
       "windows": "supported",
-      "linux": "planned"
+      "linux": "supported"
     },
     "detection": {
       "locations": [
@@ -5545,4 +5545,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "a602d303270d3264";
+export const TOOL_REGISTRY_VERSION: string = "935f40352018ab59";
