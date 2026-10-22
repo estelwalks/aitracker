@@ -87,8 +87,13 @@ win:
         # list) and emit exactly one installer each — that is what the release
         # workflow builds.
         - arm64
-  # Keep the EXE and pinned shortcut transparent, like the running window.
-  # The three light trails remain part of the artwork at every icon size.
+  # The EXE, the desktop/Start-menu shortcuts it pins and the running window all
+  # use ONE white-plated ICO. Windows draws these at 24-48px over the user's
+  # wallpaper, where the plate-free artwork used for the tray reads as an unclear
+  # smudge; the plate is the same white tile macOS and Linux ship.
+  # scripts/generate-native-icons.mjs writes this file as both `icon.ico` (this
+  # path, embedded by electron-builder) and `windows-app.ico` (loaded by the
+  # window at runtime), so the two can never drift apart.
   icon: build/native-icons/icon.ico
 nsis:
   # Versionless for the same reason as the DMG name above.

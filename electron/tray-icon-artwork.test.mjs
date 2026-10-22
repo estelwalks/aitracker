@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { Resvg } from "@resvg/resvg-js";
 import {
@@ -9,7 +11,10 @@ import {
   packIco,
   renderPng,
   WINDOWS_ICON_SIZES,
+  windowsAppArtwork,
 } from "../scripts/generate-native-icons.mjs";
+
+const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 
 const light = readFileSync(
   new URL("../public/favicon.svg", import.meta.url),
@@ -74,7 +79,7 @@ test("all three light trails remain visible in small native icons at every DPI",
   }
 });
 
-test("shared web/Windows artwork stays transparent without a macOS backplate", () => {
+test("shared web artwork stays transparent without a backplate", () => {
   for (const source of [light, dark]) {
     const pixels = raster(source, 64);
     const nativePixels = raster(compactArtwork(source), 64);
@@ -182,4 +187,75 @@ test("Windows ICO contains independently decodable frames including 125% and 150
     assert.equal(png.readUInt32BE(16), size);
     assert.equal(png.readUInt32BE(20), size);
   }
+});
+
+/**
+ * The Windows app icon is the one surface that must NOT be transparent.
+ *
+ * It is drawn at 24-48px on a desktop wallpaper, where a bare mark has nothing
+ * to separate it from the photograph behind it and reads as an unclear smudge.
+ * The white plate the macOS Dock and the Linux hicolor set already use is what
+ * makes it legible, so the plate has to cover the canvas — a future change that
+ * returns this artwork to `compactArtwork` would leave every assertion about
+ * the tray intact and silently reintroduce the smudge.
+ */
+test("the Windows app icon is an opaque white plate carrying the mark", () => {
+  for (const size of [16, 20, 24, 32, 48, 64, 256]) {
+    const pixels = raster(windowsAppArtwork(light), size);
+    for (const [x, y] of [
+      [0.2, 0.2],
+      [15.8, 0.2],
+      [0.2, 15.8],
+      [15.8, 15.8],
+    ]) {
+      assert.equal(
+        alphaAt(pixels, size, x, y),
+        0,
+        `${size}px: the plate must keep transparent outer corners`,
+      );
+    }
+    // Between the two top brackets: inside the plate, clear of the mark.
+    const offset =
+      (Math.floor((3 * size) / 16) * size + Math.floor((8 * size) / 16)) * 4;
+    assert.deepEqual(
+      [...pixels.subarray(offset, offset + 4)],
+      [255, 255, 255, 255],
+      `${size}px: the plate behind the mark must be opaque white`,
+    );
+    let darkest = 255;
+    let lightest = 0;
+    for (let i = 0; i < size * size; i += 1) {
+      if (pixels[i * 4 + 3] < 250) continue;
+      const luminance =
+        0.2126 * pixels[i * 4] +
+        0.7152 * pixels[i * 4 + 1] +
+        0.0722 * pixels[i * 4 + 2];
+      darkest = Math.min(darkest, luminance);
+      lightest = Math.max(lightest, luminance);
+    }
+    assert.ok(
+      (lightest + 5) / (darkest + 5) > 5,
+      `${size}px: the mark must stay dark on the white plate (ink ${darkest.toFixed(0)}, plate ${lightest.toFixed(0)})`,
+    );
+  }
+});
+
+/**
+ * The EXE's icon and the one the window loads at runtime are two files written
+ * by the same generator. If they diverge, the desktop shortcut and the taskbar
+ * show different artwork for the same app, which is exactly the split this
+ * change removes.
+ */
+test("the packaged EXE icon and the runtime Windows icon are the same artwork", () => {
+  const packaged = readFileSync(
+    join(projectRoot, "build", "native-icons", "icon.ico"),
+  );
+  const runtime = readFileSync(
+    join(projectRoot, "build", "native-icons", "windows-app.ico"),
+  );
+  assert.ok(
+    packaged.equals(runtime),
+    "icon.ico and windows-app.ico must match",
+  );
+  assert.equal(runtime.readUInt16LE(4), WINDOWS_ICON_SIZES.length);
 });

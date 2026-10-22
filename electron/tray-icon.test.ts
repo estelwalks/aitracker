@@ -15,7 +15,7 @@ import {
   MAC_APP_ICON_FILENAME,
   MAC_TRAY_ICON_FILENAMES,
   TRAY_ICON_FILENAMES,
-  WINDOWS_APP_ICON_FILENAMES,
+  WINDOWS_APP_ICON_FILENAME,
   WINDOWS_TRAY_ICON_FILENAMES,
 } from "./tray-icon.js";
 
@@ -258,12 +258,12 @@ test("macOS Dock uses the white-plate app icon in both appearances", () => {
   }
 });
 
-test("Windows windows and taskbar resolve the same multi-resolution glyph as the tray", () => {
+test("Windows windows and taskbar resolve the plated app ICO, not the tray glyph", () => {
   for (const appearance of ["light", "dark"] as const) {
     const appIconPath = join(
       "C:\\Program Files\\AITracker\\resources",
       "native-icons",
-      WINDOWS_APP_ICON_FILENAMES[appearance],
+      WINDOWS_APP_ICON_FILENAME,
     );
     assert.equal(
       findAppIconPath(
@@ -295,26 +295,52 @@ test("missing generated icon returns null without a path warning", () => {
   );
 });
 
-test("Windows and macOS startup keep a large PNG in the app appearance", () => {
-  for (const platform of ["win32", "darwin"] as const) {
-    const input = {
-      isPackaged: false,
-      resourcesPath: "/unused",
-      appPath: projectRoot,
-      platform,
-      surface: "startup" as const,
-    };
-    for (const appearance of ["light", "dark"] as const) {
-      const path = join(
-        projectRoot,
-        "build",
-        "native-icons",
-        APP_ICON_FILENAMES[appearance],
-      );
-      assert.equal(
-        findAppIconPath(input, appearance, (candidate) => candidate === path),
-        path,
-      );
-    }
+test("macOS startup keeps a large PNG in the app appearance", () => {
+  const input = {
+    isPackaged: false,
+    resourcesPath: "/unused",
+    appPath: projectRoot,
+    platform: "darwin" as const,
+    surface: "startup" as const,
+  };
+  for (const appearance of ["light", "dark"] as const) {
+    const path = join(
+      projectRoot,
+      "build",
+      "native-icons",
+      APP_ICON_FILENAMES[appearance],
+    );
+    assert.equal(
+      findAppIconPath(input, appearance, (candidate) => candidate === path),
+      path,
+    );
   }
+});
+
+/**
+ * Windows has one theme-independent plated ICO, and the startup screen is the
+ * first thing drawn. Falling back to the transparent PNG there made the window
+ * swap icons a frame later, which is the flicker this pins down.
+ */
+test("Windows startup resolves the same plated ICO as the running window", () => {
+  const path = join(
+    projectRoot,
+    "build",
+    "native-icons",
+    WINDOWS_APP_ICON_FILENAME,
+  );
+  assert.equal(
+    findAppIconPath(
+      {
+        isPackaged: false,
+        resourcesPath: "/unused",
+        appPath: projectRoot,
+        platform: "win32",
+        surface: "startup",
+      },
+      "light",
+      (candidate) => candidate === path,
+    ),
+    path,
+  );
 });

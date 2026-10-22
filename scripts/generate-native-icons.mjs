@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import {
   access,
-  copyFile,
   mkdir,
   mkdtemp,
   readFile,
@@ -75,6 +74,7 @@ const outputNames = [
   "trayTemplate.png",
   "trayTemplate@2x.png",
   "icon.ico",
+  "windows-app.ico",
   "mac-app.icns",
   "mac-app-512.png",
   "mac-app-1024.png",
@@ -166,44 +166,30 @@ export function linuxTrayArtwork(source) {
 }
 
 /**
- * The Linux application icon for the freedesktop hicolor set.
+ * How much of the canvas the white plate fills on the platforms that do not
+ * have the macOS Dock's margin.
  *
- * A hicolor icon is a single file installed by the package manager, so unlike
- * the tray artwork it cannot follow the theme. The two obvious choices both
- * fail on half of all desktops: the dark-ink mark (#111827) is invisible in a
- * dark dock, and the light-ink mark (#f8fafc) is invisible in a light one.
- * Measured against a GNOME dark dock, dark ink rendered the mark at roughly
- * 1.3:1 contrast — the symptom was an app icon that looked like an empty tile.
- *
- * The mark is therefore drawn light, with its own darker outline underneath of
- * the same geometry. The outline is what separates it from a light background,
- * so one file stays legible on both. Both layers keep the original stroke
- * weights and paths, and the outline is a wide, low-opacity stroke rather than
- * a solid shape, so it reads as a soft edge instead of a plate.
- *
- * Linux only. macOS ships a white Dock tile (macAppArtwork) and Windows a
- * multi-size ICO, and neither is touched.
+ * `macAppArtwork` is drawn on a 1024 artboard whose outer margin is sized for
+ * the Dock: the tile occupies 824/1024 = 80.5% of it. Launchers elsewhere frame
+ * icons differently — a GNOME app grid holds 81-100% (chromium and syncthing
+ * fill the whole canvas), and a Windows desktop draws the icon in a box its
+ * neighbours fill — so an 80.5% tile reads as undersized. 88% puts it in the
+ * range those neighbours occupy without crowding it against the edge, and
+ * rewinding to the tile's own bounds (1.0) would lose the breathing room.
  */
-export function linuxAppArtwork(source) {
-  // Linux reuses the macOS app tile so the two platforms show the same icon, and
-  // crops only the canvas.
-  //
-  // The crop exists because the two desktops frame icons differently. The macOS
-  // artboard carries a deliberate outer margin for the Dock: the tile occupies
-  // 824/1024 = 80.5% of it. That reads as noticeably smaller than its neighbours
-  // in a GNOME app grid, where installed icons measure 81-100% (chromium and
-  // syncthing fill the whole canvas). Bringing the tile to 88% puts it in the
-  // range the surrounding icons occupy without crowding it against the edge.
-  //
-  // Cropping the viewBox rather than redrawing keeps a single source of truth:
-  // the plate, its radius and the mark keep the exact proportions macOS uses, so
-  // nothing here needs revisiting when macAppArtwork changes. Rewinding to the
-  // tile's own bounds would be 1.0; the value below deliberately stops short so
-  // the icon keeps the breathing room its neighbours have.
+const PLATFORM_TILE_COVERAGE = 0.88;
+
+/**
+ * The white app tile, re-framed to fill more of the canvas.
+ *
+ * Cropping the viewBox rather than redrawing keeps a single source of truth:
+ * the plate, its radius and the mark keep the exact proportions macOS uses, so
+ * nothing here needs revisiting when macAppArtwork changes.
+ */
+function tiledAppArtwork(source, coverage) {
   const MACOS_TILE_COVERAGE = 824 / 1024;
-  const LINUX_TILE_COVERAGE = 0.88;
   const artboard = 1024;
-  const span = (MACOS_TILE_COVERAGE * artboard) / LINUX_TILE_COVERAGE;
+  const span = (MACOS_TILE_COVERAGE * artboard) / coverage;
   const offset = (artboard - span) / 2;
   const artwork = macAppArtwork(source);
   const inner = artwork.match(/<svg[^>]*>([\s\S]*)<\/svg>/u)?.[1];
@@ -213,6 +199,41 @@ export function linuxAppArtwork(source) {
     `viewBox="${offset.toFixed(2)} ${offset.toFixed(2)} ${span.toFixed(2)} ${span.toFixed(2)}">` +
     `${inner}</svg>`
   );
+}
+
+/**
+ * The Linux application icon for the freedesktop hicolor set.
+ *
+ * A hicolor icon is a single file installed by the package manager, so unlike
+ * the tray artwork it cannot follow the theme. It is the macOS app tile (a white
+ * plate carrying the dark-ink mark) because the two obvious transparent
+ * alternatives fail on half of all desktops: the dark-ink mark (#111827) is
+ * invisible in a dark dock, and the light-ink mark (#f8fafc) is invisible in a
+ * light one. A white plate works on both, and the dark ink stays legible on it.
+ *
+ * Linux only. macOS ships the same tile with its Dock margin (macAppArtwork)
+ * and Windows its own plated ICO (windowsAppArtwork); neither is touched.
+ */
+export function linuxAppArtwork(source) {
+  return tiledAppArtwork(source, PLATFORM_TILE_COVERAGE);
+}
+
+/**
+ * The Windows application icon for the EXE, its pinned shortcuts, the window and
+ * the taskbar.
+ *
+ * Windows draws these at 24-48px over whatever wallpaper the user chose. The
+ * plate-free artwork the tray uses disappears at that size: the mark is ink
+ * only, with nothing separating it from a photograph, so the desktop icon reads
+ * as an unclear smudge. Plating it on the same white tile macOS and Linux use
+ * fixes that without inventing a third design — the mark, its weight and its
+ * placement stay identical to every other surface.
+ *
+ * The tray deliberately keeps the plate-free ICO: at 16px in the notification
+ * area a white square is the unclear shape instead.
+ */
+export function windowsAppArtwork(source) {
+  return tiledAppArtwork(source, PLATFORM_TILE_COVERAGE);
 }
 
 /** Retain physical density as well as Electron's @2x filename convention. */
@@ -293,9 +314,10 @@ async function exists(path) {
 async function currentManifest() {
   return {
     // 6 -> 7 added the Linux status-area artwork; 7 -> 8 thickened its ink for
-    // panel legibility. Either way an existing tree must be regenerated rather
-    // than reported as current.
-    version: 11,
+    // panel legibility; 11 -> 12 moved the Windows app icon onto the white plate
+    // and split it out of the tray ICO. An existing tree must be regenerated
+    // rather than reported as current.
+    version: 12,
     generator: await sha256(fileURLToPath(import.meta.url)),
     windowsSizes: WINDOWS_ICON_SIZES,
     linuxSizes: LINUX_ICON_SIZES,
@@ -440,6 +462,17 @@ export async function generateNativeIcons() {
     const template = compactArtwork(artworks.light, { template: true });
     // Always use dark ink on white, independent of the application theme.
     const macApp = macAppArtwork(artworks.light);
+    // One plate, two names: electron-builder embeds `icon.ico` in the EXE and
+    // pins it to the desktop/Start-menu shortcuts, while the running window and
+    // the taskbar read `windows-app.ico` from resources/native-icons. They have
+    // to be the same artwork or the shortcut and its running window disagree.
+    const windowsApp = windowsAppArtwork(artworks.light);
+    const windowsAppIco = packIco(
+      WINDOWS_ICON_SIZES.map((size) => ({
+        size,
+        png: renderPng(windowsApp, size, 96),
+      })),
+    );
     await Promise.all([
       writeFile(
         join(stagingDirectory, "trayTemplate.png"),
@@ -458,12 +491,11 @@ export async function generateNativeIcons() {
         join(stagingDirectory, "mac-app-1024.png"),
         renderPng(macApp, 1024, 144),
       ),
-      // Pinned shortcuts and the EXE use the same transparent artwork as the
-      // running window. Never reintroduce a background during packaging.
-      copyFile(
-        join(stagingDirectory, "favicon-light-windows.ico"),
-        join(stagingDirectory, "icon.ico"),
-      ),
+      // The EXE, its pinned shortcuts and the running window share the plated
+      // Windows app icon. The transparent per-appearance ICOs stay for the tray,
+      // where a white square would be the unclear shape at 16px.
+      writeFile(join(stagingDirectory, "icon.ico"), windowsAppIco),
+      writeFile(join(stagingDirectory, "windows-app.ico"), windowsAppIco),
       writeFile(
         join(stagingDirectory, "manifest.json"),
         `${JSON.stringify(manifest, null, 2)}\n`,
@@ -474,7 +506,7 @@ export async function generateNativeIcons() {
     await removeGeneratedDirectory(outputDirectory);
     await rename(stagingDirectory, outputDirectory);
     console.log(
-      "Generated native icons: macOS white app tiles, transparent menu-bar templates, Windows multi-size ICOs and the Linux hicolor PNG set.",
+      "Generated native icons: macOS white app tiles, transparent menu-bar templates, the Windows plated app ICO plus transparent tray ICOs, and the Linux hicolor PNG set.",
     );
   } catch (error) {
     await removeGeneratedDirectory(stagingDirectory);

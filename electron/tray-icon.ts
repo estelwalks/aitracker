@@ -8,6 +8,13 @@ export const TRAY_ICON_FILENAMES = {
   dark: "favicon-dark.png",
 } as const;
 
+/**
+ * The Windows tray keeps the transparent, theme-aware ICO.
+ *
+ * A plated icon is right for the desktop and the taskbar, where it sits over a
+ * wallpaper at 24-48px, and wrong in the notification area: at 16px a white
+ * rounded square is the unclear shape. These files therefore stay plate-free.
+ */
 export const WINDOWS_TRAY_ICON_FILENAMES = {
   light: "favicon-light-windows.ico",
   dark: "favicon-dark-windows.ico",
@@ -47,11 +54,14 @@ export const APP_ICON_FILENAMES = {
 export const MAC_APP_ICON_FILENAME = "mac-app-1024.png";
 
 /**
- * Windows taskbar/window icons are plate-free glyphs (no white/blue square
- * behind the mark). The ICO contains separately rasterized frames for the
- * taskbar and window sizes at each Windows display scale.
+ * The Windows app icon: one white-plated ICO shared by the EXE, the desktop and
+ * Start-menu shortcuts, the running window and the taskbar.
+ *
+ * The plate is what makes the icon readable over a wallpaper; electron-builder
+ * embeds the same artwork as `icon.ico`, so the shortcut and its running window
+ * cannot drift apart. The tray keeps the transparent ICOs above.
  */
-export const WINDOWS_APP_ICON_FILENAMES = WINDOWS_TRAY_ICON_FILENAMES;
+export const WINDOWS_APP_ICON_FILENAME = "windows-app.ico";
 
 function findNativeIconPath(
   input: {
@@ -148,9 +158,11 @@ export function findAppIconPath(
   if (input.platform === "darwin" && input.surface !== "startup") {
     return findNativeIconPath(input, MAC_APP_ICON_FILENAME, fileExists);
   }
-  const filenames =
-    input.platform === "win32" && input.surface !== "startup"
-      ? WINDOWS_APP_ICON_FILENAMES
-      : APP_ICON_FILENAMES;
-  return findNativeIconPath(input, filenames[appearance], fileExists);
+  // Windows uses the plated ICO on every surface, the startup screen included:
+  // it is theme-independent, so there is no appearance to pick and no reason for
+  // the icon to change between the first frame and the running window.
+  if (input.platform === "win32") {
+    return findNativeIconPath(input, WINDOWS_APP_ICON_FILENAME, fileExists);
+  }
+  return findNativeIconPath(input, APP_ICON_FILENAMES[appearance], fileExists);
 }
