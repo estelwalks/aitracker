@@ -13,24 +13,74 @@ the tag, so a numbered section means "this version shipped" and is never
 opened early. Individual fixes do not have to touch this file.
 -->
 
+## [1.0.8] - 2026-10-22
+
 ### Highlights
 
 > Published as this release's GitHub notes; keep these short and user-facing.
 > `### 更新摘要` below carries the same list in Chinese and is published as
 > `## 本次更新` right after the English one, so the release page is bilingual.
 
+- Cursor conversations now appear in Sessions: the IDE's own local state is read, the transcript is shown when available, and Cursor data sources also resolve on Linux
+- Usage collection is more complete: Cursor account usage can be turned on in Settings, and AiPy usage is collected again after its buckets had frozen at 2026-09-25
 - A `.deb` or `.rpm` install now updates with its own package instead of an AppImage: the software centre opens where the desktop has one registered, otherwise the exact install command is shown
 - A page that fails to load now names the actual cause instead of only "Failed to Load Page", and the details can be copied into a bug report
+- The Windows app icon now carries the same white plate as macOS and Linux, so the EXE, pinned shortcuts and taskbar entry stay legible over any wallpaper
+- A skills scan that finds nothing now explains the empty result and offers a re-read instead of failing, and Market only marks the Skill that was actually installed
 
 ### 更新摘要
 
 > 与上面的 `### Highlights` 一一对应，发布时作为 `## 本次更新` 出现在英文摘要之后。
 
+- Cursor 会话现在会出现在「会话」列表里：读取 IDE 自己的本地状态，有记录时直接显示对话内容，Linux 上的 Cursor 数据源也能正常解析
+- 用量采集更完整：Cursor 账户用量可在设置中按需开启，AiPy 的采集也恢复了——此前它的统计停留在 2026-09-25
 - `.deb` / `.rpm` 安装现在改用本机包管理器能装的系统包来更新，不再下载 AppImage：桌面注册了软件中心就直接打开，否则给出确切的安装命令
 - 页面加载失败时会直接给出真实原因，不再只有「页面加载失败」一句话；错误详情可一键复制到问题反馈里
+- Windows 应用图标改用与 macOS/Linux 相同的白色底板，EXE、固定到开始菜单的快捷方式和任务栏图标在任何壁纸下都清晰可辨
+- 技能扫描没有发现任何内容时，会说明这是空结果并提供重新扫描，而不是报错；市场里也只会把真正安装的那个技能标为已安装
 
 ### Details
 
+- Cursor's tool definition declared sessions "unsupported", so the sessions list
+  never showed a Cursor conversation even though the IDE keeps every composer on
+  disk. A read-only reader now reads the VS Code state database
+  (`User/globalStorage/state.vscdb`): composer headers give one row per
+  conversation, `composerData` supplies the model, workspace URI and bubble
+  index, and `bubbleId:` rows are the fallback when the head has no index. The
+  title prefers the composer name and falls back to a redacted first-prompt
+  preview, drafts and subagents are skipped, and the transcript renders user and
+  assistant bubbles including the assistant thinking block. Data roots come from
+  the platform profiles (`appData` on macOS, `appDataRoaming` on Windows,
+  `configHome` on Linux). The capability is read-only — Cursor ships no
+  shell-safe resume entry point for an IDE composer — and session tokens stay 0
+  because Cursor keeps no per-turn token accounting locally; the opt-in account
+  collector below owns the token totals.
+- Cursor is marked Linux-supported now, which is what makes any Cursor
+  capability resolve there: a `planned` platform collects no data roots, so
+  every Cursor feature was dead on Linux, including the new session reader. The
+  registry and the public manifest were regenerated from that change.
+- Cursor keeps no local per-request usage log: token counts only exist behind
+  cursor.com's account usage export. An opt-in collector reads the access token
+  from Cursor's own `state.vscdb` (plus the `~/.cursor/cli-config.json` subject,
+  with a JWT fallback), downloads `export-usage-events-csv?strategy=tokens`, and
+  caches normalized rows under
+  `~/.aitracker/data/cursor-account-usage/usage.json`, where the existing
+  network-free scanner reads them. A new hourly `cursor.refresh` task carries
+  the executor and no-ops unless the user opts in, so no request leaves the
+  machine by default. Settings → Scan adds the switch with local status and a
+  manual sync button, localized in all four locales. The session cookie is sent
+  only to cursor.com/www.cursor.com, at most one inspected redirect is followed,
+  requests time out after 30 s and are capped at 32 MiB, the token is never
+  persisted or logged, PRIVACY.md documents the request, and clearing collected
+  data removes the cache. The `cursor` collector is also part of the persisted
+  monitoring status schema now (migration 0006), so a monitored task no longer
+  fails while recording its own start.
+- AiPy stopped being scanned on 2026-10-09: `catalogVisible: false` had been
+  re-added, and that flag also removes a tool from the usage adapters and the
+  session readers, so the collector kept serving the last-known-good snapshot
+  while its buckets froze at 2026-09-25. Dropping the flag again restores both,
+  with the registry regenerated (38 visible tools) and a regression test that
+  keeps AiPy wired to the usage adapter and the session reader.
 - The updater reads `/etc/os-release` to learn which package family the host
   installs, and downloads that artifact for a distro install: `AITracker-Linux-x64.deb`
   on Debian/Ubuntu/Kali and `AITracker-Linux-x64.rpm` on Fedora/RHEL/openSUSE.
@@ -63,6 +113,34 @@ install <file>`, or `sudo rpm -U <file>` for an rpm — which asks for the
   Page" line in the sessions list, and the report can be copied to the
   clipboard as one block. It is built and shown locally — no network call, no
   business data and no browser persistence.
+- Windows draws the EXE, the pinned shortcuts, the running window and the
+  taskbar at 24–48 px over the user's wallpaper, where the plate-free light/dark
+  glyph read as an unclear smudge. `windows-app.ico` is generated from the same
+  white tile macOS and Linux already ship and used on every Windows app surface,
+  while electron-builder embeds the identical artwork as `icon.ico`, so a
+  shortcut and its running window cannot drift apart. The tray keeps the
+  transparent ICOs, where a white square would be the unclear shape at 16 px;
+  the tile, radius and mark proportions share one coverage helper (88%) with the
+  Linux hicolor icon.
+- An all-Skills scan with nothing discoverable is rejected by the desktop
+  scanner ("No trusted Skill target was found") and by the companion HTTP API
+  (`security.http.no_skills`). Both shapes are recognised now, the generic
+  failure path stays for real errors, and the page shows an actionable empty
+  state with a re-read action and a link to Sources.
+- The source label is repository-level (`owner/name`), so installing one Skill
+  lit up every sibling in that repository and made the others look installed.
+  Market status is now keyed on the installer's leaf folder next to the label —
+  never the repository path — with the local `SKILL.md` name only as a
+  same-repository fallback for older snapshots, so a same-named Skill from
+  another repository cannot borrow the status.
+- The root loader is isomorphic: it runs during SSR and again in the browser
+  whenever the router revalidates. Reading `process.platform` there crashed
+  sandboxed Electron renderers with "ReferenceError: process is not defined"
+  (first seen on `/agents`). The read now lives in a ServerFn so both executions
+  describe the local host, and the SSR value stays hydration-stable. The
+  production-bundle gate rejects Node globals in browser-reachable chunks now,
+  because Vite's dev client defines a `process` polyfill that let dev and e2e
+  miss it.
 
 ## [1.0.7] - 2026-10-15
 
